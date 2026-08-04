@@ -42,7 +42,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
     // CLI → server events, broadcast to connected dashboard clients.
     // (Room-based fan-out is optional; the dashboard never joins rooms yet.)
-    for (const event of ['session:start', 'plan:generated', 'agent:started', 'agent:step', 'agent:done', 'agent:failed', 'agent:needs_review', 'integration:pass', 'build:complete', 'toast']) {
+    for (const event of ['session:start', 'plan:generated', 'agent:started', 'agent:step', 'agent:file', 'agent:done', 'agent:failed', 'agent:needs_review', 'integration:pass', 'build:complete', 'toast']) {
       socket.on(event, (payload = {}) => {
         io.emit(event, payload);
         // best-effort persistence for build results

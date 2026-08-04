@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { isAuthed, logout } from '../../api/client.js';
 import { connectSocket } from '../../socket/socket.js';
 import { ToastStack } from '../../components/ToastStack.jsx';
+import { AgentSidebar } from '../../components/AgentSidebar.jsx';
 import { TerminalSquare, LogOut } from 'lucide-react';
 
 const NAV = [
@@ -63,6 +64,7 @@ export function AppShell() {
       <main className="flex-1 overflow-y-auto p-6">
         <Outlet />
       </main>
+      <AgentSidebar />
       <ToastStack />
     </div>
   );

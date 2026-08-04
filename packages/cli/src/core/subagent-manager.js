@@ -135,8 +135,11 @@ export class SubagentManager {
       return map;
     };
 
-    for (const wave of waves) {
+    for (const [idx, wave] of waves.entries()) {
       if (this._stopped) break;
+      wave.forEach((todo) => {
+        todo.wave = idx + 1;
+      });
       this.emit(EVENTS.WAVE_COMPLETE, { wave: wave.map((t) => t.id) });
       const ready = wave.filter((todo) => isEligible(todo, statusById()));
       this.queue.push(...ready);

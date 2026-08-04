@@ -3,6 +3,7 @@ import { store } from '../store/index.js';
 import {
   agentStarted,
   agentStep,
+  agentFile,
   agentDone,
   agentFailed,
   agentNeedsReview,
@@ -24,6 +25,7 @@ export function connectSocket() {
 
   socket.on('agent:started', (p) => s.dispatch(agentStarted(p)));
   socket.on('agent:step', (p) => s.dispatch(agentStep(p)));
+  socket.on('agent:file', (p) => s.dispatch(agentFile(p)));
   socket.on('agent:done', (p) => {
     s.dispatch(agentDone(p));
     setTimeout(() => s.dispatch(removeAgent(p.todoId)), 8000);

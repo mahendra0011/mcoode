@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useDispatch, useSelector } from 'react-redux';
+import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../api/client.js';
 import { Card, CardContent } from '../../components/ui/card.jsx';
 import { Badge } from '../../components/ui/badge.jsx';
@@ -67,17 +68,26 @@ export function Watch() {
                 <CardContent className="p-5 font-mono text-sm text-gray-600">no events recorded yet</CardContent>
               </Card>
             )}
-            {events.slice(0, 50).map((e, i) => (
-              <div key={i} className="flex items-start gap-3 rounded-md border border-mcode-border bg-mcode-panel/30 px-3 py-2.5">
-                <Badge variant={e.type === 'fix' ? 'success' : 'default'}>{e.type}</Badge>
-                <div className="min-w-0 flex-1">
-                  <code className="block truncate font-mono text-xs text-gray-300">{e.file}</code>
-                  <span className="text-[11px] text-gray-600">
-                    {e.issue ? `${e.issue.slice(0, 90)}…` : new Date(e.timestamp || Date.now()).toISOString().slice(11, 19)}
-                  </span>
-                </div>
-              </div>
-            ))}
+            <AnimatePresence initial={false}>
+              {events.slice(0, 50).map((e, i) => (
+                <motion.div
+                  key={e._id || `${e.file}-${i}`}
+                  layout
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-start gap-3 rounded-md border border-mcode-border bg-mcode-panel/30 px-3 py-2.5"
+                >
+                  <Badge variant={e.type === 'fix' ? 'success' : 'default'}>{e.type}</Badge>
+                  <div className="min-w-0 flex-1">
+                    <code className="block truncate font-mono text-xs text-gray-300">{e.file}</code>
+                    <span className="text-[11px] text-gray-600">
+                      {e.issue ? `${e.issue.slice(0, 90)}…` : new Date(e.timestamp || Date.now()).toISOString().slice(11, 19)}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         </div>
       </div>

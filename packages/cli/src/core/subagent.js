@@ -82,7 +82,7 @@ export class Subagent {
     this.status = SUBAGENT_STATUS.RUNNING;
     this.startedAt = new Date();
     this.emit(EVENTS.SUBAGENT_ASSIGNED, { model: this.assignment.ref, domain: this.todo.domain });
-    this.emit(EVENTS.SUBAGENT_STARTED, { model: this.assignment.ref, title: this.todo.title, domain: this.todo.domain });
+    this.emit(EVENTS.SUBAGENT_STARTED, { model: this.assignment.ref, title: this.todo.title, domain: this.todo.domain, wave: this.todo.wave || 1 });
     this.startTimer();
 
     const tools = new ToolExecutor({
@@ -90,7 +90,8 @@ export class Subagent {
       bus: this.bus,
       undoStack: this.undoStack,
       allowShellAll: this.allowShellAll,
-      domain: this.todo.domain
+      domain: this.todo.domain,
+      todoId: this.todo.id
     });
 
     this.messages = [

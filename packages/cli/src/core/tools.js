@@ -1,18 +1,20 @@
 import { join, resolve, relative } from 'node:path';
 import { readFile, writeFile, readdir, mkdir, rm } from 'node:fs/promises';
 import { execa } from 'execa';
+import { EVENTS } from '@mcode/shared';
 
 /**
  * Scoped toolset handed to subagents. Writes go through a snapshot +
  * diff-preview layer so `/undo` can revert any todo's changes.
  */
 export class ToolExecutor {
-  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, domain = 'backend' }) {
+  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, domain = 'backend', todoId = null }) {
     this.projectPath = resolve(projectPath);
     this.bus = bus;
     this.undoStack = undoStack;
     this.allowShellAll = allowShellAll;
     this.domain = domain;
+    this.todoId = todoId;
   }
 
   tools() {
@@ -96,6 +98,14 @@ export class ToolExecutor {
     const prev = await readFile(full, 'utf8').catch(() => null);
     await this.undoStack?.snapshot(path, prev);
     await writeFile(full, content, 'utf8');
+    this.bus?.emit(EVENTS.SUBAGENT_FILE, {
+      todoId: this.todoId || null,
+      file: path,
+      content,
+      diff: diffText(prev || '', content),
+      language: path.split('.').pop() || 'txt',
+      timestamp: Date.now()
+    });
     return { ok: true, file: path, diff: diffText(prev || '', content) };
   }
 

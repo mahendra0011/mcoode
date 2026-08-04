@@ -14,17 +14,19 @@ const agentsSlice = createSlice({
       state.plans[sessionId] = todos || [];
     },
     agentStarted(state, action) {
-      const { sessionId, todoId, model, domain } = action.payload;
+      const { sessionId, todoId, model, domain, wave } = action.payload;
       state.agents = state.agents.filter((a) => a.todoId !== todoId);
       state.agents.push({
         sessionId,
         todoId,
         model,
         domain,
+        wave: wave || 1,
         status: 'running',
         step: 0,
         total: 0,
         message: 'starting...',
+        filesChanged: [],
         startedAt: Date.now()
       });
     },
@@ -35,6 +37,19 @@ const agentsSlice = createSlice({
         agent.step = step;
         agent.total = total;
         agent.message = message;
+      }
+    },
+    agentFile(state, action) {
+      const { todoId, file, content, diff, language, timestamp } = action.payload;
+      const agent = state.agents.find((a) => a.todoId === todoId);
+      if (!agent) return;
+      const existing = agent.filesChanged.find((f) => f.file === file);
+      if (existing) {
+        existing.content = content;
+        existing.diff = diff;
+        existing.timestamp = timestamp;
+      } else {
+        agent.filesChanged.push({ file, content, diff, language, timestamp });
       }
     },
     agentDone(state, action) {
@@ -71,6 +86,7 @@ export const {
   planGenerated,
   agentStarted,
   agentStep,
+  agentFile,
   agentDone,
   agentFailed,
   agentNeedsReview,

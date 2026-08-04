@@ -13,6 +13,7 @@ const EVENT_TO_SOCKET = {
   [EVENTS.PLAN_GENERATED]: SOCKET.CLIENT_TO_SERVER.PLAN_GENERATED,
   [EVENTS.SUBAGENT_STARTED]: SOCKET.CLIENT_TO_SERVER.AGENT_STARTED,
   [EVENTS.SUBAGENT_STEP]: SOCKET.CLIENT_TO_SERVER.AGENT_STEP,
+  [EVENTS.SUBAGENT_FILE]: SOCKET.CLIENT_TO_SERVER.AGENT_FILE,
   [EVENTS.SUBAGENT_DONE]: SOCKET.CLIENT_TO_SERVER.AGENT_DONE,
   [EVENTS.SUBAGENT_FAILED]: SOCKET.CLIENT_TO_SERVER.AGENT_FAILED,
   [EVENTS.SUBAGENT_NEEDS_REVIEW]: SOCKET.CLIENT_TO_SERVER.AGENT_NEEDS_REVIEW,
@@ -58,8 +59,10 @@ export class Orchestrator extends EventEmitter {
     await this._initUndo();
     this.on(EVENTS.SUBAGENT_TOOL_CALL, (p) => {
       if (this.verbose) process.stderr.write(`[tool] ${p.tool} ${p.args}\n`);
-      if (p.tool === 'write_file' && p.content) {
-        this.emit(EVENTS.MESSAGE, { kind: 'code', id: `${Date.now()}-${p.todoId || ''}`, title: p.path || 'file', code: p.content });
+    });
+    this.on(EVENTS.SUBAGENT_FILE, (p) => {
+      if (p.file && p.content) {
+        this.emit(EVENTS.MESSAGE, { kind: 'code', id: `${Date.now()}-${p.todoId || ''}`, title: p.file, code: p.content });
       }
     });
     this._tryConnectBackend();
