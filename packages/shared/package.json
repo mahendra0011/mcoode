@@ -1,0 +1,13 @@
+{
+  "name": "@mcode/shared",
+  "version": "2.4.6",
+  "description": "Shared contracts between the mcode CLI, backend and dashboard",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

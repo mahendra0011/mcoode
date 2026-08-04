@@ -1,0 +1,12 @@
+{
+  "name": "fastify-starter",
+  "version": "1.0.0",
+  "description": "Minimal Fastify API scaffolded by mcode",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "vitest run"
+  }
+}

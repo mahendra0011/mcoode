@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-mcode-bg text-gray-200 font-sans antialiased;
+  }
+  ::selection {
+    background: rgba(62, 207, 110, 0.3);
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0a0e0f;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1f2937;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  .section-label {
+    @apply font-mono text-[11px] uppercase tracking-[0.25em] text-mcode-green mb-4;
+  }
+  .terminal-card {
+    @apply bg-mcode-panel border border-mcode-border rounded-lg;
+  }
+  .cmd-line {
+    @apply font-mono text-gray-300;
+  }
+}

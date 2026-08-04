@@ -1,0 +1,29 @@
+{
+  "name": "mcode-monorepo",
+  "private": true,
+  "version": "2.4.6",
+  "description": "mcode — terminal-first, multi-model AI coding CLI (monorepo)",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "mcode": "node packages/cli/bin/mcode.js",
+    "dev:cli": "node --watch packages/cli/bin/mcode.js",
+    "serve": "node packages/cli/bin/mcode.js serve",
+    "dev:dashboard": "npm run dev --workspace @mcode/dashboard",
+    "build:dashboard": "npm run build --workspace @mcode/dashboard",
+    "build:cli": "node packages/cli/scripts/build.js",
+    "test": "vitest run",
+    "lint": "eslint packages --ext .js,.jsx",
+    "publish:cli": "npm run build:cli && npm publish ./packages/cli",
+    "postinstall": "node scripts/bootstrap.js"
+  },
+  "devDependencies": {
+    "eslint-plugin-react": "^7.37.5",
+    "vitest": "^2.1.9"
+  }
+}

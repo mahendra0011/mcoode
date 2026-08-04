@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+packages/cli/dist/
+packages/dashboard/dist/
+*.tgz
+
+# env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# test/tmp artifacts
+tmp-watch-test/
+coverage/
+*.log
+
+# editor / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

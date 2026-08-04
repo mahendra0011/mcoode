@@ -1,0 +1,15 @@
+{
+  "name": "full-stack-starter",
+  "private": true,
+  "version": "1.0.0",
+  "description": "React + Vite frontend with an Express API backend, scaffolded by mcode",
+  "type": "module",
+  "scripts": {
+    "dev:server": "node --watch server.js",
+    "dev:web": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server.js",
+    "test": "vitest run"
+  }
+}

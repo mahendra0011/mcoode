@@ -1,0 +1,26 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #0f1115;
+  color: #e6e6e6;
+}
+
+main {
+  max-width: 640px;
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+
+h1 {
+  font-size: 2rem;
+}
+
+code {
+  background: #1d2130;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.api {
+  color: #7ee787;
+}
