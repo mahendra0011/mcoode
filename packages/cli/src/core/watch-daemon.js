@@ -276,7 +276,8 @@ You are mcode's bugfix subagent. Fix the reported problem in the file below. Res
           },
           { role: 'user', content: `CURRENT CONTENT:\n\`\`\`\n${source.slice(0, 8000)}\n\`\`\`` }
         ],
-        temperature: 0.1
+        temperature: 0.1,
+        reasoning: this.router?.reasoning || null
       });
       const candidate = extractFixedContent(res.text);
       if (!candidate || candidate.length < 10) continue;

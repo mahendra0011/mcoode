@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { io } from 'socket.io-client';
 import { EVENTS, SOCKET, DEFAULT_CONFIG, CostLedger } from '@mcode/shared';
 import { Planner } from './planner.js';
-import { ModelRouter } from './router.js';
+import { ModelRouter, MODES } from './router.js';
 import { SubagentManager } from './subagent-manager.js';
 import { UndoStack } from './tools.js';
 import { getProviders } from '../providers/index.js';
@@ -43,6 +43,39 @@ export class Orchestrator extends EventEmitter {
     this.options = options;
     this.modelOverride = options.modelOverride || config?.modelOverride || null;
     this.verbose = Boolean(options.verbose);
+    this.mode = MODES.includes(config?.mode) ? config.mode : 'medium';
+    this.chatAgentEnabled = config?.chatAgent !== false;
+    this.chatHistory = [];
+    this.chatAgent = null;
+  }
+
+  /** Agent-mode chat on/off. Persisted by the caller. */
+  setChatAgent(on) {
+    this.chatAgentEnabled = Boolean(on);
+    return this.chatAgentEnabled;
+  }
+
+  /** Forget the running conversation (used by /clear). */
+  clearChat() {
+    this.chatHistory = [];
+  }
+
+  /** Switch the quality/speed dial. Persisted by the caller. */
+  setMode(mode) {
+    this.mode = this.router ? this.router.setMode(mode) : mode;
+    return this.mode;
+  }
+
+  async reloadConfig() {
+    this.config = await loadConfig();
+    this.secrets = await loadVault();
+    this.providers = await getProviders({ secrets: this.secrets, config: this.config });
+    this.router = new ModelRouter({
+      secrets: this.secrets,
+      config: this.config,
+      ledger: this.ledger,
+      providers: this.providers
+    });
   }
 
   async init() {
@@ -173,8 +206,30 @@ export class Orchestrator extends EventEmitter {
 
   async chat(prompt) {
     const assignment = (this.modelOverride && await this.router.find(this.modelOverride))
-      || await this.router.pick('docs');
+      || await this.router.pick('build');
     if (!assignment) throw new Error('no model available for chat');
+
+    if (this.chatAgentEnabled) {
+      const { ChatAgent } = await import('./chat-agent.js');
+      const agent = new ChatAgent({
+        assignment,
+        projectPath: this.projectPath,
+        bus: this.bus,
+        undoStack: this.undoStack,
+        config: this.config,
+        reasoning: this.router?.reasoning || null,
+        history: this.chatHistory
+      });
+      this.chatAgent = agent;
+      try {
+        const out = await agent.run(prompt);
+        this.chatHistory = out.history;
+        return { text: out.text, interrupted: Boolean(out.interrupted) };
+      } finally {
+        this.chatAgent = null;
+      }
+    }
+
     const stream = assignment.provider.stream(assignment.model.id, {
       messages: [
         {
@@ -183,14 +238,25 @@ export class Orchestrator extends EventEmitter {
         },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.3
+      temperature: 0.3,
+      reasoning: this.router?.reasoning || null
     });
     let full = '';
     for await (const chunk of stream) {
       full += chunk;
       this.emit(EVENTS.MESSAGE, { kind: 'stream', text: full });
     }
-    return full;
+    return { text: full, interrupted: false };
+  }
+
+  /** Cancel an in-flight chat run (Esc / Ctrl+C mid-turn). */
+  interrupt() {
+    this.chatAgent?.abort();
+  }
+
+  /** Resolve a pending permission prompt (y/n/always). */
+  answerPermission(requestId, answer) {
+    this.bus.emit(EVENTS.PERMISSION_ANSWER, { requestId, answer });
   }
 
   async undo() {

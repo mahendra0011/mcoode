@@ -98,15 +98,17 @@ export class ToolExecutor {
     const prev = await readFile(full, 'utf8').catch(() => null);
     await this.undoStack?.snapshot(path, prev);
     await writeFile(full, content, 'utf8');
+    const created = prev === null;
+    const diff = created ? null : lineDiff(prev || '', content);
     this.bus?.emit(EVENTS.SUBAGENT_FILE, {
       todoId: this.todoId || null,
       file: path,
       content,
-      diff: diffText(prev || '', content),
+      diff: diff || diffText(prev || '', content),
       language: path.split('.').pop() || 'txt',
       timestamp: Date.now()
     });
-    return { ok: true, file: path, diff: diffText(prev || '', content) };
+    return { ok: true, file: path, created, diff, diffLines: diff?.lines || [], content };
   }
 
   async git_status() {
@@ -154,6 +156,53 @@ export function diffText(before, after) {
   while (a.length - 1 - j >= i && b.length - 1 - j >= i && a[a.length - 1 - j] === b[b.length - 1 - j]) j++;
   const changed = Math.max(0, a.length - i - j) + Math.max(0, b.length - i - j);
   return { changedLines: changed, sample: `...\n${b.slice(i, i + 6).join('\n')}\n...` };
+}
+
+/**
+ * Line-level diff with old/new line numbers for the Edit block's dual gutter.
+ * Returns { changedLines, lines: [{kind: 'context'|'remove'|'add', oldNo, newNo, text}] }.
+ */
+export function lineDiff(before, after) {
+  const a = String(before || '').split('\n');
+  const b = String(after || '').split('\n');
+  const m = a.length;
+  const n = b.length;
+  const emit = (kind, oldNo, newNo, text) => {
+    lines.push({ kind, oldNo, newNo, text });
+    return kind === 'context' ? 0 : 1;
+  };
+  const lines = [];
+  let changed = 0;
+  if (m * n > 4_000_000) {
+    for (let i = 0; i < m; i++) changed += emit('remove', i + 1, null, a[i]);
+    for (let j = 0; j < n; j++) changed += emit('add', null, j + 1, b[j]);
+    return { changedLines: changed, lines };
+  }
+  const dp = Array.from({ length: m + 1 }, () => new Uint32Array(n + 1));
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  let i = 0;
+  let j = 0;
+  let oldNo = 1;
+  let newNo = 1;
+  while (i < m && j < n) {
+    if (a[i] === b[j]) {
+      changed += emit('context', oldNo, newNo, a[i]);
+      i++; j++; oldNo++; newNo++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      changed += emit('remove', oldNo, null, a[i]);
+      i++; oldNo++;
+    } else {
+      changed += emit('add', null, newNo, b[j]);
+      j++; newNo++;
+    }
+  }
+  while (i < m) { changed += emit('remove', oldNo, null, a[i]); i++; oldNo++; }
+  while (j < n) { changed += emit('add', null, newNo, b[j]); j++; newNo++; }
+  return { changedLines: changed, lines };
 }
 
 /** Per-project undo stack: snapshots of every file before a subagent writes. */

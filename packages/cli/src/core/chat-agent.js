@@ -1,0 +1,412 @@
+import { ToolExecutor } from './tools.js';
+import { EVENTS } from '@mcode/shared';
+import { join, isAbsolute, relative } from 'node:path';
+
+/**
+ * Agent-mode chat: the assistant can inspect the project, edit files, run
+ * commands and tests, then answer — opencode-style. The model narrates and
+ * emits at most ONE tool action per turn inside a ```mcode-action fence```.
+ * This text protocol works on every provider (native function-calling is
+ * optional, not required).
+ */
+
+export function buildAgentSystem(projectPath, tools, maxTurns) {
+  return `You are mcode, a terminal-first AI coding agent. You are working autonomously inside the project:
+${projectPath}
+
+You can inspect code, edit files, run commands and tests, then give the user a final answer.
+
+AVAILABLE TOOLS:
+${Object.entries(tools)
+  .map(([name, spec]) => `- ${name}: ${spec.description} (args: ${JSON.stringify(spec.parameters)})`)
+  .join('\n')}
+
+HOW TO WORK:
+- If the user asks about code or wants changes, explore first: read the relevant files before writing anything.
+- Keep your narration short and technical. Tell the user what you are doing.
+- To invoke a tool, end your reply with an action fence EXACTLY like this:
+\`\`\`mcode-action
+{"tool":"read_file","args":{"path":"src/foo.js"}}
+\`\`\`
+- ONE action per reply. Never put more than one action fence in a reply.
+- After you see the TOOL RESULT, continue in your next reply (read more, fix, test, ...).
+- When the task is complete, reply with a plain final answer and NO action fence.
+
+RULES:
+- Only use tools from the list above. Paths are relative to the project root.
+- Read a file before overwriting it. Never invent files that already exist.
+- run_shell is allowed for npm scripts, builds, git commands — but never destructive commands (rm -rf etc).
+- Verify your work: run the relevant tests when you changed code.
+- Maximum ${maxTurns} actions for one user request. When you are done, stop.`;
+}
+
+const ACTION_FENCE = /```mcode-action\s*([\s\S]*?)```/g;
+const TOOL_CALL_XML = /<tool_call>\s*([\w_-]+)([\s\S]*?)<\/tool_call>/g;
+const ARG_PAIR = /<arg_key>\s*([^<]+?)\s*<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g;
+
+export function extractAction(text) {
+  const source = String(text || '');
+  const matches = [...source.matchAll(ACTION_FENCE)];
+  if (matches.length > 0) {
+    const raw = matches[matches.length - 1][1].trim();
+    let candidate = raw;
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start !== -1 && end >= start) candidate = raw.slice(start, end + 1);
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed.tool === 'string') {
+        return { tool: parsed.tool, args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {} };
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  const xml = [...source.matchAll(TOOL_CALL_XML)];
+  if (xml.length > 0) {
+    const block = xml[xml.length - 1];
+    const tool = block[1];
+    const args = {};
+    for (const pair of block[2].matchAll(ARG_PAIR)) {
+      args[pair[1].trim()] = pair[2].trim();
+    }
+    return { tool, args };
+  }
+  return null;
+}
+
+export function stripActions(text) {
+  const out = String(text || '')
+    .replace(ACTION_FENCE, '')
+    .replace(TOOL_CALL_XML, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return out || String(text || '').trim();
+}
+
+/** Stream a turn from any provider: native stream when available, else complete(). */
+async function* streamText(assignment, model, params) {
+  if (typeof assignment.provider.stream === 'function') {
+    yield* assignment.provider.stream(model, params);
+  } else {
+    const res = await assignment.provider.complete(model, params);
+    if (res?.text) yield res.text;
+  }
+}
+
+export class ChatAgent {
+  constructor({ assignment, projectPath, bus, undoStack, config = {}, reasoning = null, history = [], onTool = null }) {
+    this.assignment = assignment;
+    this.projectPath = projectPath;
+    this.bus = bus;
+    this.undoStack = undoStack;
+    this.reasoning = reasoning;
+    this.history = history ? history.slice(-20) : [];
+    this.maxTurns = Math.max(1, Number(config.chatAgentTurns) || 12);
+    this.allowShellAll = Boolean(config.allowShellAll);
+    this.requirePermission = config.requirePermission !== false;
+    this.onTool = onTool;
+    this.turn = 0;
+    this.narration = [];
+    this.toolSeq = 0;
+    this.changedFiles = [];
+    this.aborted = false;
+    this.abortWaiters = [];
+    this.pendingPermission = null;
+  }
+
+  /** Cancel the current run (user pressed escape/Ctrl+C). */
+  abort() {
+    if (this.aborted) return;
+    this.aborted = true;
+    for (const resolve of this.abortWaiters.splice(0)) resolve('aborted');
+    if (this.pendingPermission) {
+      const { requestId } = this.pendingPermission;
+      this.pendingPermission = null;
+      this.bus?.emit(EVENTS.MESSAGE, {
+        kind: 'tool',
+        replaceKey: requestId,
+        block: 'permission',
+        status: 'done',
+        permission: 'denied',
+        approved: false,
+        command: '',
+        interrupt: true
+      });
+    }
+  }
+
+  /** Interactive permission gate — resolved by the UI (y/n/always) or abort. */
+  _askPermission(command) {
+    const requestId = `perm${++this.toolSeq}`;
+    return new Promise((resolve) => {
+      const settle = (answer) => {
+        this.abortWaiters = this.abortWaiters.filter((w) => w !== settle);
+        this.bus.off(EVENTS.PERMISSION_ANSWER, onAnswer);
+        if (this.pendingPermission?.requestId === requestId) this.pendingPermission = null;
+        resolve(answer);
+      };
+      const onAnswer = (p) => {
+        if (p.requestId !== requestId) return;
+        settle(p.answer || 'no');
+      };
+      this.pendingPermission = { requestId, command, resolve: settle };
+      this.abortWaiters.push(settle);
+      this.bus?.on(EVENTS.PERMISSION_ANSWER, onAnswer);
+      this.bus?.emit(EVENTS.MESSAGE, {
+        kind: 'tool',
+        replaceKey: requestId,
+        block: 'permission',
+        status: 'running',
+        permission: 'pending',
+        command,
+        approved: false
+      });
+    });
+  }
+
+  _toolArgsPreview(name, args) {
+    if (name === 'read_file' || name === 'write_file' || name === 'run_tests') return String(args.path || args.file || '');
+    if (name === 'run_shell') return String(args.command || '');
+    return JSON.stringify(args || {}).slice(0, 80);
+  }
+
+  _toolResultSummary(name, result) {
+    if (!result || result.ok === false) return String(result?.error || 'failed').slice(0, 120);
+    if (name === 'read_file') {
+      const lines = String(result.content || '').split('\n').length;
+      return `${lines} lines`;
+    }
+    if (name === 'list_files') return `${(result.files || []).length} files`;
+    if (name === 'search_code') return `${(result.files || []).length} matches`;
+    if (name === 'write_file') {
+      return `${result?.diff?.changedLines ?? result?.diffLines?.length ?? '?'} lines changed in ${result.file}`;
+    }
+    if (name === 'run_shell') return String(result.stdout || '').split('\n').slice(0, 3).join(' · ').slice(0, 120) || 'ok';
+    if (name === 'run_tests') return result.passed ? 'tests passed' : 'tests failed';
+    if (name === 'git_status') return `${(result.files || []).length} changed files`;
+    return 'ok';
+  }
+
+  _toolOutput(name, result) {
+    if (!result || result.ok === false) return '';
+    if (name === 'run_shell') return String(result.stdout || '').slice(0, 3000);
+    if (name === 'read_file') return String(result.content || '').slice(0, 3000);
+    if (name === 'write_file') return String(result.diff?.sample || '').slice(0, 3000);
+    return '';
+  }
+
+  _fullPath(p) {
+    if (!p) return '';
+    return isAbsolute(p) ? p : join(this.projectPath, p);
+  }
+
+  /** Build the spec block payload for a completed tool result. */
+  _blockMeta(name, args, result) {
+    const ok = !result || result.ok !== false;
+    if (name === 'read_file') {
+      return {
+        block: 'read',
+        path: this._fullPath(args.path),
+        lines: String(result?.content || '').split('\n').slice(0, 400),
+        diffLines: [],
+        command: '',
+        relDir: '',
+        title: '',
+        output: ''
+      };
+    }
+    if (name === 'write_file') {
+      const created = !!result?.created;
+      return {
+        block: created ? 'write' : 'edit',
+        path: this._fullPath(result?.file || args.path),
+        created,
+        lines: String(result?.content || '').split('\n').slice(0, 200),
+        diffLines: (result?.diffLines || []).slice(0, 200),
+        command: '',
+        relDir: '',
+        title: '',
+        output: ''
+      };
+    }
+    if (name === 'run_shell') {
+      const rel = ''; // commands run at project root → header omitted per spec §7
+      const output = String(result?.stdout || '') + (result?.stderr ? `\n${result.stderr}` : '');
+      return {
+        block: 'command',
+        path: '',
+        lines: [],
+        command: String(args.command || ''),
+        relDir: rel && rel !== '.' ? rel : '',
+        title: '',
+        output: output.slice(0, 3000)
+      };
+    }
+    if (name === 'run_tests') {
+      return {
+        block: 'command',
+        path: '',
+        lines: [],
+        command: `npm test${args.file ? ` -- ${args.file}` : ''}`,
+        relDir: '',
+        title: '',
+        output: String(result?.output || (ok ? 'passed' : 'failed')).slice(0, 3000)
+      };
+    }
+    if (name === 'list_files') {
+      return {
+        block: 'command', path: '', lines: [], command: '', relDir: '',
+        title: `Glob ${JSON.stringify(args.glob ?? '**/*')}`,
+        output: String((result?.files || []).join('\n')).slice(0, 3000)
+      };
+    }
+    if (name === 'search_code') {
+      return {
+        block: 'command', path: '', lines: [], command: '', relDir: '',
+        title: `Grep ${JSON.stringify(args.query || '')}`,
+        output: String((result?.files || []).join('\n')).slice(0, 3000)
+      };
+    }
+    if (name === 'git_status') {
+      return {
+        block: 'command', path: '', lines: [], command: '', relDir: '',
+        title: 'Git status',
+        output: String((result?.files || []).join('\n')).slice(0, 3000)
+      };
+    }
+    return {
+      block: 'command', path: '', lines: [], command: '', relDir: '',
+      title: String(name), output: String(this._toolResultSummary(name, result))
+    };
+  }
+
+  async run(prompt) {
+    const tools = new ToolExecutor({
+      projectPath: this.projectPath,
+      bus: this.bus,
+      undoStack: this.undoStack,
+      allowShellAll: this.allowShellAll,
+      domain: 'backend',
+      todoId: null
+    });
+
+    const messages = [
+      { role: 'system', content: buildAgentSystem(this.projectPath, tools.tools(), this.maxTurns) },
+      ...this.history,
+      { role: 'user', content: prompt }
+    ];
+    this.history.push({ role: 'user', content: prompt });
+
+    for (this.turn = 0; this.turn < this.maxTurns; this.turn++) {
+      let text = '';
+      for await (const chunk of streamText(this.assignment, this.assignment.model.id, {
+        messages,
+        temperature: 0.15,
+        reasoning: this.reasoning
+      })) {
+        if (this.aborted) break;
+        text += chunk;
+        this.bus?.emit(EVENTS.MESSAGE, { kind: 'stream', text: stripActions(text) || '\u2026' });
+      }
+      if (this.aborted) break;
+      messages.push({ role: 'assistant', content: text });
+      this.history.push({ role: 'assistant', content: stripActions(text) });
+
+      const action = extractAction(text);
+      if (!action) {
+        this.narration.push(stripActions(text));
+        break;
+      }
+
+      const toolText = stripActions(text);
+      if (toolText) this.narration.push(toolText);
+
+      const preview = this._toolArgsPreview(action.tool, action.args);
+      const seq = ++this.toolSeq;
+      const replaceKey = `t${seq}`;
+      this.bus?.emit(EVENTS.MESSAGE, {
+        kind: 'tool',
+        replaceKey,
+        tool: action.tool,
+        args: preview,
+        status: 'running'
+      });
+      this.onTool?.({ tool: action.tool, args: action.args });
+
+      let result;
+      if (typeof tools[action.tool] === 'function') {
+        if (action.tool === 'run_shell' && !this.allowShellAll && this.requirePermission) {
+          const answer = await this._askPermission(String(action.args?.command || ''));
+          if (answer === 'aborted' || this.aborted) break;
+          if (answer !== 'yes' && answer !== 'always') {
+            result = { ok: false, error: 'permission denied by user' };
+            this.bus?.emit(EVENTS.MESSAGE, {
+              kind: 'tool',
+              replaceKey,
+              tool: action.tool,
+              args: preview,
+              status: 'done',
+              block: 'command',
+              path: '',
+              lines: [],
+              command: String(action.args?.command || ''),
+              relDir: '',
+              title: '',
+              output: ''
+            });
+            messages.push({ role: 'user', content: `TOOL RESULT: ${JSON.stringify(result)}` });
+            this.history.push({ role: 'user', content: `TOOL RESULT (${action.tool}): permission denied by user` });
+            continue;
+          }
+        }
+        result = await tools.run(action.tool, action.args || {});
+      } else {
+        result = { ok: false, error: `unknown tool "${action.tool}"` };
+      }
+
+      const ok = !result || result.ok !== false;
+      this.bus?.emit(EVENTS.MESSAGE, {
+        kind: 'tool',
+        replaceKey,
+        tool: action.tool,
+        args: preview,
+        status: ok ? 'done' : 'failed',
+        error: ok ? '' : String(result?.error || 'failed').slice(0, 300),
+        ...this._blockMeta(action.tool, action.args || {}, result)
+      });
+
+      if (ok && (action.tool === 'write_file' || action.tool === 'edit_file')) {
+        const diff = Array.isArray(result?.diffLines) ? result.diffLines : [];
+        this.changedFiles.push({
+          path: result?.file || this._fullPath(action.args?.path || action.args?.file || ''),
+          added: diff.filter((l) => l.kind === 'add').length,
+          removed: diff.filter((l) => l.kind === 'remove').length,
+          created: Boolean(result?.created)
+        });
+      }
+
+      messages.push({ role: 'user', content: `TOOL RESULT: ${JSON.stringify(result).slice(0, 4000)}` });
+      this.history.push({ role: 'user', content: `TOOL RESULT (${action.tool}): ${this._toolResultSummary(action.tool, result)}` });
+    }
+
+    if (this.aborted) {
+      this.bus?.emit(EVENTS.MESSAGE, { kind: 'interrupt', replaceKey: `interrupt${Date.now()}` });
+    } else if (this.changedFiles.length >= 2) {
+      this.bus?.emit(EVENTS.MESSAGE, {
+        kind: 'summary',
+        replaceKey: `summary${Date.now()}`,
+        files: this.changedFiles.map((f) => ({
+          ...f,
+          path: relative(this.projectPath, f.path) || f.path
+        }))
+      });
+    }
+
+    const full = this.narration.join('\n\n') || '...';
+    this.history = this.history.slice(-20);
+    return { text: full, turns: this.turn, history: this.history, interrupted: this.aborted };
+  }
+}
+
+export { ChatAgent as default };

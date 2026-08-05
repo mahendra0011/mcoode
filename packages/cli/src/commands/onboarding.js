@@ -3,6 +3,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import { loadConfig, saveConfig } from '../core/store.js';
 import { loadVault, saveVault } from '../core/vault.js';
 import { DEFAULT_CONFIG } from '@mcode/shared';
+import { apiKeyAddCommand } from './api-key.js';
 
 export const LOGO = `
   __  ___     _         __   __
@@ -16,19 +17,10 @@ const KNOWN_KEYS = [
   'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GROQ_API_KEY',
   'TOGETHER_API_KEY', 'MISTRAL_API_KEY', 'DEEPSEEK_API_KEY',
   'XAI_API_KEY', 'FIREWORKS_API_KEY', 'PERPLEXITY_API_KEY',
-  'CEREBRAS_API_KEY', 'NOVITA_API_KEY', 'HUGGINGFACE_API_KEY'
+  'CEREBRAS_API_KEY', 'NOVITA_API_KEY', 'HUGGINGFACE_API_KEY',
+  'POOLSIDE_API_KEY'
 ];
 
-const PROVIDER_CHOICES = [
-  { id: 'OpenRouter', env: 'OPENROUTER_API_KEY' },
-  { id: 'OpenAI', env: 'OPENAI_API_KEY' },
-  { id: 'Anthropic (Claude)', env: 'ANTHROPIC_API_KEY' },
-  { id: 'Google (Gemini)', env: 'GOOGLE_API_KEY' },
-  { id: 'Groq', env: 'GROQ_API_KEY' },
-  { id: 'DeepSeek', env: 'DEEPSEEK_API_KEY' },
-  { id: 'Mistral', env: 'MISTRAL_API_KEY' },
-  { id: 'Other provider', env: null }
-];
 
 export function backendUrl(config) {
   return config?.backend?.url || DEFAULT_CONFIG.backend.url;
@@ -62,14 +54,24 @@ async function promptHidden(rl, query) {
 }
 
 async function api(method, path, body, token = null) {
-  const res = await fetch(path, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (err) {
+    const code = err.cause?.code || '';
+    const base = path.startsWith('http') ? new URL(path).origin : '';
+    if (['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'].includes(code)) {
+      throw new Error(`cannot reach mcode backend at ${base || 'the configured URL'} — start it from the repo root with: npm run start --workspace packages/backend`);
+    }
+    throw new Error(`network error contacting ${base || 'the backend'}: ${err.message}`);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data?.error?.message || `request failed (${res.status})`);
@@ -110,23 +112,7 @@ async function loginAccount(rl, config) {
   output.write(`  \u2713 logged in — welcome back ${data.user.name}!\n\n`);
 }
 
-async function addApiKey(rl) {
-  output.write('\n  add an API key\n');
-  output.write(`  ${'-'.repeat(46)}\n`);
-  output.write('  which provider?\n');
-  PROVIDER_CHOICES.forEach((p, i) => output.write(`    ${i + 1}) ${p.id}\n`));
-  const pickRaw = (await rl.question('  choice [1-8]: ')).trim();
-  const pick = Number(pickRaw);
-  const choice = PROVIDER_CHOICES[pick - 1];
-  if (!choice) throw new Error('invalid choice');
-  const env = choice.env || (await rl.question('  env var name (e.g. OPENAI_API_KEY): ')).trim().toUpperCase();
-  if (!/^[A-Z0-9_]+$/.test(env)) throw new Error('invalid env var name');
-  const key = (await promptHidden(rl, `  paste ${choice.id} API key: `)).trim();
-  if (key.length < 8) throw new Error('key looks too short');
-  const secrets = await loadVault();
-  await saveVault({ ...secrets, [env]: key });
-  output.write(`  \u2713 key stored in encrypted vault as ${env}\n\n`);
-}
+
 
 export async function runOnboarding({ interactive = true } = {}) {
   const config = await loadConfig();
@@ -165,13 +151,15 @@ export async function runOnboarding({ interactive = true } = {}) {
       output.write('  (you can skip — mock + local providers still work, and add keys later with `mcode api-key`)\n');
       const keyChoice = (await rl.question('  add an API key now? [y/N]: ')).trim().toLowerCase();
       if (keyChoice === 'y' || keyChoice === 'yes') {
-        await addApiKey(rl);
+        rl.close();
+        await apiKeyAddCommand();
+        return;
       } else {
         output.write('  skipping — use `mcode api-key` any time\n\n');
       }
     }
   } finally {
-    rl.close();
+    if (!rl.closed) rl.close();
   }
 }
 
@@ -197,14 +185,4 @@ export async function logoutCommand() {
   output.write('\u2713 logged out (API keys in the vault are untouched)\n');
 }
 
-export async function apiKeyCommand() {
-  const rl = createInterface({ input, output, terminal: true });
-  try {
-    output.write('\n  mcode api-key\n\n');
-    await addApiKey(rl);
-  } catch (err) {
-    output.write(`  \u26a0 ${err.message}\n`);
-  } finally {
-    rl.close();
-  }
-}
+

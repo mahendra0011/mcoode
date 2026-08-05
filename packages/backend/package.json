@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node src/main.js",
+    "seed:plugins": "node scripts/seed-plugins.js",
     "test": "vitest run"
   },
   "dependencies": {

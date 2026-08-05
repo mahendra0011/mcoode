@@ -42,15 +42,17 @@ export function authRoutes({ secret }) {
       const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
       await db().otp.deleteOne({ email, intent });
       await db().otp.create({ email, code, intent, expiresAt: new Date(Date.now() + OTP_TTL_MS), attempts: 0 });
-      await sendMail({
+      const mail = await sendMail({
         to: email,
         subject: `mcode verification code: ${code}`,
         text: `Your mcode ${intent} code is ${code}. It expires in 10 minutes.`
       });
+      const dev = process.env.NODE_ENV !== 'production';
       res.json({
         ok: true,
         expiresInSec: OTP_TTL_MS / 1000,
-        devOtp: !isMailEnabled() ? code : undefined
+        delivered: mail.delivered,
+        devOtp: dev ? code : undefined
       });
     } catch (err) {
       next(err);

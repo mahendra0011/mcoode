@@ -1,27 +1,115 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, useApp } from 'ink';
+import { Box, Text, useApp, useInput, useStdout } from 'ink';
+import { theme } from './theme.js';
 import { Header } from './Header.jsx';
 import { MainPane } from './MainPane.jsx';
 import { Sidebar } from './Sidebar.jsx';
 import { InputLine } from './InputLine.jsx';
+import { CommandPalette } from './CommandPalette.jsx';
 import { Toasts } from './Toasts.jsx';
+import { WelcomeScreen } from './WelcomeScreen.jsx';
+import { StatusBar } from './StatusBar.jsx';
+import { ProviderWizard } from './ProviderWizard.jsx';
 import { EVENTS, SUBAGENT_STATUS } from '@mcode/shared';
+import { MODES, MODE_DESC } from '../core/router.js';
 
-export function App({ orchestrator, projectName, history = [] }) {
+const VERSION = 'v2.4.6';
+
+export function App({ orchestrator, projectName, history = [], onAction }) {
   const { exit } = useApp();
-  const [messages, setMessages] = useState([{ kind: 'system', text: `mcode v2.4.6 — type /help for commands` }]);
+  const { stdout } = useStdout();
+  const [rows, setRows] = useState(stdout.rows || 24);
+  const [messages, setMessages] = useState([]);
   const [agents, setAgents] = useState([]);
   const [plan, setPlan] = useState(null);
   const [toasts, setToasts] = useState([]);
-  const [watchOn, setWatchOn] = useState(false);
-  const [modelLabel] = useState('auto');
-  const [sidebarWidth, setSidebarWidth] = useState(0);
+  const [streamingMessage, setStreamingMessage] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [chatStarted, setChatStarted] = useState(false);
+  const [modelLabel, setModelLabel] = useState('auto');
+  const [mode, setMode] = useState('medium');
+  const [agentMode, setAgentMode] = useState('Build');
+  const [email, setEmail] = useState('');
+  const sidebarWidth = 35;
+  const [branch, setBranch] = useState(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [todos, setTodos] = useState([]);
+  const [pendingPermission, setPendingPermission] = useState(null);
+  const lastPrompt = useRef('');
+  
+  const streamTimer = useRef(null);
+  const streamBuffer = useRef(null);
+  const thoughtRef = useRef('');
+  const [activeModal, setActiveModal] = useState(null);
   const inputHistory = useRef(history);
+
+  const pushTodoMsg = (items) =>
+    setMessages((m) => {
+      const idx = m.findIndex((x) => x.replaceKey === 'todos');
+      const msg = { kind: 'todo', replaceKey: 'todos', items };
+      if (idx === -1) return [...m, msg];
+      const next = m.slice();
+      next[idx] = { ...next[idx], items };
+      return next;
+    });
+
+  useInput((input, key) => {
+    if (key.ctrl && input === 'p') {
+      setPaletteOpen((o) => !o);
+    }
+  });
+
+  useEffect(() => {
+    const onResize = () => setRows(stdout.rows || 24);
+    stdout.on('resize', onResize);
+    return () => stdout.off('resize', onResize);
+  }, [stdout]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const git = (await import('simple-git')).default(process.cwd());
+        const b = await git.branch();
+        if (!cancelled && b?.current) setBranch(b.current);
+      } catch {
+        /* not a git repo */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const refreshModelLabel = async () => {
+    try {
+      const { loadConfig } = await import('../core/store.js');
+      const config = await loadConfig();
+      if (config?.roles?.build) setModelLabel(config.roles.build.split(':').pop());
+      setMode(MODES.includes(config?.mode) ? config.mode : 'medium');
+      setEmail(config?.account?.email || '');
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!activeModal) {
+      refreshModelLabel();
+      orchestrator.reloadConfig().catch(console.error);
+    }
+  }, [activeModal]);
 
   useEffect(() => {
     const bus = orchestrator;
 
-    const push = (msg) => setMessages((m) => [...m, msg]);
+    const push = (msg) =>
+      setMessages((m) => {
+        if (!msg.replaceKey) return [...m, msg];
+        const idx = m.findIndex((x) => x.replaceKey === msg.replaceKey);
+        if (idx === -1) return [...m, msg];
+        const next = m.slice();
+        next[idx] = { ...next[idx], ...msg };
+        return next;
+      });
     const toast = (t) => {
       setToasts((ts) => [...ts, { id: Date.now() + Math.random(), ...t }]);
       setTimeout(() => setToasts((ts) => ts.filter((x) => x.id !== t.id)), 4000);
@@ -29,10 +117,18 @@ export function App({ orchestrator, projectName, history = [] }) {
 
     const onPlan = (p) => {
       setPlan(p);
+      const items = p.todos.map((t) => ({ id: t.id, domain: t.domain, title: t.title, status: 'pending' }));
+      setTodos(items);
       push({ kind: 'ok', text: `\u2713 plan generated — ${p.todos.length} todos` });
-      for (const t of p.todos.slice(0, 14)) {
-        push({ kind: 'system', text: `  [${t.id}] (${t.domain}) ${t.title}` });
-      }
+      push({ kind: 'todo', replaceKey: 'todos', items });
+    };
+
+    const patchTodo = (id, status) => {
+      setTodos((list) => {
+        const next = list.map((t) => (t.id === id ? { ...t, status } : t));
+        push({ kind: 'todo', replaceKey: 'todos', items: next });
+        return next;
+      });
     };
 
     const upsertAgent = (id, patch) =>
@@ -46,11 +142,13 @@ export function App({ orchestrator, projectName, history = [] }) {
     const onAgentStep = (p) => upsertAgent(p.todoId, { status: 'running', message: p.message });
     const onAgentDone = (p) => {
       upsertAgent(p.todoId, { status: 'done', message: p.summary || 'done' });
+      patchTodo(p.todoId, 'done');
       push({ kind: 'ok', text: `\u2713 ${p.todoId} done — ${String(p.summary || '').slice(0, 90)}` });
       setTimeout(() => setAgents((list) => list.filter((a) => a.todoId !== p.todoId)), 1200);
     };
     const onAgentFailed = (p) => {
       upsertAgent(p.todoId, { status: 'failed', message: p.error });
+      patchTodo(p.todoId, 'failed');
       push({ kind: 'err', text: `\u2717 ${p.todoId} failed — ${p.error}` });
       setTimeout(() => setAgents((list) => list.filter((a) => a.todoId !== p.todoId)), 1500);
     };
@@ -62,27 +160,28 @@ export function App({ orchestrator, projectName, history = [] }) {
       toast({ kind: 'warn', text: `${p.todoId} needs human review` });
     };
     const onToast = (t) => toast(t);
-    let streamTimer = null;
-    let streamBuffer = null;
     const flushStream = () => {
-      if (streamBuffer === null) return;
-      const text = streamBuffer;
-      streamBuffer = null;
-      streamTimer = null;
-      setMessages((list) => {
-        const last = list[list.length - 1];
-        if (last?.streaming) return [...list.slice(0, -1), { ...last, text }];
-        return [...list, { kind: 'assistant', text, streaming: true }];
-      });
+      if (streamBuffer.current === null) return;
+      const text = streamBuffer.current;
+      streamBuffer.current = null;
+      streamTimer.current = null;
+      setStreamingMessage(text);
     };
     const onMessage = (m) => {
       if (m.kind === 'stream') {
-        streamBuffer = m.text;
-        if (!streamTimer) streamTimer = setTimeout(flushStream, 60);
+        thoughtRef.current += m.text;
+        streamBuffer.current = m.text;
+        if (!streamTimer.current) streamTimer.current = setTimeout(flushStream, 60);
       } else {
-        if (streamTimer) {
-          clearTimeout(streamTimer);
+        if (streamTimer.current) {
+          clearTimeout(streamTimer.current);
           flushStream();
+        }
+        if (m.block === 'permission' && m.status === 'running') {
+          setPendingPermission(m);
+        }
+        if (m.block === 'permission' && m.status === 'done') {
+          setPendingPermission((p) => (p?.requestId === m.replaceKey ? null : p));
         }
         push(m);
       }
@@ -94,7 +193,7 @@ export function App({ orchestrator, projectName, history = [] }) {
         text: `${r.done}/${r.total} todos complete · ${(r.elapsedSecs / 60).toFixed(1)}m`
       });
     };
-    const onWatchStatus = (s) => setWatchOn(s === 'active');
+    const onWatchStatus = () => {};
 
     bus.on(EVENTS.PLAN_GENERATED, onPlan);
     bus.on(EVENTS.SUBAGENT_STARTED, onAgentStarted);
@@ -110,8 +209,8 @@ export function App({ orchestrator, projectName, history = [] }) {
     bus.on(EVENTS.WATCH_FIX, onWatchFix);
 
     return () => {
-      if (streamTimer) {
-        clearTimeout(streamTimer);
+      if (streamTimer.current) {
+        clearTimeout(streamTimer.current);
         flushStream();
       }
       bus.off(EVENTS.PLAN_GENERATED, onPlan);
@@ -129,44 +228,56 @@ export function App({ orchestrator, projectName, history = [] }) {
     };
   }, [orchestrator]);
 
-  // animate the sidebar in/out when agents exist
-  useEffect(() => {
-    const target = agents.length > 0 ? 34 : 0;
-    if (sidebarWidth === target) return;
-    const t = setInterval(() => {
-      setSidebarWidth((w) => {
-        const step = 6;
-        if (w < target) return Math.min(target, w + step);
-        return Math.max(0, w - step);
-      });
-    }, 25);
-    return () => clearInterval(t);
-  }, [agents.length > 0, sidebarWidth]);
-
-  const handleSubmit = async (value) => {
+const handleSubmit = async (value) => {
     if (value.startsWith('/')) {
       await handleSlash(value.slice(1));
       return;
     }
+    lastPrompt.current = value;
     inputHistory.current.push(value);
+    setChatStarted(true);
     setMessages((m) => [...m, { kind: 'user', text: value }]);
+    setIsGenerating(true);
+    const t0 = Date.now();
     try {
       const reply = await orchestrator.chat(value);
+      if (streamTimer.current) clearTimeout(streamTimer.current);
+      streamTimer.current = null;
+      streamBuffer.current = null;
+      setStreamingMessage('');
+      setIsGenerating(false);
+      setPendingPermission(null);
+      const text = typeof reply === 'string' ? reply : (reply?.text || '');
+      const interrupted = !!(reply && typeof reply === 'object' && reply.interrupted);
+      const secs = ((Date.now() - t0) / 1000).toFixed(1);
+      const tokens = Math.max(1, Math.round((text.length || 0) / 4));
+      const thoughtText = thoughtRef.current;
+      thoughtRef.current = '';
+      if (interrupted) {
+        setTodos((list) => {
+          const next = list.map((t) => (t.status === 'running' ? { ...t, status: 'paused' } : t));
+          pushTodoMsg(next);
+          return next;
+        });
+      }
       setMessages((m) => [
-        ...m.slice(0, -1),
-        { kind: 'assistant', text: reply }
+        ...m,
+        { kind: 'assistant', text, thought: thoughtText || null, meta: { tokens, secs, model: modelLabel, interrupted } }
       ]);
     } catch (err) {
-      setMessages((m) => [...m, { kind: 'err', text: `error: ${err.message}` }]);
+      setStreamingMessage('');
+      setIsGenerating(false);
+      setPendingPermission(null);
+      setMessages((m) => [...m, { kind: 'error', reason: err.message }]);
     }
   };
 
-  const handleSlash = async (raw) => {
+const handleSlash = async (raw) => {
     const [name, ...rest] = raw.split(' ');
     switch (name) {
       case 'help':
         setMessages((m) => [...m,
-          { kind: 'system', text: 'commands: /init /god /bugfix /watch /agents /model /plan /diff /undo /clear /help /exit' }
+          { kind: 'system', text: 'commands: /connect /models /init /god /bugfix /watch /agents /plan /diff /undo /clear /help /exit' }
         ]);
         break;
       case 'clear':
@@ -192,53 +303,161 @@ export function App({ orchestrator, projectName, history = [] }) {
         setMessages((m) => [...m, { kind: 'ok', text: file ? `\u2713 reverted ${file}` : 'nothing to undo' }]);
         break;
       }
-      case 'model':
-        setMessages((m) => [...m, { kind: 'system', text: 'model routing table:' }]);
-        try {
-          const catalog = await orchestrator.router.catalog();
-          setMessages((m) => [...m, ...catalog.slice(0, 20).map((c) => ({
-            kind: 'system',
-            text: `  ${c.ref.padEnd(48)} best: ${c.bestDomain} (${c.bestScore})${c.free ? ' · free' : ''}`
-          }))]);
-        } catch { /* ignore */ }
-        break;
+
       case 'god':
         await orchestrator.runGod(rest.join(' '), { interactive: true, addMessage: (msg) => setMessages((m) => [...m, msg]) });
         break;
+      case 'agent': {
+        const AGENTS = ['Build', 'Edit', 'Read', 'Notebook', 'Architect'];
+        const want = (rest[0] || '').toLowerCase();
+        const hit = want ? AGENTS.find((a) => a.toLowerCase() === want) : null;
+        if (want && !hit) {
+          setMessages((m) => [...m, { kind: 'err', text: `unknown agent "${want}" — options: ${AGENTS.join(', ')}` }]);
+          break;
+        }
+        const next = hit || AGENTS[(AGENTS.indexOf(agentMode) + 1) % AGENTS.length];
+        setAgentMode(next);
+        setMessages((m) => [...m, { kind: 'ok', text: `\u2713 agent mode: ${next}` }]);
+        break;
+      }
+      case 'mode': {
+        const level = (rest[0] || '').toLowerCase();
+        if (!level) {
+          setMessages((m) => [...m, { kind: 'system', text: `mode: ${mode} (${MODE_DESC[mode]}) — options: ${MODES.join(', ')} — use /mode <level>` }]);
+          break;
+        }
+        if (!MODES.includes(level)) {
+          setMessages((m) => [...m, { kind: 'err', text: `unknown mode "${level}" — use one of: ${MODES.join(', ')}` }]);
+          break;
+        }
+        orchestrator.setMode(level);
+        setMode(level);
+        const { saveConfig } = await import('../core/store.js');
+        await saveConfig({ mode: level });
+        setMessages((m) => [...m, { kind: 'ok', text: `\u2713 mode set to ${level} (${MODE_DESC[level]})` }]);
+        break;
+      }
       case 'bugfix':
       case 'watch':
         if (orchestrator.watchStatus === 'active') {
           await orchestrator.stopWatch();
-          setWatchOn(false);
           setMessages((m) => [...m, { kind: 'system', text: 'watch daemon stopped' }]);
         } else {
-          setWatchOn(true);
           setMessages((m) => [...m, { kind: 'system', text: '\u25c9 watching — scanning every 30s (Ctrl+C or /bugfix to stop)' }]);
           orchestrator.startWatch().catch((err) => {
             setMessages((m) => [...m, { kind: 'err', text: `watch failed: ${err.message}` }]);
-            setWatchOn(false);
           });
         }
         break;
       case 'diff':
         setMessages((m) => [...m, { kind: 'system', text: `${orchestrator.undoStack.pending()} pending undoable changes (see /undo)` }]);
         break;
+      case 'connect':
+        setActiveModal('connect');
+        break;
+      case 'models':
+        setActiveModal('models');
+        break;
+      case 'init':
+        if (onAction) onAction('init');
+        else setMessages((m) => [...m, { kind: 'err', text: 'init not supported here' }]);
+        break;
       default:
         setMessages((m) => [...m, { kind: 'err', text: `unknown command /${name} — try /help` }]);
     }
   };
 
+  const hasStarted = chatStarted || messages.length > 1 || plan || agents.length > 0;
+
+  const tokens = messages.reduce((s, m) => {
+    if (m.kind === 'user' || m.kind === 'assistant') return s + Math.round(String(m.text || '').length / 4);
+    return s;
+  }, 0);
+  const percent = Math.min(99, Math.round((tokens / 200000) * 100));
+
   return (
-    <Box flexDirection="column" width="100%" height="100%">
-      <Header projectName={projectName} model={modelLabel} watching={watchOn} />
-      <Box flexDirection="row" flexGrow={1}>
-        <Sidebar agents={agents} plan={plan} width={sidebarWidth} />
-        <Box flexDirection="column" flexGrow={1} paddingX={1}>
-          <MainPane messages={messages} />
-        </Box>
-      </Box>
-      <Toasts toasts={toasts} />
-      <InputLine onSubmit={handleSubmit} history={inputHistory.current} />
+    <Box flexDirection="column" width="100%" height={hasStarted ? rows : undefined}>
+      {hasStarted ? (
+        <>
+          <Header
+            projectName={projectName}
+            model={modelLabel}
+            watching={false}
+            email={email}
+            version={VERSION}
+          />
+          <Box flexDirection="row" flexGrow={1}>
+            <Box flexDirection="column" flexGrow={1} overflow="hidden" paddingX={1}>
+              <MainPane
+                messages={messages}
+                streamingMessage={streamingMessage}
+                isGenerating={isGenerating}
+                modelLabel={modelLabel}
+                onInterrupt={() => {
+                  orchestrator.interrupt?.();
+                }}
+                onRetry={() => {
+                  if (lastPrompt.current) handleSubmit(lastPrompt.current);
+                }}
+                pendingPermission={pendingPermission}
+                onPermission={(requestId, answer) => orchestrator.answerPermission?.(requestId, answer)}
+              />
+            </Box>
+            <Sidebar
+              width={sidebarWidth}
+              title={(messages.find((m) => m.kind === 'user')?.text || 'New Chat').slice(0, 44)}
+              workspace={projectName}
+              branch={branch}
+              version={VERSION}
+              tokens={tokens}
+              percent={percent}
+              spent="0.00"
+              todos={todos}
+            />
+          </Box>
+          <Toasts toasts={toasts} />
+          <Box flexShrink={0}>
+            <InputLine
+              onSubmit={handleSubmit}
+              history={inputHistory.current}
+              agentMode={agentMode}
+              mode={mode}
+              modelLabel={modelLabel}
+              isActive={!activeModal && !paletteOpen}
+              canRetry={messages.length > 0 && messages[messages.length - 1].kind === 'error'}
+              onRetry={() => {
+                if (lastPrompt.current) handleSubmit(lastPrompt.current);
+              }}
+              pendingPermission={pendingPermission}
+              onPermission={(requestId, answer) => orchestrator.answerPermission?.(requestId, answer)}
+            />
+          </Box>
+          <Box flexShrink={0}>
+            <StatusBar tokens={tokens} percent={percent} />
+          </Box>
+        </>
+      ) : (
+        <>
+          <WelcomeScreen modelLabel={modelLabel}>
+            <InputLine onSubmit={handleSubmit} history={inputHistory.current} variant="welcome" agentMode={agentMode} mode={mode} modelLabel={modelLabel} isActive={!activeModal} />
+          </WelcomeScreen>
+          <Toasts toasts={toasts} />
+          <Box flexShrink={0}>
+            <StatusBar tokens={tokens} percent={percent} />
+          </Box>
+        </>
+      )}
+      {activeModal && <ProviderWizard mode={activeModal} onClose={() => setActiveModal(null)} />}
+{paletteOpen && (
+        <CommandPalette
+          onRun={(cmd) => {
+            setPaletteOpen(false);
+            handleSlash(cmd);
+          }}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
     </Box>
   );
 }
+

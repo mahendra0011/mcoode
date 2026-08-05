@@ -6,6 +6,21 @@ export class AnthropicProvider extends HttpProvider {
     super({ id, displayName, baseUrl: 'https://api.anthropic.com/v1', apiKey: key, models, kind: 'remote' });
   }
 
+  async testKey(key) {
+    try {
+      const res = await fetch(`${this.baseUrl}/models`, { 
+        headers: { ...this.headers(), 'x-api-key': key }
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async listModels() {
+    return this.models;
+  }
+
   async probe() {
     if (!this.apiKey) return false;
     try {
@@ -24,9 +39,11 @@ export class AnthropicProvider extends HttpProvider {
     };
   }
 
-  async complete(model, { messages, temperature = 0.3, maxTokens = 4096 } = {}) {
+  async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null } = {}) {
     const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
     const rest = messages.filter((m) => m.role !== 'system');
+    const budget = reasoning?.thinkingBudget || 0;
+    const thinking = budget > 0 ? { type: 'enabled', budget_tokens: budget } : undefined;
     const res = await fetch(`${this.baseUrl}/messages`, {
       method: 'POST',
       headers: this.headers(),
@@ -35,7 +52,8 @@ export class AnthropicProvider extends HttpProvider {
         system,
         messages: rest,
         temperature,
-        max_tokens: maxTokens
+        max_tokens: maxTokens + budget,
+        ...(thinking ? { thinking } : {})
       })
     });
     if (!res.ok) {

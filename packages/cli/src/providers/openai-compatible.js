@@ -11,6 +11,45 @@ export class OpenAICompatible extends HttpProvider {
     super({ id, displayName, baseUrl, apiKey: key || '', models, kind });
   }
 
+  async testKey(key) {
+    if (this.kind === 'local') return true;
+    try {
+      const res = await fetch(`${this.baseUrl}/models`, { 
+        headers: { ...this.headers(), Authorization: `Bearer ${key}` }
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async listModels() {
+    if (this.kind === 'local') return this.models;
+    try {
+      const res = await fetch(`${this.baseUrl}/models`, { headers: this.headers() });
+      if (!res.ok) return this.models;
+      const body = await res.json();
+      
+      const hardcoded = new Map(this.models.map(m => [m.id, m]));
+      const fallbackScores = { planning: 70, frontend: 70, backend: 70, db: 70, devops: 70, test: 70, docs: 70, bugfix: 70 };
+      
+      return (body.data || []).map((m) => {
+        if (hardcoded.has(m.id)) return hardcoded.get(m.id);
+        
+        return {
+          id: m.id,
+          name: m.id,
+          free: false,
+          scores: fallbackScores,
+          costPer1kIn: m.pricing?.prompt ? Number(m.pricing.prompt) * 1000 : undefined,
+          costPer1kOut: m.pricing?.completion ? Number(m.pricing.completion) * 1000 : undefined
+        };
+      });
+    } catch {
+      return this.models;
+    }
+  }
+
   async probe() {
     if (!this.apiKey && this.kind !== 'local') return false;
     if (this.kind === 'local') {
@@ -21,19 +60,13 @@ export class OpenAICompatible extends HttpProvider {
         return false;
       }
     }
-    try {
-      const res = await fetch(`${this.baseUrl}/models`, { headers: this.headers() });
-      if (!res.ok) return false;
-      const body = await res.json();
-      const ids = new Set((body.data || []).map((m) => m.id));
-      this.models = this.models.filter((m) => ids.has(m.id));
-      return this.models.length > 0;
-    } catch {
-      return false;
-    }
+    const filtered = await this.listModels();
+    if (filtered.length === 0) return false;
+    this.models = filtered;
+    return true;
   }
 
-  async complete(model, { messages, temperature = 0.3, maxTokens = 4096 } = {}) {
+  async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null } = {}) {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers(),
@@ -42,7 +75,8 @@ export class OpenAICompatible extends HttpProvider {
         messages,
         temperature,
         max_tokens: maxTokens,
-        stream: false
+        stream: false,
+        ...(reasoning?.effort ? { reasoning_effort: reasoning.effort } : {})
       })
     });
     if (!res.ok) {
@@ -65,7 +99,7 @@ export class OpenAICompatible extends HttpProvider {
     };
   }
 
-  async *stream(model, { messages, temperature = 0.3, maxTokens = 4096 } = {}) {
+  async *stream(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null } = {}) {
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers(),
@@ -74,7 +108,8 @@ export class OpenAICompatible extends HttpProvider {
         messages,
         temperature,
         max_tokens: maxTokens,
-        stream: true
+        stream: true,
+        ...(reasoning?.effort ? { reasoning_effort: reasoning.effort } : {})
       })
     });
     if (!res.ok || !res.body) {

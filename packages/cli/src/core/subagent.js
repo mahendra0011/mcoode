@@ -44,9 +44,10 @@ function parseAction(text) {
 }
 
 export class Subagent {
-  constructor({ todo, assignment, projectPath, bus, undoStack, config = {}, onEvent = null }) {
+  constructor({ todo, assignment, projectPath, bus, undoStack, config = {}, onEvent = null, reasoning = null }) {
     this.todo = todo;
     this.assignment = assignment; // { provider, model, ref }
+    this.reasoning = reasoning;
     this.bus = bus;
     this.undoStack = undoStack;
     this.projectPath = projectPath;
@@ -108,7 +109,8 @@ export class Subagent {
 
         const res = await this.assignment.provider.complete(this.assignment.model.id, {
           messages: this.messages,
-          temperature: 0.1
+          temperature: 0.1,
+          reasoning: this.reasoning
         });
         this.ledger?.(res);
 

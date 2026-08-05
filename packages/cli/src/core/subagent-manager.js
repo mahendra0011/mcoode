@@ -97,6 +97,7 @@ export class SubagentManager {
         bus: this.bus,
         undoStack: this.undoStack,
         config: this.config,
+        reasoning: this.router?.reasoning || null,
         onEvent: () => {}
       });
       this.subagents.set(todo.id, sub);

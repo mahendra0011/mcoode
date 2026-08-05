@@ -17,6 +17,7 @@ export async function connectRedis(uri) {
       maxRetriesPerRequest: 1,
       retryStrategy: (times) => (times > 2 ? null : 200)
     });
+    redis.on('error', () => {});
     await redis.connect();
     client = redis;
     mode = 'redis';

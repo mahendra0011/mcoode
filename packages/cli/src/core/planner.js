@@ -61,7 +61,8 @@ export class Planner {
           { role: 'system', content: PLAN_SYSTEM },
           { role: 'user', content: user }
         ],
-        temperature: 0.2
+        temperature: 0.2,
+        reasoning: this.router?.reasoning || null
       });
     } catch (err) {
       // fall back to the mock provider so planning never hard-fails

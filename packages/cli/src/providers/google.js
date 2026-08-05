@@ -13,6 +13,19 @@ export class GeminiProvider extends HttpProvider {
     });
   }
 
+  async testKey(key) {
+    try {
+      const res = await fetch(`${this.baseUrl}/models?key=${key}`);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async listModels() {
+    return this.models;
+  }
+
   async probe() {
     if (!this.apiKey) return false;
     try {
@@ -27,7 +40,7 @@ export class GeminiProvider extends HttpProvider {
     return { 'Content-Type': 'application/json' };
   }
 
-  async complete(model, { messages, temperature = 0.3, maxTokens = 4096 } = {}) {
+  async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null } = {}) {
     const contents = messages
       .filter((m) => m.role !== 'system')
       .map((m) => ({
@@ -35,6 +48,7 @@ export class GeminiProvider extends HttpProvider {
         parts: [{ text: m.content }]
       }));
     const system = messages.find((m) => m.role === 'system')?.content;
+    const budget = reasoning?.thinkingBudget || 0;
     const res = await fetch(
       `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`,
       {
@@ -43,7 +57,11 @@ export class GeminiProvider extends HttpProvider {
         body: JSON.stringify({
           contents,
           systemInstruction: system ? { parts: [{ text: system }] } : undefined,
-          generationConfig: { temperature, maxOutputTokens: maxTokens }
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+            ...(budget > 0 ? { thinkingConfig: { thinkingBudget: budget } } : {})
+          }
         })
       }
     );

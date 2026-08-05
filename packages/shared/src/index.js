@@ -2,6 +2,7 @@ export * from './events.js';
 export * from './domains.js';
 export * from './plan.js';
 export * from './provider.js';
+export * from './plugins.js';
 export { DEFAULT_CONFIG, DEFAULT_ROUTING } from './domains.js';
 
 /** In-memory + file-backed usage ledger: tracks RPM/TPM per provider,

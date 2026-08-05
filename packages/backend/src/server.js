@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'node:http';
 import helmet from 'helmet';
@@ -24,13 +25,27 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
 
   const storage = await connectDb(mongoUri);
   await connectRedis(redisUri);
-  await connectQueue(redisUri ? (await import('ioredis')).default(redisUri) : null);
+
+  let redisClient = null;
+  if (redisUri) {
+    try {
+      const { Redis } = await import('ioredis');
+      const candidate = new Redis(redisUri, {
+        lazyConnect: true,
+        retryStrategy: (times) => (times > 2 ? null : 200)
+      });
+      candidate.on('error', () => {});
+      await candidate.connect().catch(() => {});
+      if (candidate.status === 'ready') redisClient = candidate;
+    } catch {
+      redisClient = null;
+    }
+  }
+  await connectQueue(redisClient);
   configureMailer({
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-    from: env.SMTP_FROM
+    apiKey: env.BREVO_API_KEY,
+    from: env.MAIL_FROM,
+    name: env.MAIL_FROM_NAME
   });
 
   const logger = pino({ level: env.LOG_LEVEL || 'info' });

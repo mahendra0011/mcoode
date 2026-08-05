@@ -1,9 +1,11 @@
 import { render } from 'ink';
 import { App } from './ui/App.jsx';
+import { OnboardingScreen } from './ui/OnboardingScreen.jsx';
 import { Orchestrator } from './core/orchestrator.js';
-import { loadConfig } from './core/store.js';
+import { loadConfig, saveConfig } from './core/store.js';
 import { saveHistory } from './core/history.js';
-import { runOnboarding } from './commands/onboarding.js';
+import { hasApiKey, backendUrl } from './commands/onboarding.js';
+import { loadVault, saveVault } from './core/vault.js';
 import { basename } from 'node:path';
 
 export async function startRepl() {
@@ -15,48 +17,165 @@ export async function startRepl() {
     console.error('Command Prompt (not Git Bash/mintty), or run with --non-interactive for scripted use.');
     process.exit(1);
   }
-  const config = await loadConfig();
-  await runOnboarding({ interactive: true });
-  const projectName = basename(process.cwd()) || 'project';
-  const orchestrator = new Orchestrator({
-    projectPath: process.cwd(),
-    config,
-    options: {
-      modelOverride: process.env.MCCODE_MODEL || null,
-      verbose: process.env.MCCODE_VERBOSE === '1'
-    }
-  });
-  await orchestrator.init();
 
-  let app;
-  try {
-    app = render(
-      <App
-        orchestrator={orchestrator}
-        projectName={projectName}
-        history={[]}
-      />,
-      { exitOnCtrlC: true }
-    );
-  } catch (err) {
-    console.error(`mcode: TUI failed to start (${err?.message || err}).`);
-    console.error('Use Windows Terminal, VS Code terminal, or Command Prompt — or run with --non-interactive.');
-    process.exit(1);
+  // Enter alternate screen FIRST — entire TUI (including onboarding) lives here
+  process.stdout.write('\x1b[?1049h');
+  process.stdout.write('\x1b[H\x1b[2J'); // Clear the alternate screen
+  process.on('exit', () => {
+    process.stdout.write('\x1b[?1049l'); // Leave alternate screen buffer on exit
+  });
+
+  const config = await loadConfig();
+  const accountExists = Boolean(config?.account?.email);
+  const keyExists = await hasApiKey(config);
+
+  // ── Ink-based onboarding (if needed) ──────────────────────────────────
+  const needsOnboarding = !accountExists;
+
+  if (needsOnboarding) {
+    await new Promise((resolve) => {
+      const base = backendUrl(config);
+
+      async function apiCall(method, path, body, token = null) {
+        let res;
+        try {
+          res = await fetch(path, {
+            method,
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: body ? JSON.stringify(body) : undefined,
+          });
+        } catch (err) {
+          const code = err.cause?.code || '';
+          if (['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'].includes(code)) {
+            throw new Error(`cannot reach mcode backend at ${base} — start it from the repo root with: npm run start --workspace packages/backend`);
+          }
+          throw new Error(`network error contacting ${base}: ${err.message}`);
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const err = new Error(data?.error?.message || `request failed (${res.status})`);
+          err.code = data?.error?.code;
+          throw err;
+        }
+        return data;
+      }
+
+      const apiHandlers = {
+        sendOtp: async (email) => {
+          return apiCall('POST', `${base}/api/v1/auth/send-otp`, { email, intent: 'signup' });
+        },
+        verifySignup: async ({ email, name, password, otp }) => {
+          const data = await apiCall('POST', `${base}/api/v1/auth/verify-otp`, {
+            email, otp, intent: 'signup', name, password,
+          });
+          await saveConfig({ account: { email: data.user.email, name: data.user.name, refresh: data.refresh } });
+          return data;
+        },
+        login: async (email, password) => {
+          const data = await apiCall('POST', `${base}/api/v1/auth/login`, { email, password });
+          await saveConfig({ account: { email: data.user.email, name: data.user.name, refresh: data.refresh } });
+          return data;
+        },
+        saveApiKey: async (envVar, key) => {
+          const secrets = await loadVault();
+          await saveVault({ ...secrets, [envVar]: key });
+        },
+      };
+
+      const onboardingApp = render(
+        <OnboardingScreen
+          onComplete={() => {
+            onboardingApp.unmount();
+            resolve();
+          }}
+          hasAccount={accountExists}
+          hasKey={keyExists}
+          config={config}
+          apiHandlers={apiHandlers}
+        />,
+        { exitOnCtrlC: true }
+      );
+    });
+
+    // Clear screen after onboarding finishes, before main TUI
+    process.stdout.write('\x1b[H\x1b[2J');
   }
 
-  await app.waitUntilExit();
+  // ── Main TUI ──────────────────────────────────────────────────────────
+  while (true) {
+    const freshConfig = await loadConfig();
+    const projectName = basename(process.cwd()) || 'project';
+    const orchestrator = new Orchestrator({
+      projectPath: process.cwd(),
+      config: freshConfig,
+      options: {
+        modelOverride: process.env.MCCODE_MODEL || null,
+        verbose: process.env.MCCODE_VERBOSE === '1'
+      }
+    });
+    await orchestrator.init();
 
-  // persist session on exit
-  await saveHistory({
-    id: orchestrator.sessionId,
-    mode: 'manual',
-    projectName,
-    projectPath: process.cwd(),
-    startedAt: new Date().toISOString(),
-    completedAt: new Date().toISOString(),
-    status: 'completed'
-  });
+    let app;
+    let nextAction = null;
+    try {
+      app = render(
+        <App
+          orchestrator={orchestrator}
+          projectName={projectName}
+          history={[]}
+          onAction={(action) => {
+            nextAction = action;
+            app.unmount();
+          }}
+        />,
+        { exitOnCtrlC: true }
+      );
+    } catch (err) {
+      console.error(`mcode: TUI failed to start (${err?.message || err}).`);
+      console.error('Use Windows Terminal, VS Code terminal, or Command Prompt — or run with --non-interactive.');
+      process.stdout.write('\x1b[?1049l'); // Ensure we leave alternate screen if we error out
+      process.exit(1);
+    }
 
-  await orchestrator.watchDaemon?.stop();
-  process.exit(0);
+    await app.waitUntilExit();
+    await orchestrator.watchDaemon?.stop();
+
+    if (nextAction === 'init') {
+      process.stdout.write('\x1b[?1049l'); // Leave alternate screen buffer for clack
+      process.stdout.write('\x1b[H\x1b[2J'); // Clear normal screen
+
+      try {
+        if (nextAction === 'init') {
+          const { initListCommand } = await import('./commands/init.js');
+          await initListCommand();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+
+      // Wait a moment for user to read outcome before going back to TUI
+      await new Promise(r => setTimeout(r, 1500));
+      
+      // Re-enter alternate screen for next iteration
+      process.stdout.write('\x1b[?1049h');
+      process.stdout.write('\x1b[H\x1b[2J');
+      continue;
+    }
+
+    // persist session on exit
+    await saveHistory({
+      id: orchestrator.sessionId,
+      mode: 'manual',
+      projectName,
+      projectPath: process.cwd(),
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      status: 'completed'
+    });
+
+    process.exit(0);
+  }
 }
