@@ -203,7 +203,7 @@ export function TodoBlock({ items, marginTop = 1 }) {
 
 export function InterruptBlock({ marginTop = 1 }) {
   return (
-    <Box marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+    <Box backgroundColor={theme.bgMessage} paddingX={2} marginTop={marginTop} marginLeft={1} flexShrink={0}>
       <Text color={theme.red}>{'\u2717 Interrupted by user'}</Text>
     </Box>
   );
@@ -211,7 +211,7 @@ export function InterruptBlock({ marginTop = 1 }) {
 
 export function ErrorBlock({ reason, marginTop = 1 }) {
   return (
-    <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+    <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0} marginTop={marginTop} marginLeft={1} flexShrink={0}>
       <Text color={theme.red}>{'\u2717 Something went wrong: '}{reason}</Text>
       <Text color={theme.dim}>Press r to retry</Text>
     </Box>
@@ -220,7 +220,7 @@ export function ErrorBlock({ reason, marginTop = 1 }) {
 
 export function PermissionBlock({ pending, approved = false, command, marginTop = 1 }) {
   return (
-    <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+    <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0} marginTop={marginTop} marginLeft={1} flexShrink={0}>
       {pending ? (
         <>
           <Text color={theme.orange}>{'? Allow running: '}<Text bold color={theme.text}>{command}</Text></Text>
