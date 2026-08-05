@@ -64,17 +64,14 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     }
     const lines = isExpanded ? highlighted.split('\n') : [];
     return (
-      <Box key={id} flexDirection="column" marginTop={1} flexShrink={0} paddingLeft={1}>
-        <Box flexDirection="row">
-          <Box width={1} backgroundColor={theme.blue}><Text> </Text></Box>
-          <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={3} paddingY={1} flexGrow={1}>
-            <Text color={isFocused ? theme.text : theme.dim}>{title}</Text>
-            {isExpanded && (
-              <Box flexDirection="column" marginTop={1}>
-                {lines.slice(0, 30).map((line, i) => <Text key={i} color={theme.text}>{line || ' '}</Text>)}
-              </Box>
-            )}
-          </Box>
+      <Box key={id} flexDirection="column" marginTop={1} flexShrink={0}>
+        <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={3} paddingY={1} width="100%">
+          <Text color={isFocused ? theme.text : theme.dim}>{title}</Text>
+          {isExpanded && (
+            <Box flexDirection="column" marginTop={1}>
+              {lines.slice(0, 30).map((line, i) => <Text key={i} color={theme.text}>{line || ' '}</Text>)}
+            </Box>
+          )}
         </Box>
       </Box>
     );
@@ -223,7 +220,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     const isFirst = i === keepStart;
     if (msg.kind === 'user') {
       return (
-        <Box key={`u${i}`} flexDirection="row" marginTop={isFirst ? 0 : 1} flexShrink={0}>
+        <Box key={`u${i}`} width="100%" marginTop={isFirst ? 0 : 1} flexShrink={0}>
           <Box backgroundColor={theme.userBg} width="100%" paddingX={3} paddingY={1}>
             <Text color={theme.text}>{msg.text}</Text>
           </Box>

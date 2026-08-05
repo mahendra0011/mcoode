@@ -375,7 +375,7 @@ const handleSlash = async (raw) => {
   const percent = Math.min(99, Math.round((tokens / 200000) * 100));
 
   return (
-    <Box flexDirection="column" width="100%" height={hasStarted ? rows : undefined}>
+    <Box flexDirection="column" width="100%" height={hasStarted ? rows : undefined} backgroundColor={theme.bg}>
       {hasStarted ? (
         <>
           <Header
