@@ -3,7 +3,6 @@ import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import { theme } from './theme.js';
 import { Header } from './Header.jsx';
 import { MainPane } from './MainPane.jsx';
-import { Sidebar } from './Sidebar.jsx';
 import { InputLine } from './InputLine.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
 import { Toasts } from './Toasts.jsx';
@@ -30,7 +29,6 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
   const [mode, setMode] = useState('medium');
   const [agentMode, setAgentMode] = useState('Build');
   const [email, setEmail] = useState('');
-  const sidebarWidth = 35;
   const [branch, setBranch] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [todos, setTodos] = useState([]);
@@ -253,6 +251,7 @@ const handleSubmit = async (value) => {
       const tokens = Math.max(1, Math.round((text.length || 0) / 4));
       const thoughtText = thoughtRef.current;
       thoughtRef.current = '';
+      const thoughtObj = thoughtText ? { text: thoughtText, secs: Number(secs) } : null;
       if (interrupted) {
         setTodos((list) => {
           const next = list.map((t) => (t.status === 'running' ? { ...t, status: 'paused' } : t));
@@ -262,7 +261,7 @@ const handleSubmit = async (value) => {
       }
       setMessages((m) => [
         ...m,
-        { kind: 'assistant', text, thought: thoughtText || null, meta: { tokens, secs, model: modelLabel, interrupted } }
+        { kind: 'assistant', text, thought: thoughtObj, meta: { tokens, secs, model: modelLabel, interrupted } }
       ]);
     } catch (err) {
       setStreamingMessage('');
@@ -403,17 +402,6 @@ const handleSlash = async (raw) => {
                 onPermission={(requestId, answer) => orchestrator.answerPermission?.(requestId, answer)}
               />
             </Box>
-            <Sidebar
-              width={sidebarWidth}
-              title={(messages.find((m) => m.kind === 'user')?.text || 'New Chat').slice(0, 44)}
-              workspace={projectName}
-              branch={branch}
-              version={VERSION}
-              tokens={tokens}
-              percent={percent}
-              spent="0.00"
-              todos={todos}
-            />
           </Box>
           <Toasts toasts={toasts} />
           <Box flexShrink={0}>
@@ -433,7 +421,7 @@ const handleSlash = async (raw) => {
             />
           </Box>
           <Box flexShrink={0}>
-            <StatusBar tokens={tokens} percent={percent} />
+            <StatusBar tokens={tokens} percent={percent} cwd={process.cwd()} isGenerating={isGenerating} />
           </Box>
         </>
       ) : (

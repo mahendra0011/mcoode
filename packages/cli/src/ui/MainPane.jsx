@@ -225,7 +225,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
       return (
         <Box key={`u${i}`} flexDirection="row" marginTop={isFirst ? 0 : 1} flexShrink={0}>
           <Box width={1}><Text color={theme.blue}>{'\u2502'}</Text></Box>
-          <Box paddingLeft={1} paddingTop={1} paddingBottom={1}>
+          <Box backgroundColor={theme.userBg} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0} flexGrow={1}>
             <Text color={theme.text}>{msg.text}</Text>
           </Box>
         </Box>
