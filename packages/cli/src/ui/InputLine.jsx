@@ -188,8 +188,8 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
         </Box>
       )}
       <Box flexDirection="row" width="100%">
-        <Box width={1}><Text color={theme.green}>{'\u2502'}</Text></Box>
-        <Box paddingLeft={1} flexDirection="column" flexGrow={1}>
+        <Box width={1}><Text color={theme.blue}>{'\u2502'}</Text></Box>
+        <Box backgroundColor={theme.userBg} flexGrow={1} paddingX={3} paddingY={1} flexDirection="column">
           {value.length === 0 ? (
             <Box flexDirection="row">
               <Text color={theme.dim}>Ask anything…</Text>
