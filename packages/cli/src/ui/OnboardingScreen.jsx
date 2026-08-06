@@ -106,7 +106,7 @@ const STEPS = {
 
 // ─── Main Onboarding Component ──────────────────────────────────────────────
 
-export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHandlers }) {
+export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = null, hasAccount, hasKey, config, apiHandlers }) {
   const renderer = useRenderer();
   const exit = () => renderer.destroy();
   const [step, setStep] = useState(STEPS.WELCOME);
@@ -133,6 +133,12 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
   }, []);
 
   const setField = (field, value) => setInputValues((v) => ({ ...v, [field]: value }));
+
+  // Skip setup entirely — proceed without storing any keys.
+  const skipSetup = () => {
+    if (onToast) onToast({ kind: 'warn', text: 'skipped setup — no providers configured' });
+    onSkip();
+  };
 
   // ── Welcome step ────────────────────────────────────────────────────────
 

@@ -2,6 +2,8 @@ import { ToolExecutor } from './tools.js';
 import { EVENTS } from '@mcode/shared';
 import { join, isAbsolute, relative } from 'node:path';
 
+/* global AbortController */
+
 /**
  * Agent-mode chat: the assistant can inspect the project, edit files, run
  * commands and tests, then answer — opencode-style. The model narrates and
@@ -49,17 +51,20 @@ export function extractAction(text) {
   const matches = [...source.matchAll(ACTION_FENCE)];
   if (matches.length > 0) {
     const raw = matches[matches.length - 1][1].trim();
-    let candidate = raw;
     const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
-    if (start !== -1 && end >= start) candidate = raw.slice(start, end + 1);
-    try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed.tool === 'string') {
-        return { tool: parsed.tool, args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {} };
+    if (start !== -1) {
+      let end = start;
+      while ((end = raw.indexOf('}', end)) !== -1) {
+        try {
+          const parsed = JSON.parse(raw.slice(start, end + 1));
+          if (parsed && typeof parsed.tool === 'string') {
+            return { tool: parsed.tool, args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {} };
+          }
+        } catch {
+          /* keep scanning for the end of the object */
+        }
+        end += 1;
       }
-    } catch {
-      /* fall through */
     }
   }
   const xml = [...source.matchAll(TOOL_CALL_XML)];
@@ -93,7 +98,6 @@ async function* streamText(assignment, model, params) {
     if (res?.text) yield res.text;
   }
 }
-
 export class ChatAgent {
   constructor({ assignment, projectPath, bus, undoStack, config = {}, reasoning = null, history = [], onTool = null }) {
     this.assignment = assignment;
@@ -104,7 +108,10 @@ export class ChatAgent {
     this.history = history ? history.slice(-20) : [];
     this.maxTurns = Math.max(1, Number(config.chatAgentTurns) || 12);
     this.allowShellAll = Boolean(config.allowShellAll);
+    this.networkWhitelist = config.networkWhitelist || null;
+    this.auditLog = config.auditLog || null;
     this.requirePermission = config.requirePermission !== false;
+    this.permissionTimeoutMs = Math.max(5_000, Number(config.permissionTimeoutMs) || 120_000);
     this.onTool = onTool;
     this.turn = 0;
     this.narration = [];
@@ -113,12 +120,14 @@ export class ChatAgent {
     this.aborted = false;
     this.abortWaiters = [];
     this.pendingPermission = null;
+    this.abortController = null;
   }
 
   /** Cancel the current run (user pressed escape/Ctrl+C). */
   abort() {
     if (this.aborted) return;
     this.aborted = true;
+    this.abortController?.abort();
     for (const resolve of this.abortWaiters.splice(0)) resolve('aborted');
     if (this.pendingPermission) {
       const { requestId } = this.pendingPermission;
@@ -136,11 +145,15 @@ export class ChatAgent {
     }
   }
 
-  /** Interactive permission gate — resolved by the UI (y/n/always) or abort. */
+  /** Interactive permission gate — resolved by the UI (y/n/always), abort, or timeout. */
   _askPermission(command) {
     const requestId = `perm${++this.toolSeq}`;
     return new Promise((resolve) => {
+      let settled = false;
       const settle = (answer) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         this.abortWaiters = this.abortWaiters.filter((w) => w !== settle);
         this.bus.off(EVENTS.PERMISSION_ANSWER, onAnswer);
         if (this.pendingPermission?.requestId === requestId) this.pendingPermission = null;
@@ -150,6 +163,14 @@ export class ChatAgent {
         if (p.requestId !== requestId) return;
         settle(p.answer || 'no');
       };
+      const timeout = setTimeout(() => {
+        this.bus?.emit(EVENTS.MESSAGE, {
+          kind: 'system',
+          replaceKey: requestId,
+          text: `permission prompt timed out after ${Math.round(this.permissionTimeoutMs / 1000)}s — auto-denied`
+        });
+        settle('no');
+      }, this.permissionTimeoutMs);
       this.pendingPermission = { requestId, command, resolve: settle };
       this.abortWaiters.push(settle);
       this.bus?.on(EVENTS.PERMISSION_ANSWER, onAnswer);
@@ -185,6 +206,9 @@ export class ChatAgent {
     if (name === 'run_shell') return String(result.stdout || '').split('\n').slice(0, 3).join(' · ').slice(0, 120) || 'ok';
     if (name === 'run_tests') return result.passed ? 'tests passed' : 'tests failed';
     if (name === 'git_status') return `${(result.files || []).length} changed files`;
+    if (name === 'edit_file') return `${result?.diff?.changedLines ?? result?.diffLines?.length ?? '?'} lines changed in ${result.file}`;
+    if (name === 'web_search') return `${(result?.results || []).length} results`;
+    if (name === 'web_fetch') return `${String(result?.content || '').length} chars fetched`;
     return 'ok';
   }
 
@@ -222,6 +246,19 @@ export class ChatAgent {
         block: created ? 'write' : 'edit',
         path: this._fullPath(result?.file || args.path),
         created,
+        lines: String(result?.content || '').split('\n').slice(0, 200),
+        diffLines: (result?.diffLines || []).slice(0, 200),
+        command: '',
+        relDir: '',
+        title: '',
+        output: ''
+      };
+    }
+    if (name === 'edit_file') {
+      return {
+        block: 'edit',
+        path: this._fullPath(args.path),
+        created: false,
         lines: String(result?.content || '').split('\n').slice(0, 200),
         diffLines: (result?.diffLines || []).slice(0, 200),
         command: '',
@@ -268,6 +305,27 @@ export class ChatAgent {
         output: String((result?.files || []).join('\n')).slice(0, 3000)
       };
     }
+    if (name === 'web_search') {
+      const results = (result?.results || []).slice(0, 5);
+      const output = results.map((r, i) =>
+        `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || ''}`
+      ).join('\n\n');
+      return {
+        block: 'command', path: '', lines: [], command: '', relDir: '',
+        title: `Web search: ${args.query || ''}`,
+        output: output.slice(0, 3000)
+      };
+    }
+    if (name === 'web_fetch') {
+      const content = String(result?.content || '').split('\n').slice(0, 60);
+      return {
+        block: 'read', path: args.url || '',
+        lines: content,
+        diffLines: [], command: '', relDir: '',
+        title: `Fetched: ${result?.title || args.url || ''}`,
+        output: ''
+      };
+    }
     if (name === 'git_status') {
       return {
         block: 'command', path: '', lines: [], command: '', relDir: '',
@@ -282,13 +340,18 @@ export class ChatAgent {
   }
 
   async run(prompt) {
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
     const tools = new ToolExecutor({
       projectPath: this.projectPath,
       bus: this.bus,
       undoStack: this.undoStack,
       allowShellAll: this.allowShellAll,
+      networkWhitelist: this.networkWhitelist,
+      auditLog: this.auditLog,
       domain: 'backend',
-      todoId: null
+      todoId: null,
+      cancelSignal: signal
     });
 
     const messages = [
@@ -300,14 +363,21 @@ export class ChatAgent {
 
     for (this.turn = 0; this.turn < this.maxTurns; this.turn++) {
       let text = '';
-      for await (const chunk of streamText(this.assignment, this.assignment.model.id, {
-        messages,
-        temperature: 0.15,
-        reasoning: this.reasoning
-      })) {
+      try {
+        for await (const chunk of streamText(this.assignment, this.assignment.model.id, {
+          messages,
+          temperature: 0.15,
+          reasoning: this.reasoning,
+          signal
+        })) {
+          if (this.aborted) break;
+          text += chunk;
+          this.bus?.emit(EVENTS.MESSAGE, { kind: 'stream', text: stripActions(text) || '\u2026' });
+        }
+      } catch (err) {
         if (this.aborted) break;
-        text += chunk;
-        this.bus?.emit(EVENTS.MESSAGE, { kind: 'stream', text: stripActions(text) || '\u2026' });
+        this.bus?.emit(EVENTS.MESSAGE, { kind: 'system', text: `model error: ${err.message}` });
+        break;
       }
       if (this.aborted) break;
       messages.push({ role: 'assistant', content: text });
@@ -360,7 +430,12 @@ export class ChatAgent {
             continue;
           }
         }
-        result = await tools.run(action.tool, action.args || {});
+        try {
+          result = await tools.run(action.tool, action.args || {});
+        } catch (err) {
+          if (this.aborted) break;
+          result = { ok: false, error: `tool error: ${err.message}` };
+        }
       } else {
         result = { ok: false, error: `unknown tool "${action.tool}"` };
       }
@@ -376,7 +451,7 @@ export class ChatAgent {
         ...this._blockMeta(action.tool, action.args || {}, result)
       });
 
-      if (ok && (action.tool === 'write_file' || action.tool === 'edit_file')) {
+      if (ok && action.tool === 'write_file') {
         const diff = Array.isArray(result?.diffLines) ? result.diffLines : [];
         this.changedFiles.push({
           path: result?.file || this._fullPath(action.args?.path || action.args?.file || ''),

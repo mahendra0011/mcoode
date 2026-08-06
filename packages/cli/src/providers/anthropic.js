@@ -1,4 +1,4 @@
-import { HttpProvider } from '@mcode/shared';
+import { HttpProvider, streamSSE } from '@mcode/shared';
 
 /** Anthropic Messages API adapter. */
 export class AnthropicProvider extends HttpProvider {
@@ -8,7 +8,7 @@ export class AnthropicProvider extends HttpProvider {
 
   async testKey(key) {
     try {
-      const res = await fetch(`${this.baseUrl}/models`, { 
+      const res = await this.httpFetch(`${this.baseUrl}/models`, {
         headers: { ...this.headers(), 'x-api-key': key }
       });
       return res.ok;
@@ -24,7 +24,7 @@ export class AnthropicProvider extends HttpProvider {
   async probe() {
     if (!this.apiKey) return false;
     try {
-      const res = await fetch(`${this.baseUrl}/models`, { headers: this.headers() });
+      const res = await this.httpFetch(`${this.baseUrl}/models`, { headers: this.headers() });
       return res.ok;
     } catch {
       return false;
@@ -39,22 +39,29 @@ export class AnthropicProvider extends HttpProvider {
     };
   }
 
-  async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null } = {}) {
+  /** Anthropic rejects `temperature` on models with extended thinking — omit it. */
+  _body(model, { messages, temperature, maxTokens, thinking, stream }) {
     const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
     const rest = messages.filter((m) => m.role !== 'system');
+    return JSON.stringify({
+      model,
+      system,
+      messages: rest,
+      ...(thinking ? {} : { temperature }),
+      max_tokens: maxTokens + (thinking?.budget_tokens || 0),
+      ...(thinking ? { thinking } : {}),
+      stream
+    });
+  }
+
+  async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
     const budget = reasoning?.thinkingBudget || 0;
     const thinking = budget > 0 ? { type: 'enabled', budget_tokens: budget } : undefined;
-    const res = await fetch(`${this.baseUrl}/messages`, {
+    const res = await this.httpFetch(`${this.baseUrl}/messages`, {
       method: 'POST',
       headers: this.headers(),
-      body: JSON.stringify({
-        model,
-        system,
-        messages: rest,
-        temperature,
-        max_tokens: maxTokens + budget,
-        ...(thinking ? { thinking } : {})
-      })
+      signal,
+      body: this._body(model, { messages, temperature, maxTokens, thinking, stream: false })
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
@@ -71,5 +78,31 @@ export class AnthropicProvider extends HttpProvider {
       model,
       finishReason: body.stop_reason || 'stop'
     };
+  }
+
+  async *stream(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
+    const budget = reasoning?.thinkingBudget || 0;
+    const thinking = budget > 0 ? { type: 'enabled', budget_tokens: budget } : undefined;
+    const res = await this.httpFetch(`${this.baseUrl}/messages`, {
+      method: 'POST',
+      headers: this.headers(),
+      signal,
+      body: this._body(model, { messages, temperature, maxTokens, thinking, stream: true })
+    });
+    if (!res.ok) {
+      throw new Error(`anthropic stream error ${res.status}`);
+    }
+    for await (const payload of streamSSE(res)) {
+      try {
+        const json = JSON.parse(payload);
+        if (json.type === 'content_block_delta' && json.delta?.type === 'text_delta' && json.delta.text) {
+          yield json.delta.text;
+        } else if (json.type === 'message_stop') {
+          return;
+        }
+      } catch {
+        /* ignore malformed chunk */
+      }
+    }
   }
 }

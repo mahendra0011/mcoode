@@ -1,16 +1,25 @@
 let jsonMode = false;
 let interactive = true;
+let quiet = false;
 
 export function setJsonMode(v) {
   jsonMode = v;
+}
+
+export function isJsonMode() {
+  return jsonMode;
 }
 
 export function setInteractive(v) {
   interactive = v;
 }
 
+export function setQuiet(v) {
+  quiet = Boolean(v);
+}
+
 export function out(...parts) {
-  if (jsonMode) return;
+  if (jsonMode || quiet) return;
   process.stdout.write(parts.join(' ') + '\n');
 }
 

@@ -12,6 +12,7 @@ export const EVENTS = Object.freeze({
   SUBAGENT_DONE: 'SUBAGENT_DONE',
   SUBAGENT_FAILED: 'SUBAGENT_FAILED',
   SUBAGENT_NEEDS_REVIEW: 'SUBAGENT_NEEDS_REVIEW',
+  WAVE_START: 'WAVE_START',
   WAVE_COMPLETE: 'WAVE_COMPLETE',
   INTEGRATION_PASS: 'INTEGRATION_PASS',
   BUILD_COMPLETE: 'BUILD_COMPLETE',
@@ -22,7 +23,8 @@ export const EVENTS = Object.freeze({
   WATCH_CHANGE: 'WATCH_CHANGE',
   WATCH_FIX: 'WATCH_FIX',
   WATCH_STATUS: 'WATCH_STATUS',
-  UNDO: 'UNDO'
+  UNDO: 'UNDO',
+  HOOK_EXECUTED: 'HOOK_EXECUTED'
 });
 
 export const SUBAGENT_STATUS = Object.freeze({
@@ -58,6 +60,8 @@ export const SOCKET = Object.freeze({
     AGENT_DONE: 'agent:done',
     AGENT_FAILED: 'agent:failed',
     AGENT_NEEDS_REVIEW: 'agent:needs_review',
+    WAVE_START: 'wave:start',
+    WAVE_COMPLETE: 'wave:complete',
     INTEGRATION_PASS: 'integration:pass',
     BUILD_COMPLETE: 'build:complete',
     TOAST: 'toast',

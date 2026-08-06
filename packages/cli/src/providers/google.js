@@ -1,4 +1,4 @@
-import { HttpProvider } from '@mcode/shared';
+import { HttpProvider, streamSSE } from '@mcode/shared';
 
 /** Google Gemini (generativelanguage) adapter. */
 export class GeminiProvider extends HttpProvider {
@@ -15,7 +15,7 @@ export class GeminiProvider extends HttpProvider {
 
   async testKey(key) {
     try {
-      const res = await fetch(`${this.baseUrl}/models?key=${key}`);
+      const res = await this.httpFetch(`${this.baseUrl}/models?key=${key}`);
       return res.ok;
     } catch {
       return false;
@@ -29,7 +29,7 @@ export class GeminiProvider extends HttpProvider {
   async probe() {
     if (!this.apiKey) return false;
     try {
-      const res = await fetch(`${this.baseUrl}/models?key=${this.apiKey}`);
+      const res = await this.httpFetch(`${this.baseUrl}/models?key=${this.apiKey}`);
       return res.ok;
     } catch {
       return false;
@@ -40,7 +40,7 @@ export class GeminiProvider extends HttpProvider {
     return { 'Content-Type': 'application/json' };
   }
 
-  async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null } = {}) {
+  _request(model, { messages, temperature, maxTokens, reasoning }) {
     const contents = messages
       .filter((m) => m.role !== 'system')
       .map((m) => ({
@@ -49,37 +49,68 @@ export class GeminiProvider extends HttpProvider {
       }));
     const system = messages.find((m) => m.role === 'system')?.content;
     const budget = reasoning?.thinkingBudget || 0;
-    const res = await fetch(
-      `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`,
-      {
-        method: 'POST',
-        headers: this.headers(),
-        body: JSON.stringify({
-          contents,
-          systemInstruction: system ? { parts: [{ text: system }] } : undefined,
-          generationConfig: {
-            temperature,
-            maxOutputTokens: maxTokens,
-            ...(budget > 0 ? { thinkingConfig: { thinkingBudget: budget } } : {})
-          }
-        })
-      }
-    );
+    return {
+      body: JSON.stringify({
+        contents,
+        systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+          ...(budget > 0 ? { thinkingConfig: { thinkingBudget: budget } } : {})
+        }
+      }),
+      url: `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`
+    };
+  }
+
+  async complete(model, opts = {}) {
+    const { url, body } = this._request(model, { maxTokens: 4096, temperature: 0.3, ...opts });
+    const res = await this.httpFetch(url, {
+      method: 'POST',
+      headers: this.headers(),
+      signal: opts.signal || null,
+      body
+    });
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
       throw new Error(`google error ${res.status}: ${detail.slice(0, 400)}`);
     }
-    const body = await res.json();
-    const usage = body.usageMetadata || {};
+    const resBody = await res.json();
+    const usage = resBody.usageMetadata || {};
     return {
-      text: (body.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join(''),
+      text: (resBody.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join(''),
       toolCall: null,
       usage: {
         inputTokens: usage.promptTokenCount || 0,
         outputTokens: usage.candidatesTokenCount || 0
       },
       model,
-      finishReason: body.candidates?.[0]?.finishReason || 'STOP'
+      finishReason: resBody.candidates?.[0]?.finishReason || 'STOP'
     };
+  }
+
+  async *stream(model, opts = {}) {
+    const { url, body } = this._request(model, { maxTokens: 4096, temperature: 0.3, ...opts });
+    const streamUrl = `${url}&alt=sse`;
+    const res = await this.httpFetch(streamUrl, {
+      method: 'POST',
+      headers: this.headers(),
+      signal: opts.signal || null,
+      body
+    });
+    if (!res.ok) {
+      throw new Error(`google stream error ${res.status}`);
+    }
+    for await (const payload of streamSSE(res)) {
+      try {
+        const json = JSON.parse(payload);
+        const parts = json.candidates?.[0]?.content?.parts || [];
+        const text = parts.map((p) => p.text || '').join('');
+        if (text) yield text;
+        if (json.candidates?.[0]?.finishReason === 'STOP') return;
+      } catch {
+        /* ignore malformed chunk */
+      }
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { HttpProvider } from '@mcode/shared';
+import { HttpProvider, streamSSE } from '@mcode/shared';
 
 /**
  * Base adapter for any OpenAI-compatible /v1/chat/completions endpoint
@@ -14,7 +14,7 @@ export class OpenAICompatible extends HttpProvider {
   async testKey(key) {
     if (this.kind === 'local') return true;
     try {
-      const res = await fetch(`${this.baseUrl}/models`, { 
+      const res = await this.httpFetch(`${this.baseUrl}/models`, {
         headers: { ...this.headers(), Authorization: `Bearer ${key}` }
       });
       return res.ok;
@@ -26,7 +26,7 @@ export class OpenAICompatible extends HttpProvider {
   async listModels() {
     if (this.kind === 'local') return this.models;
     try {
-      const res = await fetch(`${this.baseUrl}/models`, { headers: this.headers() });
+      const res = await this.httpFetch(`${this.baseUrl}/models`, { headers: this.headers() });
       if (!res.ok) return this.models;
       const body = await res.json();
       
@@ -54,7 +54,7 @@ export class OpenAICompatible extends HttpProvider {
     if (!this.apiKey && this.kind !== 'local') return false;
     if (this.kind === 'local') {
       try {
-        const res = await fetch(`${this.baseUrl}/models`);
+        const res = await this.httpFetch(`${this.baseUrl}/models`, {}, { retries: 0 });
         return res.ok;
       } catch {
         return false;
@@ -66,10 +66,11 @@ export class OpenAICompatible extends HttpProvider {
     return true;
   }
 
-  async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null } = {}) {
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+  async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
+    const res = await this.httpFetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers(),
+      signal,
       body: JSON.stringify({
         model,
         messages,
@@ -99,10 +100,11 @@ export class OpenAICompatible extends HttpProvider {
     };
   }
 
-  async *stream(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null } = {}) {
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+  async *stream(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
+    const res = await this.httpFetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers(),
+      signal,
       body: JSON.stringify({
         model,
         messages,
@@ -112,30 +114,16 @@ export class OpenAICompatible extends HttpProvider {
         ...(reasoning?.effort ? { reasoning_effort: reasoning.effort } : {})
       })
     });
-    if (!res.ok || !res.body) {
+    if (!res.ok) {
       throw new Error(`${this.id} stream error ${res.status}`);
     }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) continue;
-        const payload = trimmed.slice(5).trim();
-        if (payload === '[DONE]') continue;
-        try {
-          const json = JSON.parse(payload);
-          const delta = json.choices?.[0]?.delta?.content;
-          if (delta) yield delta;
-        } catch {
-          /* ignore malformed chunk */
-        }
+    for await (const payload of streamSSE(res)) {
+      try {
+        const json = JSON.parse(payload);
+        const delta = json.choices?.[0]?.delta?.content;
+        if (delta) yield delta;
+      } catch {
+        /* ignore malformed chunk */
       }
     }
   }

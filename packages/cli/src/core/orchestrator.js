@@ -3,8 +3,10 @@ import { io } from 'socket.io-client';
 import { EVENTS, SOCKET, DEFAULT_CONFIG, CostLedger } from '@mcode/shared';
 import { Planner } from './planner.js';
 import { ModelRouter, MODES } from './router.js';
+import { detectTechStack, smartDefaults } from './techstack.js';
 import { SubagentManager } from './subagent-manager.js';
 import { UndoStack } from './tools.js';
+import { AuditLog } from './audit.js';
 import { getProviders } from '../providers/index.js';
 import { loadVault } from './vault.js';
 import { loadConfig, getProjectId } from './store.js';
@@ -17,6 +19,8 @@ const EVENT_TO_SOCKET = {
   [EVENTS.SUBAGENT_DONE]: SOCKET.CLIENT_TO_SERVER.AGENT_DONE,
   [EVENTS.SUBAGENT_FAILED]: SOCKET.CLIENT_TO_SERVER.AGENT_FAILED,
   [EVENTS.SUBAGENT_NEEDS_REVIEW]: SOCKET.CLIENT_TO_SERVER.AGENT_NEEDS_REVIEW,
+  [EVENTS.WAVE_START]: SOCKET.CLIENT_TO_SERVER.WAVE_START,
+  [EVENTS.WAVE_COMPLETE]: SOCKET.CLIENT_TO_SERVER.WAVE_COMPLETE,
   [EVENTS.INTEGRATION_PASS]: SOCKET.CLIENT_TO_SERVER.INTEGRATION_PASS,
   [EVENTS.BUILD_COMPLETE]: SOCKET.CLIENT_TO_SERVER.BUILD_COMPLETE,
   [EVENTS.TOAST]: SOCKET.CLIENT_TO_SERVER.TOAST,
@@ -36,6 +40,7 @@ export class Orchestrator extends EventEmitter {
     this.router = null;
     this.manager = null;
     this.undoStack = null;
+    this.auditLog = null;
     this.socket = null;
     this.sessionId = null;
     this.watchDaemon = null;
@@ -43,7 +48,7 @@ export class Orchestrator extends EventEmitter {
     this.options = options;
     this.modelOverride = options.modelOverride || config?.modelOverride || null;
     this.verbose = Boolean(options.verbose);
-    this.mode = MODES.includes(config?.mode) ? config.mode : 'medium';
+    this.mode = MODES.includes(options.mode) ? options.mode : (MODES.includes(config?.mode) ? config.mode : 'medium');
     this.chatAgentEnabled = config?.chatAgent !== false;
     this.chatHistory = [];
     this.chatAgent = null;
@@ -67,7 +72,7 @@ export class Orchestrator extends EventEmitter {
   }
 
   async reloadConfig() {
-    this.config = await loadConfig();
+    this.config = await loadConfig({ force: true });
     this.secrets = await loadVault();
     this.providers = await getProviders({ secrets: this.secrets, config: this.config });
     this.router = new ModelRouter({
@@ -90,6 +95,7 @@ export class Orchestrator extends EventEmitter {
     });
     this.sessionId = await getProjectId(this.projectPath);
     await this._initUndo();
+    this.auditLog = new AuditLog({ projectId: this.sessionId });
     this.on(EVENTS.SUBAGENT_TOOL_CALL, (p) => {
       if (this.verbose) process.stderr.write(`[tool] ${p.tool} ${p.args}\n`);
     });
@@ -106,7 +112,8 @@ export class Orchestrator extends EventEmitter {
     const { join } = await import('node:path');
     const { homedir } = await import('node:os');
     this.undoStack = new UndoStack({
-      filePath: join(homedir(), '.mcode', 'projects', this.sessionId, 'undo.json')
+      filePath: join(homedir(), '.mcode', 'projects', this.sessionId, 'undo.json'),
+      projectPath: this.projectPath
     });
     await this.undoStack.load();
   }
@@ -157,6 +164,14 @@ export class Orchestrator extends EventEmitter {
     emit: (event, payload) => {
       this.emit(event, payload);
       this.forwardToBackend(event, payload);
+    },
+    on: (event, fn) => {
+      this.on(event, fn);
+      return this;
+    },
+    off: (event, fn) => {
+      this.off(event, fn);
+      return this;
     }
   };
 
@@ -173,6 +188,13 @@ export class Orchestrator extends EventEmitter {
     const { readFile, readdir } = await import('node:fs/promises');
     const { join } = await import('node:path');
     const out = [];
+
+    // Detect tech stack for smart context injection
+    const stack = await detectTechStack(this.projectPath);
+    const defaults = smartDefaults(stack);
+
+    out.push(`--- tech stack ---\nfrontend: ${stack.frontend.join(', ') || 'none'}\nbackend: ${stack.backend.join(', ') || 'none'}\ndatabases: ${stack.databases.join(', ') || 'none'}\ntest frameworks: ${stack.testFrameworks.join(', ') || 'none'}\nbuild tools: ${stack.buildTools.join(', ') || 'none'}\nlanguages: ${stack.languages.join(', ')}\npackage manager: ${stack.packageManager}\nsmart defaults: test=${defaults.testCommand}, build=${defaults.buildCommand}, port=${defaults.devPort}`);
+
     const pkg = await readFile(join(this.projectPath, 'package.json'), 'utf8').catch(() => null);
     if (pkg) out.push('--- package.json ---\n' + pkg.slice(0, 1500));
     const readme = await readFile(join(this.projectPath, 'README.md'), 'utf8').catch(() => null);
@@ -192,13 +214,14 @@ export class Orchestrator extends EventEmitter {
       plan,
       router: this.router,
       projectPath: this.projectPath,
-      config: { ...DEFAULT_CONFIG, ...this.config },
+      config: { ...DEFAULT_CONFIG, ...this.config, auditLog: this.auditLog },
       bus: this.bus,
       options: {
         ledger: this.ledger,
         undoStack: this.undoStack,
         skipIntegrationTests: Boolean(noTests),
-        forceRef: this.modelOverride
+        forceRef: this.modelOverride,
+        maxAgents: this.options.maxAgents
       }
     });
     return this.manager.runAll();
@@ -265,6 +288,15 @@ export class Orchestrator extends EventEmitter {
     return file;
   }
 
+  /** Revert the last watch-daemon auto-fix from the watch undo stack. */
+  async undoWatch() {
+    const stack = this.watchDaemon?.undoStack;
+    if (!stack) return null;
+    const file = await stack.undo();
+    if (file) this.emit(EVENTS.UNDO, { file, watch: true });
+    return file;
+  }
+
   /** God Mode — full one-prompt-to-delivery pipeline. */
   async runGod(prompt, { confirmFn = null, addMessage = null, fresh = false, deployTarget = null, noTests = false } = {}) {
     const t0 = Date.now();
@@ -272,7 +304,11 @@ export class Orchestrator extends EventEmitter {
     const plan = await this.plan(prompt, { fresh });
     if (addMessage) addMessage({ kind: 'ok', text: `\u2713 plan generated — ${plan.todos.length} todos across ${new Set(plan.todos.map((t) => t.domain)).size} domains` });
 
+    let metrics = null;
+    const onBuild = (p) => { metrics = p; };
+    this.on(EVENTS.BUILD_COMPLETE, onBuild);
     const results = await this.runPlan(plan, { confirmFn, noTests });
+    this.off(EVENTS.BUILD_COMPLETE, onBuild);
     if (!results) return null;
 
     if (addMessage) {
@@ -282,6 +318,7 @@ export class Orchestrator extends EventEmitter {
     const elapsedSecs = (Date.now() - t0) / 1000;
     const summary = {
       ...results,
+      ...(metrics || {}),
       elapsedSecs,
       provider: plan.model,
       deployTarget,
@@ -302,16 +339,27 @@ export class Orchestrator extends EventEmitter {
 
   async startWatch(opts = {}) {
     const { WatchDaemon } = await import('./watch-daemon.js');
+    const { join } = await import('node:path');
+    const { homedir } = await import('node:os');
     this.watchDaemon = new WatchDaemon({
       projectPath: this.projectPath,
       config: { ...DEFAULT_CONFIG.watch, ...(this.config?.watch || {}), ...opts },
       bus: this.bus,
       router: this.router,
-      undoStack: this.undoStack,
-      projectId: this.sessionId
+      undoStack: new UndoStack({
+        filePath: join(homedir(), '.mcode', 'projects', this.sessionId, 'undo-watch.json'),
+        projectPath: this.projectPath
+      }),
+      projectId: this.sessionId,
+      confirmHandler: this.watchConfirmHandler || null
     });
     await this.watchDaemon.start();
     return this.watchDaemon;
+  }
+
+  /** Register a y/n confirm callback used when watch is in confirm mode. */
+  setWatchConfirmHandler(fn) {
+    this.watchConfirmHandler = fn;
   }
 
   async stopWatch() {
@@ -321,5 +369,9 @@ export class Orchestrator extends EventEmitter {
 
   get watchStatus() {
     return this.watchDaemon?.status || 'off';
+  }
+
+  get watchMaxPerHour() {
+    return this.watchDaemon?.config?.maxFixesPerHour || 60;
   }
 }

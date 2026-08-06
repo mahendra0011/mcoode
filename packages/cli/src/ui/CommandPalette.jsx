@@ -9,8 +9,30 @@ export function CommandPalette({ onRun, onClose }) {
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState(0);
 
+  // Fuzzy match: scores how well query matches a string (chars in order = bonus)
+  const fuzzyScore = (str, q) => {
+    str = str.toLowerCase();
+    let score = 0;
+    let lastIdx = -1;
+    for (const ch of q) {
+      const idx = str.indexOf(ch, lastIdx + 1);
+      if (idx === -1) return -1;
+      score += idx === lastIdx + 1 ? 10 : 1; // consecutive = bonus
+      lastIdx = idx;
+    }
+    return score + (str.includes(q) ? 50 : 0); // exact substring bonus
+  };
+
   const matches = query
-    ? SLASH_COMMANDS.filter((c) => c.cmd.includes(query.toLowerCase()) || c.desc.toLowerCase().includes(query.toLowerCase()))
+    ? SLASH_COMMANDS
+        .map((c) => {
+          const nameScore = fuzzyScore(c.cmd, query.toLowerCase());
+          const descScore = fuzzyScore(c.desc, query.toLowerCase());
+          return { c, score: Math.max(nameScore, descScore) };
+        })
+        .filter((m) => m.score >= 0)
+        .sort((a, b) => b.score - a.score)
+        .map((m) => m.c)
     : SLASH_COMMANDS;
 
   useKeyboard((key) => {
@@ -58,6 +80,7 @@ export function CommandPalette({ onRun, onClose }) {
       height={height}
       flexDirection="column"
       borderStyle="round"
+      border
       borderColor={theme.accent}
       backgroundColor={theme.panel}
       paddingLeft={1} paddingRight={1}

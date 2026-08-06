@@ -12,6 +12,13 @@ const RAW_COLORS = [
   '#1a3a2a',
 ];
 
+const MINI_GLYPH = [
+  '█▄ ▄█ ▄▀▀ ▄▀▄ █▀▄ █▀',
+  '█ ▀ █ ▀▄▄ ▀▄▀ █▄▀ █▄'
+];
+
+const MINI_COLORS = ['#3E9F49', '#4ADE80'];
+
 export function Logo({ compact = false, mini = false }) {
   const [tick, setTick] = useState(0);
   const [palette, setPalette] = useState([]);
@@ -23,15 +30,10 @@ export function Logo({ compact = false, mini = false }) {
   }, []);
 
   const ACCENT_LINE = '━';
-  const MINI_GLYPH = [
-    '█▄ ▄█ ▄▀▀ ▄▀▄ █▀▄ █▀',
-    '█ ▀ █ ▀▄▄ ▀▄▀ █▄▀ █▄'
-  ];
   const glyph = mini ? MINI_GLYPH : MCODE_GLYPH;
-  const miniColors = ['#4ADE80', '#3ECF6E'];
 
   return (
-    <box flexDirection="column" alignItems="flex-start" marginBottom={compact || mini ? 0 : 1}>
+    <box flexDirection="column" alignItems="center">
       {/* Top accent line */}
       {!compact && !mini && (
         <box marginBottom={1} flexDirection="row">
@@ -47,7 +49,7 @@ export function Logo({ compact = false, mini = false }) {
       {glyph.map((line, i) => {
         // Shift color over time, creating a wave
         const color = mini
-          ? miniColors[i % miniColors.length]
+          ? MINI_COLORS[i % MINI_COLORS.length]
           : palette.length ? palette[(i * 2 + tick) % palette.length] : theme.green;
         return (
           <text key={i} fg={color}>
@@ -70,22 +72,6 @@ export function Logo({ compact = false, mini = false }) {
   );
 }
 
-function halve(lines) {
-  const out = [];
-  for (let pair = 0; pair < lines.length; pair += 2) {
-    const top = lines[pair];
-    const bot = lines[pair + 1] || '';
-    let line = '';
-    for (let c = 0; c < top.length; c++) {
-      const t = top[c];
-      const b = bot[c] || ' ';
-      if (t !== ' ') line += b !== ' ' ? t : '\u2580';
-      else line += b !== ' ' ? '\u2584' : ' ';
-    }
-    out.push(line);
-  }
-  return out;
-}
 
 function hexToRgb(hex) {
   const h = hex.replace('#', '');

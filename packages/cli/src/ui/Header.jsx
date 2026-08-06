@@ -1,39 +1,58 @@
 import { Logo } from './Logo.jsx';
+import { TextAttributes } from '@opentui/core';
 import { theme } from './theme.js';
 
-export function Header({ projectName, model, watching, email = '', version = '' }) {
+export function Header({ projectName, model, watching, email = '', version = '', agentsRunning = 0, agentsTotal = 0, elapsed = 0 }) {
   const status = watching ? 'Working' : 'Ready';
   const statusColor = watching ? theme.amber : theme.green;
+  const truncate = (s, n) => (s && s.length > n ? s.slice(0, n - 1) + '\u2026' : s);
+  const modelLabel = truncate(model, 26);
+  const emailLabel = truncate(email, 30);
 
   return (
     <box
       flexDirection="row"
       width="100%"
       borderStyle="round"
-      borderColor={theme.divider || '#233043'}
+      border
+      borderColor={theme.divider}
       backgroundColor={theme.panel}
-      padding={{ top: 4, bottom: 4 }}
-      paddingLeft={2}
-      paddingRight={2}
-      marginBottom={0}
-      minHeight={80}
-    >
-      <box width={24} flexShrink={0} flexGrow={0} justifyContent="center" alignItems="flex-start">
-        {/* Use the regular (non‑mini) logo so it’s fully visible */}
-        <Logo />
+      paddingLeft={2} paddingRight={3}
+      paddingTop={0} paddingBottom={0}
+      marginBottom={1}
+      alignItems="center"
+      >
+      <box flexShrink={0} marginRight={3}>
+        <Logo mini />
       </box>
-      <box flexDirection="column" flexGrow={1} justifyContent="center" paddingLeft={3}>
-        <box flexDirection="row" justifyContent="space-between">
-          <text fg={theme.text}>mcode CLI {version}</text>
-          <text fg={statusColor}>{'\u25cf'} {status}</text>
-        </box>
-        <box flexDirection="row" justifyContent="space-between" marginTop={1}>
+      <box flexDirection="row" flexGrow={1} justifyContent="space-between">
+
+        <box flexDirection="column" justifyContent="center">
           <box flexDirection="row">
-            <text fg={theme.dim}>{'\ud83d\udcc1'} {projectName}</text>
-            <text fg={theme.dim}>{email ? ` \u00b7 ${email}` : ''}</text>
+            <text fg={theme.text} attributes={TextAttributes.BOLD}>mcode CLI </text>
+            <text fg={theme.dim}>{version}</text>
           </box>
-          <text fg={theme.green}>{model}</text>
+          <box flexDirection="row" marginTop={1}>
+            <text fg={theme.blue}>{'\u25a3'} </text>
+            <text fg={theme.text} attributes={TextAttributes.BOLD}>{String(projectName).slice(0, 28)}</text>
+          </box>
         </box>
+
+        <box flexDirection="column" alignItems="center" justifyContent="center">
+          <text fg={theme.dim}>{emailLabel}</text>
+          <text fg={theme.green} marginTop={1}>{modelLabel}</text>
+        </box>
+
+        <box flexDirection="column" alignItems="flex-end" justifyContent="center">
+          <box flexDirection="row">
+            <text fg={statusColor}>{theme.circle} </text>
+            <text fg={theme.text} attributes={TextAttributes.BOLD}>{status}</text>
+            {watching && (agentsTotal > 0 || elapsed > 0) && (
+              <text fg={theme.dim}>{` \u00b7 ${agentsRunning}/${agentsTotal} agents \u00b7 ${elapsed}s`}</text>
+            )}
+          </box>
+        </box>
+
       </box>
     </box>
   );

@@ -8,7 +8,9 @@ try {
   setTimeout(() => {
     try {
       renderer.clear();
-    } catch {}
+    } catch {
+      /* ignore renderer clear failure */
+    }
     renderer.destroy();
     process.exit(0);
   }, 400);

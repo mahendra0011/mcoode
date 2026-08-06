@@ -13,12 +13,16 @@ export function normalizeTodo(raw, index) {
   const dependsOn = Array.isArray(raw.dependsOn)
     ? raw.dependsOn.map(String)
     : [];
+  const files = Array.isArray(raw.files)
+    ? raw.files.map(String).filter(Boolean).map((f) => f.replace(/\\/g, '/'))
+    : [];
   return {
     id,
     title: String(raw.title || `Todo ${id}`),
     description: String(raw.description || ''),
     domain,
     dependsOn,
+    files,
     status: SUBAGENT_STATUS.PENDING,
     assignedModel: null,
     startedAt: null,
@@ -27,9 +31,14 @@ export function normalizeTodo(raw, index) {
   };
 }
 
+export const MAX_TODOS = 14;
+
 export function normalizePlan(raw) {
-  const todos = (Array.isArray(raw.todos) ? raw.todos : [])
+  let todos = (Array.isArray(raw.todos) ? raw.todos : [])
     .map(normalizeTodo);
+  if (todos.length > MAX_TODOS) {
+    todos = todos.slice(0, MAX_TODOS);
+  }
   const ids = new Set(todos.map((t) => t.id));
   for (const todo of todos) {
     todo.dependsOn = todo.dependsOn.filter((d) => ids.has(d) && d !== todo.id);
@@ -69,6 +78,28 @@ export function findCycle(plan) {
     if (cycle) return cycle;
   }
   return null;
+}
+
+/** File-conflict safety: if two todos plan to touch the same file, chain them
+ *  (later todo depends on earlier one) so subagents never write concurrently
+ *  to the same path. Returns the (possibly mutated) plan. */
+export function resolveFileConflicts(plan) {
+  const byId = new Map(plan.todos.map((t) => [t.id, t]));
+  const seen = new Map(); // normalized file -> todo id
+  for (const todo of plan.todos) {
+    for (const file of todo.files || []) {
+      const norm = file.replace(/^\.?\//, '').replace(/\/+/g, '/');
+      const prior = seen.get(norm);
+      if (prior && prior !== todo.id && !todo.dependsOn.includes(prior)) {
+        todo.dependsOn = [...todo.dependsOn, prior];
+      }
+      seen.set(norm, todo.id);
+    }
+  }
+  for (const todo of plan.todos) {
+    todo.dependsOn = todo.dependsOn.filter((d) => byId.has(d) && d !== todo.id);
+  }
+  return plan;
 }
 
 /** Sort todos into waves: wave[0] = no deps, wave[n] = deps in earlier waves. */

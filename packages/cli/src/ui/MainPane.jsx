@@ -1,26 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { highlight } from 'cli-highlight';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { theme } from './theme.js';
-import { BgBox, padBg } from './BgBox.jsx';
+import { BgBox } from './BgBox.jsx';
 import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, TOOL_VERBS, READ_MAX, CMD_MAX } from './blocks.jsx';
+import { BuildSummaryCard } from './SummaryCard.jsx';
 
-export function MainPane({ messages, streamingMessage, isGenerating = false, onInterrupt = null, onRetry = null, pendingPermission = null, onPermission = null }) {
+export function MainPane({ messages, streamingMessage, isGenerating = false, onInterrupt = null, onRetry = null, pendingPermission = null, onPermission = null, agentMode = 'Build' }) {
   const { width: termWidth } = useTerminalDimensions();
   const panelWidth = Math.max(20, (termWidth || 120) - 6);
   const [expanded, setExpanded] = useState(null);
   const [focus, setFocus] = useState(-1);
   const [genSecs, setGenSecs] = useState(0);
-  const items = []; // focusable expand/collapse items
+  const itemsRef = useRef([]);
+  const blocksRef = useRef([]);
+  itemsRef.current.length = 0;
+  blocksRef.current.length = 0;
+  const items = itemsRef.current;
+  const blocks = blocksRef.current;
 
   const registerItem = (item) => {
     const index = items.length;
     items.push(item);
     return index;
   };
-
-  const blocks = [];
 
   const renderCode = (id, title, code, index) => {
     const isExpanded = expanded === index;
@@ -29,19 +33,30 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     if (isExpanded) {
       try {
         highlighted = highlight(code, { language: 'javascript', ignoreIllegals: true });
-      } catch {}
+      } catch { /* unparseable code */ }
     }
     const lines = isExpanded ? highlighted.split('\n') : [];
     return (
-      <box key={id} flexDirection="column" marginTop={1} flexShrink={0}>
-        <BgBox
-          width={panelWidth}
-          bg={theme.surface}
-          color={isFocused ? theme.text : theme.dim}
-          paddingLeft={3} paddingRight={3}
-          paddingTop={1} paddingBottom={1}
-          lines={isExpanded ? [title, '', ...lines.slice(0, 30).map((l) => l || ' ')] : [title]}
-        />
+      <box key={id} flexDirection="column" marginTop={1} flexShrink={0} paddingLeft={1}>
+        <box flexDirection="column" backgroundColor={theme.surface} borderStyle="round" border borderColor={isFocused ? theme.accent : theme.divider} paddingLeft={1} paddingRight={1} paddingTop={0} paddingBottom={0}>
+          <box flexDirection="row" paddingBottom={isExpanded ? 1 : 0} borderStyle={isExpanded ? 'single' : undefined} border={isExpanded ? ['bottom'] : undefined} borderColor={theme.divider}>
+            <text fg={theme.teal}>{'\u25ce'} </text>
+            <text fg={theme.textBright}>{title}</text>
+          </box>
+          {isExpanded && (
+            <box flexDirection="column" marginTop={1} paddingLeft={1}>
+              {lines.slice(0, 30).map((l, i) => (
+                <text key={i}>{l || ' '}</text>
+              ))}
+              {lines.length > 30 && <text fg={theme.dim}>... {lines.length - 30} more lines</text>}
+            </box>
+          )}
+          {isExpanded && (
+            <box flexDirection="row" marginTop={1} paddingTop={1} borderStyle="single" border={['top']} borderColor={theme.divider}>
+              <text fg={theme.dim}>[y] Apply   [c] Copy   [r] Run</text>
+            </box>
+          )}
+        </box>
       </box>
     );
   };
@@ -93,7 +108,10 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     return () => clearInterval(t);
   }, [isGenerating]);
 
-  const runningTool = messages.find((m) => m.kind === 'tool' && m.status === 'running' && m.block !== 'permission');
+  const runningTool = useMemo(
+    () => messages.find((m) => m.kind === 'tool' && m.status === 'running' && m.block !== 'permission'),
+    [messages]
+  );
 
   // Non-scroll keys only — PageUp/PageDown and mouse-wheel scrolling are
   // handled natively by <scrollbox> (matches OpenCode's own scroll behavior).
@@ -101,8 +119,8 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
     if (key.name === 'tab') {
       setFocus((f) => {
-        if (items.length === 0) return f;
-        return (f + 1) % (items.length + 1) - 1;
+        if (items.length === 0) return -1;
+        return f >= items.length - 1 ? -1 : f + 1;
       });
       return;
     }
@@ -188,10 +206,13 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
         </box>
       );
     }
+    if (msg.kind === 'build') {
+      return <BuildSummaryCard key={`b${i}`} projectName={msg.projectName} data={msg.data} marginTop={isFirst ? 0 : 1} />;
+    }
     if (msg.kind === 'code') {
       const index = blocks.length;
       blocks.push({ index, id: msg.id, title: msg.title, code: msg.code });
-      return null;
+      return renderCode(msg.id, msg.title, msg.code, index);
     }
     // Assistant message
     return (
@@ -207,7 +228,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
         {msg.meta && (
           <box marginTop={1} paddingLeft={1} flexDirection="row" alignItems="center">
             <text fg={theme.blue}>{'\u25aa '}</text>
-            <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Build</text>
+            <text fg={theme.textBright} attributes={TextAttributes.BOLD}>{agentMode}</text>
             <text fg={theme.meta}>
               {' \u00b7 '}{msg.meta.model}{' \u00b7 '}{msg.meta.secs}s
               {msg.meta.interrupted && <span fg={theme.red}>{' (interrupted)'}</span>}
@@ -217,17 +238,6 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
       </box>
     );
   });
-
-  const B = () => {
-    if (!isGenerating) return null;
-    if (runningTool) {
-      return <SpinnerBlock label={TOOL_VERBS[runningTool.tool] || 'Working…'} />;
-    }
-    if (streamingMessage) {
-      return <ThoughtBlock text={streamingMessage} seconds={genSecs} live />;
-    }
-    return <SpinnerBlock label="Working…" />;
-  };
 
   return (
     <box flexDirection="column" width="100%" height="100%" overflow="hidden">
@@ -239,14 +249,17 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
         stickyStart="bottom"
         rootOptions={{ flexGrow: 1 }}
         viewportOptions={{ flexGrow: 1 }}
-        contentOptions={{ flexDirection: 'column', flexShrink: 0 }}
+        contentOptions={{ flexDirection: 'column', flexShrink: 0, width: panelWidth }}
         scrollbarOptions={{ visible: true }}
         verticalScrollbarOptions={{ visible: true }}
         horizontalScrollbarOptions={{ visible: false }}
       >
         {render}
-        <B />
-        {blocks.map((b) => renderCode(b.id, b.title, b.code, b.index))}
+        {isGenerating && (runningTool
+          ? <SpinnerBlock label={TOOL_VERBS[runningTool.tool] || 'Working…'} />
+          : streamingMessage
+            ? <ThoughtBlock text={streamingMessage} seconds={genSecs} live />
+            : <SpinnerBlock label="Working…" />)}
       </scrollbox>
     </box>
   );

@@ -19,28 +19,63 @@ function majorVersion() {
 }
 
 async function findCompatibleNode() {
+  // Explicit override wins
+  if (process.env.MCCODE_NODE) return process.env.MCCODE_NODE;
+
   // Current binary already supports --experimental-ffi (Node 26.1+)
   if (majorVersion() >= 26) return process.execPath;
 
-  // Search common locations for a newer Node.js binary
+  // A different node on PATH (nvm/fnm/volta shims, manual installs) may be newer
+  try {
+    const { execa } = await import('execa');
+    const { stdout } = await execa('node', ['-e', 'process.stdout.write(process.execPath + " " + process.versions.node)'], {
+      timeout: 5000,
+      reject: false
+    });
+    const [p, v] = String(stdout || '').trim().split(/\s+/);
+    if (p && p !== process.execPath && Number(String(v).split('.')[0]) >= 26) return p;
+  } catch {
+    /* no PATH node beyond the current one */
+  }
+
+  // Generic search locations — machine-specific install paths don't belong here.
+  // Each candidate is probed and must actually support --experimental-ffi.
   const candidates = [
     // nvm-windows-style
     join(process.env.LOCALAPPDATA || process.env.HOME || '', 'nvm', 'versions', 'node', `v26.4.0`, 'node.exe'),
-    // Manual installs
-    'D:/programs/node26/node.exe',
-    'D:/programs/nodejs26/node.exe',
-    'C:/Program Files/nodejs26/node.exe',
     // fnm/volta-style
     join(process.env.HOME || '', '.volta', 'bin', 'node.exe'),
     join(process.env.HOME || '', '.fnm', 'versions', '26.4.0', 'node.exe'),
+    // standard installer location
+    'C:/Program Files/nodejs/node.exe',
   ];
+
+  // Machine-specific hint stored outside the repo (~/.mcode/node-path)
+  try {
+    const { readFile } = await import('node:fs/promises');
+    const hint = (await readFile(join((await import('node:os')).homedir(), '.mcode', 'node-path'), 'utf8')).trim();
+    if (hint) candidates.unshift(hint);
+  } catch {
+    /* no hint file — fine */
+  }
 
   for (const candidate of candidates) {
     if (!candidate) continue;
+    let abs;
     try {
       await access(candidate);
-      return isAbsolute(candidate) ? candidate : join(process.cwd(), candidate);
-    } catch {}
+      abs = isAbsolute(candidate) ? candidate : join(process.cwd(), candidate);
+    } catch {
+      continue;
+    }
+    try {
+      const { execa } = await import('execa');
+      const { stdout } = await execa(abs, ['--version'], { timeout: 5000, reject: false });
+      const [major] = String(stdout || '').trim().replace('v', '').split('.');
+      if (Number(major) >= 26) return abs;
+    } catch {
+      /* candidate unusable — try the next */
+    }
   }
 
   return null;

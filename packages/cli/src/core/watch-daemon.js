@@ -6,26 +6,30 @@ import { execa } from 'execa';
 import { EVENTS, WATCH_OUTCOMES } from '@mcode/shared';
 import { extractImports } from './git.js';
 import { getProjectId } from './store.js';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 
 const IGNORE_DEFAULTS = ['node_modules', '.git', 'dist', 'build', 'coverage', '.mcodeignore', '*.lock', '.mcode-fix-*'];
+const MAX_SWEEP_QUEUE = 150;
 
 export class WatchDaemon extends EventEmitter {
-  constructor({ projectPath, config = {}, bus = null, router = null, undoStack = null, projectId = null }) {
+  constructor({ projectPath, config = {}, bus = null, router = null, undoStack = null, projectId = null, confirmHandler = null }) {
     super();
     this.projectPath = projectPath;
+    const envRatePerMin = Number(process.env.MCODE_WATCH_MAX_AUTOFIX_PER_MIN) || 0;
     this.config = {
       scanIntervalMs: 30_000,
       debounceMs: 400,
-      maxFixesPerHour: 60,
+      maxFixesPerHour: envRatePerMin > 0 ? envRatePerMin * 60 : 60,
       autoCommit: false,
       maxAttemptsPerFix: 3,
+      confirm: false,
       ...config
     };
     this.bus = bus;
     this.router = router;
     this.undoStack = undoStack;
     this.projectId = projectId || null;
+    this.confirmHandler = confirmHandler || null;
     this.running = false;
     this.startedAt = null;
     this.scansRun = 0;
@@ -38,6 +42,11 @@ export class WatchDaemon extends EventEmitter {
     this._queue = new Set();
     this._processing = false;
     this._stopRequested = false;
+    this._scanState = new Map();
+    this._scanFailures = 0;
+    this._eslintBin = null;
+    this._eslintChecked = false;
+    this._lastNoModelLog = 0;
   }
 
   get status() {
@@ -86,7 +95,7 @@ export class WatchDaemon extends EventEmitter {
     this.startedAt = new Date();
     await this._loadIgnores();
     if (!this.projectId) this.projectId = await getProjectId(this.projectPath);
-    this.undoStack.filePath = join(homedir(), '.mcode', 'projects', this.projectId, 'undo-watch.json');
+    this.undoStack.filePath = this.undoStack.filePath || join(homedir(), '.mcode', 'projects', this.projectId, 'undo-watch.json');
     await mkdir(dirname(this.undoStack.filePath), { recursive: true });
 
     this.emitStatus();
@@ -128,6 +137,7 @@ export class WatchDaemon extends EventEmitter {
       const files = await walkTree(this.projectPath, {
         ignore: this._ignorePatterns.map((p) => p.replace(/\\/g, '/'))
       });
+      this._scanFailures = 0;
       count = files.length;
       this.filesScanned += count;
       this.scansRun++;
@@ -137,10 +147,72 @@ export class WatchDaemon extends EventEmitter {
         timestamp: new Date().toISOString()
       });
       this._pushActivity({ file: '(scan)', outcome: 'no-issues', detail: `scanned ${count} files in ${Date.now() - t0}ms` });
+
+      // full-repo sweep: queue files changed since the last sweep so
+      // pre-existing breakage is caught on start and external edits too
+      let queued = 0;
+      const seen = new Set();
+      for (const file of files) {
+        seen.add(file.path);
+        if (this._scanState.get(file.path) === file.mtimeMs) continue;
+        this._scanState.set(file.path, file.mtimeMs);
+        if (queued >= MAX_SWEEP_QUEUE) continue; // rest pick up on the next sweep
+        this._queue.add(relative(this.projectPath, file.path));
+        queued++;
+      }
+      for (const path of this._scanState.keys()) {
+        if (!seen.has(path)) this._scanState.delete(path); // gone — don't let the map grow forever
+      }
+      if (this._queue.size > 0) {
+        setTimeout(() => this._drainQueue(), this.config.debounceMs);
+      }
     } catch (err) {
+      this._scanFailures++;
       this._pushActivity({ file: '(scan)', outcome: 'needs-review', detail: `scan error: ${err.message}` });
+      if (this._scanFailures <= 3) {
+        setTimeout(() => this.scanOnce(), this.config.scanIntervalMs);
+      }
     }
     this.emitStatus();
+  }
+
+  async _getEslintBin() {
+    if (this._eslintChecked) return this._eslintBin;
+    this._eslintChecked = true;
+    try {
+      const local = join(this.projectPath, 'node_modules', '.bin', process.platform === 'win32' ? 'eslint.cmd' : 'eslint');
+      await fsStat(local);
+      this._eslintBin = local;
+    } catch {
+      this._eslintBin = null;
+    }
+    return this._eslintBin;
+  }
+
+  async _lintFiles(rels) {
+    const result = new Map();
+    for (const rel of rels) result.set(rel, { ok: true });
+    const bin = await this._getEslintBin();
+    if (!bin || rels.length === 0) return result;
+    const files = rels.map((r) => join(this.projectPath, r));
+    try {
+      const { stdout } = await execa(bin, [...files, '--fix-dry-run', '--format', 'json'], {
+        cwd: this.projectPath,
+        timeout: 60_000,
+        reject: false
+      });
+      const reports = JSON.parse(stdout || '[]');
+      for (const r of reports) {
+        const rel = relative(this.projectPath, r.filePath);
+        const errors = (r.messages || []).filter((m) => m.severity === 2);
+        if (errors.length > 0) {
+          result.set(rel, { ok: false, detail: errors.map((e) => `${e.line}:${e.column} ${e.message}`).slice(0, 6).join('\n') });
+        }
+      }
+    } catch {
+      /* linter failed — treat as no lint info */
+    }
+    return result;
   }
 
   async _drainQueue() {
@@ -148,10 +220,12 @@ export class WatchDaemon extends EventEmitter {
     this._processing = true;
     const pending = [...this._queue];
     this._queue.clear();
+    const lintable = pending.filter((rel) => ['.js', '.jsx', '.mjs', '.cjs'].includes(extname(rel)));
+    const lintMap = await this._lintFiles(lintable);
     for (const rel of pending) {
       if (!this.running || this._stopRequested) break;
       try {
-        await this.analyzeFile(rel);
+        await this.analyzeFile(rel, lintMap.get(rel));
       } catch (err) {
         this._pushActivity({ file: rel, outcome: 'needs-review', detail: `analysis error: ${err.message}` });
       }
@@ -160,7 +234,7 @@ export class WatchDaemon extends EventEmitter {
     if (this._queue.size > 0) await this._drainQueue();
   }
 
-  async analyzeFile(rel) {
+  async analyzeFile(rel, lint = null) {
     const full = join(this.projectPath, rel);
     const stat = await fsStat(full).catch(() => null);
     if (!stat) {
@@ -171,9 +245,9 @@ export class WatchDaemon extends EventEmitter {
     this.bus?.emit(EVENTS.WATCH_CHANGE, { projectId: this.projectId, file: rel, action: 'change' });
 
     // 1. local lint pass — zero model cost
-    const lint = await this._lintFile(full);
-    if (!lint.ok) {
-      await this._applyFix(rel, lint);
+    const lintResult = lint || (await this._lintFile(full));
+    if (!lintResult.ok) {
+      await this._applyFix(rel, lintResult);
       return;
     }
 
@@ -191,12 +265,14 @@ export class WatchDaemon extends EventEmitter {
       return;
     }
 
-    this._pushActivity({ file: rel, outcome: 'no-issues', detail: 'lint ✓ imports ✓ tests ✓' });
+    this._pushActivity({ file: rel, outcome: 'no-issues', detail: 'lint \u2713 imports \u2713 tests \u2713' });
   }
 
   async _lintFile(full) {
+    const bin = await this._getEslintBin();
+    if (!bin) return { ok: true };
     try {
-      const { stdout } = await execa('npx', ['--no-install', 'eslint', full, '--fix-dry-run', '--format', 'json'], {
+      const { stdout } = await execa(bin, [full, '--fix-dry-run', '--format', 'json'], {
         cwd: this.projectPath,
         timeout: 30_000,
         reject: false
@@ -213,17 +289,42 @@ export class WatchDaemon extends EventEmitter {
 
   async _staticCheck(full) {
     const ext = extname(full);
-    if (!['.js', '.jsx', '.mjs', '.cjs'].includes(ext)) return [];
     const source = await readFile(full, 'utf8').catch(() => '');
-    const issues = [];
-    for (const spec of extractImports(source)) {
-      if (spec.startsWith('.') || spec.startsWith('/')) {
-        const candidates = [spec, spec.endsWith('.js') ? spec : `${spec}.js`, `${spec}/index.js`, `${spec}/index.jsx`];
-        const ok = await Promise.all(candidates.map((c) => fsStat(join(dirname(full), c)).then(() => true).catch(() => false)));
-        if (!ok.some(Boolean)) issues.push(`unresolved import: ${spec}`);
+    if (['.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
+      const issues = [];
+      for (const spec of extractImports(source)) {
+        if (spec.startsWith('.') || spec.startsWith('/')) {
+          const candidates = [spec, spec.endsWith('.js') ? spec : `${spec}.js`, `${spec}/index.js`, `${spec}/index.jsx`];
+          const ok = await Promise.all(candidates.map((c) => fsStat(join(dirname(full), c)).then(() => true).catch(() => false)));
+          if (!ok.some(Boolean)) issues.push(`unresolved import: ${spec}`);
+        }
+      }
+      return issues;
+    }
+    if (ext === '.ts' || ext === '.tsx') {
+      const bin = join(this.projectPath, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
+      try {
+        await fsStat(bin);
+        const { stdout, stderr } = await execa(bin, ['--noEmit', full], { cwd: this.projectPath, timeout: 60_000, reject: false });
+        const errs = (stdout + stderr).split('\n').filter((l) => /error TS\d/.test(l)).slice(0, 6);
+        return errs;
+      } catch {
+        return [];
       }
     }
-    return issues;
+    if (ext === '.html') {
+      const close = (source.match(/<\/[a-zA-Z][\w-]*>/g) || []).length;
+      const nonVoidOpen = (source.match(/<([a-zA-Z][\w-]*)(?![^>]*\/>)[^>]*>/g) || [])
+        .filter((t) => !/^<(br|img|input|hr|meta|link|source|area|base|col|embed|param|track|wbr)(\s|>)/.test(t)).length;
+      if (nonVoidOpen > close + 2 && nonVoidOpen > 3) return [`possible unbalanced tags (${nonVoidOpen} open vs ${close} close)`];
+      return [];
+    }
+    if (ext === '.css') {
+      const opens = (source.match(/\{/g) || []).length;
+      const closes = (source.match(/\}/g) || []).length;
+      return opens !== closes ? [`unbalanced braces: {${opens} vs }${closes}`] : [];
+    }
+    return [];
   }
 
   async _runRelatedTests(rel) {
@@ -234,6 +335,17 @@ export class WatchDaemon extends EventEmitter {
     );
     const testFile = exist.indexOf(true) === -1 ? null : join(this.projectPath, candidates[exist.indexOf(true)]);
     if (!testFile) return { passed: true };
+    // no `npm test` script means "not runnable" — skip instead of false-passing
+    const pkg = await readFile(join(this.projectPath, 'package.json'), 'utf8').catch(() => null);
+    let hasTestScript = false;
+    if (pkg) {
+      try {
+        hasTestScript = Boolean(JSON.parse(pkg).scripts?.test);
+      } catch {
+        /* malformed package.json — treat as no test script */
+      }
+    }
+    if (!hasTestScript) return { passed: true };
     try {
       const { stdout, stderr } = await execa('npm', ['test', '--', relative(this.projectPath, testFile)], {
         cwd: this.projectPath,
@@ -242,7 +354,7 @@ export class WatchDaemon extends EventEmitter {
         env: { ...process.env, FORCE_COLOR: '0' }
       });
       const output = stdout + stderr;
-      return { passed: !/FAIL|failed|✗|✖/.test(output), output: output.slice(-1200) };
+      return { passed: !/FAIL|failed|✗|✖|Missing script/i.test(output), output: output.slice(-1200) };
     } catch (err) {
       return { passed: false, output: err.message };
     }
@@ -255,7 +367,26 @@ export class WatchDaemon extends EventEmitter {
     }
     const assignment = await this.router?.pick('bugfix');
     if (!assignment) {
-      this._pushActivity({ file: rel, outcome: 'needs-review', detail: 'no bugfix model available' });
+      const now = Date.now();
+      if (now - this._lastNoModelLog > 10_000) {
+        this._lastNoModelLog = now;
+        this._pushActivity({ file: rel, outcome: 'needs-review', detail: 'no bugfix model available' });
+      }
+      return;
+    }
+    // Mock provider has no real fix logic — attempting would echo the file back,
+    // fail verification, and spam needs-review on every sweep. Skip with a clear
+    // one-time note instead of burning attempts.
+    if (assignment.provider.id === 'mock') {
+      const now = Date.now();
+      if (now - this._lastNoModelLog > 30_000) {
+        this._lastNoModelLog = now;
+        this._pushActivity({
+          file: rel,
+          outcome: 'needs-review',
+          detail: 'running on MOCK (no real AI) — add a provider key to enable auto-fix'
+        });
+      }
       return;
     }
 
@@ -267,41 +398,65 @@ export class WatchDaemon extends EventEmitter {
 
     while (attempts < this.config.maxAttemptsPerFix && !verified) {
       attempts++;
-      const res = await assignment.provider.complete(assignment.model.id, {
-        messages: [
-          {
-            role: 'system',
-            content: `BUGFIX
+      try {
+        const res = await assignment.provider.complete(assignment.model.id, {
+          messages: [
+            {
+              role: 'system',
+              content: `BUGFIX
 You are mcode's bugfix subagent. Fix the reported problem in the file below. Respond with EXACTLY the new full file content (no markdown, no commentary). File: ${rel}\n\nPROBLEM:\n${errorContext}`
-          },
-          { role: 'user', content: `CURRENT CONTENT:\n\`\`\`\n${source.slice(0, 8000)}\n\`\`\`` }
-        ],
-        temperature: 0.1,
-        reasoning: this.router?.reasoning || null
-      });
-      const candidate = extractFixedContent(res.text);
-      if (!candidate || candidate.length < 10) continue;
+            },
+            { role: 'user', content: `CURRENT CONTENT:\n\`\`\`\n${source.slice(0, 8000)}\n\`\`\`` }
+          ],
+          temperature: 0.1,
+          reasoning: this.router?.reasoning || null
+        });
+        const candidate = extractFixedContent(res.text);
+        if (!candidate || candidate.length < 10) continue;
 
-      // verify before applying
-      const ok = await this._verifyFix(full, candidate);
-      if (!ok) {
-        errorContext += `\n\nPrevious fix attempt failed verification (attempt ${attempts}).`;
-        continue;
+        // verify before applying
+        const ok = await this._verifyFix(full, candidate, source);
+        if (!ok) {
+          errorContext += `\n\nPrevious fix attempt failed verification (attempt ${attempts}).`;
+          continue;
+        }
+        fixed = candidate;
+        verified = true;
+      } catch (err) {
+        errorContext += `\n\nProvider call failed (attempt ${attempts}): ${err.message}`;
       }
-      fixed = candidate;
-      verified = true;
     }
 
     if (verified) {
+      if (this.config.confirm && this.confirmHandler) {
+        const allowed = await this.confirmHandler({
+          file: rel,
+          detail: errorContext.slice(0, 300),
+          candidate: fixed
+        });
+        if (!allowed) {
+          this._pushActivity({ file: rel, outcome: 'needs-review', detail: 'declined in confirm mode' });
+          return;
+        }
+      }
       await this.undoStack.snapshot(rel, source);
       await writeFile(full, fixed, 'utf8');
       this.fixesApplied++;
       this.fixTimestamps.push(Date.now());
       this.fixTimestamps = this.fixTimestamps.filter((t) => Date.now() - t < 3_600_000);
-      this.bus?.emit(EVENTS.WATCH_FIX, { projectId: this.projectId, file: rel, outcome: WATCH_OUTCOMES.AUTO_FIXED, detail: errorContext.slice(0, 200) });
-      this._pushActivity({ file: rel, outcome: 'auto-fixed', detail: `fixed after ${attempts} attempt(s)` });
-      if (this.config.autoCommit) {
-        await this._autoCommit(rel);
+      // verify after write — re-run the failing check once before calling it fixed
+      const postLint = await this._lintFile(full);
+      const postStatic = await this._staticCheck(full);
+      const stillBroken = !postLint.ok || postStatic.length > 0;
+      if (stillBroken) {
+        this.bus?.emit(EVENTS.WATCH_FIX, { projectId: this.projectId, file: rel, outcome: WATCH_OUTCOMES.NEEDS_REVIEW, detail: `still failing after fix: ${postStatic[0] || postLint.detail}` });
+        this._pushActivity({ file: rel, outcome: 'needs-review', detail: 'fix applied but verification still fails' });
+      } else {
+        this.bus?.emit(EVENTS.WATCH_FIX, { projectId: this.projectId, file: rel, outcome: WATCH_OUTCOMES.AUTO_FIXED, detail: errorContext.slice(0, 200) });
+        this._pushActivity({ file: rel, outcome: 'auto-fixed', detail: `fixed after ${attempts} attempt(s)` });
+        if (this.config.autoCommit) {
+          await this._autoCommit(rel);
+        }
       }
     } else {
       this.bus?.emit(EVENTS.WATCH_FIX, { projectId: this.projectId, file: rel, outcome: WATCH_OUTCOMES.NEEDS_REVIEW, detail: errorContext.slice(0, 200) });
@@ -310,21 +465,31 @@ You are mcode's bugfix subagent. Fix the reported problem in the file below. Res
     this.emitStatus();
   }
 
-  async _verifyFix(full, candidate) {
-    // lint the proposed content
-    const tmp = join(dirname(full), `.mcode-fix-${basename(full)}`);
+  async _verifyFix(full, candidate, source) {
+    const tmp = join(tmpdir(), `.mcode-fix-${Date.now()}-${basename(full)}`);
     await writeFile(tmp, candidate, 'utf8');
     try {
-      const { stdout } = await execa('npx', ['--no-install', 'eslint', tmp, '--format', 'json'], {
-        cwd: this.projectPath,
-        timeout: 30_000,
-        reject: false
-      });
-      const reports = JSON.parse(stdout || '[]');
-      const errors = reports.flatMap((r) => (r.messages || []).filter((m) => m.severity === 2));
-      if (errors.length > 0) return false;
-    } catch {
-      /* no eslint — accept */
+      // never accept an unchanged echo — the model refused or gave up
+      if (candidate.trim() === String(source || '').trim()) return false;
+      // structural gate: the reported issue must actually be gone
+      const issues = await this._staticCheck(tmp);
+      if (issues.length > 0) return false;
+      // lint gate when eslint is available locally
+      const bin = await this._getEslintBin();
+      if (bin) {
+        try {
+          const { stdout } = await execa(bin, [tmp, '--format', 'json'], {
+            cwd: this.projectPath,
+            timeout: 30_000,
+            reject: false
+          });
+          const reports = JSON.parse(stdout || '[]');
+          const errors = reports.flatMap((r) => (r.messages || []).filter((m) => m.severity === 2));
+          if (errors.length > 0) return false;
+        } catch {
+          /* linter unavailable — structural gate above is the backstop */
+        }
+      }
     } finally {
       await rm(tmp, { force: true });
     }
@@ -362,6 +527,13 @@ You are mcode's bugfix subagent. Fix the reported problem in the file below. Res
     this.running = false;
     await this.watcher?.close();
     clearInterval(this.scanTimer);
+    this.scanTimer = null;
+    this.watcher = null;
+    this._queue.clear();
+    this._scanState.clear();
+    this.activity = [];
+    this.fixTimestamps = [];
+    this._processing = false;
     this.bus?.emit(EVENTS.WATCH_STATUS, 'stopped');
   }
 }

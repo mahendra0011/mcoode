@@ -7,6 +7,31 @@ export function sessionRoutes({ secret }) {
   const router = Router();
   router.use(authMiddleware({ secret }));
 
+  router.get('/workspaces', async (req, res, next) => {
+    try {
+      const sessions = await db().session.find({ userId: req.userId });
+      // Group sessions by workspace (or by project name if no workspace)
+      const workspaceMap = new Map();
+      for (const s of sessions) {
+        const ws = s.workspace || s.projectName || 'default';
+        const entry = workspaceMap.get(ws) || { name: ws, sessions: 0, lastActive: null };
+        entry.sessions++;
+        if (!entry.lastActive || (s.createdAt && s.createdAt > entry.lastActive)) {
+          entry.lastActive = s.createdAt;
+        }
+        workspaceMap.set(ws, entry);
+      }
+      const workspaces = [...workspaceMap.values()].sort((a, b) => {
+        if (!b.lastActive) return -1;
+        if (!a.lastActive) return 1;
+        return b.lastActive - a.lastActive;
+      });
+      res.json({ workspaces });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/', async (req, res, next) => {
     try {
       const { page = 1, limit = 20 } = req.query;

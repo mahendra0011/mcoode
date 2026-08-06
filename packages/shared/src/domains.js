@@ -34,49 +34,55 @@ export const DOMAIN_TAGS = Object.freeze({
 
 /** Default model preferences per task type. Entries are tried top-down.
  *  Format: "providerId:modelId" — the router picks the first whose provider
- *  is available and not rate-limited. */
+ *  is available and not rate-limited. Defaults are cheap/free-first; the
+ *  router still falls back to the highest-scoring available model. */
 export const DEFAULT_ROUTING = Object.freeze({
   planning: [
-    'openrouter:anthropic/claude-3.5-sonnet',
-    'openrouter:openai/gpt-4o',
-    'opencodezen:opencode-zen-7b',
+    'deepseek:deepseek-v4-pro',
+    'openai:gpt-5.5',
+    'anthropic:claude-sonnet-5',
     'mock:mock'
   ],
   frontend: [
-    'openrouter:openai/gpt-4o',
-    'openrouter:qwen/qwen-2.5-coder-32b-instruct',
-    'openrouter:anthropic/claude-3.5-sonnet',
+    'qwen:qwen-3.8-max',
+    'openai:gpt-5.6-luna',
+    'deepseek:deepseek-v4-flash-0731',
     'mock:mock'
   ],
   backend: [
-    'openrouter:anthropic/claude-3.5-sonnet',
-    'openrouter:deepseek/deepseek-chat',
-    'openrouter:mistralai/codestral-2501',
+    'deepseek:deepseek-v4-flash-0731',
+    'deepseek:deepseek-v4-pro',
+    'mistral:codestral',
     'mock:mock'
   ],
   db: [
-    'openrouter:anthropic/claude-3.5-sonnet',
-    'openrouter:openai/gpt-4o-mini',
+    'deepseek:deepseek-v4-pro',
+    'qwen:qwen-3.8-max',
+    'openai:gpt-5.6-luna',
     'mock:mock'
   ],
   devops: [
-    'openrouter:groq/llama-3.3-70b-versatile',
-    'openrouter:mistralai/mistral-small',
+    'groq:llama-3.3-70b-versatile',
+    'groq:llama-3.1-8b-instant',
+    'mistral:mistral-medium-3.5',
     'mock:mock'
   ],
   test: [
-    'openrouter:groq/llama-3.1-8b-instant',
-    'openrouter:deepseek/deepseek-chat',
+    'groq:llama-3.1-8b-instant',
+    'deepseek:deepseek-v4-flash-0731',
+    'deepseek:deepseek-v4-pro',
     'mock:mock'
   ],
   docs: [
-    'openrouter:openai/gpt-4o-mini',
+    'google:gemini-3.6-flash',
+    'openai:gpt-5.6-luna',
+    'qwen:qwen-3.7-flash',
     'mock:mock'
   ],
   bugfix: [
-    'openrouter:anthropic/claude-3.5-sonnet',
-    'openrouter:deepseek/deepseek-chat',
-    'openrouter:groq/llama-3.3-70b-versatile',
+    'deepseek:deepseek-v4-flash-0731',
+    'groq:llama-3.3-70b-versatile',
+    'anthropic:claude-haiku-4-5',
     'mock:mock'
   ]
 });
@@ -96,6 +102,7 @@ export const DEFAULT_CONFIG = Object.freeze({
     budgetPerRunUsd: 2.0,
     freeProvidersPreferred: true
   },
+  networkWhitelist: null, // null = allow all; set to array of domains (supports *.glob)
   backend: {
     url: 'http://localhost:3100'
   }

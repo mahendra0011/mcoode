@@ -11,6 +11,8 @@ export const PROJECTS_DIR = join(MCCODE_DIR, 'projects');
 export const WATCH_DIR = join(MCCODE_DIR, 'watch');
 
 let cache = null;
+let cacheLoadedAt = 0;
+const CONFIG_TTL_MS = 3_000;
 
 export async function ensureDirs() {
   await Promise.all([
@@ -21,14 +23,15 @@ export async function ensureDirs() {
   ]);
 }
 
-export async function loadConfig() {
-  if (cache) return cache;
+export async function loadConfig({ force = false } = {}) {
+  if (cache && !force && Date.now() - cacheLoadedAt < CONFIG_TTL_MS) return cache;
   await ensureDirs();
   try {
     cache = JSON.parse(await readFile(CONFIG_PATH, 'utf8'));
   } catch {
     cache = {};
   }
+  cacheLoadedAt = Date.now();
   return cache;
 }
 

@@ -66,8 +66,8 @@ const MODEL_DEFS = {
   'groq/llama-3.1-8b-instant': { name: 'Llama 3.1 8B (Groq)', free: true, scores: { ...S.cheap }, costPer1kIn: 0.0001, costPer1kOut: 0.0002 }
 };
 
-const model = (def, free = def.free) => ({
-  id: def.id || null,
+const model = (id, def = {}, free = def.free) => ({
+  id,
   name: def.name,
   free: Boolean(free),
   scores: def.scores,
@@ -75,15 +75,23 @@ const model = (def, free = def.free) => ({
   costPer1kOut: def.costPer1kOut
 });
 
+/** model() for MODEL_DEFS entries — key format is '<provider>/<model-id>'. */
+const m = (key, free) => {
+  const def = MODEL_DEFS[key];
+  return model(key.slice(key.indexOf('/') + 1), def, free);
+};
+
 function modelsFor(ids, map) {
   return ids.map((id) => ({ id, ...map[id] }));
 }
 
 export function getAllAdapters(secrets = {}) {
   const providers = [];
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('npm_') && !k.startsWith('NODE_') && !k.startsWith('_') && !k.startsWith('PSModulePath')));
+  const merged = { ...env, ...secrets };
 
   const addRemote = (def) => {
-    providers.push(Object.assign(def.factory(secrets[def.key] || ''), { envVar: def.key }));
+    providers.push(Object.assign(def.factory(merged[def.key] || ''), { envVar: def.key }));
   };
 
   addRemote({
@@ -105,9 +113,9 @@ export function getAllAdapters(secrets = {}) {
       key,
       baseUrl: 'https://opencode.ai/api/v1',
       models: [
-        model({ name: 'OpenCode Zen 7B', free: true, scores: { ...S.cheap, planning: 60, backend: 72 } }),
-        model({ name: 'OpenCode Zen 32B', free: true, scores: { ...S.general, planning: 80 } }),
-        model({ name: 'OpenCode Zen 120B', free: false, scores: S.general })
+        model('opencode-zen-7b', { name: 'OpenCode Zen 7B', free: true, scores: { ...S.cheap, planning: 60, backend: 72 } }),
+        model('opencode-zen-32b', { name: 'OpenCode Zen 32B', free: true, scores: { ...S.general, planning: 80 } }),
+        model('opencode-zen-120b', { name: 'OpenCode Zen 120B', free: false, scores: S.general })
       ]
     })
   });
@@ -120,10 +128,10 @@ export function getAllAdapters(secrets = {}) {
       key,
       baseUrl: 'https://api.openai.com/v1',
       models: [
-        model(MODEL_DEFS['openai/gpt-5.6-sol'], false),
-        model(MODEL_DEFS['openai/gpt-5.6-luna'], true),
-        model(MODEL_DEFS['openai/gpt-5.5'], false),
-        model(MODEL_DEFS['openai/gpt-5.3-codex'], false)
+        m('openai/gpt-5.6-sol', false),
+        m('openai/gpt-5.6-luna', true),
+        m('openai/gpt-5.5', false),
+        m('openai/gpt-5.3-codex', false)
       ]
     })
   });
@@ -133,10 +141,10 @@ export function getAllAdapters(secrets = {}) {
     factory: (key) => new AnthropicProvider({
       key,
       models: [
-        model(MODEL_DEFS['anthropic/claude-fable-5'], false),
-        model(MODEL_DEFS['anthropic/claude-opus-5'], false),
-        model(MODEL_DEFS['anthropic/claude-sonnet-5'], false),
-        model(MODEL_DEFS['anthropic/claude-haiku-4-5'], true)
+        m('anthropic/claude-fable-5', false),
+        m('anthropic/claude-opus-5', false),
+        m('anthropic/claude-sonnet-5', false),
+        m('anthropic/claude-haiku-4-5', true)
       ]
     })
   });
@@ -146,9 +154,9 @@ export function getAllAdapters(secrets = {}) {
     factory: (key) => new GeminiProvider({
       key,
       models: [
-        model(MODEL_DEFS['google/gemini-3.6-flash'], true),
-        model(MODEL_DEFS['google/gemini-3.1-pro'], false),
-        model(MODEL_DEFS['google/gemma-4-31b'], true)
+        m('google/gemini-3.6-flash', true),
+        m('google/gemini-3.1-pro', false),
+        m('google/gemma-4-31b', true)
       ]
     })
   });
@@ -160,7 +168,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'Groq',
       key,
       baseUrl: 'https://api.groq.com/openai/v1',
-      models: [model(MODEL_DEFS['groq/llama-3.3-70b-versatile'], true), model(MODEL_DEFS['groq/llama-3.1-8b-instant'], true)]
+      models: [m('groq/llama-3.3-70b-versatile', true), m('groq/llama-3.1-8b-instant', true)]
     })
   });
 
@@ -172,8 +180,8 @@ export function getAllAdapters(secrets = {}) {
       key,
       baseUrl: 'https://api.together.xyz/v1',
       models: [
-        model(MODEL_DEFS['qwen/qwen-3.8-max'], false),
-        model(MODEL_DEFS['qwen/qwen-3.7-flash'], true)
+        m('qwen/qwen-3.8-max', false),
+        m('qwen/qwen-3.7-flash', true)
       ]
     })
   });
@@ -185,7 +193,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'Mistral',
       key,
       baseUrl: 'https://api.mistral.ai/v1',
-      models: [model(MODEL_DEFS['mistralai/mistral-medium-3.5'], false), model(MODEL_DEFS['mistralai/codestral'], false)]
+      models: [m('mistralai/mistral-medium-3.5', false), m('mistralai/codestral', false)]
     })
   });
 
@@ -196,7 +204,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'DeepSeek',
       key,
       baseUrl: 'https://api.deepseek.com/v1',
-      models: [model(MODEL_DEFS['deepseek/deepseek-v4-pro'], false), model(MODEL_DEFS['deepseek/deepseek-v4-flash-0731'], true)]
+      models: [m('deepseek/deepseek-v4-pro', false), m('deepseek/deepseek-v4-flash-0731', true)]
     })
   });
 
@@ -207,7 +215,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'xAI (Grok)',
       key,
       baseUrl: 'https://api.x.ai/v1',
-      models: [model(MODEL_DEFS['xai/grok-4.5'], false)]
+      models: [m('xai/grok-4.5', false)]
     })
   });
 
@@ -218,7 +226,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'Fireworks AI',
       key,
       baseUrl: 'https://api.fireworks.ai/inference/v1',
-      models: [model({ name: 'Llama 3.1 8B', free: true, scores: S.cheap })]
+      models: [model('llama-3.1-8b-instruct', { name: 'Llama 3.1 8B', free: true, scores: S.cheap })]
     })
   });
 
@@ -229,7 +237,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'Perplexity',
       key,
       baseUrl: 'https://api.perplexity.ai',
-      models: [model({ name: 'Sonar', scores: { ...S.general, docs: 95 } })]
+      models: [model('sonar', { name: 'Sonar', scores: { ...S.general, docs: 95 } })]
     })
   });
 
@@ -240,7 +248,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'Cerebras',
       key,
       baseUrl: 'https://api.cerebras.ai/v1',
-      models: [model({ name: 'Llama 3.3 70B', free: true, scores: S.fast })]
+      models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: true, scores: S.fast })]
     })
   });
 
@@ -251,7 +259,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'Novita AI',
       key,
       baseUrl: 'https://api.novita.ai/v3/openai',
-      models: [model({ name: 'DeepSeek V3', free: true, scores: S.coding })]
+      models: [model('deepseek-v3', { name: 'DeepSeek V3', free: true, scores: S.coding })]
     })
   });
 
@@ -262,7 +270,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'HuggingFace',
       key,
       baseUrl: 'https://router.huggingface.co/v1',
-      models: [model({ name: 'Qwen 2.5 Coder 32B', free: true, scores: S.coding })]
+      models: [model('qwen2.5-coder-32b', { name: 'Qwen 2.5 Coder 32B', free: true, scores: S.coding })]
     })
   });
 
@@ -280,8 +288,8 @@ export function getAllAdapters(secrets = {}) {
   addRemote({ key: 'NEBIUS_API_KEY', factory: (key) => new OpenAICompatible({ id: 'nebius', displayName: 'Nebius AI Studio', key, baseUrl: 'https://api.studio.nebius.ai/v1', models: [] }) });
   addRemote({ key: 'BASETEN_API_KEY', factory: (key) => new OpenAICompatible({ id: 'baseten', displayName: 'Baseten', key, baseUrl: 'https://bridge.baseten.co/v1', models: [] }) });
   addRemote({ key: 'COHERE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'cohere', displayName: 'Cohere', key, baseUrl: 'https://api.cohere.com/v1', models: [] }) });
-  addRemote({ key: 'QWEN_API_KEY', factory: (key) => new OpenAICompatible({ id: 'qwen', displayName: 'Alibaba Cloud (Qwen)', key, baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', models: [model(MODEL_DEFS['qwen/qwen-3.8-max'], false), model(MODEL_DEFS['qwen/qwen-3.7-flash'], true)] }) });
-  addRemote({ key: 'MOONSHOT_API_KEY', factory: (key) => new OpenAICompatible({ id: 'moonshot', displayName: 'Moonshot AI', key, baseUrl: 'https://api.moonshot.cn/v1', models: [model(MODEL_DEFS['moonshot/kimi-k3'], false)] }) });
+  addRemote({ key: 'QWEN_API_KEY', factory: (key) => new OpenAICompatible({ id: 'qwen', displayName: 'Alibaba Cloud (Qwen)', key, baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', models: [m('qwen/qwen-3.8-max', false), m('qwen/qwen-3.7-flash', true)] }) });
+  addRemote({ key: 'MOONSHOT_API_KEY', factory: (key) => new OpenAICompatible({ id: 'moonshot', displayName: 'Moonshot AI', key, baseUrl: 'https://api.moonshot.cn/v1', models: [m('moonshot/kimi-k3', false)] }) });
   addRemote({ key: 'MINIMAX_API_KEY', factory: (key) => new OpenAICompatible({ id: 'minimax', displayName: 'MiniMax', key, baseUrl: 'https://api.minimax.chat/v1', models: [] }) });
   addRemote({ key: 'ZHIPU_API_KEY', factory: (key) => new OpenAICompatible({ id: 'zhipu', displayName: 'Zhipu AI', key, baseUrl: 'https://open.bigmodel.cn/api/paas/v4', models: [] }) });
   addRemote({ key: 'TENCENT_API_KEY', factory: (key) => new OpenAICompatible({ id: 'tencent', displayName: 'Tencent Hunyuan', key, baseUrl: 'https://hunyuan.tencentcloudapi.com/v1', models: [] }) });
@@ -322,6 +330,20 @@ export function getAllAdapters(secrets = {}) {
   addRemote({ key: 'CLOUDFLARE_GATEWAY_API_KEY', factory: (key) => new OpenAICompatible({ id: 'cloudflare_gateway', displayName: 'Cloudflare AI Gateway', key, baseUrl: 'https://gateway.ai.cloudflare.com/v1', models: [] }) });
   addRemote({ key: 'CLOUDFLARE_WORKERS_API_KEY', factory: (key) => new OpenAICompatible({ id: 'cloudflare_workers', displayName: 'Cloudflare Workers AI', key, baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1', models: [] }) });
   addRemote({ key: 'CORTECS_API_KEY', factory: (key) => new OpenAICompatible({ id: 'cortecs', displayName: 'Cortecs', key, baseUrl: 'https://api.cortecs.ai/v1', models: [] }) });
+  addRemote({ key: 'GITHUB_MODELS_API_KEY', factory: (key) => new OpenAICompatible({
+    id: 'github',
+    displayName: 'GitHub Models',
+    key,
+    baseUrl: 'https://models.github.ai/inference/v1',
+    models: [
+      model('gpt-5.3', { name: 'GPT-5.3', scores: S.general, costPer1kIn: 0, costPer1kOut: 0 }),
+      model('gpt-4.1', { name: 'GPT-4.1', scores: S.general, costPer1kIn: 0, costPer1kOut: 0 }),
+      model('claude-sonnet-4.6', { name: 'Claude Sonnet 4.6', scores: S.general, costPer1kIn: 0, costPer1kOut: 0 }),
+      model('gemini-3-flash', { name: 'Gemini 3 Flash', free: true, scores: S.fast, costPer1kIn: 0, costPer1kOut: 0 }),
+      model('deepseek-v4-flash', { name: 'DeepSeek V4 Flash', free: true, scores: { ...S.coding, bugfix: 96 }, costPer1kIn: 0, costPer1kOut: 0 }),
+      model('qwen3.8-max', { name: 'Qwen 3.8 Max', scores: S.general, costPer1kIn: 0, costPer1kOut: 0 })
+    ]
+  }) });
   addRemote({ key: 'GITHUB_COPILOT_API_KEY', factory: (key) => new OpenAICompatible({ id: 'github_copilot', displayName: 'GitHub Copilot', key, baseUrl: 'https://api.githubcopilot.com/v1', models: [] }) });
   addRemote({ key: 'GMI_CLOUD_API_KEY', factory: (key) => new OpenAICompatible({ id: 'gmicloud', displayName: 'GMI Cloud', key, baseUrl: 'https://api.gmicloud.ai/v1', models: [] }) });
   addRemote({ key: 'HELICONE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'helicone', displayName: 'Helicone', key, baseUrl: 'https://oai.hconeai.com/v1', models: [] }) });
@@ -398,169 +420,169 @@ export function getAllAdapters(secrets = {}) {
     id: 'ollama',
     displayName: 'Ollama (local)',
     key: '',
-    baseUrl: secrets.OLLAMA_HOST || 'http://localhost:11434/v1',
+    baseUrl: merged.OLLAMA_HOST || 'http://localhost:11434/v1',
     kind: 'local',
-    models: [model({ name: 'Ollama (any local model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Ollama', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'lmstudio',
     displayName: 'LM Studio (local)',
     key: '',
-    baseUrl: secrets.LMSTUDIO_HOST || 'http://localhost:1234/v1',
+    baseUrl: merged.LMSTUDIO_HOST || 'http://localhost:1234/v1',
     kind: 'local',
-    models: [model({ name: 'LM Studio (any local model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'LM Studio', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'lemonade',
     displayName: 'Lemonade Server (local)',
     key: '',
-    baseUrl: secrets.LEMONADE_HOST || 'http://localhost:8000/v1',
+    baseUrl: merged.LEMONADE_HOST || 'http://localhost:8000/v1',
     kind: 'local',
-    models: [model({ name: 'Lemonade Server (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Lemonade Server', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'llamafile',
     displayName: 'Llamafile (local)',
     key: '',
-    baseUrl: secrets.LLAMAFILE_HOST || 'http://localhost:8080/v1',
+    baseUrl: merged.LLAMAFILE_HOST || 'http://localhost:8080/v1',
     kind: 'local',
-    models: [model({ name: 'Llamafile (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Llamafile', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'vllm',
     displayName: 'vLLM (local/self-hosted)',
     key: '',
-    baseUrl: secrets.VLLM_HOST || 'http://localhost:8000/v1',
+    baseUrl: merged.VLLM_HOST || 'http://localhost:8000/v1',
     kind: 'local',
-    models: [model({ name: 'vLLM (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'vLLM', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'atomic_chat',
     displayName: 'Atomic Chat (local)',
     key: '',
-    baseUrl: secrets.ATOMIC_CHAT_HOST || 'http://localhost:8080/v1',
+    baseUrl: merged.ATOMIC_CHAT_HOST || 'http://localhost:8080/v1',
     kind: 'local',
-    models: [model({ name: 'Atomic Chat (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Atomic Chat', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'anaconda',
     displayName: 'Anaconda Desktop (local)',
     key: '',
-    baseUrl: secrets.ANACONDA_HOST || 'http://localhost:8080/v1',
+    baseUrl: merged.ANACONDA_HOST || 'http://localhost:8080/v1',
     kind: 'local',
-    models: [model({ name: 'Anaconda Desktop (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Anaconda Desktop', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'llamacpp',
     displayName: 'llama.cpp (local)',
     key: '',
-    baseUrl: secrets.LLAMACPP_HOST || 'http://localhost:8080/v1',
+    baseUrl: merged.LLAMACPP_HOST || 'http://localhost:8080/v1',
     kind: 'local',
-    models: [model({ name: 'llama.cpp (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'llama.cpp', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'localai',
     displayName: 'LocalAI (local)',
     key: '',
-    baseUrl: secrets.LOCALAI_HOST || 'http://localhost:8080/v1',
+    baseUrl: merged.LOCALAI_HOST || 'http://localhost:8080/v1',
     kind: 'local',
-    models: [model({ name: 'LocalAI (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'LocalAI', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'xinference',
     displayName: 'Xinference (local)',
     key: '',
-    baseUrl: secrets.XINFERENCE_HOST || 'http://localhost:9997/v1',
+    baseUrl: merged.XINFERENCE_HOST || 'http://localhost:9997/v1',
     kind: 'local',
-    models: [model({ name: 'Xinference (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Xinference', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'jan',
     displayName: 'Jan (local)',
     key: '',
-    baseUrl: secrets.JAN_HOST || 'http://localhost:1337/v1',
+    baseUrl: merged.JAN_HOST || 'http://localhost:1337/v1',
     kind: 'local',
-    models: [model({ name: 'Jan (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Jan', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'gpt4all',
     displayName: 'GPT4All (local)',
     key: '',
-    baseUrl: secrets.GPT4ALL_HOST || 'http://localhost:4891/v1',
+    baseUrl: merged.GPT4ALL_HOST || 'http://localhost:4891/v1',
     kind: 'local',
-    models: [model({ name: 'GPT4All (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'GPT4All', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'koboldcpp',
     displayName: 'KoboldCPP (local)',
     key: '',
-    baseUrl: secrets.KOBOLDCPP_HOST || 'http://localhost:5001/v1',
+    baseUrl: merged.KOBOLDCPP_HOST || 'http://localhost:5001/v1',
     kind: 'local',
-    models: [model({ name: 'KoboldCPP (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'KoboldCPP', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'oobabooga',
     displayName: 'Oobabooga (local)',
     key: '',
-    baseUrl: secrets.OOBABOOGA_HOST || 'http://localhost:5000/v1',
+    baseUrl: merged.OOBABOOGA_HOST || 'http://localhost:5000/v1',
     kind: 'local',
-    models: [model({ name: 'Oobabooga (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Oobabooga', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'tgi',
     displayName: 'TGI (local)',
     key: '',
-    baseUrl: secrets.TGI_HOST || 'http://localhost:8080/v1',
+    baseUrl: merged.TGI_HOST || 'http://localhost:8080/v1',
     kind: 'local',
-    models: [model({ name: 'TGI (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'TGI', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'aphrodite',
     displayName: 'Aphrodite Engine (local)',
     key: '',
-    baseUrl: secrets.APHRODITE_HOST || 'http://localhost:2242/v1',
+    baseUrl: merged.APHRODITE_HOST || 'http://localhost:2242/v1',
     kind: 'local',
-    models: [model({ name: 'Aphrodite Engine (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'Aphrodite Engine', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'tensorrt',
     displayName: 'TensorRT-LLM (local)',
     key: '',
-    baseUrl: secrets.TENSORRT_HOST || 'http://localhost:8000/v1',
+    baseUrl: merged.TENSORRT_HOST || 'http://localhost:8000/v1',
     kind: 'local',
-    models: [model({ name: 'TensorRT-LLM (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'TensorRT-LLM', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'sglang',
     displayName: 'SGLang (local)',
     key: '',
-    baseUrl: secrets.SGLANG_HOST || 'http://localhost:30000/v1',
+    baseUrl: merged.SGLANG_HOST || 'http://localhost:30000/v1',
     kind: 'local',
-    models: [model({ name: 'SGLang (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'SGLang', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'lmdeploy',
     displayName: 'LMDeploy (local)',
     key: '',
-    baseUrl: secrets.LMDEPLOY_HOST || 'http://localhost:23333/v1',
+    baseUrl: merged.LMDEPLOY_HOST || 'http://localhost:23333/v1',
     kind: 'local',
-    models: [model({ name: 'LMDeploy (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'LMDeploy', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'mlx',
     displayName: 'MLX Server (local)',
     key: '',
-    baseUrl: secrets.MLX_HOST || 'http://localhost:8080/v1',
+    baseUrl: merged.MLX_HOST || 'http://localhost:8080/v1',
     kind: 'local',
-    models: [model({ name: 'MLX Server (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'MLX Server', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
   providers.push(new OpenAICompatible({
     id: 'llamaedge',
     displayName: 'LlamaEdge (local)',
     key: '',
-    baseUrl: secrets.LLAMAEDGE_HOST || 'http://localhost:8080/v1',
+    baseUrl: merged.LLAMAEDGE_HOST || 'http://localhost:8080/v1',
     kind: 'local',
-    models: [model({ name: 'LlamaEdge (any model)', free: true, scores: { ...S.cheap, docs: 70 } })]
+    models: [model('local-model', { name: 'LlamaEdge', free: true, scores: { ...S.cheap, docs: 70 } })]
   }));
 
   // Mock is always available so the pipeline works without any keys.

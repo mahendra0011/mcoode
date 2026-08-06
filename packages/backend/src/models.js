@@ -1,62 +1,5 @@
-Maine saare specs check kar liye hain. **Abhi tak kuch bhi fix nahi hua hai** — hum sirf PLAN MODE mein analysis kar rahe hain. Ye raha final status:
+﻿import mongoose from 'mongoose';
 
----
-
-## ✅ Jo Already Implemented Hai (actual repo mein)
-
-| Feature | File | Status |
-|---|---|---|
-| Two-column layout (chat + sidebar) | `App.jsx` | ✅ |
-| Blue left-bar message blocks | `MainPane.jsx` | ✅ |
-| Assistant meta line `▪ Build · model · secs` | `MainPane.jsx` | ✅ |
-| Live Thought block `+ Thought: 2.8s…` | `MainPane.jsx` | ✅ |
-| Spinner (braille frames) | `MainPane.jsx` | ✅ |
-| Read block `# Read path` + line numbers | `MainPane.jsx` | ✅ |
-| Write block `# Wrote path` | `MainPane.jsx` | ✅ |
-| Diff block `← Edit path` + red/green tint | `MainPane.jsx` | ✅ |
-| Command block `$ cmd` + muted output | `MainPane.jsx` | ✅ |
-| Todo block `# Todos` + glyphs | `MainPane.jsx` | ✅ |
-| Interrupt `✗ Interrupted by user` | `MainPane.jsx` | ✅ |
-| Error + retry hint | `MainPane.jsx` | ✅ |
-| Permission prompt `(y/n/always)` | `MainPane.jsx` | ✅ |
-| Multi-file summary `# Changed 3 files` | `MainPane.jsx` | ✅ |
-| Sidebar (Context, Tasks, LSP, path:branch) | `Sidebar.jsx` | ✅ |
-| Command palette (ctrl+p, bordered) | `CommandPalette.jsx` | ✅ |
-| Status bar (cwd, tokens, ctrl+p) | `StatusBar.jsx` | ✅ |
-| Input box + multiline + slash menu | `InputLine.jsx` | ✅ |
-| Scroll (PgUp/PgDn + wheel SGR + auto-follow) | `MainPane.jsx` | ✅ |
-
----
-
-## ❌ Jo Fix Nahi Hua Hai (spec ke against gaps)
-
-**5 color mismatches in `MainPane.jsx`:**
-1. Todo **done** `✓` → `theme.green` (`#3ecf6e`) hona chahiye `diffGreen` (`#5fb87a`)
-2. Todo **paused** `◐` → `theme.amber` (`#f5c04a`) hona chahiye dim `accentOrange`
-3. Permission `?` prefix → `theme.text` hai, hona chahiye `accentOrange`
-4. Permission command → orange hai, hona chahiye bold white
-5. Summary `(new)` suffix → `theme.purple` hai, hona chahiye `theme.dim`
-
-**Other gaps from earlier specs:**
-- Sidebar animated (0→35) instead of fixed width
-- Input meta row missing provider + `max` badge
-- StatusBar shows project name not absolute path
-- `blocks.jsx` / `blocks-extra.jsx` / `blocks-todo-and-states.jsx` reference files don't exist in repo (but functionality is already inline in MainPane.jsx)
-- `ink-text-input` not installed (only matters for standalone `mcode-ui.jsx` demo)
-- Reference `PermissionBlock` has a React hooks violation (conditional `useInput`) — but actual repo doesn't have this bug
-
----
-
-## 🧭 Final Answer
-
-**Nahi, sab complete nahi hua hai.** Core UI ~90% working hai, but 5 color fixes + a few spec-alignment tweaks baaki hain. Ye saare changes **ACT MODE** mein implement karne hain — PLAN MODE mein sirf analysis ho sakta hai.
-
-**Toggle to ACT MODE** and I'll apply all remaining fixes:
-1. 5 color corrections in `MainPane.jsx`
-2. Sidebar fixed width (remove animation)
-3. Input meta row: add `max` badge + provider name
-4. StatusBar: absolute path + version dot
-5. Verify build passes (`npm run build:cliimport mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, index: true },
@@ -68,12 +11,18 @@ const userSchema = new mongoose.Schema({
     defaultConcurrency: Number,
     notifyOnBuildComplete: Boolean,
     routingOverrides: { type: Map, of: String, default: {} }
+  },
+  quotas: {
+    tokens: { limit: { type: Number, default: 1_000_000 }, used: { type: Number, default: 0 } },
+    builds: { limit: { type: Number, default: 100 }, used: { type: Number, default: 0 } },
+    resetAt: { type: Date, default: () => new Date() }
   }
 });
 
 const sessionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, index: true },
   projectName: String,
+  workspace: String,
   mode: String,
   status: String,
   plan: {

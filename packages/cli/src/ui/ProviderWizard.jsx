@@ -92,7 +92,7 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
   if (step === 'loading' || step === 'validating' || step === 'loading-models') {
     return (
       <box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
-        <box padding={1} borderStyle="single" borderColor={theme.green} backgroundColor={theme.panel}>
+        <box padding={1} borderStyle="single" border borderColor={theme.green} backgroundColor={theme.panel}>
           <text>{step === 'loading-models' ? 'Fetching models...' : (step === 'validating' ? 'Validating key...' : 'Loading...')}</text>
         </box>
       </box>

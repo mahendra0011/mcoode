@@ -20,6 +20,12 @@ import { uploadRoutes } from './routes/uploads.js';
 
 export async function startServer({ port = 3100, env = process.env } = {}) {
   const secret = env.JWT_SECRET || 'mcode-dev-secret-change-me';
+  if (secret === 'mcode-dev-secret-change-me' && env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be set in production — refusing to start with the dev fallback secret');
+  }
+  if (secret === 'mcode-dev-secret-change-me') {
+    console.warn('[auth] using the DEV JWT secret — set JWT_SECRET in production');
+  }
   const mongoUri = env.MONGODB_URI || null;
   const redisUri = env.REDIS_URI || null;
 
@@ -87,6 +93,16 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   const httpServer = createServer(app);
   const io = attachSockets(httpServer, { secret });
   app.set('io', io);
+
+  // /metrics — reports runtime performance stats
+  app.get('/metrics', (_req, res) => res.json({
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    cacheSize: cache() && cache().mode === 'redis' ? 'delegated' : 'in-memory',
+    activeConnections: httpServer._connections != null ? httpServer._connections : null,
+    pid: process.pid,
+    nodeVersion: process.version,
+  }));
 
   // demo worker: dashboard-triggered god builds log their progress
   const queue = jobQueue('subagents');

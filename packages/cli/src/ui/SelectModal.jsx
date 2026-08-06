@@ -41,10 +41,6 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
     }
     
     if ((key.name === "down")) {
-      if (key.shift) {
-        setCursor(c => Math.max(0, c - 1));
-        return;
-      }
       setCursor(c => Math.min(selectableIndexes.length - 1, c + 1));
       return;
     }
@@ -88,6 +84,7 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
         width={70} 
         flexDirection="column"
         borderStyle="single"
+        border
         borderColor={theme.green}
         backgroundColor={theme.panel}
         paddingLeft={1} paddingRight={1}

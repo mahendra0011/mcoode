@@ -5,11 +5,11 @@ import { OnboardingScreen } from './ui/OnboardingScreen.jsx';
 import { Orchestrator } from './core/orchestrator.js';
 import { loadConfig, saveConfig } from './core/store.js';
 import { saveHistory } from './core/history.js';
-import { hasApiKey, backendUrl } from './commands/onboarding.js';
+import { hasApiKey, backendUrl, migrateLegacyRefreshToken } from './commands/onboarding.js';
 import { loadVault, saveVault } from './core/vault.js';
 import { basename } from 'node:path';
 
-export async function startRepl() {
+export async function startRepl({ watchAfter = null } = {}) {
   const stdinOk = Boolean(process.stdin.isTTY) && typeof process.stdin.setRawMode === 'function';
   const stdoutOk = Boolean(process.stdout.isTTY);
   if (!stdinOk || !stdoutOk) {
@@ -37,8 +37,13 @@ export async function startRepl() {
   const accountExists = Boolean(config?.account?.email);
   const keyExists = await hasApiKey(config);
 
+  // move any legacy plaintext refresh token into the encrypted vault
+  await migrateLegacyRefreshToken(config);
+
   // ── Onboarding (if needed) ────────────────────────────────────────────
-  const needsOnboarding = !accountExists;
+  // Local-first: only block when there's no provider key at all (env or
+  // vault). An account is optional — the tool works fully without one.
+  const needsOnboarding = !keyExists;
 
   if (needsOnboarding) {
     await new Promise((resolve) => {
@@ -79,12 +84,14 @@ export async function startRepl() {
           const data = await apiCall('POST', `${base}/api/v1/auth/verify-otp`, {
             email, otp, intent: 'signup', name, password,
           });
-          await saveConfig({ account: { email: data.user.email, name: data.user.name, refresh: data.refresh } });
+          await saveConfig({ account: { email: data.user.email, name: data.user.name } });
+          await saveVault({ ...(await loadVault()), MCCODE_REFRESH_TOKEN: data.refresh });
           return data;
         },
         login: async (email, password) => {
           const data = await apiCall('POST', `${base}/api/v1/auth/login`, { email, password });
-          await saveConfig({ account: { email: data.user.email, name: data.user.name, refresh: data.refresh } });
+          await saveConfig({ account: { email: data.user.email, name: data.user.name } });
+          await saveVault({ ...(await loadVault()), MCCODE_REFRESH_TOKEN: data.refresh });
           return data;
         },
         saveApiKey: async (envVar, key) => {
@@ -111,22 +118,24 @@ export async function startRepl() {
 
   // ── Main TUI ──────────────────────────────────────────────────────────
   while (true) {
-    const freshConfig = await loadConfig();
+    const freshConfig = await loadConfig({ force: true });
     const projectName = basename(process.cwd()) || 'project';
     const orchestrator = new Orchestrator({
       projectPath: process.cwd(),
       config: freshConfig,
       options: {
         modelOverride: process.env.MCCODE_MODEL || null,
-        verbose: process.env.MCCODE_VERBOSE === '1'
+        verbose: process.env.MCCODE_VERBOSE === '1',
+        watchAfter: watchAfter === false ? false : Boolean(freshConfig.watchAfter || freshConfig.watch?.autoStart)
       }
     });
     await orchestrator.init();
 
     let root;
     let nextAction = null;
+    let onRendererDestroy = null;
     const exited = new Promise((resolveExit) => {
-      const onRendererDestroy = () => resolveExit();
+      onRendererDestroy = () => resolveExit();
       renderer.on('destroy', onRendererDestroy);
 
       try {
@@ -144,7 +153,6 @@ export async function startRepl() {
           />
         );
       } catch (err) {
-        renderer.off('destroy', onRendererDestroy);
         console.error(`mcode: TUI failed to start (${err?.message || err}).`);
         console.error('Use Windows Terminal, VS Code terminal, or Command Prompt — or run with --non-interactive.');
         renderer.destroy?.();
@@ -153,7 +161,9 @@ export async function startRepl() {
     });
 
     await exited;
-    await orchestrator.watchDaemon?.stop();
+    renderer.off('destroy', onRendererDestroy);
+    await orchestrator.stopWatch();
+    orchestrator.interrupt?.();
 
     if (nextAction === 'init') {
       try {

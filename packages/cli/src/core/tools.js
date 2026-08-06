@@ -2,19 +2,24 @@ import { join, resolve, relative } from 'node:path';
 import { readFile, writeFile, readdir, mkdir, rm } from 'node:fs/promises';
 import { execa } from 'execa';
 import { EVENTS } from '@mcode/shared';
+import { redactSecrets, isNetworkAllowed } from './security.js';
+import { scoreRisk, RISK_LEVELS } from './audit.js';
 
 /**
  * Scoped toolset handed to subagents. Writes go through a snapshot +
  * diff-preview layer so `/undo` can revert any todo's changes.
  */
 export class ToolExecutor {
-  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, domain = 'backend', todoId = null }) {
+  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null }) {
     this.projectPath = resolve(projectPath);
     this.bus = bus;
     this.undoStack = undoStack;
     this.allowShellAll = allowShellAll;
     this.domain = domain;
     this.todoId = todoId;
+    this.cancelSignal = cancelSignal;
+    this.networkWhitelist = networkWhitelist;
+    this.auditLog = auditLog;
   }
 
   tools() {
@@ -23,6 +28,9 @@ export class ToolExecutor {
       list_files: { description: 'List files matching a glob', parameters: { glob: 'string' } },
       search_code: { description: 'Search the codebase for text', parameters: { query: 'string' } },
       write_file: { description: 'Write a file (creates parent dirs)', parameters: { path: 'string', content: 'string' } },
+      edit_file: { description: 'Edit a file by replacing text', parameters: { path: 'string', old: 'string', new: 'string' } },
+      web_search: { description: 'Search the web for information', parameters: { query: 'string' } },
+      web_fetch: { description: 'Fetch and extract text content from a URL', parameters: { url: 'string' } },
       git_status: { description: 'Show current git status / diff summary', parameters: {} },
       run_tests: { description: 'Run the project test suite (or one file)', parameters: { file: 'string' } }
     };
@@ -42,15 +50,70 @@ export class ToolExecutor {
 
   async run(name, args) {
     const start = Date.now();
-    this.bus?.emit('SUBAGENT_TOOL_CALL', { tool: name, args: JSON.stringify(args).slice(0, 200) });
+    const { riskLevel } = scoreRisk(name, args);
+    this.bus?.emit('SUBAGENT_TOOL_CALL', { tool: name, args: JSON.stringify(args).slice(0, 200), risk: riskLevel });
+
+    // High-risk operations always require permission, even in agent mode
+    if (riskLevel === RISK_LEVELS.CRITICAL && this.bus && this.bus.listenerCount) {
+      const approved = await this._askPermissionIfNeeded(name, args);
+      if (!approved) {
+        this.auditLog?.logPermission(name, 'denied', { reason: 'high risk', args });
+        return { ok: false, error: `permission denied: ${name} flagged as ${riskLevel}` };
+      }
+      this.auditLog?.logPermission(name, 'approved', { args });
+    }
+
+    this.auditLog?.logToolCall(name, { ...args, todoId: this.todoId, domain: this.domain });
+
     let result;
     try {
       result = await this[name](args || {});
     } catch (err) {
       result = { ok: false, error: err.message };
     }
-    this.bus?.emit('SUBAGENT_TOOL_RESULT', { tool: name, ms: Date.now() - start, truncated: String(result).slice(0, 300) });
+    this.bus?.emit('SUBAGENT_TOOL_RESULT', { tool: name, ms: Date.now() - start, risk: riskLevel, truncated: String(result).slice(0, 300) });
     return result;
+  }
+
+  /** Risk-based permission prompt for critical operations. */
+  async _askPermissionIfNeeded(name, args) {
+    if (!this.bus) return true;
+    const requestId = `risk${Date.now().toString(36)}`;
+    let resolved = false;
+    let approved = false;
+    const onAnswer = (p) => {
+      if (p.requestId !== requestId) return;
+      if (p.answer === 'always' || p.answer === 'yes') approved = true;
+      resolved = true;
+      this.bus.off('PERMISSION_ANSWER', onAnswer);
+      clearTimeout(timer);
+    };
+    this.bus.on('PERMISSION_ANSWER', onAnswer);
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        this.bus.off('PERMISSION_ANSWER', onAnswer);
+        resolved = true;
+        approved = false;
+      }
+    }, 60_000);
+
+    this.bus.emit(EVENTS.MESSAGE, {
+      kind: 'tool',
+      block: 'permission',
+      requestId,
+      status: 'running',
+      prompt: `High-risk action: ${name}`,
+      command: name,
+      detail: `risk level: ${scoreRisk(name, args).level} (score ${scoreRisk(name, args).score}/10)`,
+    });
+
+    // Wait for answer
+    await new Promise((resolve) => {
+      const check = setInterval(() => {
+        if (resolved) { clearInterval(check); resolve(); }
+      }, 50);
+    });
+    return approved;
   }
 
   async read_file({ path }) {
@@ -88,14 +151,50 @@ export class ToolExecutor {
       const files = stdout.split('\n').filter(Boolean).slice(0, 50);
       return { ok: true, files };
     } catch {
-      return { ok: true, files: [] };
+      return { ok: true, files: await this._nativeSearch(query) };
     }
+  }
+
+  /** ripgrep-less fallback: bounded recursive text scan over source-ish files. */
+  async _nativeSearch(query) {
+    const matches = [];
+    const walk = async (dir) => {
+      let entries;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (matches.length >= 50) return;
+        if (['node_modules', '.git', 'dist', 'build', 'coverage'].includes(entry.name)) continue;
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full);
+        } else if (/\.(js|jsx|ts|tsx|mjs|cjs|json|md|css|html|vue|svelte)$/i.test(entry.name)) {
+          try {
+            const content = await readFile(full, 'utf8');
+            if (content.includes(query)) matches.push(full);
+          } catch {
+            /* unreadable */
+          }
+        }
+      }
+    };
+    await walk(this.projectPath);
+    return matches;
   }
 
   async write_file({ path, content }) {
     const full = this._abs(path);
     await mkdir(join(full, '..'), { recursive: true });
     const prev = await readFile(full, 'utf8').catch(() => null);
+    if (prev !== null) {
+      const answer = await this._askOverwrite(path, prev);
+      if (answer !== 'y' && answer !== 'always') {
+        return { ok: false, error: `Overwrite denied by user for ${path}` };
+      }
+    }
     await this.undoStack?.snapshot(path, prev);
     await writeFile(full, content, 'utf8');
     const created = prev === null;
@@ -111,6 +210,134 @@ export class ToolExecutor {
     return { ok: true, file: path, created, diff, diffLines: diff?.lines || [], content };
   }
 
+  async edit_file({ path, old: oldText, new: newText }) {
+    const full = this._abs(path);
+    const prev = await readFile(full, 'utf8').catch(() => null);
+    if (prev === null) {
+      return { ok: false, error: `file not found: ${path}` };
+    }
+    if (!prev.includes(oldText)) {
+      return { ok: false, error: `old text not found in ${path}` };
+    }
+    const content = prev.replace(oldText, newText);
+    await this.undoStack?.snapshot(path, prev);
+    await writeFile(full, content, 'utf8');
+    const diff = lineDiff(prev, content);
+    this.bus?.emit(EVENTS.SUBAGENT_FILE, {
+      todoId: this.todoId || null,
+      file: path,
+      content,
+      diff: diff || diffText(prev, content),
+      language: path.split('.').pop() || 'txt',
+      timestamp: Date.now()
+    });
+    return { ok: true, file: path, diff, diffLines: diff?.lines || [], content };
+  }
+
+  /** Strip HTML tags and decode entities to plain text. */
+  _stripHtml(html) {
+    return String(html || '')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  async web_search({ query }) {
+    const searchUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+    if (!isNetworkAllowed(searchUrl, this.networkWhitelist)) {
+      return { ok: false, error: 'network request blocked by whitelist' };
+    }
+    try {
+      const html = await fetch(searchUrl, {
+        headers: { 'User-Agent': 'mcode-agent/2.4.6' },
+        signal: this.cancelSignal || undefined,
+        timeout: 10_000
+      }).then((r) => r.text());
+
+      // Parse DuckDuckGo lite results: <a class="result-link" href="...">title</a>
+      const linkRegex = /<a[^]*?class="result-link"[^]*?href="([^"]+)"[^]*?>([^<]+)<\/a>/gi;
+      const results = [];
+      let match;
+      while ((match = linkRegex.exec(html)) !== null && results.length < 5) {
+        const href = decodeURIComponent(match[1]);
+        const title = this._stripHtml(match[2]);
+        const after = html.slice(match.index + match[0].length, match.index + match[0].length + 500);
+        const snippet = redactSecrets(this._stripHtml(after).slice(0, 200));
+        results.push({ title, url: href, snippet });
+      }
+
+      if (results.length === 0) {
+        return { ok: false, error: 'No search results found' };
+      }
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  async web_fetch({ url }) {
+    if (!isNetworkAllowed(url, this.networkWhitelist)) {
+      return { ok: false, error: 'network request blocked by whitelist' };
+    }
+    try {
+      const html = await fetch(url, {
+        headers: { 'User-Agent': 'mcode-agent/2.4.6' },
+        signal: this.cancelSignal || undefined,
+        timeout: 15_000
+      }).then((r) => r.text());
+
+      const text = redactSecrets(this._stripHtml(html));
+      // Extract title
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      const title = titleMatch ? redactSecrets(this._stripHtml(titleMatch[1])) : url;
+
+      return { ok: true, url, title, content: text.slice(0, 8000) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /** Ask the user for permission to overwrite an existing file.
+   *  Emits a permission message on the bus and waits for PERMISSION_ANSWER.
+   *  Returns 'y' | 'n' | 'always'. 'always' is cached for this executor. */
+  async _askOverwrite(path, prev) {
+    if (!this.bus) return 'y';
+    if (this._alwaysApprove) return 'always';
+
+    const lineCount = String(prev || '').split('\n').length;
+
+    return new Promise((resolve) => {
+      const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const onAnswer = (p) => {
+        if (p.requestId !== requestId) return;
+        this.bus.off(EVENTS.PERMISSION_ANSWER, onAnswer);
+        if (p.answer === 'always') this._alwaysApprove = true;
+        clearTimeout(timer);
+        resolve(p.answer);
+      };
+      this.bus.on(EVENTS.PERMISSION_ANSWER, onAnswer);
+      const timer = setTimeout(() => {
+        this.bus.off(EVENTS.PERMISSION_ANSWER, onAnswer);
+        resolve('n');
+      }, 60_000);
+
+      this.auditLog?.logPermission('write_file', 'pending', { path, reason: 'overwrite', lineCount });
+      this.bus.emit(EVENTS.MESSAGE, {
+        kind: 'tool',
+        block: 'permission',
+        requestId,
+        status: 'running',
+        prompt: `Overwrite existing file: ${path} (${lineCount} lines)`,
+        command: `write_file → ${path}`,
+        detail: '',
+      });
+    });
+  }
+
   async git_status() {
     const git = (await import('simple-git')).default(this.projectPath);
     const status = await git.status();
@@ -118,13 +345,27 @@ export class ToolExecutor {
   }
 
   async run_shell({ command }) {
-    if (!this.allowShellAll && /(rm\s+-rf|del\s+\/|format\s+\w:|:\(\)\s*\{|mkfs)/i.test(command)) {
-      return { ok: false, error: 'destructive command blocked by sandbox (use --allow-shell-all to bypass)' };
+    if (!this.allowShellAll) {
+      // strip quoting/escapes first so `r"m" -r -f` / `r\m -rf` can't sneak past
+      const flat = String(command).replace(/["'`\\]/g, '');
+      const tokens = flat.toLowerCase().split(/[\s;&|()]+/);
+      const killers = ['rm', 'rmdir', 'del', 'erase', 'dd', 'mkfs', 'format', 'shutdown'];
+      const hit = tokens.some((t) => killers.some((k) => t === k || t.startsWith(`${k}.`)));
+      const dangerousFlags = /-{1,2}([a-z]*r[a-z]*|[a-z]*f[a-z]*)/.test(flat) || /(^|\s)\/[a-z]*[sq][a-z]*(?=\s|$)/.test(flat);
+      if (
+        (hit && dangerousFlags) ||
+        /:\(\)\s*\{/.test(flat) ||
+        /mkfs\s+\S+/.test(flat) ||
+        /format\s+[a-z]:/i.test(flat)
+      ) {
+        return { ok: false, error: 'destructive command blocked by sandbox (use --allow-shell-all to bypass)' };
+      }
     }
     const { stdout, stderr } = await execa(command, {
       cwd: this.projectPath,
       shell: true,
       timeout: 120_000,
+      cancelSignal: this.cancelSignal || undefined,
       env: { ...process.env, FORCE_COLOR: '0' }
     });
     return { ok: true, stdout: stdout.slice(0, 4000), stderr: stderr.slice(0, 2000) };
@@ -136,6 +377,7 @@ export class ToolExecutor {
       const { stdout, stderr } = await execa('npm', args, {
         cwd: this.projectPath,
         timeout: 180_000,
+        cancelSignal: this.cancelSignal || undefined,
         env: { ...process.env, FORCE_COLOR: '0' },
         reject: false
       });
@@ -205,12 +447,13 @@ export function lineDiff(before, after) {
   return { changedLines: changed, lines };
 }
 
-/** Per-project undo stack: snapshots of every file before a subagent writes. */
+  /** Per-project undo stack: snapshots of every file before a subagent writes. */
 export class UndoStack {
-  constructor({ filePath, maxEntries = 200 } = {}) {
+  constructor({ filePath, maxEntries = 200, projectPath = null } = {}) {
     this.filePath = filePath;
     this.maxEntries = maxEntries;
     this.entries = [];
+    this.projectPath = projectPath;
   }
 
   async snapshot(relPath, prevContent) {
@@ -240,7 +483,7 @@ export class UndoStack {
     await this.load();
     const last = this.entries.pop();
     if (!last) return null;
-    const full = resolve(process.cwd(), last.file);
+    const full = this.projectPath ? resolve(this.projectPath, last.file) : resolve(process.cwd(), last.file);
     if (last.prev === null) {
       await rm(full, { force: true });
     } else {

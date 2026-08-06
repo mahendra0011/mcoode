@@ -40,7 +40,6 @@ export class ModelRouter {
     this.config = config;
     this.ledger = ledger || new CostLedger();
     this.providers = providers;
-    this.availabilityCache = new Map();
     this.mode = MODES.includes(config?.mode) ? config.mode : 'medium';
   }
 
@@ -69,11 +68,8 @@ export class ModelRouter {
     await this._init();
     const out = [];
     for (const provider of this.providers) {
-      const key = provider.id;
-      if (!this.availabilityCache.has(key)) {
-        this.availabilityCache.set(key, await provider.isAvailable());
-      }
-      if (this.availabilityCache.get(key)) {
+      // provider.isAvailable() caches its own probe result with a TTL
+      if (await provider.isAvailable()) {
         out.push(provider);
       }
     }
@@ -114,7 +110,7 @@ export class ModelRouter {
       if (!provider) continue;
       if (this.ledger.isRateLimited(providerId)) continue;
       const models = await provider.listModels();
-      const entry = models.find((m) => m.id === modelId) || models[0];
+      const entry = models.find((m) => m.id === modelId);
       if (!entry) continue;
       return { provider, model: entry, ref: `${providerId}:${entry.id}` };
     }

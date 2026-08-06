@@ -37,6 +37,7 @@ export function TextInputModal({ title, placeholder, onSubmit, onClose, password
         width={60} 
         flexDirection="column"
         borderStyle="single"
+        border
         borderColor={theme.green}
         backgroundColor={theme.panel}
         paddingLeft={1} paddingRight={1}

@@ -7,13 +7,15 @@ Respond with ONLY a JSON object (no markdown fence, no commentary) shaped like:
 {
   "summary": "one-line summary of the build",
   "todos": [
-    { "id": "t1", "title": "...", "description": "...", "domain": "db", "dependsOn": [] }
+    { "id": "t1", "title": "...", "description": "...", "domain": "db", "dependsOn": [], "files": ["src/db.ts"] }
   ]
 }
 
 Rules:
 - domain is one of: frontend | backend | db | devops | test | docs
 - dependsOn lists ids that must finish first (empty array when none)
+- files lists the paths this todo will likely create or modify (relative, no leading ./)
+- if two todos touch the same file, make one depend on the other — never let two todos share a file
 - split big work into 4-14 granular todos; each todo should be doable by one agent
 - always include a test todo depending on the core implementation todos
 - plan a fresh build unless the repo context shows an existing app to extend
@@ -25,9 +27,16 @@ export function parsePlanOutput(text) {
   const match = JSON_RE.exec(String(text || '').trim());
   const raw = match?.[1] || match?.[2] || match?.[3] || text;
   const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('no JSON object found in planner output');
-  return normalizePlan(JSON.parse(raw.slice(start, end + 1)));
+  if (start === -1) throw new Error('no JSON object found in planner output');
+  let end = start;
+  while ((end = raw.indexOf('}', end)) !== -1) {
+    try {
+      return normalizePlan(JSON.parse(raw.slice(start, end + 1)));
+    } catch {
+      end += 1;
+    }
+  }
+  throw new Error('no valid JSON object found in planner output');
 }
 
 export class Planner {

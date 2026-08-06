@@ -1,5 +1,5 @@
 import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { execa } from 'execa';
 
 export async function isGitRepo(cwd = process.cwd()) {
@@ -18,6 +18,34 @@ export async function changedFiles(cwd = process.cwd()) {
     .filter(Boolean)
     .map((line) => line.slice(3).trim())
     .filter((f) => f && !f.endsWith('/'));
+}
+
+/** Get per-file diff stats (added/deleted lines) using `git diff --numstat`.
+ *  Returns array of { file, added, deleted, status }. */
+export async function diffStats(cwd = process.cwd()) {
+  const { stdout } = await execa('git', ['diff', '--numstat'], { cwd });
+  const files = stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [added, deleted, rest] = line.split('\t');
+      return {
+        file: rest || '',
+        added: Number(added) || 0,
+        deleted: Number(deleted) || 0,
+        status: Number(added) > 0 && Number(deleted) > 0 ? 'modified' : Number(added) > 0 ? 'added' : 'deleted',
+      };
+    })
+    .filter((f) => f.file);
+  return files;
+}
+
+/** Get the full unified diff for a specific file (or all files). */
+export async function gitDiff(cwd = process.cwd(), file = null) {
+  const args = ['diff'];
+  if (file) args.push('--', file);
+  const { stdout } = await execa('git', args, { cwd });
+  return stdout;
 }
 
 export async function repoRoot(cwd = process.cwd()) {
@@ -43,7 +71,7 @@ export async function walkTree(root, { ignore = [], maxDepth = 12 } = {}) {
   const { stat: fsStat } = await import('node:fs/promises');
   const results = [];
   const isIgnored = (p) => {
-    const rel = p.replace(/\\/g, '/');
+    const rel = relative(root, p).replace(/\\/g, '/');
     return ignore.some((pattern) => {
       if (pattern.startsWith('!')) return false;
       const norm = pattern.replace(/\\/g, '/').replace(/\/$/, '');
@@ -51,7 +79,7 @@ export async function walkTree(root, { ignore = [], maxDepth = 12 } = {}) {
         const re = new RegExp(`^${norm.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}($|/)`);
         return re.test(rel);
       }
-      return rel === norm || rel.startsWith(`${norm}/`);
+      return rel === norm || rel.startsWith(`${norm}/`) || rel.includes(`/${norm}/`);
     });
   };
   const walk = async (dir, depth) => {

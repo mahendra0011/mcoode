@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { loadConfig, saveConfig } from '../core/store.js';
-import { loadVault, saveVault } from '../core/vault.js';
+import { loadVault, saveVault, vaultSet, vaultDelete } from '../core/vault.js';
 import { DEFAULT_CONFIG } from '@mcode/shared';
 import { apiKeyAddCommand } from './api-key.js';
 
@@ -36,6 +36,19 @@ export async function needsOnboarding(config) {
   const hasAccount = Boolean(config?.account?.email);
   const keyed = await hasApiKey(config);
   return !(hasAccount && keyed);
+}
+
+/** Move a legacy plaintext refresh token from config.json into the vault,
+ *  then drop it from the config. Safe to call on every startup path. */
+export async function migrateLegacyRefreshToken(config) {
+  if (!config?.account?.refresh) return false;
+  try {
+    await saveVault({ ...(await loadVault()), MCCODE_REFRESH_TOKEN: config.account.refresh });
+  } catch {
+    return false; // keep the plaintext copy if the vault write fails
+  }
+  await saveConfig({ account: { email: config.account.email, name: config.account.name } });
+  return true;
 }
 
 async function promptHidden(rl, query) {
@@ -97,7 +110,8 @@ async function createAccount(rl, config) {
   if (sent.devOtp) output.write(`  [dev mode, no SMTP configured] your code: ${sent.devOtp}\n`);
   const otp = (await rl.question('  enter 6-digit code: ')).trim();
   const data = await api('POST', `${base}/api/v1/auth/verify-otp`, { email, otp, intent: 'signup', name, password });
-  await saveConfig({ account: { email: data.user.email, name: data.user.name, refresh: data.refresh } });
+  await saveConfig({ account: { email: data.user.email, name: data.user.name } });
+  await vaultSet('MCCODE_REFRESH_TOKEN', data.refresh);
   output.write(`  \u2713 account created — welcome ${data.user.name}!\n\n`);
 }
 
@@ -108,7 +122,8 @@ async function loginAccount(rl, config) {
   const email = (await rl.question('  email: ')).trim();
   const password = await promptHidden(rl, '  password: ');
   const data = await api('POST', `${base}/api/v1/auth/login`, { email, password });
-  await saveConfig({ account: { email: data.user.email, name: data.user.name, refresh: data.refresh } });
+  await saveConfig({ account: { email: data.user.email, name: data.user.name } });
+  await vaultSet('MCCODE_REFRESH_TOKEN', data.refresh);
   output.write(`  \u2713 logged in — welcome back ${data.user.name}!\n\n`);
 }
 
@@ -182,6 +197,7 @@ export async function loginCommand() {
 
 export async function logoutCommand() {
   await saveConfig({ account: null });
+  await vaultDelete('MCCODE_REFRESH_TOKEN');
   output.write('\u2713 logged out (API keys in the vault are untouched)\n');
 }
 
