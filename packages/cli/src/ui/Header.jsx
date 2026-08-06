@@ -1,3 +1,4 @@
+import { TextAttributes } from '@opentui/core';
 import { theme } from './theme.js';
 
 export function Header({ projectName, model, watching, email = '', version = '' }) {
@@ -16,7 +17,7 @@ export function Header({ projectName, model, watching, email = '', version = '' 
     >
       <box flexDirection="row">
         <box width={22}>
-          <text bold fg={theme.green}>{'\u25c8'} mcode</text>
+          <text fg={theme.green} attributes={TextAttributes.BOLD}>{'\u25c8'} mcode</text>
         </box>
         <box flexGrow={1} justifyContent="center">
           <text fg={theme.text}>mcode CLI {version}</text>

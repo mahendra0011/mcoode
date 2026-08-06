@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { SelectModal } from './SelectModal.jsx';
 import { TextInputModal } from './TextInputModal.jsx';
 import { getAllAdapters } from '../providers/index.js';
@@ -134,7 +134,7 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
 
   if (step === 'enter-key') {
     return (
-      <textInputModal
+      <TextInputModal
         title={`Manually enter API Key`}
         placeholder="API key"
         password={true}

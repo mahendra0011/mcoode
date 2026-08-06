@@ -19,7 +19,7 @@
     "node": ">=26.4.0"
   },
   "scripts": {
-    "start": "node --experimental-ffi bin/mcode.js",
+    "start": "node bin/mcode.js",
     "build": "node scripts/build.js",
     "test": "vitest run"
   },

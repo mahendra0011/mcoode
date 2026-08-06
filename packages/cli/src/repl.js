@@ -21,7 +21,12 @@ export async function startRepl() {
 
   let renderer;
   try {
-    renderer = await createCliRenderer({ exitOnCtrlC: true });
+    renderer = await createCliRenderer({
+      exitOnCtrlC: true,
+      screenMode: 'alternate-screen',
+      clearOnShutdown: true,
+      backgroundColor: '#0a0a0a',
+    });
   } catch (err) {
     console.error(`mcode: TUI failed to start (${err?.message || err}).`);
     console.error('OpenTUI needs Node.js 26.4.0+ started with --experimental-ffi.');
@@ -121,6 +126,9 @@ export async function startRepl() {
     let root;
     let nextAction = null;
     const exited = new Promise((resolveExit) => {
+      const onRendererDestroy = () => resolveExit();
+      renderer.on('destroy', onRendererDestroy);
+
       try {
         root = createRoot(renderer);
         root.render(
@@ -136,6 +144,7 @@ export async function startRepl() {
           />
         );
       } catch (err) {
+        renderer.off('destroy', onRendererDestroy);
         console.error(`mcode: TUI failed to start (${err?.message || err}).`);
         console.error('Use Windows Terminal, VS Code terminal, or Command Prompt — or run with --non-interactive.');
         renderer.destroy?.();

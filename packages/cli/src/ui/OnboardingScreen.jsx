@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useKeyboard, useRenderer } from '@opentui/react';
+import { TextAttributes } from '@opentui/core';
 import { Logo } from './Logo.jsx';
 import { theme } from './theme.js';
 
@@ -11,7 +12,7 @@ function Divider({ width = 56, color = '#1f2937' }) {
 
 function Badge({ label, color = theme.green }) {
   return (
-    <text fg={color} bold>
+    <text fg={color} attributes={TextAttributes.BOLD}>
       {'  '}[{label}]
     </text>
   );
@@ -35,7 +36,7 @@ function SelectionItem({ label, description, isSelected, index }) {
       <text fg={isSelected ? theme.greenBright : '#1f2937'}>
         {isSelected ? '▸ ' : '  '}
       </text>
-      <text fg={isSelected ? theme.text : theme.dim} bold={isSelected}>
+      <text fg={isSelected ? theme.text : theme.dim} attributes={isSelected ? TextAttributes.BOLD : 0}>
         {label}
       </text>
       {description && (
@@ -279,7 +280,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     return (
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={0} total={totalSteps} />
-        <box marginTop={1} marginBottom={1}><text fg={theme.text} bold>Create Account</text></box>
+        <box marginTop={1} marginBottom={1}><text fg={theme.text} attributes={TextAttributes.BOLD}>Create Account</text></box>
         <box
           flexDirection="column"
           borderStyle="round"
@@ -291,7 +292,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
             <>
               {fields.map((field, i) => (
                 <box key={field} marginBottom={i < fields.length - 1 ? 1 : 0}>
-                  <textInput
+                  <TextInput
                     label={field.charAt(0).toUpperCase() + field.slice(1)}
                     value={inputValues[field]}
                     focused={i === activeField}
@@ -313,7 +314,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
               <box marginTop={1}>
                 <text fg={theme.dim}>Enter 6-digit code: </text>
                 <box borderStyle="round" borderColor={theme.green} paddingLeft={1} paddingRight={1} minWidth={12}>
-                  <text fg={theme.text} bold>
+                  <text fg={theme.text} attributes={TextAttributes.BOLD}>
                     {inputValues.otp.split('').join(' ')}
                     {'  '.repeat(Math.max(0, 6 - inputValues.otp.length))}
                   </text>
@@ -398,7 +399,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     return (
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={0} total={totalSteps} />
-        <box marginTop={1} marginBottom={1}><text fg={theme.text} bold>Login</text></box>
+        <box marginTop={1} marginBottom={1}><text fg={theme.text} attributes={TextAttributes.BOLD}>Login</text></box>
         <box
           flexDirection="column"
           borderStyle="round"
@@ -408,7 +409,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
         >
           {fields.map((field, i) => (
             <box key={field} marginBottom={i < fields.length - 1 ? 1 : 0}>
-              <textInput
+              <TextInput
                 label={field.charAt(0).toUpperCase() + field.slice(1)}
                 value={inputValues[field]}
                 focused={i === activeField}
@@ -456,7 +457,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
         <StepIndicator current={1} total={3} />
         <box marginTop={1} marginBottom={1} flexDirection="column" alignItems="center">
           <text fg={theme.amber}>● </text>
-          <text fg={theme.text} bold>API Key Setup</text>
+          <text fg={theme.text} attributes={TextAttributes.BOLD}>API Key Setup</text>
         </box>
         <box marginBottom={1}>
           <text fg={theme.dim}>You need an AI provider API key for chat and god mode</text>
@@ -511,7 +512,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     return (
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={2} total={3} />
-        <box marginTop={1} marginBottom={1}><text fg={theme.text} bold>Select Provider</text></box>
+        <box marginTop={1} marginBottom={1}><text fg={theme.text} attributes={TextAttributes.BOLD}>Select Provider</text></box>
         <box
           flexDirection="column"
           borderStyle="round"
@@ -527,7 +528,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
               <text fg={i === selectedIdx ? theme.purple : theme.dim}>
                 {p.icon}{' '}
               </text>
-              <text fg={i === selectedIdx ? theme.text : theme.dim} bold={i === selectedIdx}>
+              <text fg={i === selectedIdx ? theme.text : theme.dim} attributes={i === selectedIdx ? TextAttributes.BOLD : 0}>
                 {p.id}
               </text>
               {p.env && i === selectedIdx && (
@@ -603,7 +604,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={2} total={3} />
         <box marginTop={1} marginBottom={1}>
-          <text fg={theme.text} bold>
+          <text fg={theme.text} attributes={TextAttributes.BOLD}>
             Enter {selectedProvider?.id || 'Provider'} API Key
           </text>
         </box>
@@ -616,7 +617,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
         >
           {needsCustomEnv && (
             <box marginBottom={1}>
-              <textInput
+              <TextInput
                 label="Env var"
                 value={inputValues.customEnv}
                 focused={activeField === 1}
@@ -624,7 +625,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
               />
             </box>
           )}
-          <textInput
+          <TextInput
             label="API Key"
             value={inputValues.apiKey}
             focused={needsCustomEnv ? activeField === 0 : true}

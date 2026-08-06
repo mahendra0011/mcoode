@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
+import { TextAttributes } from '@opentui/core';
 import { theme } from './theme.js';
 import { SLASH_COMMANDS } from './InputLine.jsx';
 
@@ -63,7 +64,7 @@ export function CommandPalette({ onRun, onClose }) {
       paddingTop={1} paddingBottom={1}
     >
       <box flexDirection="row">
-        <text bold fg={theme.blue}>Commands</text>
+        <text fg={theme.blue} attributes={TextAttributes.BOLD}>Commands</text>
         <text fg={theme.dim}>{'  '}ctrl+p · esc to close</text>
       </box>
       <box marginTop={1} flexDirection="row">

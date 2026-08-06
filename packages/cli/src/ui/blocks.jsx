@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { highlight } from 'cli-highlight';
+import { TextAttributes } from '@opentui/core';
 import { theme } from './theme.js';
 import { BgBox } from './BgBox.jsx';
 
@@ -42,12 +43,12 @@ export function ThoughtBlock({ text, seconds, live = false, expanded = false }) 
   return (
     <box flexDirection="column" marginTop={0} flexShrink={0} paddingLeft={1}>
       <text>
-        <text fg={theme.dim}>{expanded ? '- ' : '+ '}</text>
-        <text fg={theme.amber}>{label}</text>
+        <span fg={theme.dim}>{expanded ? '- ' : '+ '}</span>
+        <span fg={theme.amber}>{label}</span>
       </text>
       {live && (
         <box marginTop={1} paddingLeft={1}>
-          <text fg={theme.dim}>{text}<text fg={theme.dim}>{'\u2588'}</text></text>
+          <text fg={theme.dim}>{text}<span fg={theme.dim}>{'\u2588'}</span></text>
         </box>
       )}
     </box>
@@ -103,7 +104,7 @@ export function DiffBlock({ path, lines, expanded = false, onToggle = null, marg
             }
             return (
               <text key={i} fg={isAdd ? theme.diffGreen : isRm ? theme.diffRed : theme.text}
-                backgroundColor={isAdd ? theme.diffGreenBg : isRm ? theme.diffRedBg : undefined}>
+                bg={isAdd ? theme.diffGreenBg : isRm ? theme.diffRedBg : undefined}>
                 {String(l.oldNo ?? '').padStart(padOld)} {String(l.newNo ?? '').padStart(padNew)} {op} {code}
               </text>
             );
@@ -127,7 +128,7 @@ export function CommandBlock({ title, relDir, command, output, expanded = false,
       <box flexDirection="column" backgroundColor={theme.bgMessage} borderStyle="round" borderColor={theme.divider} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0}>
         {title ? <text fg={theme.dim}>{'\u25b8'} {title}</text>
           : relDir ? <text fg={theme.dim}>{'\u25b8'} Running in {relDir}</text> : null}
-        {command ? <text fg={theme.text} bold>$ {command}</text> : null}
+        {command ? <text fg={theme.text} attributes={TextAttributes.BOLD}>$ {command}</text> : null}
         {output && (
           <box flexDirection="column" marginTop={title || command ? 1 : 0}>
             {display.map((line, i) => <text key={i} fg={theme.dim}>{line || ' '}</text>)}
@@ -156,11 +157,11 @@ export function TodoBlock({ items, marginTop = 1 }) {
         <box flexDirection="column" marginTop={1} paddingLeft={1}>
           {list.map((t, i) => (
             <text key={i}>
-              <text fg={t.status === 'done' ? theme.diffGreen : t.status === 'running' ? theme.orange : t.status === 'failed' || t.status === 'interrupt' ? theme.red : t.status === 'paused' ? theme.orange : theme.dim}>
+              <span fg={t.status === 'done' ? theme.diffGreen : t.status === 'running' ? theme.orange : t.status === 'failed' || t.status === 'interrupt' ? theme.red : t.status === 'paused' ? theme.orange : theme.dim}>
                 {t.status === 'done' ? '\u2713' : t.status === 'running' ? '\u25cf' : t.status === 'failed' || t.status === 'interrupt' ? '\u2717' : t.status === 'paused' ? '\u25d0' : '\u25cb'}
-              </text>
-              <text fg={theme.dim}> {' '}</text>
-              <text fg={t.status === 'done' ? theme.dim : theme.text}>{t.title}</text>
+              </span>
+              <span fg={theme.dim}> {' '}</span>
+              <span fg={t.status === 'done' ? theme.dim : theme.text}>{t.title}</span>
             </text>
           ))}
           {truncated && <text fg={theme.dim}>... {(items?.length || 0) - 12} more</text>}
@@ -197,7 +198,7 @@ export function PermissionBlock({ pending, approved = false, command, marginTop 
     <box flexDirection="column" backgroundColor={theme.bgMessage} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0} marginTop={marginTop} marginLeft={1} flexShrink={0}>
       {pending ? (
         <>
-          <text fg={theme.orange}>{'? Allow running: '}<text bold fg={theme.text}>{command}</text></text>
+          <text fg={theme.orange}>{'? Allow running: '}<span fg={theme.text} attributes={TextAttributes.BOLD}>{command}</span></text>
           <text fg={theme.dim}>{'  (y/n/always)'}</text>
         </>
       ) : approved ? (
@@ -220,10 +221,10 @@ export function ChangeSummaryBlock({ files, marginTop = 1 }) {
         <box flexDirection="column" marginTop={1} paddingLeft={1}>
           {list.map((f, i) => (
             <text key={i}>
-              <text fg={theme.text}>{f.path}</text>
-              <text fg={theme.dim}>{' '.repeat(Math.max(1, 24 - f.path.length))}</text>
-              {f.created ? <text fg={theme.dim}>(new)</text>
-                : <><text fg={theme.diffGreen}>+{f.added}</text><text fg={theme.dim}>/</text><text fg={theme.diffRed}>-{f.removed}</text></>}
+              <span fg={theme.text}>{f.path}</span>
+              <span fg={theme.dim}>{' '.repeat(Math.max(1, 24 - f.path.length))}</span>
+              {f.created ? <span fg={theme.dim}>(new)</span>
+                : <><span fg={theme.diffGreen}>+{f.added}</span><span fg={theme.dim}>/</span><span fg={theme.diffRed}>-{f.removed}</span></>}
             </text>
           ))}
         </box>

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useKeyboard } from '@opentui/react';
+import { TextAttributes } from '@opentui/core';
 import { theme } from './theme.js';
 
 export function TextInputModal({ title, placeholder, onSubmit, onClose, password = false, error = null }) {
@@ -42,18 +43,18 @@ export function TextInputModal({ title, placeholder, onSubmit, onClose, password
         paddingTop={1} paddingBottom={1}
       >
         <box justifyContent="space-between" marginBottom={1}>
-        <text bold>{title}</text>
+        <text attributes={TextAttributes.BOLD}>{title}</text>
         <text fg="gray">esc</text>
       </box>
 
       <box marginBottom={1}>
         {value.length === 0 ? (
           <text fg={theme.gray}>
-            <text fg={theme.green}>{placeholder.charAt(0)}</text>
+            <span fg={theme.green}>{placeholder.charAt(0)}</span>
             {placeholder.slice(1)}
           </text>
         ) : (
-          <text>{displayValue}<text fg={theme.green}>█</text></text>
+          <text>{displayValue}<span fg={theme.green}>█</span></text>
         )}
       </box>
 
@@ -65,7 +66,7 @@ export function TextInputModal({ title, placeholder, onSubmit, onClose, password
 
       <box>
         <text fg="white">
-          <text bold>enter</text> <text fg="gray">submit</text>
+          <span attributes={TextAttributes.BOLD}>enter</span> <span fg="gray">submit</span>
         </text>
       </box>
     </box>

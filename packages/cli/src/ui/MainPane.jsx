@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { highlight } from 'cli-highlight';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { theme } from './theme.js';
 import { BgBox, padBg } from './BgBox.jsx';
@@ -180,9 +181,9 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
           <box marginTop={1} paddingLeft={1} flexDirection="row" justifyContent="space-between" alignItems="center">
             <text fg={theme.meta}>
               {'\u25aa '}
-              <text fg={theme.blue}>Build</text>
+              <span fg={theme.blue}>Build</span>
               {' \u00b7 '}{msg.meta.model}{' \u00b7 '}{msg.meta.secs}s
-              {msg.meta.interrupted && <text fg={theme.red}>{' (interrupted)'}</text>}
+              {msg.meta.interrupted && <span fg={theme.red}>{' (interrupted)'}</span>}
             </text>
             {msg.meta.tokens ? (
               <text fg={theme.meta}>{msg.meta.tokens}</text>

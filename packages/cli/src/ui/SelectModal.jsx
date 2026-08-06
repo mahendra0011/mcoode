@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useKeyboard } from '@opentui/react';
+import { TextAttributes } from '@opentui/core';
 import { theme } from './theme.js';
 
 export function SelectModal({ title, options, onSelect, onClose, placeholder = 'Search' }) {
@@ -93,18 +94,18 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
         paddingTop={1} paddingBottom={1}
       >
         <box justifyContent="space-between" marginBottom={1}>
-        <text bold>{title}</text>
+        <text attributes={TextAttributes.BOLD}>{title}</text>
         <text fg="gray">esc</text>
       </box>
 
       <box marginBottom={1}>
         {search.length === 0 ? (
           <text fg={theme.gray}>
-            <text fg={theme.green}>{placeholder.charAt(0)}</text>
+            <span fg={theme.green}>{placeholder.charAt(0)}</span>
             {placeholder.slice(1)}
           </text>
         ) : (
-          <text>{search}<text fg={theme.green}>█</text></text>
+          <text>{search}<span fg={theme.green}>█</span></text>
         )}
       </box>
 
@@ -116,7 +117,7 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
             const actualIdx = startIdx + idx;
             if (item.isCategory) {
               return <box key={`cat-${actualIdx}`} marginTop={idx === 0 ? 0 : 1}>
-                <text fg={theme.blue} bold>{item.label}</text>
+                <text fg={theme.blue} attributes={TextAttributes.BOLD}>{item.label}</text>
               </box>;
             }
             const isSelected = actualIdx === currentFlatIndex;
@@ -129,7 +130,7 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
               >
                 <text fg={isSelected ? 'black' : theme.text}>
                   {item.label}
-                  {item.hint && <text fg={isSelected ? '#14532d' : theme.dim}> {item.hint}</text>}
+                  {item.hint && <span fg={isSelected ? '#14532d' : theme.dim}> {item.hint}</span>}
                 </text>
               </box>
             );

@@ -9,7 +9,7 @@ try {
     try {
       renderer.clear();
     } catch {}
-    renderer.exit();
+    renderer.destroy();
     process.exit(0);
   }, 400);
 } catch (e) {
