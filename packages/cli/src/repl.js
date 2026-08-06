@@ -1,4 +1,5 @@
-import { render } from 'ink';
+import { createCliRenderer } from '@opentui/core';
+import { createRoot } from '@opentui/react';
 import { App } from './ui/App.jsx';
 import { OnboardingScreen } from './ui/OnboardingScreen.jsx';
 import { Orchestrator } from './core/orchestrator.js';
@@ -13,23 +14,25 @@ export async function startRepl() {
   const stdoutOk = Boolean(process.stdout.isTTY);
   if (!stdinOk || !stdoutOk) {
     console.error('mcode: interactive TUI needs a supported terminal (raw-mode input).');
-    console.error('Current terminal is not TTY-capable for Ink. Use Windows Terminal, VS Code terminal,');
+    console.error('Current terminal is not TTY-capable for OpenTUI. Use Windows Terminal, VS Code terminal,');
     console.error('Command Prompt (not Git Bash/mintty), or run with --non-interactive for scripted use.');
     process.exit(1);
   }
 
-  // Enter alternate screen FIRST — entire TUI (including onboarding) lives here
-  process.stdout.write('\x1b[?1049h');
-  process.stdout.write('\x1b[H\x1b[2J'); // Clear the alternate screen
-  process.on('exit', () => {
-    process.stdout.write('\x1b[?1049l'); // Leave alternate screen buffer on exit
-  });
+  let renderer;
+  try {
+    renderer = await createCliRenderer({ exitOnCtrlC: true });
+  } catch (err) {
+    console.error(`mcode: TUI failed to start (${err?.message || err}).`);
+    console.error('OpenTUI needs Node.js 26.4.0+ started with --experimental-ffi.');
+    process.exit(1);
+  }
 
   const config = await loadConfig();
   const accountExists = Boolean(config?.account?.email);
   const keyExists = await hasApiKey(config);
 
-  // ── Ink-based onboarding (if needed) ──────────────────────────────────
+  // ── Onboarding (if needed) ────────────────────────────────────────────
   const needsOnboarding = !accountExists;
 
   if (needsOnboarding) {
@@ -85,23 +88,20 @@ export async function startRepl() {
         },
       };
 
-      const onboardingApp = render(
+      const onboardingRoot = createRoot(renderer);
+      onboardingRoot.render(
         <OnboardingScreen
           onComplete={() => {
-            onboardingApp.unmount();
+            onboardingRoot.unmount();
             resolve();
           }}
           hasAccount={accountExists}
           hasKey={keyExists}
           config={config}
           apiHandlers={apiHandlers}
-        />,
-        { exitOnCtrlC: true }
+        />
       );
     });
-
-    // Clear screen after onboarding finishes, before main TUI
-    process.stdout.write('\x1b[H\x1b[2J');
   }
 
   // ── Main TUI ──────────────────────────────────────────────────────────
@@ -118,50 +118,42 @@ export async function startRepl() {
     });
     await orchestrator.init();
 
-    let app;
+    let root;
     let nextAction = null;
-    try {
-      app = render(
-        <App
-          orchestrator={orchestrator}
-          projectName={projectName}
-          history={[]}
-          onAction={(action) => {
-            nextAction = action;
-            app.unmount();
-          }}
-        />,
-        { exitOnCtrlC: true }
-      );
-    } catch (err) {
-      console.error(`mcode: TUI failed to start (${err?.message || err}).`);
-      console.error('Use Windows Terminal, VS Code terminal, or Command Prompt — or run with --non-interactive.');
-      process.stdout.write('\x1b[?1049l'); // Ensure we leave alternate screen if we error out
-      process.exit(1);
-    }
+    const exited = new Promise((resolveExit) => {
+      try {
+        root = createRoot(renderer);
+        root.render(
+          <App
+            orchestrator={orchestrator}
+            projectName={projectName}
+            history={[]}
+            onAction={(action) => {
+              nextAction = action;
+              root.unmount();
+              resolveExit();
+            }}
+          />
+        );
+      } catch (err) {
+        console.error(`mcode: TUI failed to start (${err?.message || err}).`);
+        console.error('Use Windows Terminal, VS Code terminal, or Command Prompt — or run with --non-interactive.');
+        renderer.destroy?.();
+        process.exit(1);
+      }
+    });
 
-    await app.waitUntilExit();
+    await exited;
     await orchestrator.watchDaemon?.stop();
 
     if (nextAction === 'init') {
-      process.stdout.write('\x1b[?1049l'); // Leave alternate screen buffer for clack
-      process.stdout.write('\x1b[H\x1b[2J'); // Clear normal screen
-
       try {
-        if (nextAction === 'init') {
-          const { initListCommand } = await import('./commands/init.js');
-          await initListCommand();
-        }
+        const { initListCommand } = await import('./commands/init.js');
+        await initListCommand();
       } catch (err) {
         console.error(err);
       }
-
-      // Wait a moment for user to read outcome before going back to TUI
-      await new Promise(r => setTimeout(r, 1500));
-      
-      // Re-enter alternate screen for next iteration
-      process.stdout.write('\x1b[?1049h');
-      process.stdout.write('\x1b[H\x1b[2J');
+      await new Promise((r) => setTimeout(r, 1500));
       continue;
     }
 
@@ -176,6 +168,7 @@ export async function startRepl() {
       status: 'completed'
     });
 
+    renderer.destroy?.();
     process.exit(0);
   }
 }

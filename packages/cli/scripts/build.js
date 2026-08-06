@@ -11,8 +11,9 @@ const common = {
   bundle: true,
   platform: 'node',
   format: 'esm',
-  target: 'node18',
+  target: 'node26',
   jsx: 'automatic',
+  jsxImportSource: '@opentui/react',
   loader: { '.js': 'jsx' },
   external: ['@mcode/backend'],
   alias: {

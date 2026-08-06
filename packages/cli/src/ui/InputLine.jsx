@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from './theme.js';
+import { BgBox } from './BgBox.jsx';
 
 const SLASH_COMMANDS = [
   { cmd: 'agents', desc: 'Switch agent' },
@@ -26,6 +27,8 @@ const SLASH_COMMANDS = [
 export { SLASH_COMMANDS };
 
 export function InputLine({ onSubmit, history, variant = 'default', modelLabel = 'auto', agentMode = 'Build', mode = 'medium', isActive = true, canRetry = false, onRetry = null, pendingPermission = null, onPermission = null }) {
+  const { stdout } = useStdout();
+  const termWidth = Math.max(20, (stdout.columns || 100) - 4);
   const [value, setValue] = useState('');
   const [histIdx, setHistIdx] = useState(history.length);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -143,26 +146,19 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
           </Box>
         )}
         <Box width="100%" borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.green}>
-        <Box backgroundColor={theme.userBg} paddingLeft={2} paddingRight={2} paddingTop={1} flexDirection="column">
-          <Box flexDirection="row">
-            {value.length === 0 ? (
-              <>
-                <Text color={theme.dim}>Ask anything… “build a rest api for orders”</Text>
-                <Text color={theme.greenBright}>▌</Text>
-              </>
-            ) : (
-              <>
-                <Text color={theme.text}>{value}</Text>
-                <Text color={theme.greenBright}>▌</Text>
-              </>
-            )}
-          </Box>
-          <Box flexDirection="row" marginTop={1} flexShrink={0}>
-            <Text color={theme.blue}>Build</Text>
-            <Text color={theme.meta}>{' · '}{modelLabel}</Text>
-            <Text color={theme.meta}>{' · '}</Text>
-            <Text color={theme.amber}>max</Text>
-          </Box>
+        <Box flexDirection="column" width={64}>
+          <BgBox
+            width={64}
+            bg={theme.userBg}
+            color={theme.text}
+            paddingX={2}
+            paddingY={1}
+            lines={[
+              value.length === 0 ? 'Ask anything… "build a rest api for orders"' : value,
+              '',
+              `Build  ${modelLabel}   max`
+            ]}
+          />
         </Box>
       </Box>
       </Box>
@@ -189,28 +185,19 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       )}
       <Box flexDirection="row" width="100%">
         <Box width={1}><Text color={theme.blue}>{'\u2502'}</Text></Box>
-        <Box backgroundColor={theme.userBg} flexGrow={1} paddingX={3} paddingY={1} flexDirection="column">
-          {value.length === 0 ? (
-            <Box flexDirection="row">
-              <Text color={theme.dim}>Ask anything…</Text>
-              <Text color={theme.gray}>{'  \u00b7  '}</Text>
-              <Text color={theme.dim}>/ for commands</Text>
-              <Text color={theme.greenBright}>{'\u2588'}</Text>
-            </Box>
-          ) : (
-            value.split('\n').map((line, i, arr) => (
-              <Text key={i} color={theme.text}>
-                {line}
-                {i === arr.length - 1 ? <Text color={theme.greenBright}>{'\u2588'}</Text> : null}
-              </Text>
-            ))
-          )}
-          <Box flexDirection="row" marginTop={1} flexShrink={0}>
-            <Text color={theme.blue}>{agentMode}</Text>
-            <Text color={theme.meta}>{' \u00b7 '}{modelLabel}</Text>
-            <Text color={theme.meta}>{' \u00b7 '}</Text>
-            <Text color={theme.amber}>{mode}</Text>
-          </Box>
+        <Box flexGrow={1}>
+          <BgBox
+            width={termWidth}
+            bg={theme.userBg}
+            color={theme.text}
+            paddingX={3}
+            paddingY={1}
+            lines={[
+              value.length === 0 ? 'Ask anything…  \u00b7  / for commands' : value,
+              '',
+              `${agentMode}  ${modelLabel}  ${mode}`
+            ]}
+          />
         </Box>
       </Box>
     </Box>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import { highlight } from 'cli-highlight';
 import { theme } from './theme.js';
+import { BgBox } from './BgBox.jsx';
 
 export const FRAMES = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2823', '\u280f'];
 export const TOOL_VERBS = {
@@ -54,54 +55,28 @@ export function ThoughtBlock({ text, seconds, live = false, expanded = false }) 
   );
 }
 
-export function ReadBlock({ path, lines, expanded = false, onToggle = null, marginTop = 1 }) {
+export function ReadBlock({ path, lines, expanded = false, onToggle = null, marginTop = 1, width = 100 }) {
   const pad = String(lines.length).length;
   const truncated = lines.length > READ_MAX;
   const display = expanded ? lines : lines.slice(0, READ_MAX);
+  const body = display.map((line, i) => `${String(i + 1).padStart(pad)}  ${line || ' '}`);
+  if (truncated) body.push(expanded ? '\u2026 click to collapse' : `\u2026 ${lines.length - READ_MAX} more \u00b7 click to expand`);
   return (
     <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0}>
-        <Text color={theme.dim}>{'\u25ce'} Read {path}</Text>
-        <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-          {display.map((line, i) => (
-            <Text key={i} color={theme.text}>
-              <Text color={theme.dim}>{String(i + 1).padStart(pad)}  </Text>
-              {line || ' '}
-            </Text>
-          ))}
-          {truncated && (
-            <Text color={theme.dim}>
-              {expanded ? '\u2026 click to collapse' : `\u2026 ${lines.length - READ_MAX} more \u00b7 click to expand`}
-            </Text>
-          )}
-        </Box>
-      </Box>
+      <BgBox width={width} bg={theme.bgMessage} color={theme.text} paddingX={2} paddingY={0} lines={[`\u25ce Read ${path}`, ...body]} />
     </Box>
   );
 }
 
-export function WriteBlock({ path, lines, expanded = false, onToggle = null, marginTop = 1 }) {
+export function WriteBlock({ path, lines, expanded = false, onToggle = null, marginTop = 1, width = 100 }) {
   const pad = String(lines.length).length;
   const truncated = lines.length > READ_MAX;
   const display = expanded ? lines : lines.slice(0, READ_MAX);
+  const body = display.map((line, i) => `${String(i + 1).padStart(pad)}  ${line || ' '}`);
+  if (truncated) body.push(expanded ? '\u2026 click to collapse' : `\u2026 ${lines.length - READ_MAX} more \u00b7 click to expand`);
   return (
     <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0}>
-        <Text color={theme.dim}>{'\u270e'} Wrote {path}</Text>
-        <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-          {display.map((line, i) => (
-            <Text key={i} color={theme.text}>
-              <Text color={theme.dim}>{String(i + 1).padStart(pad)}  </Text>
-              {line || ' '}
-            </Text>
-          ))}
-          {truncated && (
-            <Text color={theme.dim}>
-              {expanded ? '\u2026 click to collapse' : `\u2026 ${lines.length - READ_MAX} more \u00b7 click to expand`}
-            </Text>
-          )}
-        </Box>
-      </Box>
+      <BgBox width={width} bg={theme.bgMessage} color={theme.text} paddingX={2} paddingY={0} lines={[`\u270e Wrote ${path}`, ...body]} />
     </Box>
   );
 }
@@ -114,7 +89,7 @@ export function DiffBlock({ path, lines, expanded = false, onToggle = null, marg
   const display = expanded ? lines : lines.slice(0, maxRows);
   return (
     <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0}>
+      <Box flexDirection="column" paddingX={2} paddingY={0}>
         <Text color={theme.dim}>{'\u270e'} Edit {path}</Text>
         <Box flexDirection="column" marginTop={1} paddingLeft={1}>
           {display.map((l, i) => {

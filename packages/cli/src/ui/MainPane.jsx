@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { theme } from './theme.js';
+import { BgBox, padBg } from './BgBox.jsx';
 import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, TOOL_VERBS, READ_MAX, CMD_MAX } from './blocks.jsx';
 
 export function MainPane({ messages, streamingMessage, isGenerating = false, onInterrupt = null, onRetry = null, pendingPermission = null, onPermission = null }) {
@@ -65,14 +66,14 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     const lines = isExpanded ? highlighted.split('\n') : [];
     return (
       <Box key={id} flexDirection="column" marginTop={1} flexShrink={0}>
-        <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={3} paddingY={1} width="100%">
-          <Text color={isFocused ? theme.text : theme.dim}>{title}</Text>
-          {isExpanded && (
-            <Box flexDirection="column" marginTop={1}>
-              {lines.slice(0, 30).map((line, i) => <Text key={i} color={theme.text}>{line || ' '}</Text>)}
-            </Box>
-          )}
-        </Box>
+        <BgBox
+          width={panelWidth}
+          bg={theme.bgMessage}
+          color={isFocused ? theme.text : theme.dim}
+          paddingX={3}
+          paddingY={1}
+          lines={isExpanded ? [title, '', ...lines.slice(0, 30).map((l) => l || ' ')] : [title]}
+        />
       </Box>
     );
   };
@@ -221,9 +222,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     if (msg.kind === 'user') {
       return (
         <Box key={`u${i}`} width="100%" marginTop={isFirst ? 0 : 1} flexShrink={0}>
-          <Box backgroundColor={theme.userBg} width="100%" paddingX={3} paddingY={1}>
-            <Text color={theme.text}>{msg.text}</Text>
-          </Box>
+          <BgBox width={panelWidth} bg={theme.userBg} color={theme.text} paddingX={3} paddingY={1} lines={String(msg.text).split('\n')} />
         </Box>
       );
     }
