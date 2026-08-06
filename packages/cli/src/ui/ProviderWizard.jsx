@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text } from 'ink';
 import { SelectModal } from './SelectModal.jsx';
 import { TextInputModal } from './TextInputModal.jsx';
 import { getAllAdapters } from '../providers/index.js';
@@ -92,11 +91,11 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
 
   if (step === 'loading' || step === 'validating' || step === 'loading-models') {
     return (
-      <Box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
-        <Box padding={1} borderStyle="single" borderColor={theme.green} backgroundColor={theme.panel}>
-          <Text>{step === 'loading-models' ? 'Fetching models...' : (step === 'validating' ? 'Validating key...' : 'Loading...')}</Text>
-        </Box>
-      </Box>
+      <box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
+        <box padding={1} borderStyle="single" borderColor={theme.green} backgroundColor={theme.panel}>
+          <text>{step === 'loading-models' ? 'Fetching models...' : (step === 'validating' ? 'Validating key...' : 'Loading...')}</text>
+        </box>
+      </box>
     );
   }
 
@@ -135,7 +134,7 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
 
   if (step === 'enter-key') {
     return (
-      <TextInputModal
+      <textInputModal
         title={`Manually enter API Key`}
         placeholder="API key"
         password={true}

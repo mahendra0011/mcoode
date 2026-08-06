@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { useKeyboard } from '@opentui/react';
 import { theme } from './theme.js';
 
 export function TextInputModal({ title, placeholder, onSubmit, onClose, password = false, error = null }) {
   const [value, setValue] = useState('');
 
-  useInput((input, key) => {
-    if (key.escape) {
+  useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+    if ((key.name === "escape")) {
       onClose();
       return;
     }
     
-    if (key.return) {
+    if ((key.name === "return")) {
       onSubmit(value);
       return;
     }
     
-    if (key.backspace || key.delete) {
+    if ((key.name === "backspace") || (key.name === "delete")) {
       setValue(s => s.slice(0, -1));
       return;
     }
@@ -25,49 +26,49 @@ export function TextInputModal({ title, placeholder, onSubmit, onClose, password
     if (input && !input.includes('\u001b') && !key.ctrl && !key.meta) {
       setValue(s => s + input);
     }
-  }, { isActive: true });
+  });
 
   const displayValue = password ? '•'.repeat(value.length) : value;
 
   return (
-    <Box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
-      <Box 
+    <box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
+      <box 
         width={60} 
         flexDirection="column"
         borderStyle="single"
         borderColor={theme.green}
         backgroundColor={theme.panel}
-        paddingX={1}
-        paddingY={1}
+        paddingLeft={1} paddingRight={1}
+        paddingTop={1} paddingBottom={1}
       >
-        <Box justifyContent="space-between" marginBottom={1}>
-        <Text bold>{title}</Text>
-        <Text color="gray">esc</Text>
-      </Box>
+        <box justifyContent="space-between" marginBottom={1}>
+        <text bold>{title}</text>
+        <text fg="gray">esc</text>
+      </box>
 
-      <Box marginBottom={1}>
+      <box marginBottom={1}>
         {value.length === 0 ? (
-          <Text color={theme.gray}>
-            <Text color={theme.green}>{placeholder.charAt(0)}</Text>
+          <text fg={theme.gray}>
+            <text fg={theme.green}>{placeholder.charAt(0)}</text>
             {placeholder.slice(1)}
-          </Text>
+          </text>
         ) : (
-          <Text>{displayValue}<Text color={theme.green}>█</Text></Text>
+          <text>{displayValue}<text fg={theme.green}>█</text></text>
         )}
-      </Box>
+      </box>
 
       {error && (
-        <Box marginBottom={1}>
-          <Text color="red">{error}</Text>
-        </Box>
+        <box marginBottom={1}>
+          <text fg="red">{error}</text>
+        </box>
       )}
 
-      <Box>
-        <Text color="white">
-          <Text bold>enter</Text> <Text color="gray">submit</Text>
-        </Text>
-      </Box>
-    </Box>
-    </Box>
+      <box>
+        <text fg="white">
+          <text bold>enter</text> <text fg="gray">submit</text>
+        </text>
+      </box>
+    </box>
+    </box>
   );
 }

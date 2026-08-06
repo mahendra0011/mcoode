@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Box, Text } from 'ink';
 import { theme } from './theme.js';
 
 const TOAST_TTL_MS = 5000;
@@ -24,15 +23,15 @@ export function Toasts({ toasts }) {
   }, [visible]);
 
   return (
-    <Box flexDirection="column" width="100%">
+    <box flexDirection="column" width="100%">
       {visible.map((t, i) => {
         const fading = dying.includes(t.text);
         return (
-          <Text key={`${t.text}-${i}`} color={fading ? theme.gray : t.kind === 'ok' ? theme.green : t.kind === 'warn' ? theme.amber : theme.dim}>
+          <text key={`${t.text}-${i}`} fg={fading ? theme.gray : t.kind === 'ok' ? theme.green : t.kind === 'warn' ? theme.amber : theme.dim}>
             {fading ? '\u25e6' : t.kind === 'ok' ? '\u2713' : '\u2022'} {t.text}
-          </Text>
+          </text>
         );
       })}
-    </Box>
+    </box>
   );
 }

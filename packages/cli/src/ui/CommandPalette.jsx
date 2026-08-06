@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { theme } from './theme.js';
 import { SLASH_COMMANDS } from './InputLine.jsx';
 
 export function CommandPalette({ onRun, onClose }) {
-  const { stdout } = useStdout();
+  const { width: tw, height: th } = useTerminalDimensions();
   const [query, setQuery] = useState('');
   const [sel, setSel] = useState(0);
 
@@ -12,24 +12,25 @@ export function CommandPalette({ onRun, onClose }) {
     ? SLASH_COMMANDS.filter((c) => c.cmd.includes(query.toLowerCase()) || c.desc.toLowerCase().includes(query.toLowerCase()))
     : SLASH_COMMANDS;
 
-useInput((input, key) => {
-    if (key.escape) {
+  useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+    if (key.name === 'escape') {
       onClose();
       return;
     }
-    if (key.return) {
+    if (key.name === 'return') {
       if (matches[sel]) onRun(matches[sel].cmd);
       return;
     }
-    if (key.upArrow) {
+    if (key.name === 'up') {
       setSel((s) => Math.max(0, s - 1));
       return;
     }
-    if (key.downArrow) {
+    if (key.name === 'down') {
       setSel((s) => Math.min(matches.length - 1, s + 1));
       return;
     }
-    if (key.backspace) {
+    if (key.name === 'backspace') {
       setQuery((q) => q.slice(0, -1));
       setSel(0);
       return;
@@ -42,13 +43,13 @@ useInput((input, key) => {
 
   const width = 52;
   const height = 14;
-  const cols = stdout.columns || 120;
-  const rows = stdout.rows || 30;
+  const cols = tw || 120;
+  const rows = th || 30;
   const left = Math.max(0, Math.floor((cols - width) / 2));
   const top = Math.max(0, Math.floor((rows - height) / 2));
 
   return (
-    <Box
+    <box
       position="absolute"
       left={left}
       top={top}
@@ -58,30 +59,28 @@ useInput((input, key) => {
       borderStyle="round"
       borderColor={theme.blue}
       backgroundColor={theme.panel}
-      paddingX={1}
-      paddingY={1}
+      paddingLeft={1} paddingRight={1}
+      paddingTop={1} paddingBottom={1}
     >
-      <Box flexDirection="row">
-        <Text bold color={theme.blue}>Commands</Text>
-        <Text color={theme.dim}>{'  '}ctrl+p · esc to close</Text>
-      </Box>
-      <Box marginTop={1} flexDirection="row">
-        <Text color={theme.dim}>/</Text>
-        <Text color={theme.text}>{query}</Text>
-        <Text color={theme.blue}>█</Text>
-      </Box>
-      <Box flexDirection="column" marginTop={1}>
+      <box flexDirection="row">
+        <text bold fg={theme.blue}>Commands</text>
+        <text fg={theme.dim}>{'  '}ctrl+p · esc to close</text>
+      </box>
+      <box marginTop={1} flexDirection="row">
+        <text fg={theme.dim}>/</text>
+        <text fg={theme.text}>{query}</text>
+        <text fg={theme.blue}>█</text>
+      </box>
+      <box flexDirection="column" marginTop={1}>
         {matches.slice(0, 10).map((c, i) => (
-          <Box key={c.cmd}>
-            <Text backgroundColor={i === sel ? theme.blue : undefined}>
-              <Text color={i === sel ? '#ffffff' : theme.text}>{`/${c.cmd}`.padEnd(14, ' ')}</Text>
-              <Text color={i === sel ? '#dbeafe' : theme.dim}>{c.desc}</Text>
-            </Text>
-          </Box>
+          <box key={c.cmd} backgroundColor={i === sel ? theme.blue : undefined} flexDirection="row">
+            <text fg={i === sel ? '#ffffff' : theme.text}>{`/${c.cmd}`.padEnd(14, ' ')}</text>
+            <text fg={i === sel ? '#dbeafe' : theme.dim}>{c.desc}</text>
+          </box>
         ))}
-        {matches.length === 0 && <Text color={theme.dim}>no matching commands</Text>}
-      </Box>
-    </Box>
+        {matches.length === 0 && <text fg={theme.dim}>no matching commands</text>}
+      </box>
+    </box>
   );
 }
 
