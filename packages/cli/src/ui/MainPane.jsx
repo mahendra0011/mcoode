@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { highlight } from 'cli-highlight';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
+import { TextAttributes } from '@opentui/core';
 import { theme } from './theme.js';
 import { BgBox, padBg } from './BgBox.jsx';
 import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, TOOL_VERBS, READ_MAX, CMD_MAX } from './blocks.jsx';
@@ -35,8 +36,8 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
       <box key={id} flexDirection="column" marginTop={1} flexShrink={0}>
         <BgBox
           width={panelWidth}
-          bg={theme.bgMessage}
-          fg={isFocused ? theme.text : theme.dim}
+          bg={theme.surface}
+          color={isFocused ? theme.text : theme.dim}
           paddingLeft={3} paddingRight={3}
           paddingTop={1} paddingBottom={1}
           lines={isExpanded ? [title, '', ...lines.slice(0, 30).map((l) => l || ' ')] : [title]}
@@ -125,26 +126,20 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
   const render = messages.map((msg, i) => {
     const isFirst = i === 0;
     if (msg.kind === 'user') {
+      const lines = String(msg.text).split('\n');
+      const totalRows = lines.length + 2; // paddingTop(1) + text rows + paddingBottom(1)
       return (
-        <box
-          key={`u${i}`}
-          width={panelWidth}
-          flexDirection="column"
-          marginTop={isFirst ? 0 : 1}
-          flexShrink={0}
-          borderStyle="single"
-          borderLeft
-          borderTop={false}
-          borderRight={false}
-          borderBottom={false}
-          borderColor={theme.accent}
-          backgroundColor={theme.userBg}
-          paddingLeft={2} paddingRight={2}
-          paddingTop={1} paddingBottom={1}
-        >
-          {String(msg.text).split('\n').map((line, li) => (
-            <text key={li} fg={theme.text}>{line}</text>
-          ))}
+        <box key={`u${i}`} flexDirection="row" width={panelWidth} marginTop={isFirst ? 0 : 1} flexShrink={0}>
+          <box flexDirection="column" width={1} flexShrink={0}>
+            {Array.from({ length: totalRows }).map((_, r) => (
+              <text key={r} fg={theme.accent}>{'\u2502'}</text>
+            ))}
+          </box>
+          <box flexGrow={1} flexDirection="column" backgroundColor={theme.userBg} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
+            {lines.map((line, li) => (
+              <text key={li} fg={theme.textBright}>{line}</text>
+            ))}
+          </box>
         </box>
       );
     }
@@ -165,25 +160,40 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     }
     if (msg.kind === 'system') {
       return (
-        <box key={i} flexDirection="row" justifyContent="center" flexShrink={0}>
+        <box key={i} flexDirection="row" justifyContent="center" marginTop={isFirst ? 0 : 1} flexShrink={0}>
+          <text fg={theme.muted}>{'\u2500\u2500 '}</text>
           <text fg={theme.purple}>{msg.text}</text>
+          <text fg={theme.muted}>{' \u2500\u2500'}</text>
         </box>
       );
     }
     if (msg.kind === 'ok') {
-      return <box key={i} flexShrink={0}><text fg={theme.green}>{msg.text}</text></box>;
+      return (
+        <box key={i} flexShrink={0} paddingLeft={1}>
+          <text fg={theme.green}>{'\u2713'} {msg.text}</text>
+        </box>
+      );
     }
     if (msg.kind === 'warn') {
-      return <box key={i} flexShrink={0}><text fg={theme.amber}>{msg.text}</text></box>;
+      return (
+        <box key={i} flexShrink={0} paddingLeft={1}>
+          <text fg={theme.amber}>{'\u26a0'} {msg.text}</text>
+        </box>
+      );
     }
     if (msg.kind === 'err') {
-      return <box key={i} flexShrink={0}><text fg={theme.red}>{msg.text}</text></box>;
+      return (
+        <box key={i} flexShrink={0} paddingLeft={1}>
+          <text fg={theme.red}>{'\u2717'} {msg.text}</text>
+        </box>
+      );
     }
     if (msg.kind === 'code') {
       const index = blocks.length;
       blocks.push({ index, id: msg.id, title: msg.title, code: msg.code });
       return null;
     }
+    // Assistant message
     return (
       <box key={i} flexDirection="column" marginTop={isFirst ? 0 : 1} flexShrink={0}>
         {msg.thought && (
@@ -197,10 +207,10 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
         {msg.meta && (
           <box marginTop={1} paddingLeft={1} flexDirection="row" alignItems="center">
             <text fg={theme.blue}>{'\u25aa '}</text>
-            <text fg={theme.text} bold>Build</text>
+            <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Build</text>
             <text fg={theme.meta}>
               {' \u00b7 '}{msg.meta.model}{' \u00b7 '}{msg.meta.secs}s
-              {msg.meta.interrupted && <text fg={theme.red}>{' (interrupted)'}</text>}
+              {msg.meta.interrupted && <span fg={theme.red}>{' (interrupted)'}</span>}
             </text>
           </box>
         )}
@@ -211,12 +221,12 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
   const B = () => {
     if (!isGenerating) return null;
     if (runningTool) {
-      return <SpinnerBlock label={TOOL_VERBS[runningTool.tool] || 'Working...'} />;
+      return <SpinnerBlock label={TOOL_VERBS[runningTool.tool] || 'Working…'} />;
     }
     if (streamingMessage) {
       return <ThoughtBlock text={streamingMessage} seconds={genSecs} live />;
     }
-    return <SpinnerBlock label="Working..." />;
+    return <SpinnerBlock label="Working…" />;
   };
 
   return (
@@ -231,6 +241,8 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
         viewportOptions={{ flexGrow: 1 }}
         contentOptions={{ flexDirection: 'column', flexShrink: 0 }}
         scrollbarOptions={{ visible: true }}
+        verticalScrollbarOptions={{ visible: true }}
+        horizontalScrollbarOptions={{ visible: false }}
       >
         {render}
         <B />

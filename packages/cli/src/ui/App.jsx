@@ -7,6 +7,8 @@ import { CommandPalette } from './CommandPalette.jsx';
 import { Toasts } from './Toasts.jsx';
 import { WelcomeScreen } from './WelcomeScreen.jsx';
 import { StatusBar } from './StatusBar.jsx';
+import { Sidebar } from './Sidebar.jsx';
+import { Header } from './Header.jsx';
 import { ProviderWizard } from './ProviderWizard.jsx';
 import { EVENTS, SUBAGENT_STATUS } from '@mcode/shared';
 import { MODES, MODE_DESC } from '../core/router.js';
@@ -161,7 +163,7 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
     };
     const onMessage = (m) => {
       if (m.kind === 'stream') {
-        thoughtRef.current += m.text;
+        thoughtRef.current = m.text;
         streamBuffer.current = m.text;
         if (!streamTimer.current) streamTimer.current = setTimeout(flushStream, 60);
       } else {
@@ -225,6 +227,7 @@ const handleSubmit = async (value) => {
       await handleSlash(value.slice(1));
       return;
     }
+    if (isGenerating) return;
     lastPrompt.current = value;
     inputHistory.current.push(value);
     setChatStarted(true);
@@ -371,8 +374,9 @@ const handleSlash = async (raw) => {
   return (
     <box flexDirection="column" width="100%" height={hasStarted ? rows : undefined} backgroundColor={theme.bg}>
       {hasStarted ? (
-        <>
-          <box flexDirection="row" flexGrow={1}>
+        <box flexDirection="row" width="100%" height="100%">
+          <box flexDirection="column" flexGrow={1} overflow="hidden">
+            <Header projectName={projectName} model={modelLabel} watching={isGenerating} email={email} version={VERSION} />
             <box flexDirection="column" flexGrow={1} overflow="hidden" paddingLeft={1} paddingRight={1}>
               <MainPane
                 messages={messages}
@@ -389,28 +393,39 @@ const handleSlash = async (raw) => {
                 onPermission={(requestId, answer) => orchestrator.answerPermission?.(requestId, answer)}
               />
             </box>
+            <Toasts toasts={toasts} />
+            <box flexShrink={0}>
+              <InputLine
+                onSubmit={handleSubmit}
+                history={inputHistory.current}
+                agentMode={agentMode}
+                mode={mode}
+                modelLabel={modelLabel}
+                isActive={!activeModal && !paletteOpen}
+                isGenerating={isGenerating}
+                canRetry={messages.length > 0 && messages[messages.length - 1].kind === 'error'}
+                onRetry={() => {
+                  if (lastPrompt.current) handleSubmit(lastPrompt.current);
+                }}
+                pendingPermission={pendingPermission}
+                onPermission={(requestId, answer) => orchestrator.answerPermission?.(requestId, answer)}
+              />
+            </box>
+            <box flexShrink={0}>
+              <StatusBar tokens={tokens} percent={percent} cwd={process.cwd()} isGenerating={isGenerating} branch={branch} />
+            </box>
           </box>
-          <Toasts toasts={toasts} />
-          <box flexShrink={0}>
-            <InputLine
-              onSubmit={handleSubmit}
-              history={inputHistory.current}
-              agentMode={agentMode}
-              mode={mode}
-              modelLabel={modelLabel}
-              isActive={!activeModal && !paletteOpen}
-              canRetry={messages.length > 0 && messages[messages.length - 1].kind === 'error'}
-              onRetry={() => {
-                if (lastPrompt.current) handleSubmit(lastPrompt.current);
-              }}
-              pendingPermission={pendingPermission}
-              onPermission={(requestId, answer) => orchestrator.answerPermission?.(requestId, answer)}
-            />
-          </box>
-          <box flexShrink={0}>
-            <StatusBar tokens={tokens} percent={percent} cwd={process.cwd()} isGenerating={isGenerating} />
-          </box>
-        </>
+          <Sidebar
+            width={40}
+            title={messages.find((m) => m.kind === 'user')?.text || 'New Chat'}
+            workspace={process.cwd()}
+            branch={branch}
+            version={VERSION}
+            tokens={tokens}
+            percent={percent}
+            todos={todos}
+          />
+        </box>
       ) : (
         <>
           <WelcomeScreen modelLabel={modelLabel}>

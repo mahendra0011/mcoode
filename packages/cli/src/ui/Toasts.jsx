@@ -3,6 +3,12 @@ import { theme } from './theme.js';
 
 const TOAST_TTL_MS = 5000;
 
+const KIND_CONFIG = {
+  ok:   { icon: '\u2713', color: theme.green },
+  warn: { icon: '\u26a0', color: theme.amber },
+  err:  { icon: '\u2717', color: theme.red },
+};
+
 export function Toasts({ toasts }) {
   const [visible, setVisible] = useState([]);
   const [dying, setDying] = useState([]);
@@ -26,10 +32,12 @@ export function Toasts({ toasts }) {
     <box flexDirection="column" width="100%">
       {visible.map((t, i) => {
         const fading = dying.includes(t.text);
+        const cfg = KIND_CONFIG[t.kind] || { icon: '\u2022', color: theme.dim };
         return (
-          <text key={`${t.text}-${i}`} fg={fading ? theme.gray : t.kind === 'ok' ? theme.green : t.kind === 'warn' ? theme.amber : theme.dim}>
-            {fading ? '\u25e6' : t.kind === 'ok' ? '\u2713' : '\u2022'} {t.text}
-          </text>
+          <box key={`${t.text}-${i}`} flexDirection="row" paddingLeft={2}>
+            <text fg={fading ? theme.muted : cfg.color}>{fading ? '\u25e6' : cfg.icon} </text>
+            <text fg={fading ? theme.muted : theme.text}>{t.text}</text>
+          </box>
         );
       })}
     </box>
