@@ -126,8 +126,25 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     const isFirst = i === 0;
     if (msg.kind === 'user') {
       return (
-        <box key={`u${i}`} width="100%" marginTop={isFirst ? 0 : 1} flexShrink={0}>
-          <BgBox width={panelWidth} bg={theme.userBg} fg={theme.text} paddingLeft={3} paddingRight={3} paddingTop={1} paddingBottom={1} lines={String(msg.text).split('\n')} />
+        <box
+          key={`u${i}`}
+          width={panelWidth}
+          flexDirection="column"
+          marginTop={isFirst ? 0 : 1}
+          flexShrink={0}
+          borderStyle="single"
+          borderLeft
+          borderTop={false}
+          borderRight={false}
+          borderBottom={false}
+          borderColor={theme.accent}
+          backgroundColor={theme.userBg}
+          paddingLeft={2} paddingRight={2}
+          paddingTop={1} paddingBottom={1}
+        >
+          {String(msg.text).split('\n').map((line, li) => (
+            <text key={li} fg={theme.text}>{line}</text>
+          ))}
         </box>
       );
     }
