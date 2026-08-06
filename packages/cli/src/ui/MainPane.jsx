@@ -126,8 +126,11 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     const isFirst = i === 0;
     if (msg.kind === 'user') {
       return (
-        <box key={`u${i}`} width="100%" marginTop={isFirst ? 0 : 1} flexShrink={0}>
-          <BgBox width={panelWidth} bg={theme.userBg} fg={theme.text} paddingLeft={3} paddingRight={3} paddingTop={1} paddingBottom={1} lines={String(msg.text).split('\n')} />
+        <box key={`u${i}`} flexDirection="row" width="100%" marginTop={isFirst ? 0 : 1} flexShrink={0}>
+          <box width={1}><text fg={theme.accent}>{'\u2502'}</text></box>
+          <box flexGrow={1}>
+            <BgBox width={panelWidth - 1} bg={theme.userBg} fg={theme.text} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1} lines={String(msg.text).split('\n')} />
+          </box>
         </box>
       );
     }
@@ -178,16 +181,13 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
           <text fg={theme.text}>{msg.text}</text>
         </box>
         {msg.meta && (
-          <box marginTop={1} paddingLeft={1} flexDirection="row" justifyContent="space-between" alignItems="center">
+          <box marginTop={1} paddingLeft={1} flexDirection="row" alignItems="center">
+            <text fg={theme.blue}>{'\u25a2 '}</text>
+            <text fg={theme.text} bold>Build</text>
             <text fg={theme.meta}>
-              {'\u25aa '}
-              <span fg={theme.blue}>Build</span>
               {' \u00b7 '}{msg.meta.model}{' \u00b7 '}{msg.meta.secs}s
-              {msg.meta.interrupted && <span fg={theme.red}>{' (interrupted)'}</span>}
+              {msg.meta.interrupted && <text fg={theme.red}>{' (interrupted)'}</text>}
             </text>
-            {msg.meta.tokens ? (
-              <text fg={theme.meta}>{msg.meta.tokens}</text>
-            ) : null}
           </box>
         )}
       </box>

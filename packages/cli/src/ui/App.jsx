@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useKeyboard, useTerminalDimensions, useRenderer } from '@opentui/react';
 import { theme } from './theme.js';
-import { Header } from './Header.jsx';
 import { MainPane } from './MainPane.jsx';
 import { InputLine } from './InputLine.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
@@ -373,13 +372,6 @@ const handleSlash = async (raw) => {
     <box flexDirection="column" width="100%" height={hasStarted ? rows : undefined} backgroundColor={theme.bg}>
       {hasStarted ? (
         <>
-          <Header
-            projectName={projectName}
-            model={modelLabel}
-            watching={false}
-            email={email}
-            version={VERSION}
-          />
           <box flexDirection="row" flexGrow={1}>
             <box flexDirection="column" flexGrow={1} overflow="hidden" paddingLeft={1} paddingRight={1}>
               <MainPane

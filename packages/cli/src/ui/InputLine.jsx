@@ -193,7 +193,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
             lines={[
               value.length === 0 ? 'Ask anything…  \u00b7  / for commands' : value,
               '',
-              `${agentMode}  ${modelLabel}  ${mode}`
+              `${agentMode} \u00b7 ${modelLabel}   \u00b7 ${mode}`
             ]}
           />
         </box>

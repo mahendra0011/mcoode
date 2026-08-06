@@ -1,8 +1,10 @@
 export const theme = {
   bg: '#0a0a0a',
   panel: '#141414',
-  bgMessage: '#262835',
-  userBg: '#262835',
+  bgMessage: '#1a1b22',
+  userBg: '#1a1b22',
+  cardAlt: '#161616',
+  accent: '#5c9cf5',
   divider: '#3c3c3c',
   green: '#7fd88f',
   greenBright: '#7fd88f',
