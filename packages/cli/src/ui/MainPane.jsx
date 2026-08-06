@@ -5,12 +5,10 @@ import { BgBox, padBg } from './BgBox.jsx';
 import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, TOOL_VERBS, READ_MAX, CMD_MAX } from './blocks.jsx';
 
 export function MainPane({ messages, streamingMessage, isGenerating = false, onInterrupt = null, onRetry = null, pendingPermission = null, onPermission = null }) {
-  const { width: termWidth, height: termHeight } = useTerminalDimensions();
+  const { width: termWidth } = useTerminalDimensions();
   const panelWidth = Math.max(20, (termWidth || 120) - 6);
-  const viewportLines = Math.max(8, (termHeight || 30) - 17);
   const [expanded, setExpanded] = useState(null);
   const [focus, setFocus] = useState(-1);
-  const [scrollBack, setScrollBack] = useState(0);
   const [genSecs, setGenSecs] = useState(0);
   const items = []; // focusable expand/collapse items
 
@@ -18,38 +16,6 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     const index = items.length;
     items.push(item);
     return index;
-  };
-
-  const wrapLines = (text) =>
-    String(text ?? '')
-      .split('\n')
-      .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / Math.max(1, panelWidth - 2))), 0);
-
-  const blockLines = (msg) => {
-    if (msg.status === 'running') return 1;
-    if (msg.block === 'read' || msg.block === 'write') {
-      const n = Math.min(READ_MAX, msg.lines?.length || 0);
-      return 2 + n + ((msg.lines?.length || 0) > READ_MAX ? 1 : 0);
-    }
-    if (msg.block === 'edit') {
-      const n = Math.min(60, msg.diffLines?.length || 0);
-      return 2 + n;
-    }
-    // command block
-    const out = String(msg.output || '').split('\n');
-    const shown = Math.min(CMD_MAX, out.length);
-    return 2 + (msg.command ? 1 : 0) + (msg.title ? 1 : 0) + shown + (out.length > CMD_MAX ? 1 : 0);
-  };
-
-  const messageLines = (msg) => {
-    if (msg.kind === 'user') return 3 + wrapLines(msg.text);
-    if (msg.kind === 'assistant') return 3 + wrapLines(msg.text) + (msg.meta ? 1 : 0);
-    if (msg.kind === 'tool') return blockLines(msg);
-    if (msg.kind === 'todo') return 2 + (msg.items?.slice(0, 12).length || 0) + (msg.items?.length > 12 ? 1 : 0);
-    if (msg.kind === 'interrupt') return 1;
-    if (msg.kind === 'error') return 2;
-    if (msg.kind === 'summary') return 1 + (msg.files?.length || 0);
-    return wrapLines(msg.text);
   };
 
   const blocks = [];
@@ -125,61 +91,12 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     return () => clearInterval(t);
   }, [isGenerating]);
 
-  const blocksLines = blocks.reduce(
-    (s, b) => s + (expanded === b.index ? 5 + Math.min(30, b.code.split('\n').length) : 4),
-    0
-  );
   const runningTool = messages.find((m) => m.kind === 'tool' && m.status === 'running' && m.block !== 'permission');
-  const genLines = isGenerating
-    ? 2 + (streamingMessage ? wrapLines(streamingMessage) : 0)
-    : 0;
-  const contentLines = messages.reduce((s, m) => s + messageLines(m), 0) + blocksLines + genLines;
-  const maxBack = Math.max(0, contentLines - viewportLines);
-  const scrollAmt = Math.min(scrollBack, maxBack);
-  const scrolledUp = scrollAmt > 0;
 
-  // scroll model (opencode-style): at the bottom, content fills the viewport and
-  // the oldest messages clip at the top; when scrolled up, older content anchors
-  // at the top and newer messages clip at the bottom. Short content anchors top.
-  const perMsg = messages.map(messageLines);
-  let keepStart = 0;
-  let keepEnd = messages.length;
-  let justify = 'flex-start';
-  if (scrolledUp) {
-    let remaining = scrollAmt;
-    for (let i = messages.length - 1; i >= 0 && remaining > 0; i--) {
-      const l = perMsg[i];
-      if (l <= remaining) {
-        remaining -= l;
-        keepEnd = i;
-      } else {
-        break;
-      }
-    }
-  } else if (maxBack > 0) {
-    justify = 'flex-end';
-    let remaining = maxBack;
-    for (let i = 0; i < messages.length && remaining > 0; i++) {
-      const l = perMsg[i];
-      if (l <= remaining) {
-        remaining -= l;
-        keepStart = i + 1;
-      } else {
-        break;
-      }
-    }
-  }
-
+  // Non-scroll keys only — PageUp/PageDown and mouse-wheel scrolling are
+  // handled natively by <scrollbox> (matches OpenCode's own scroll behavior).
   useKeyboard((key) => {
     const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
-    if (key.name === 'pageup') {
-      setScrollBack((s) => Math.min(s + viewportLines, maxBack));
-      return;
-    }
-    if (key.name === 'pagedown') {
-      setScrollBack((s) => Math.max(0, s - viewportLines));
-      return;
-    }
     if (key.name === 'tab') {
       setFocus((f) => {
         if (items.length === 0) return f;
@@ -204,13 +121,8 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     }
   });
 
-  // snap back to the newest message when a new one lands
-  useEffect(() => {
-    setScrollBack(0);
-  }, [messages.length]);
-
   const render = messages.map((msg, i) => {
-    const isFirst = i === keepStart;
+    const isFirst = i === 0;
     if (msg.kind === 'user') {
       return (
         <box key={`u${i}`} width="100%" marginTop={isFirst ? 0 : 1} flexShrink={0}>
@@ -294,11 +206,21 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
 
   return (
     <box flexDirection="column" width="100%" height="100%" overflow="hidden">
-      <box flexDirection="column" flexGrow={1} justifyContent={justify}>
-        {render.slice(keepStart, keepEnd)}
+      <scrollbox
+        flexGrow={1}
+        scrollY
+        scrollX={false}
+        stickyScroll
+        stickyStart="bottom"
+        rootOptions={{ flexGrow: 1 }}
+        viewportOptions={{ flexGrow: 1 }}
+        contentOptions={{ flexDirection: 'column', flexShrink: 0 }}
+        scrollbarOptions={{ visible: true }}
+      >
+        {render}
         <B />
         {blocks.map((b) => renderCode(b.id, b.title, b.code, b.index))}
-      </box>
+      </scrollbox>
     </box>
   );
 }
