@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { useKeyboard } from '@opentui/react';
 import { theme } from './theme.js';
 
 export function SelectModal({ title, options, onSelect, onClose, placeholder = 'Search' }) {
@@ -27,18 +27,19 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
   const currentCursorIndex = selectableIndexes.length > 0 ? (cursor >= selectableIndexes.length ? selectableIndexes.length - 1 : cursor) : 0;
   const currentFlatIndex = selectableIndexes[currentCursorIndex];
 
-  useInput((input, key) => {
-    if (key.escape) {
+  useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+    if ((key.name === "escape")) {
       onClose();
       return;
     }
     
-    if (key.upArrow) {
+    if ((key.name === "up")) {
       setCursor(c => Math.max(0, c - 1));
       return;
     }
     
-    if (key.downArrow) {
+    if ((key.name === "down")) {
       if (key.shift) {
         setCursor(c => Math.max(0, c - 1));
         return;
@@ -47,14 +48,14 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
       return;
     }
     
-    if (key.return) {
+    if ((key.name === "return")) {
       if (selectableIndexes.length > 0) {
         onSelect(flatList[currentFlatIndex]);
       }
       return;
     }
     
-    if (key.backspace || key.delete) {
+    if ((key.name === "backspace") || (key.name === "delete")) {
       setSearch(s => s.slice(0, -1));
       setCursor(0);
       return;
@@ -66,7 +67,7 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
       setSearch(s => s + input);
       setCursor(0);
     }
-  }, { isActive: true });
+  });
 
   // Calculate sliding window for scroll (max 10 items)
   const maxItems = 10;
@@ -81,61 +82,61 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
   const visibleList = flatList.slice(startIdx, startIdx + maxItems);
 
   return (
-    <Box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
-      <Box 
+    <box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
+      <box 
         width={70} 
         flexDirection="column"
         borderStyle="single"
         borderColor={theme.green}
         backgroundColor={theme.panel}
-        paddingX={1}
-        paddingY={1}
+        paddingLeft={1} paddingRight={1}
+        paddingTop={1} paddingBottom={1}
       >
-        <Box justifyContent="space-between" marginBottom={1}>
-        <Text bold>{title}</Text>
-        <Text color="gray">esc</Text>
-      </Box>
+        <box justifyContent="space-between" marginBottom={1}>
+        <text bold>{title}</text>
+        <text fg="gray">esc</text>
+      </box>
 
-      <Box marginBottom={1}>
+      <box marginBottom={1}>
         {search.length === 0 ? (
-          <Text color={theme.gray}>
-            <Text color={theme.green}>{placeholder.charAt(0)}</Text>
+          <text fg={theme.gray}>
+            <text fg={theme.green}>{placeholder.charAt(0)}</text>
             {placeholder.slice(1)}
-          </Text>
+          </text>
         ) : (
-          <Text>{search}<Text color={theme.green}>█</Text></Text>
+          <text>{search}<text fg={theme.green}>█</text></text>
         )}
-      </Box>
+      </box>
 
-      <Box flexDirection="column">
+      <box flexDirection="column">
         {visibleList.length === 0 ? (
-          <Text color="gray">  No results found.</Text>
+          <text fg="gray">  No results found.</text>
         ) : (
           visibleList.map((item, idx) => {
             const actualIdx = startIdx + idx;
             if (item.isCategory) {
-              return <Box key={`cat-${actualIdx}`} marginTop={idx === 0 ? 0 : 1}>
-                <Text color={theme.blue} bold>{item.label}</Text>
-              </Box>;
+              return <box key={`cat-${actualIdx}`} marginTop={idx === 0 ? 0 : 1}>
+                <text fg={theme.blue} bold>{item.label}</text>
+              </box>;
             }
             const isSelected = actualIdx === currentFlatIndex;
             return (
-              <Box 
+              <box 
                 key={`item-${actualIdx}`} 
                 backgroundColor={isSelected ? theme.green : undefined} 
-                paddingX={1}
+                paddingLeft={1} paddingRight={1}
                 width="100%"
               >
-                <Text color={isSelected ? 'black' : theme.text}>
+                <text fg={isSelected ? 'black' : theme.text}>
                   {item.label}
-                  {item.hint && <Text color={isSelected ? '#14532d' : theme.dim}> {item.hint}</Text>}
-                </Text>
-              </Box>
+                  {item.hint && <text fg={isSelected ? '#14532d' : theme.dim}> {item.hint}</text>}
+                </text>
+              </box>
             );
           })
         )}
-      </Box>
-    </Box>
-    </Box>
+      </box>
+    </box>
+    </box>
   );
 }

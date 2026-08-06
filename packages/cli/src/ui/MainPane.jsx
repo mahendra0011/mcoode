@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { theme } from './theme.js';
 import { BgBox, padBg } from './BgBox.jsx';
 import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, TOOL_VERBS, READ_MAX, CMD_MAX } from './blocks.jsx';
 
 export function MainPane({ messages, streamingMessage, isGenerating = false, onInterrupt = null, onRetry = null, pendingPermission = null, onPermission = null }) {
-  const { stdout } = useStdout();
-  const panelWidth = Math.max(20, (stdout.columns || 120) - 6);
-  const viewportLines = Math.max(8, (stdout.rows || 30) - 17);
+  const { width: termWidth, height: termHeight } = useTerminalDimensions();
+  const panelWidth = Math.max(20, (termWidth || 120) - 6);
+  const viewportLines = Math.max(8, (termHeight || 30) - 17);
   const [expanded, setExpanded] = useState(null);
   const [focus, setFocus] = useState(-1);
   const [scrollBack, setScrollBack] = useState(0);
@@ -65,16 +65,16 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     }
     const lines = isExpanded ? highlighted.split('\n') : [];
     return (
-      <Box key={id} flexDirection="column" marginTop={1} flexShrink={0}>
+      <box key={id} flexDirection="column" marginTop={1} flexShrink={0}>
         <BgBox
           width={panelWidth}
           bg={theme.bgMessage}
-          color={isFocused ? theme.text : theme.dim}
-          paddingX={3}
-          paddingY={1}
+          fg={isFocused ? theme.text : theme.dim}
+          paddingLeft={3} paddingRight={3}
+          paddingTop={1} paddingBottom={1}
           lines={isExpanded ? [title, '', ...lines.slice(0, 30).map((l) => l || ' ')] : [title]}
         />
-      </Box>
+      </box>
     );
   };
 
@@ -170,32 +170,24 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     }
   }
 
-  useInput((input, key) => {
-    if (key.pageUp) {
+  useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+    if (key.name === 'pageup') {
       setScrollBack((s) => Math.min(s + viewportLines, maxBack));
       return;
     }
-    if (key.pageDown) {
+    if (key.name === 'pagedown') {
       setScrollBack((s) => Math.max(0, s - viewportLines));
       return;
     }
-    const wheel = typeof input === 'string' ? input.match(/^\x1b?\[<6([45]);(\d+);(\d+)([Mm])$/) : null;
-    if (wheel) {
-      setScrollBack((s) => {
-        const step = 3;
-        const up = wheel[1] === '4';
-        return Math.max(0, Math.min(up ? s + step : s - step, maxBack));
-      });
-      return;
-    }
-    if (key.tab) {
+    if (key.name === 'tab') {
       setFocus((f) => {
         if (items.length === 0) return f;
         return (f + 1) % (items.length + 1) - 1;
       });
       return;
     }
-    if (key.return && focus >= 0 && items[focus]) {
+    if (key.name === 'return' && focus >= 0 && items[focus]) {
       setExpanded((cur) => (cur === focus ? null : focus));
       return;
     }
@@ -203,7 +195,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
       setExpanded(null);
       setFocus(-1);
     }
-    if (key.escape) {
+    if (key.name === 'escape') {
       if (isGenerating && onInterrupt) {
         onInterrupt();
         return;
@@ -221,9 +213,9 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     const isFirst = i === keepStart;
     if (msg.kind === 'user') {
       return (
-        <Box key={`u${i}`} width="100%" marginTop={isFirst ? 0 : 1} flexShrink={0}>
-          <BgBox width={panelWidth} bg={theme.userBg} color={theme.text} paddingX={3} paddingY={1} lines={String(msg.text).split('\n')} />
-        </Box>
+        <box key={`u${i}`} width="100%" marginTop={isFirst ? 0 : 1} flexShrink={0}>
+          <BgBox width={panelWidth} bg={theme.userBg} fg={theme.text} paddingLeft={3} paddingRight={3} paddingTop={1} paddingBottom={1} lines={String(msg.text).split('\n')} />
+        </box>
       );
     }
     if (msg.kind === 'tool') {
@@ -243,19 +235,19 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     }
     if (msg.kind === 'system') {
       return (
-        <Box key={i} flexDirection="row" justifyContent="center" flexShrink={0}>
-          <Text color={theme.purple}>{msg.text}</Text>
-        </Box>
+        <box key={i} flexDirection="row" justifyContent="center" flexShrink={0}>
+          <text fg={theme.purple}>{msg.text}</text>
+        </box>
       );
     }
     if (msg.kind === 'ok') {
-      return <Box key={i} flexShrink={0}><Text color={theme.green}>{msg.text}</Text></Box>;
+      return <box key={i} flexShrink={0}><text fg={theme.green}>{msg.text}</text></box>;
     }
     if (msg.kind === 'warn') {
-      return <Box key={i} flexShrink={0}><Text color={theme.amber}>{msg.text}</Text></Box>;
+      return <box key={i} flexShrink={0}><text fg={theme.amber}>{msg.text}</text></box>;
     }
     if (msg.kind === 'err') {
-      return <Box key={i} flexShrink={0}><Text color={theme.red}>{msg.text}</Text></Box>;
+      return <box key={i} flexShrink={0}><text fg={theme.red}>{msg.text}</text></box>;
     }
     if (msg.kind === 'code') {
       const index = blocks.length;
@@ -263,29 +255,29 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
       return null;
     }
     return (
-      <Box key={i} flexDirection="column" marginTop={isFirst ? 0 : 1} flexShrink={0}>
+      <box key={i} flexDirection="column" marginTop={isFirst ? 0 : 1} flexShrink={0}>
         {msg.thought && (
-          <Box marginBottom={1}>
+          <box marginBottom={1}>
             <ThoughtBlock text={msg.thought.text} seconds={msg.thought.secs} />
-          </Box>
+          </box>
         )}
-        <Box flexDirection="column" paddingLeft={1}>
-          <Text color={theme.text}>{msg.text}</Text>
-        </Box>
+        <box flexDirection="column" paddingLeft={1}>
+          <text fg={theme.text}>{msg.text}</text>
+        </box>
         {msg.meta && (
-          <Box marginTop={1} paddingLeft={1} flexDirection="row" justifyContent="space-between" alignItems="center">
-            <Text color={theme.meta}>
+          <box marginTop={1} paddingLeft={1} flexDirection="row" justifyContent="space-between" alignItems="center">
+            <text fg={theme.meta}>
               {'\u25aa '}
-              <Text color={theme.blue}>Build</Text>
+              <text fg={theme.blue}>Build</text>
               {' \u00b7 '}{msg.meta.model}{' \u00b7 '}{msg.meta.secs}s
-              {msg.meta.interrupted && <Text color={theme.red}>{' (interrupted)'}</Text>}
-            </Text>
+              {msg.meta.interrupted && <text fg={theme.red}>{' (interrupted)'}</text>}
+            </text>
             {msg.meta.tokens ? (
-              <Text color={theme.meta}>{msg.meta.tokens}</Text>
+              <text fg={theme.meta}>{msg.meta.tokens}</text>
             ) : null}
-          </Box>
+          </box>
         )}
-      </Box>
+      </box>
     );
   });
 
@@ -301,12 +293,12 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
   };
 
   return (
-    <Box flexDirection="column" width="100%" height="100%" overflow="hidden">
-      <Box flexDirection="column" flexGrow={1} justifyContent={justify}>
+    <box flexDirection="column" width="100%" height="100%" overflow="hidden">
+      <box flexDirection="column" flexGrow={1} justifyContent={justify}>
         {render.slice(keepStart, keepEnd)}
         <B />
         {blocks.map((b) => renderCode(b.id, b.title, b.code, b.index))}
-      </Box>
-    </Box>
+      </box>
+    </box>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { theme } from './theme.js';
 import { BgBox } from './BgBox.jsx';
 
@@ -27,14 +27,16 @@ const SLASH_COMMANDS = [
 export { SLASH_COMMANDS };
 
 export function InputLine({ onSubmit, history, variant = 'default', modelLabel = 'auto', agentMode = 'Build', mode = 'medium', isActive = true, canRetry = false, onRetry = null, pendingPermission = null, onPermission = null }) {
-  const { stdout } = useStdout();
-  const termWidth = Math.max(20, (stdout.columns || 100) - 4);
+  const { width: tw } = useTerminalDimensions();
+  const termWidth = Math.max(20, (tw || 100) - 4);
   const [value, setValue] = useState('');
   const [histIdx, setHistIdx] = useState(history.length);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuIdx, setMenuIdx] = useState(0);
 
-  useInput((input, key) => {
+  useKeyboard((key) => {
+    if (!isActive) return;
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
     const currentMatches = menuOpen 
       ? SLASH_COMMANDS.filter((c) => c.cmd.startsWith(value.slice(1).toLowerCase()))
       : [];
@@ -49,7 +51,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       return;
     }
 
-    if (key.upArrow) {
+    if (key.name === 'up') {
       if (menuOpen && currentMatches.length > 0) {
         const nextIdx = (menuIdx - 1 + currentMatches.length) % currentMatches.length;
         setMenuIdx(nextIdx);
@@ -60,7 +62,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       if (history[histIdx - 1] !== undefined) setValue(history[histIdx - 1]);
       return;
     }
-    if (key.downArrow) {
+    if (key.name === 'down') {
       if (menuOpen && currentMatches.length > 0) {
         const nextIdx = (menuIdx + 1) % currentMatches.length;
         setMenuIdx(nextIdx);
@@ -72,14 +74,14 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       return;
     }
 
-    if (key.tab && menuOpen && currentMatches.length > 0) {
+    if (key.name === 'tab' && menuOpen && currentMatches.length > 0) {
       const nextIdx = (menuIdx + 1) % currentMatches.length;
       setMenuIdx(nextIdx);
       setValue('/' + currentMatches[nextIdx].cmd);
       return;
     }
     
-    if (key.return) {
+    if (key.name === 'return') {
       if (key.shift) {
         setValue((v) => v + '\n');
         return;
@@ -101,7 +103,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       if (submitted) onSubmit(submitted);
       return;
     }
-    if (key.backspace || key.delete) {
+    if (key.name === 'backspace' || key.name === 'delete') {
       setValue((v) => v.slice(0, -1));
       setMenuOpen(value.startsWith('/') && value.length > 1);
       setMenuIdx(0);
@@ -117,7 +119,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       setMenuOpen(next.startsWith('/'));
       setMenuIdx(0);
     }
-  }, { isActive });
+  });
 
   const matches = menuOpen
     ? SLASH_COMMANDS.filter((c) => c.cmd.startsWith(value.slice(1).toLowerCase()))
@@ -128,78 +130,74 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
 
   if (variant === 'welcome') {
     return (
-      <Box flexDirection="column" width={64}>
+      <box flexDirection="column" width={64}>
         {menuOpen && displayMatches.length > 0 && (
-          <Box flexDirection="column" borderStyle="round" borderColor={theme.green} paddingX={0} paddingY={0} marginBottom={1}>
+          <box flexDirection="column" borderStyle="round" borderColor={theme.green} paddingLeft={0} paddingRight={0} paddingTop={0} paddingBottom={0} marginBottom={1}>
             {displayMatches.map((item, i) => {
               const isSelected = i === menuIdx;
               return (
-                <Box key={item.cmd} paddingX={1}>
-                  <Text backgroundColor={isSelected ? theme.green : undefined}>
-                    <Text color={isSelected ? 'black' : theme.text}>{`/${item.cmd}`.padEnd(15, ' ')}</Text>
-                    <Text color={isSelected ? '#14532d' : theme.dim}>{item.desc.padEnd(45, ' ')}</Text>
-                  </Text>
-                </Box>
+                <box key={item.cmd} paddingLeft={1} paddingRight={1} backgroundColor={isSelected ? theme.green : undefined} flexDirection="row">
+                  <text fg={isSelected ? 'black' : theme.text}>{`/${item.cmd}`.padEnd(15, ' ')}</text>
+                  <text fg={isSelected ? '#14532d' : theme.dim}>{item.desc.padEnd(45, ' ')}</text>
+                </box>
               );
             })}
-            {hasMore && <Box paddingX={1}><Text color={theme.dim}>...and {matches.length - 6} more</Text></Box>}
-          </Box>
+            {hasMore && <box paddingLeft={1} paddingRight={1}><text fg={theme.dim}>...and {matches.length - 6} more</text></box>}
+          </box>
         )}
-        <Box width="100%" borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.green}>
-        <Box flexDirection="column" width={64}>
+        <box width="100%" borderStyle="single" borderLeft borderRight={false} borderTop={false} borderBottom={false} borderColor={theme.green}>
+        <box flexDirection="column" width={64}>
           <BgBox
             width={64}
             bg={theme.userBg}
             color={theme.text}
-            paddingX={2}
-            paddingY={1}
+            paddingLeft={2} paddingRight={2}
+            paddingTop={1} paddingBottom={1}
             lines={[
               value.length === 0 ? 'Ask anything… "build a rest api for orders"' : value,
               '',
               `Build  ${modelLabel}   max`
             ]}
           />
-        </Box>
-      </Box>
-      </Box>
+        </box>
+      </box>
+      </box>
     );
   }
 
   return (
-    <Box flexDirection="column" width="100%">
+    <box flexDirection="column" width="100%">
       {menuOpen && displayMatches.length > 0 && (
-        <Box flexDirection="column" borderStyle="round" borderColor={theme.green} paddingX={0} paddingY={0} marginBottom={1}>
+        <box flexDirection="column" borderStyle="round" borderColor={theme.green} paddingLeft={0} paddingRight={0} paddingTop={0} paddingBottom={0} marginBottom={1}>
           {displayMatches.map((item, i) => {
             const isSelected = i === menuIdx;
             return (
-              <Box key={item.cmd} paddingX={1}>
-                <Text backgroundColor={isSelected ? theme.green : undefined}>
-                  <Text color={isSelected ? 'black' : theme.text}>{`/${item.cmd}`.padEnd(15, ' ')}</Text>
-                  <Text color={isSelected ? '#14532d' : theme.dim}>{item.desc.padEnd(45, ' ')}</Text>
-                </Text>
-              </Box>
+              <box key={item.cmd} paddingLeft={1} paddingRight={1} backgroundColor={isSelected ? theme.green : undefined} flexDirection="row">
+                <text fg={isSelected ? 'black' : theme.text}>{`/${item.cmd}`.padEnd(15, ' ')}</text>
+                <text fg={isSelected ? '#14532d' : theme.dim}>{item.desc.padEnd(45, ' ')}</text>
+              </box>
             );
           })}
-          {hasMore && <Box paddingX={1}><Text color={theme.dim}>...and {matches.length - 6} more</Text></Box>}
-        </Box>
+          {hasMore && <box paddingLeft={1} paddingRight={1}><text fg={theme.dim}>...and {matches.length - 6} more</text></box>}
+        </box>
       )}
-      <Box flexDirection="row" width="100%">
-        <Box width={1}><Text color={theme.blue}>{'\u2502'}</Text></Box>
-        <Box flexGrow={1}>
+      <box flexDirection="row" width="100%">
+        <box width={1}><text fg={theme.blue}>{'\u2502'}</text></box>
+        <box flexGrow={1}>
           <BgBox
             width={termWidth}
             bg={theme.userBg}
             color={theme.text}
-            paddingX={3}
-            paddingY={1}
+            paddingLeft={3} paddingRight={3}
+            paddingTop={1} paddingBottom={1}
             lines={[
               value.length === 0 ? 'Ask anything…  \u00b7  / for commands' : value,
               '',
               `${agentMode}  ${modelLabel}  ${mode}`
             ]}
           />
-        </Box>
-      </Box>
-    </Box>
+        </box>
+      </box>
+    </box>
   );
 }

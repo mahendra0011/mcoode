@@ -1,4 +1,3 @@
-import { Box, Text } from 'ink';
 import { theme } from './theme.js';
 
 export function Header({ projectName, model, watching, email = '', version = '' }) {
@@ -6,38 +5,38 @@ export function Header({ projectName, model, watching, email = '', version = '' 
   const statusColor = watching ? theme.amber : theme.green;
 
   return (
-    <Box
+    <box
       flexDirection="column"
       width="100%"
       borderStyle="round"
       borderColor="#233043"
-      paddingX={2}
+      paddingLeft={2} paddingRight={2}
       backgroundColor={theme.panel}
       marginBottom={1}
     >
-      <Box flexDirection="row">
-        <Box width={22}>
-          <Text bold color={theme.green}>{'\u25c8'} mcode</Text>
-        </Box>
-        <Box flexGrow={1} justifyContent="center">
-          <Text color={theme.text}>mcode CLI {version}</Text>
-        </Box>
-        <Box justifyContent="flex-end">
-          <Text color={statusColor}>{'\u25cf'} {status}</Text>
-        </Box>
-      </Box>
-      <Box flexDirection="row">
-        <Box width={22}>
-          <Text color={theme.gray}>Workspace: </Text>
-          <Text color={theme.text}>{projectName}</Text>
-        </Box>
-        <Box flexGrow={1} justifyContent="center">
-          <Text color={theme.dim}>{email}</Text>
-        </Box>
-        <Box justifyContent="flex-end">
-          <Text color={theme.blue}>{model}</Text>
-        </Box>
-      </Box>
-    </Box>
+      <box flexDirection="row">
+        <box width={22}>
+          <text bold fg={theme.green}>{'\u25c8'} mcode</text>
+        </box>
+        <box flexGrow={1} justifyContent="center">
+          <text fg={theme.text}>mcode CLI {version}</text>
+        </box>
+        <box justifyContent="flex-end">
+          <text fg={statusColor}>{'\u25cf'} {status}</text>
+        </box>
+      </box>
+      <box flexDirection="row">
+        <box width={22}>
+          <text fg={theme.gray}>Workspace: </text>
+          <text fg={theme.text}>{projectName}</text>
+        </box>
+        <box flexGrow={1} justifyContent="center">
+          <text fg={theme.dim}>{email}</text>
+        </box>
+        <box justifyContent="flex-end">
+          <text fg={theme.blue}>{model}</text>
+        </box>
+      </box>
+    </box>
   );
 }

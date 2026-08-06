@@ -1,4 +1,3 @@
-import { Box, Text } from 'ink';
 import { theme } from './theme.js';
 
 
@@ -6,29 +5,29 @@ export function StatusBar({ tokens = 0, percent = 0, cwd = '', isGenerating = fa
   const tokenSummary = tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}K (${percent}%)` : `${tokens} (${percent}%)`;
 
   return (
-    <Box
+    <box
       width="100%"
       flexDirection="row"
       justifyContent="space-between"
-      paddingX={1}
+      paddingLeft={1} paddingRight={1}
       flexShrink={0}
     >
-      <Box flexDirection="row">
+      <box flexDirection="row">
         {isGenerating ? (
           <>
-            <Text color={theme.dim}>.: </Text>
-            <Text color={theme.text}>esc</Text>
-            <Text color={theme.dim}> interrupt</Text>
+            <text fg={theme.dim}>.: </text>
+            <text fg={theme.text}>esc</text>
+            <text fg={theme.dim}> interrupt</text>
           </>
         ) : (
-          <Text color={theme.dim}>{cwd}</Text>
+          <text fg={theme.dim}>{cwd}</text>
         )}
-      </Box>
-      <Box flexDirection="row">
-        <Text color={theme.dim}>{tokenSummary}   </Text>
-        <Text color={theme.text}>ctrl+p</Text>
-        <Text color={theme.dim}> commands</Text>
-      </Box>
-    </Box>
+      </box>
+      <box flexDirection="row">
+        <text fg={theme.dim}>{tokenSummary}   </text>
+        <text fg={theme.text}>ctrl+p</text>
+        <text fg={theme.dim}> commands</text>
+      </box>
+    </box>
   );
 }

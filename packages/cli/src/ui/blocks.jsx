@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Box, Text } from 'ink';
 import { highlight } from 'cli-highlight';
 import { theme } from './theme.js';
 import { BgBox } from './BgBox.jsx';
@@ -30,10 +29,10 @@ export function SpinnerBlock({ label }) {
     return () => clearInterval(id);
   }, []);
   return (
-    <Box flexDirection="row" paddingLeft={2} marginTop={1} flexShrink={0}>
-      <Text color={theme.amber}>{FRAMES[f]} </Text>
-      <Text color={theme.dim}>{label}</Text>
-    </Box>
+    <box flexDirection="row" paddingLeft={2} marginTop={1} flexShrink={0}>
+      <text fg={theme.amber}>{FRAMES[f]} </text>
+      <text fg={theme.dim}>{label}</text>
+    </box>
   );
 }
 
@@ -41,17 +40,17 @@ export function ThoughtBlock({ text, seconds, live = false, expanded = false }) 
   const ms = Number(seconds);
   const label = live ? 'Thinking\u2026' : `Thought: ${Number.isFinite(ms) ? Math.round(ms * 1000) : 0}ms`;
   return (
-    <Box flexDirection="column" marginTop={0} flexShrink={0} paddingLeft={1}>
-      <Text>
-        <Text color={theme.dim}>{expanded ? '- ' : '+ '}</Text>
-        <Text color={theme.amber}>{label}</Text>
-      </Text>
+    <box flexDirection="column" marginTop={0} flexShrink={0} paddingLeft={1}>
+      <text>
+        <text fg={theme.dim}>{expanded ? '- ' : '+ '}</text>
+        <text fg={theme.amber}>{label}</text>
+      </text>
       {live && (
-        <Box marginTop={1} paddingLeft={1}>
-          <Text color={theme.dim}>{text}<Text color={theme.dim}>{'\u2588'}</Text></Text>
-        </Box>
+        <box marginTop={1} paddingLeft={1}>
+          <text fg={theme.dim}>{text}<text fg={theme.dim}>{'\u2588'}</text></text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }
 
@@ -62,9 +61,9 @@ export function ReadBlock({ path, lines, expanded = false, onToggle = null, marg
   const body = display.map((line, i) => `${String(i + 1).padStart(pad)}  ${line || ' '}`);
   if (truncated) body.push(expanded ? '\u2026 click to collapse' : `\u2026 ${lines.length - READ_MAX} more \u00b7 click to expand`);
   return (
-    <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <BgBox width={width} bg={theme.bgMessage} color={theme.text} paddingX={2} paddingY={0} lines={[`\u25ce Read ${path}`, ...body]} />
-    </Box>
+    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+      <BgBox width={width} bg={theme.bgMessage} fg={theme.text} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0} lines={[`\u25ce Read ${path}`, ...body]} />
+    </box>
   );
 }
 
@@ -75,9 +74,9 @@ export function WriteBlock({ path, lines, expanded = false, onToggle = null, mar
   const body = display.map((line, i) => `${String(i + 1).padStart(pad)}  ${line || ' '}`);
   if (truncated) body.push(expanded ? '\u2026 click to collapse' : `\u2026 ${lines.length - READ_MAX} more \u00b7 click to expand`);
   return (
-    <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <BgBox width={width} bg={theme.bgMessage} color={theme.text} paddingX={2} paddingY={0} lines={[`\u270e Wrote ${path}`, ...body]} />
-    </Box>
+    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+      <BgBox width={width} bg={theme.bgMessage} fg={theme.text} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0} lines={[`\u270e Wrote ${path}`, ...body]} />
+    </box>
   );
 }
 
@@ -88,10 +87,10 @@ export function DiffBlock({ path, lines, expanded = false, onToggle = null, marg
   const truncated = lines.length > maxRows;
   const display = expanded ? lines : lines.slice(0, maxRows);
   return (
-    <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <Box flexDirection="column" paddingX={2} paddingY={0}>
-        <Text color={theme.dim}>{'\u270e'} Edit {path}</Text>
-        <Box flexDirection="column" marginTop={1} paddingLeft={1}>
+    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+      <box flexDirection="column" paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0}>
+        <text fg={theme.dim}>{'\u270e'} Edit {path}</text>
+        <box flexDirection="column" marginTop={1} paddingLeft={1}>
           {display.map((l, i) => {
             const isAdd = l.kind === 'add';
             const isRm = l.kind === 'remove';
@@ -103,20 +102,20 @@ export function DiffBlock({ path, lines, expanded = false, onToggle = null, marg
               } catch {}
             }
             return (
-              <Text key={i} color={isAdd ? theme.diffGreen : isRm ? theme.diffRed : theme.text}
+              <text key={i} fg={isAdd ? theme.diffGreen : isRm ? theme.diffRed : theme.text}
                 backgroundColor={isAdd ? theme.diffGreenBg : isRm ? theme.diffRedBg : undefined}>
                 {String(l.oldNo ?? '').padStart(padOld)} {String(l.newNo ?? '').padStart(padNew)} {op} {code}
-              </Text>
+              </text>
             );
           })}
           {truncated && (
-            <Text color={theme.dim}>
+            <text fg={theme.dim}>
               {expanded ? '\u2026 click to collapse' : `\u2026 ${lines.length - maxRows} more \u00b7 click to expand`}
-            </Text>
+            </text>
           )}
-        </Box>
-      </Box>
-    </Box>
+        </box>
+      </box>
+    </box>
   );
 }
 
@@ -124,23 +123,23 @@ export function CommandBlock({ title, relDir, command, output, expanded = false,
   const truncated = out.length > CMD_MAX;
   const display = expanded ? out : out.slice(0, CMD_MAX);
   return (
-    <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <Box flexDirection="column" backgroundColor={theme.bgMessage} borderStyle="round" borderColor={theme.divider} paddingX={2} paddingY={0}>
-        {title ? <Text color={theme.dim}>{'\u25b8'} {title}</Text>
-          : relDir ? <Text color={theme.dim}>{'\u25b8'} Running in {relDir}</Text> : null}
-        {command ? <Text color={theme.text} bold>$ {command}</Text> : null}
+    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+      <box flexDirection="column" backgroundColor={theme.bgMessage} borderStyle="round" borderColor={theme.divider} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0}>
+        {title ? <text fg={theme.dim}>{'\u25b8'} {title}</text>
+          : relDir ? <text fg={theme.dim}>{'\u25b8'} Running in {relDir}</text> : null}
+        {command ? <text fg={theme.text} bold>$ {command}</text> : null}
         {output && (
-          <Box flexDirection="column" marginTop={title || command ? 1 : 0}>
-            {display.map((line, i) => <Text key={i} color={theme.dim}>{line || ' '}</Text>)}
+          <box flexDirection="column" marginTop={title || command ? 1 : 0}>
+            {display.map((line, i) => <text key={i} fg={theme.dim}>{line || ' '}</text>)}
             {truncated && (
-              <Text color={theme.dim}>
+              <text fg={theme.dim}>
                 {expanded ? '\u2026 click to collapse' : `\u2026 ${out.length - CMD_MAX} more \u00b7 click to expand`}
-              </Text>
+              </text>
             )}
-          </Box>
+          </box>
         )}
-      </Box>
-    </Box>
+      </box>
+    </box>
   );
 }
 
@@ -151,62 +150,62 @@ export function TodoBlock({ items, marginTop = 1 }) {
   const doneCount = (items || []).filter((t) => t.status === 'done').length;
   const allDone = total > 0 && doneCount === total;
   return (
-    <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0}>
-        <Text color={theme.dim}>{'\u2630'} Todos {total ? `(${doneCount}/${total})` : ''}</Text>
-        <Box flexDirection="column" marginTop={1} paddingLeft={1}>
+    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+      <box flexDirection="column" backgroundColor={theme.bgMessage} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0}>
+        <text fg={theme.dim}>{'\u2630'} Todos {total ? `(${doneCount}/${total})` : ''}</text>
+        <box flexDirection="column" marginTop={1} paddingLeft={1}>
           {list.map((t, i) => (
-            <Text key={i}>
-              <Text color={t.status === 'done' ? theme.diffGreen : t.status === 'running' ? theme.orange : t.status === 'failed' || t.status === 'interrupt' ? theme.red : t.status === 'paused' ? theme.orange : theme.dim}>
+            <text key={i}>
+              <text fg={t.status === 'done' ? theme.diffGreen : t.status === 'running' ? theme.orange : t.status === 'failed' || t.status === 'interrupt' ? theme.red : t.status === 'paused' ? theme.orange : theme.dim}>
                 {t.status === 'done' ? '\u2713' : t.status === 'running' ? '\u25cf' : t.status === 'failed' || t.status === 'interrupt' ? '\u2717' : t.status === 'paused' ? '\u25d0' : '\u25cb'}
-              </Text>
-              <Text color={theme.dim}> {' '}</Text>
-              <Text color={t.status === 'done' ? theme.dim : theme.text}>{t.title}</Text>
-            </Text>
+              </text>
+              <text fg={theme.dim}> {' '}</text>
+              <text fg={t.status === 'done' ? theme.dim : theme.text}>{t.title}</text>
+            </text>
           ))}
-          {truncated && <Text color={theme.dim}>... {(items?.length || 0) - 12} more</Text>}
+          {truncated && <text fg={theme.dim}>... {(items?.length || 0) - 12} more</text>}
           {allDone && (
-            <Box marginTop={1}>
-              <Text color={theme.diffGreen}>{'\u2713'} All tasks completed</Text>
-            </Box>
+            <box marginTop={1}>
+              <text fg={theme.diffGreen}>{'\u2713'} All tasks completed</text>
+            </box>
           )}
-        </Box>
-      </Box>
-    </Box>
+        </box>
+      </box>
+    </box>
   );
 }
 
 export function InterruptBlock({ marginTop = 1 }) {
   return (
-    <Box backgroundColor={theme.bgMessage} paddingX={2} marginTop={marginTop} marginLeft={1} flexShrink={0}>
-      <Text color={theme.red}>{'\u2717 Interrupted by user'}</Text>
-    </Box>
+    <box backgroundColor={theme.bgMessage} paddingLeft={2} paddingRight={2} marginTop={marginTop} marginLeft={1} flexShrink={0}>
+      <text fg={theme.red}>{'\u2717 Interrupted by user'}</text>
+    </box>
   );
 }
 
 export function ErrorBlock({ reason, marginTop = 1 }) {
   return (
-    <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0} marginTop={marginTop} marginLeft={1} flexShrink={0}>
-      <Text color={theme.red}>{'\u2717 Something went wrong: '}{reason}</Text>
-      <Text color={theme.dim}>Press r to retry</Text>
-    </Box>
+    <box flexDirection="column" backgroundColor={theme.bgMessage} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0} marginTop={marginTop} marginLeft={1} flexShrink={0}>
+      <text fg={theme.red}>{'\u2717 Something went wrong: '}{reason}</text>
+      <text fg={theme.dim}>Press r to retry</text>
+    </box>
   );
 }
 
 export function PermissionBlock({ pending, approved = false, command, marginTop = 1 }) {
   return (
-    <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0} marginTop={marginTop} marginLeft={1} flexShrink={0}>
+    <box flexDirection="column" backgroundColor={theme.bgMessage} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0} marginTop={marginTop} marginLeft={1} flexShrink={0}>
       {pending ? (
         <>
-          <Text color={theme.orange}>{'? Allow running: '}<Text bold color={theme.text}>{command}</Text></Text>
-          <Text color={theme.dim}>{'  (y/n/always)'}</Text>
+          <text fg={theme.orange}>{'? Allow running: '}<text bold fg={theme.text}>{command}</text></text>
+          <text fg={theme.dim}>{'  (y/n/always)'}</text>
         </>
       ) : approved ? (
-        <Text color={theme.green}>{'\u2713 Approved'}</Text>
+        <text fg={theme.green}>{'\u2713 Approved'}</text>
       ) : (
-        <Text color={theme.red}>{'\u2717 Denied'}</Text>
+        <text fg={theme.red}>{'\u2717 Denied'}</text>
       )}
-    </Box>
+    </box>
   );
 }
 
@@ -215,29 +214,29 @@ export function ChangeSummaryBlock({ files, marginTop = 1 }) {
   const totalAdded = list.reduce((s, f) => s + (f.added || 0), 0);
   const totalRemoved = list.reduce((s, f) => s + (f.removed || 0), 0);
   return (
-    <Box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <Box flexDirection="column" backgroundColor={theme.bgMessage} paddingX={2} paddingY={0}>
-        <Text color={theme.diffGreen}>{'\u2713'} Changed {list.length} {list.length === 1 ? 'file' : 'files'}</Text>
-        <Box flexDirection="column" marginTop={1} paddingLeft={1}>
+    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
+      <box flexDirection="column" backgroundColor={theme.bgMessage} paddingLeft={2} paddingRight={2} paddingTop={0} paddingBottom={0}>
+        <text fg={theme.diffGreen}>{'\u2713'} Changed {list.length} {list.length === 1 ? 'file' : 'files'}</text>
+        <box flexDirection="column" marginTop={1} paddingLeft={1}>
           {list.map((f, i) => (
-            <Text key={i}>
-              <Text color={theme.text}>{f.path}</Text>
-              <Text color={theme.dim}>{' '.repeat(Math.max(1, 24 - f.path.length))}</Text>
-              {f.created ? <Text color={theme.dim}>(new)</Text>
-                : <><Text color={theme.diffGreen}>+{f.added}</Text><Text color={theme.dim}>/</Text><Text color={theme.diffRed}>-{f.removed}</Text></>}
-            </Text>
+            <text key={i}>
+              <text fg={theme.text}>{f.path}</text>
+              <text fg={theme.dim}>{' '.repeat(Math.max(1, 24 - f.path.length))}</text>
+              {f.created ? <text fg={theme.dim}>(new)</text>
+                : <><text fg={theme.diffGreen}>+{f.added}</text><text fg={theme.dim}>/</text><text fg={theme.diffRed}>-{f.removed}</text></>}
+            </text>
           ))}
-        </Box>
+        </box>
         {list.length > 1 && (
-          <Box marginTop={1} paddingLeft={1}>
-            <Text color={theme.dim}>Total: </Text>
-            <Text color={theme.diffGreen}>+{totalAdded}</Text>
-            <Text color={theme.dim}>/</Text>
-            <Text color={theme.diffRed}>-{totalRemoved}</Text>
-          </Box>
+          <box marginTop={1} paddingLeft={1}>
+            <text fg={theme.dim}>Total: </text>
+            <text fg={theme.diffGreen}>+{totalAdded}</text>
+            <text fg={theme.dim}>/</text>
+            <text fg={theme.diffRed}>-{totalRemoved}</text>
+          </box>
         )}
-      </Box>
-    </Box>
+      </box>
+    </box>
   );
 }
 

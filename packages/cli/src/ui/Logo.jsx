@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Box, Text } from 'ink';
 import { theme } from './theme.js';
 import { MCODE_GLYPH } from './logo.js';
 
@@ -26,16 +25,16 @@ export function Logo({ compact = false }) {
   const ACCENT_LINE = '━';
 
   return (
-    <Box flexDirection="column" alignItems="center" marginBottom={compact ? 0 : 1}>
+    <box flexDirection="column" alignItems="center" marginBottom={compact ? 0 : 1}>
       {/* Top accent line */}
       {!compact && (
-        <Box marginBottom={1}>
-          <Text color="#1a3a2a">{ACCENT_LINE.repeat(4)}</Text>
-          <Text color="#2a5a3a">{ACCENT_LINE.repeat(6)}</Text>
-          <Text color={tick % 24 < 12 ? theme.greenBright : '#2a5a3a'}>{'  ◆  '}</Text>
-          <Text color="#2a5a3a">{ACCENT_LINE.repeat(6)}</Text>
-          <Text color="#1a3a2a">{ACCENT_LINE.repeat(4)}</Text>
-        </Box>
+        <box marginBottom={1}>
+          <text fg="#1a3a2a">{ACCENT_LINE.repeat(4)}</text>
+          <text fg="#2a5a3a">{ACCENT_LINE.repeat(6)}</text>
+          <text fg={tick % 24 < 12 ? theme.greenBright : '#2a5a3a'}>{'  ◆  '}</text>
+          <text fg="#2a5a3a">{ACCENT_LINE.repeat(6)}</text>
+          <text fg="#1a3a2a">{ACCENT_LINE.repeat(4)}</text>
+        </box>
       )}
 
       {/* Logo glyph with animated per-row gradient */}
@@ -43,23 +42,23 @@ export function Logo({ compact = false }) {
         // Shift color over time, creating a wave
         const color = palette.length ? palette[(i * 2 + tick) % palette.length] : theme.green;
         return (
-          <Text key={i} color={color}>
+          <text key={i} fg={color}>
             {line}
-          </Text>
+          </text>
         );
       })}
 
       {/* Bottom accent line */}
       {!compact && (
-        <Box marginTop={1}>
-          <Text color="#1a3a2a">{ACCENT_LINE.repeat(4)}</Text>
-          <Text color="#2a5a3a">{ACCENT_LINE.repeat(6)}</Text>
-          <Text color={tick % 24 > 12 ? theme.greenBright : '#2a5a3a'}>{'  ◆  '}</Text>
-          <Text color="#2a5a3a">{ACCENT_LINE.repeat(6)}</Text>
-          <Text color="#1a3a2a">{ACCENT_LINE.repeat(4)}</Text>
-        </Box>
+        <box marginTop={1}>
+          <text fg="#1a3a2a">{ACCENT_LINE.repeat(4)}</text>
+          <text fg="#2a5a3a">{ACCENT_LINE.repeat(6)}</text>
+          <text fg={tick % 24 > 12 ? theme.greenBright : '#2a5a3a'}>{'  ◆  '}</text>
+          <text fg="#2a5a3a">{ACCENT_LINE.repeat(6)}</text>
+          <text fg="#1a3a2a">{ACCENT_LINE.repeat(4)}</text>
+        </box>
       )}
-    </Box>
+    </box>
   );
 }
 

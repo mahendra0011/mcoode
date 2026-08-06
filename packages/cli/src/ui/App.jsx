@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Text, useApp, useInput, useStdout } from 'ink';
+import { useKeyboard, useTerminalDimensions, useRenderer } from '@opentui/react';
 import { theme } from './theme.js';
 import { Header } from './Header.jsx';
 import { MainPane } from './MainPane.jsx';
@@ -15,9 +15,10 @@ import { MODES, MODE_DESC } from '../core/router.js';
 const VERSION = 'v2.4.6';
 
 export function App({ orchestrator, projectName, history = [], onAction }) {
-  const { exit } = useApp();
-  const { stdout } = useStdout();
-  const [rows, setRows] = useState(stdout.rows || 24);
+  const renderer = useRenderer();
+  const exit = () => renderer.destroy();
+  const { height } = useTerminalDimensions();
+  const rows = height || 24;
   const [messages, setMessages] = useState([]);
   const [agents, setAgents] = useState([]);
   const [plan, setPlan] = useState(null);
@@ -51,17 +52,11 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
       return next;
     });
 
-  useInput((input, key) => {
-    if (key.ctrl && input === 'p') {
+  useKeyboard((key) => {
+    if (key.ctrl && key.name === 'p') {
       setPaletteOpen((o) => !o);
     }
   });
-
-  useEffect(() => {
-    const onResize = () => setRows(stdout.rows || 24);
-    stdout.on('resize', onResize);
-    return () => stdout.off('resize', onResize);
-  }, [stdout]);
 
   useEffect(() => {
     let cancelled = false;
@@ -375,7 +370,7 @@ const handleSlash = async (raw) => {
   const percent = Math.min(99, Math.round((tokens / 200000) * 100));
 
   return (
-    <Box flexDirection="column" width="100%" height={hasStarted ? rows : undefined} backgroundColor={theme.bg}>
+    <box flexDirection="column" width="100%" height={hasStarted ? rows : undefined} backgroundColor={theme.bg}>
       {hasStarted ? (
         <>
           <Header
@@ -385,8 +380,8 @@ const handleSlash = async (raw) => {
             email={email}
             version={VERSION}
           />
-          <Box flexDirection="row" flexGrow={1}>
-            <Box flexDirection="column" flexGrow={1} overflow="hidden" paddingX={1}>
+          <box flexDirection="row" flexGrow={1}>
+            <box flexDirection="column" flexGrow={1} overflow="hidden" paddingLeft={1} paddingRight={1}>
               <MainPane
                 messages={messages}
                 streamingMessage={streamingMessage}
@@ -401,10 +396,10 @@ const handleSlash = async (raw) => {
                 pendingPermission={pendingPermission}
                 onPermission={(requestId, answer) => orchestrator.answerPermission?.(requestId, answer)}
               />
-            </Box>
-          </Box>
+            </box>
+          </box>
           <Toasts toasts={toasts} />
-          <Box flexShrink={0}>
+          <box flexShrink={0}>
             <InputLine
               onSubmit={handleSubmit}
               history={inputHistory.current}
@@ -419,10 +414,10 @@ const handleSlash = async (raw) => {
               pendingPermission={pendingPermission}
               onPermission={(requestId, answer) => orchestrator.answerPermission?.(requestId, answer)}
             />
-          </Box>
-          <Box flexShrink={0}>
+          </box>
+          <box flexShrink={0}>
             <StatusBar tokens={tokens} percent={percent} cwd={process.cwd()} isGenerating={isGenerating} />
-          </Box>
+          </box>
         </>
       ) : (
         <>
@@ -430,9 +425,9 @@ const handleSlash = async (raw) => {
             <InputLine onSubmit={handleSubmit} history={inputHistory.current} variant="welcome" agentMode={agentMode} mode={mode} modelLabel={modelLabel} isActive={!activeModal} />
           </WelcomeScreen>
           <Toasts toasts={toasts} />
-          <Box flexShrink={0}>
+          <box flexShrink={0}>
             <StatusBar tokens={tokens} percent={percent} />
-          </Box>
+          </box>
         </>
       )}
       {activeModal && <ProviderWizard mode={activeModal} onClose={() => setActiveModal(null)} />}
@@ -445,7 +440,7 @@ const handleSlash = async (raw) => {
           onClose={() => setPaletteOpen(false)}
         />
       )}
-    </Box>
+    </box>
   );
 }
 

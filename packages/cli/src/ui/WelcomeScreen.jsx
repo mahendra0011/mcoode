@@ -1,4 +1,3 @@
-import { Box, Text } from 'ink';
 import { Logo } from './Logo.jsx';
 import { theme } from './theme.js';
 
@@ -11,20 +10,20 @@ const TIPS = [
 
 export function WelcomeScreen({ modelLabel = 'auto', agentMode = 'Build', tip, children }) {
   return (
-    <Box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
+    <box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
       <Logo />
 
       {children}
 
-      <Box marginTop={1}>
-        <Text color={theme.dim}>tab </Text><Text color={theme.gray}>agents   </Text>
-        <Text color={theme.dim}>ctrl+p </Text><Text color={theme.gray}>commands</Text>
-      </Box>
+      <box marginTop={1}>
+        <text fg={theme.dim}>tab </text><text fg={theme.gray}>agents   </text>
+        <text fg={theme.dim}>ctrl+p </text><text fg={theme.gray}>commands</text>
+      </box>
 
-      <Box marginTop={2}>
-        <Text color={theme.amber}>● </Text>
-        <Text color={theme.dim}>{tip || TIPS[Math.floor(Math.random() * TIPS.length)]}</Text>
-      </Box>
-    </Box>
+      <box marginTop={2}>
+        <text fg={theme.amber}>● </text>
+        <text fg={theme.dim}>{tip || TIPS[Math.floor(Math.random() * TIPS.length)]}</text>
+      </box>
+    </box>
   );
 }

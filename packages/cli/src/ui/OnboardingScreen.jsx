@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { useKeyboard, useRenderer } from '@opentui/react';
 import { Logo } from './Logo.jsx';
 import { theme } from './theme.js';
 
 // ─── Small reusable primitives ──────────────────────────────────────────────
 
 function Divider({ width = 56, color = '#1f2937' }) {
-  return <Text color={color}>{'─'.repeat(width)}</Text>;
+  return <text fg={color}>{'─'.repeat(width)}</text>;
 }
 
 function Badge({ label, color = theme.green }) {
   return (
-    <Text color={color} bold>
+    <text fg={color} bold>
       {'  '}[{label}]
-    </Text>
+    </text>
   );
 }
 
@@ -21,49 +21,49 @@ function StepIndicator({ current, total }) {
   const dots = [];
   for (let i = 0; i < total; i++) {
     dots.push(
-      <Text key={i} color={i === current ? theme.green : '#1f2937'}>
+      <text key={i} fg={i === current ? theme.green : '#1f2937'}>
         {i === current ? ' ● ' : ' ○ '}
-      </Text>
+      </text>
     );
   }
-  return <Box justifyContent="center">{dots}</Box>;
+  return <box justifyContent="center">{dots}</box>;
 }
 
 function SelectionItem({ label, description, isSelected, index }) {
   return (
-    <Box paddingX={2}>
-      <Text color={isSelected ? theme.greenBright : '#1f2937'}>
+    <box paddingLeft={2} paddingRight={2}>
+      <text fg={isSelected ? theme.greenBright : '#1f2937'}>
         {isSelected ? '▸ ' : '  '}
-      </Text>
-      <Text color={isSelected ? theme.text : theme.dim} bold={isSelected}>
+      </text>
+      <text fg={isSelected ? theme.text : theme.dim} bold={isSelected}>
         {label}
-      </Text>
+      </text>
       {description && (
-        <Text color={theme.gray}>{`  ${description}`}</Text>
+        <text fg={theme.gray}>{`  ${description}`}</text>
       )}
-    </Box>
+    </box>
   );
 }
 
 function TextInput({ label, value, focused, hidden = false, placeholder = '' }) {
   const displayValue = hidden ? '•'.repeat(value.length) : value;
   return (
-    <Box paddingX={2} flexDirection="row">
-      <Text color={theme.dim}>{label}: </Text>
-      <Box
+    <box paddingLeft={2} paddingRight={2} flexDirection="row">
+      <text fg={theme.dim}>{label}: </text>
+      <box
         borderStyle="round"
         borderColor={focused ? theme.green : '#1f2937'}
-        paddingX={1}
+        paddingLeft={1} paddingRight={1}
         minWidth={32}
       >
         {value.length > 0 ? (
-          <Text color={theme.text}>{displayValue}</Text>
+          <text fg={theme.text}>{displayValue}</text>
         ) : (
-          <Text color="#3a3f47">{placeholder}</Text>
+          <text fg="#3a3f47">{placeholder}</text>
         )}
-        {focused && <Text color={theme.greenBright}>▌</Text>}
-      </Box>
-    </Box>
+        {focused && <text fg={theme.greenBright}>▌</text>}
+      </box>
+    </box>
   );
 }
 
@@ -71,9 +71,9 @@ function StatusMessage({ type, message }) {
   const icons = { ok: '✓', error: '✗', warn: '⚠', info: '●' };
   const colors = { ok: theme.green, error: theme.red, warn: theme.amber, info: theme.blue };
   return (
-    <Box paddingX={2} marginTop={1}>
-      <Text color={colors[type] || theme.dim}>{icons[type] || '●'} {message}</Text>
-    </Box>
+    <box paddingLeft={2} paddingRight={2} marginTop={1}>
+      <text fg={colors[type] || theme.dim}>{icons[type] || '●'} {message}</text>
+    </box>
   );
 }
 
@@ -106,7 +106,8 @@ const STEPS = {
 // ─── Main Onboarding Component ──────────────────────────────────────────────
 
 export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHandlers }) {
-  const { exit } = useApp();
+  const renderer = useRenderer();
+  const exit = () => renderer.destroy();
   const [step, setStep] = useState(STEPS.WELCOME);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [inputValues, setInputValues] = useState({ email: '', name: '', password: '', otp: '', apiKey: '', customEnv: '' });
@@ -140,29 +141,30 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
       { label: 'Login', desc: 'already have an account' },
     ];
 
-    useInput((input, key) => {
+    useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
       if (loading) return;
-      if (key.upArrow || key.pageUp) setSelectedIdx((i) => Math.max(0, i - 1));
-      if (key.downArrow || key.pageDown) setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
-      if (key.return) {
+      if ((key.name === "up") || (key.name === "pageup")) setSelectedIdx((i) => Math.max(0, i - 1));
+      if ((key.name === "down") || (key.name === "pagedown")) setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
+      if ((key.name === "return")) {
         if (selectedIdx === 0) { setStep(STEPS.CREATE_ACCOUNT); setActiveField(0); }
         else if (selectedIdx === 1) { setStep(STEPS.LOGIN); setActiveField(0); }
       }
-      if (key.escape) { exit(); }
+      if ((key.name === "escape")) { exit(); }
     });
 
     return (
-      <Box flexDirection="column" alignItems="center">
-        <Box marginBottom={1}>
-          <Text color={theme.dim}>
+      <box flexDirection="column" alignItems="center">
+        <box marginBottom={1}>
+          <text fg={theme.dim}>
             welcome{config?.account?.name ? `, ${config.account.name}` : ''}!
-          </Text>
-        </Box>
-        <Box
+          </text>
+        </box>
+        <box
           flexDirection="column"
           borderStyle="round"
           borderColor="#1f2937"
-          paddingY={1}
+          paddingTop={1} paddingBottom={1}
           width={56}
         >
           {options.map((opt, i) => (
@@ -174,16 +176,16 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
               isSelected={i === selectedIdx}
             />
           ))}
-        </Box>
-        <Box marginTop={1}>
-          <Text color={theme.gray}>↑↓</Text>
-          <Text color={theme.dim}> navigate  </Text>
-          <Text color={theme.gray}>enter</Text>
-          <Text color={theme.dim}> select  </Text>
-          <Text color={theme.gray}>esc</Text>
-          <Text color={theme.dim}> quit</Text>
-        </Box>
-      </Box>
+        </box>
+        <box marginTop={1}>
+          <text fg={theme.gray}>↑↓</text>
+          <text fg={theme.dim}> navigate  </text>
+          <text fg={theme.gray}>enter</text>
+          <text fg={theme.dim}> select  </text>
+          <text fg={theme.gray}>esc</text>
+          <text fg={theme.dim}> quit</text>
+        </box>
+      </box>
     );
   };
 
@@ -193,32 +195,33 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     const fields = ['email', 'name', 'password'];
     const placeholders = { email: 'user@example.com', name: 'Your Name', password: 'min 8 chars' };
 
-    useInput((input, key) => {
+    useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
       if (loading) return;
 
       // OTP sub-step
       if (status?.type === 'otp') {
-        if (key.backspace || key.delete) { setField('otp', inputValues.otp.slice(0, -1)); return; }
-        if (key.return && inputValues.otp.length === 6) {
+        if ((key.name === "backspace") || (key.name === "delete")) { setField('otp', inputValues.otp.slice(0, -1)); return; }
+        if ((key.name === "return") && inputValues.otp.length === 6) {
           verifyOtp();
           return;
         }
-        if (key.escape) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
+        if ((key.name === "escape")) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
         if (input && /\d/.test(input) && inputValues.otp.length < 6) {
           setField('otp', inputValues.otp + input);
         }
         return;
       }
 
-      if (key.tab || key.downArrow || key.pageDown) setActiveField((f) => Math.min(fields.length - 1, f + 1));
-      if (key.upArrow || key.pageUp) setActiveField((f) => Math.max(0, f - 1));
-      if (key.escape) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
-      if (key.backspace || key.delete) {
+      if ((key.name === "tab") || (key.name === "down") || (key.name === "pagedown")) setActiveField((f) => Math.min(fields.length - 1, f + 1));
+      if ((key.name === "up") || (key.name === "pageup")) setActiveField((f) => Math.max(0, f - 1));
+      if ((key.name === "escape")) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
+      if ((key.name === "backspace") || (key.name === "delete")) {
         const field = fields[activeField];
         setField(field, inputValues[field].slice(0, -1));
         return;
       }
-      if (key.return) {
+      if ((key.name === "return")) {
         if (activeField < fields.length - 1) {
           setActiveField((f) => f + 1);
         } else {
@@ -274,60 +277,60 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     const isOtpMode = status?.type === 'otp';
 
     return (
-      <Box flexDirection="column" alignItems="center">
+      <box flexDirection="column" alignItems="center">
         <StepIndicator current={0} total={totalSteps} />
-        <Box marginY={1}><Text color={theme.text} bold>Create Account</Text></Box>
-        <Box
+        <box marginTop={1} marginBottom={1}><text fg={theme.text} bold>Create Account</text></box>
+        <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.green}
-          paddingY={1}
+          paddingTop={1} paddingBottom={1}
           width={56}
         >
           {!isOtpMode ? (
             <>
               {fields.map((field, i) => (
-                <Box key={field} marginBottom={i < fields.length - 1 ? 1 : 0}>
-                  <TextInput
+                <box key={field} marginBottom={i < fields.length - 1 ? 1 : 0}>
+                  <textInput
                     label={field.charAt(0).toUpperCase() + field.slice(1)}
                     value={inputValues[field]}
                     focused={i === activeField}
                     hidden={field === 'password'}
                     placeholder={placeholders[field]}
                   />
-                </Box>
+                </box>
               ))}
-              <Box paddingX={2} marginTop={1}>
-                <Text color={theme.dim}>tab/↑↓ switch fields · enter to submit · esc back</Text>
-              </Box>
+              <box paddingLeft={2} paddingRight={2} marginTop={1}>
+                <text fg={theme.dim}>tab/↑↓ switch fields · enter to submit · esc back</text>
+              </box>
             </>
           ) : (
-            <Box flexDirection="column" paddingX={2}>
+            <box flexDirection="column" paddingLeft={2} paddingRight={2}>
               <StatusMessage type="ok" message={status.message} />
               {status.devOtp && (
                 <StatusMessage type="info" message={`Dev mode OTP: ${status.devOtp}`} />
               )}
-              <Box marginTop={1}>
-                <Text color={theme.dim}>Enter 6-digit code: </Text>
-                <Box borderStyle="round" borderColor={theme.green} paddingX={1} minWidth={12}>
-                  <Text color={theme.text} bold>
+              <box marginTop={1}>
+                <text fg={theme.dim}>Enter 6-digit code: </text>
+                <box borderStyle="round" borderColor={theme.green} paddingLeft={1} paddingRight={1} minWidth={12}>
+                  <text fg={theme.text} bold>
                     {inputValues.otp.split('').join(' ')}
                     {'  '.repeat(Math.max(0, 6 - inputValues.otp.length))}
-                  </Text>
-                </Box>
-              </Box>
-              <Box marginTop={1}>
-                <Text color={theme.dim}>
+                  </text>
+                </box>
+              </box>
+              <box marginTop={1}>
+                <text fg={theme.dim}>
                   {inputValues.otp.length}/6 digits · enter to verify · esc back
-                </Text>
-              </Box>
-            </Box>
+                </text>
+              </box>
+            </box>
           )}
-        </Box>
+        </box>
         {loading && (
-          <Box marginTop={1}>
-            <Text color={theme.green}>⟳ processing{dots}</Text>
-          </Box>
+          <box marginTop={1}>
+            <text fg={theme.green}>⟳ processing{dots}</text>
+          </box>
         )}
         {status && status.type === 'error' && (
           <StatusMessage type="error" message={status.message} />
@@ -335,7 +338,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
         {status && status.type === 'ok' && (
           <StatusMessage type="ok" message={status.message} />
         )}
-      </Box>
+      </box>
     );
   };
 
@@ -345,17 +348,18 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     const fields = ['email', 'password'];
     const placeholders = { email: 'user@example.com', password: 'your password' };
 
-    useInput((input, key) => {
+    useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
       if (loading) return;
-      if (key.tab || key.downArrow || key.pageDown) setActiveField((f) => Math.min(fields.length - 1, f + 1));
-      if (key.upArrow || key.pageUp) setActiveField((f) => Math.max(0, f - 1));
-      if (key.escape) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
-      if (key.backspace || key.delete) {
+      if ((key.name === "tab") || (key.name === "down") || (key.name === "pagedown")) setActiveField((f) => Math.min(fields.length - 1, f + 1));
+      if ((key.name === "up") || (key.name === "pageup")) setActiveField((f) => Math.max(0, f - 1));
+      if ((key.name === "escape")) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
+      if ((key.name === "backspace") || (key.name === "delete")) {
         const field = fields[activeField];
         setField(field, inputValues[field].slice(0, -1));
         return;
       }
-      if (key.return) {
+      if ((key.name === "return")) {
         if (activeField < fields.length - 1) {
           setActiveField((f) => f + 1);
         } else {
@@ -392,39 +396,39 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     const totalSteps = hasKey ? 2 : 3;
 
     return (
-      <Box flexDirection="column" alignItems="center">
+      <box flexDirection="column" alignItems="center">
         <StepIndicator current={0} total={totalSteps} />
-        <Box marginY={1}><Text color={theme.text} bold>Login</Text></Box>
-        <Box
+        <box marginTop={1} marginBottom={1}><text fg={theme.text} bold>Login</text></box>
+        <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.blue}
-          paddingY={1}
+          paddingTop={1} paddingBottom={1}
           width={56}
         >
           {fields.map((field, i) => (
-            <Box key={field} marginBottom={i < fields.length - 1 ? 1 : 0}>
-              <TextInput
+            <box key={field} marginBottom={i < fields.length - 1 ? 1 : 0}>
+              <textInput
                 label={field.charAt(0).toUpperCase() + field.slice(1)}
                 value={inputValues[field]}
                 focused={i === activeField}
                 hidden={field === 'password'}
                 placeholder={placeholders[field]}
               />
-            </Box>
+            </box>
           ))}
-          <Box paddingX={2} marginTop={1}>
-            <Text color={theme.dim}>tab/↑↓ switch fields · enter to submit · esc back</Text>
-          </Box>
-        </Box>
+          <box paddingLeft={2} paddingRight={2} marginTop={1}>
+            <text fg={theme.dim}>tab/↑↓ switch fields · enter to submit · esc back</text>
+          </box>
+        </box>
         {loading && (
-          <Box marginTop={1}>
-            <Text color={theme.green}>⟳ processing{dots}</Text>
-          </Box>
+          <box marginTop={1}>
+            <text fg={theme.green}>⟳ processing{dots}</text>
+          </box>
         )}
         {status && status.type === 'error' && <StatusMessage type="error" message={status.message} />}
         {status && status.type === 'ok' && <StatusMessage type="ok" message={status.message} />}
-      </Box>
+      </box>
     );
   };
 
@@ -436,31 +440,32 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
       { label: 'Skip for now', desc: 'mock + local providers still work' },
     ];
 
-    useInput((input, key) => {
-      if (key.upArrow || key.pageUp) setSelectedIdx((i) => Math.max(0, i - 1));
-      if (key.downArrow || key.pageDown) setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
-      if (key.return) {
+    useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+      if ((key.name === "up") || (key.name === "pageup")) setSelectedIdx((i) => Math.max(0, i - 1));
+      if ((key.name === "down") || (key.name === "pagedown")) setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
+      if ((key.name === "return")) {
         if (selectedIdx === 0) { setStep(STEPS.API_KEY_PROVIDER); setSelectedIdx(0); }
         else onComplete();
       }
-      if (key.escape) onComplete();
+      if ((key.name === "escape")) onComplete();
     });
 
     return (
-      <Box flexDirection="column" alignItems="center">
+      <box flexDirection="column" alignItems="center">
         <StepIndicator current={1} total={3} />
-        <Box marginY={1} flexDirection="column" alignItems="center">
-          <Text color={theme.amber}>● </Text>
-          <Text color={theme.text} bold>API Key Setup</Text>
-        </Box>
-        <Box marginBottom={1}>
-          <Text color={theme.dim}>You need an AI provider API key for chat and god mode</Text>
-        </Box>
-        <Box
+        <box marginTop={1} marginBottom={1} flexDirection="column" alignItems="center">
+          <text fg={theme.amber}>● </text>
+          <text fg={theme.text} bold>API Key Setup</text>
+        </box>
+        <box marginBottom={1}>
+          <text fg={theme.dim}>You need an AI provider API key for chat and god mode</text>
+        </box>
+        <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.amber}
-          paddingY={1}
+          paddingTop={1} paddingBottom={1}
           width={56}
         >
           {options.map((opt, i) => (
@@ -472,27 +477,28 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
               isSelected={i === selectedIdx}
             />
           ))}
-        </Box>
-        <Box marginTop={1}>
-          <Text color={theme.gray}>↑↓</Text>
-          <Text color={theme.dim}> navigate  </Text>
-          <Text color={theme.gray}>enter</Text>
-          <Text color={theme.dim}> select  </Text>
-          <Text color={theme.gray}>esc</Text>
-          <Text color={theme.dim}> skip</Text>
-        </Box>
-      </Box>
+        </box>
+        <box marginTop={1}>
+          <text fg={theme.gray}>↑↓</text>
+          <text fg={theme.dim}> navigate  </text>
+          <text fg={theme.gray}>enter</text>
+          <text fg={theme.dim}> select  </text>
+          <text fg={theme.gray}>esc</text>
+          <text fg={theme.dim}> skip</text>
+        </box>
+      </box>
     );
   };
 
   // ── API Key Provider Select ─────────────────────────────────────────────
 
   const ApiKeyProviderStep = () => {
-    useInput((input, key) => {
-      if (key.upArrow || key.pageUp) setSelectedIdx((i) => Math.max(0, i - 1));
-      if (key.downArrow || key.pageDown) setSelectedIdx((i) => Math.min(PROVIDER_CHOICES.length - 1, i + 1));
-      if (key.escape) { setStep(STEPS.API_KEY_ASK); setSelectedIdx(0); return; }
-      if (key.return) {
+    useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+      if ((key.name === "up") || (key.name === "pageup")) setSelectedIdx((i) => Math.max(0, i - 1));
+      if ((key.name === "down") || (key.name === "pagedown")) setSelectedIdx((i) => Math.min(PROVIDER_CHOICES.length - 1, i + 1));
+      if ((key.name === "escape")) { setStep(STEPS.API_KEY_ASK); setSelectedIdx(0); return; }
+      if ((key.name === "return")) {
         const choice = PROVIDER_CHOICES[selectedIdx];
         setSelectedProvider(choice);
         setActiveField(choice.env ? 0 : 1); // 1 = custom env name field
@@ -503,42 +509,42 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     });
 
     return (
-      <Box flexDirection="column" alignItems="center">
+      <box flexDirection="column" alignItems="center">
         <StepIndicator current={2} total={3} />
-        <Box marginY={1}><Text color={theme.text} bold>Select Provider</Text></Box>
-        <Box
+        <box marginTop={1} marginBottom={1}><text fg={theme.text} bold>Select Provider</text></box>
+        <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.purple}
-          paddingY={1}
+          paddingTop={1} paddingBottom={1}
           width={56}
         >
           {PROVIDER_CHOICES.map((p, i) => (
-            <Box key={i} paddingX={2}>
-              <Text color={i === selectedIdx ? theme.greenBright : '#1f2937'}>
+            <box key={i} paddingLeft={2} paddingRight={2}>
+              <text fg={i === selectedIdx ? theme.greenBright : '#1f2937'}>
                 {i === selectedIdx ? '▸ ' : '  '}
-              </Text>
-              <Text color={i === selectedIdx ? theme.purple : theme.dim}>
+              </text>
+              <text fg={i === selectedIdx ? theme.purple : theme.dim}>
                 {p.icon}{' '}
-              </Text>
-              <Text color={i === selectedIdx ? theme.text : theme.dim} bold={i === selectedIdx}>
+              </text>
+              <text fg={i === selectedIdx ? theme.text : theme.dim} bold={i === selectedIdx}>
                 {p.id}
-              </Text>
+              </text>
               {p.env && i === selectedIdx && (
-                <Text color={theme.gray}>{`  (${p.env})`}</Text>
+                <text fg={theme.gray}>{`  (${p.env})`}</text>
               )}
-            </Box>
+            </box>
           ))}
-        </Box>
-        <Box marginTop={1}>
-          <Text color={theme.gray}>↑↓</Text>
-          <Text color={theme.dim}> navigate  </Text>
-          <Text color={theme.gray}>enter</Text>
-          <Text color={theme.dim}> select  </Text>
-          <Text color={theme.gray}>esc</Text>
-          <Text color={theme.dim}> back</Text>
-        </Box>
-      </Box>
+        </box>
+        <box marginTop={1}>
+          <text fg={theme.gray}>↑↓</text>
+          <text fg={theme.dim}> navigate  </text>
+          <text fg={theme.gray}>enter</text>
+          <text fg={theme.dim}> select  </text>
+          <text fg={theme.gray}>esc</text>
+          <text fg={theme.dim}> back</text>
+        </box>
+      </box>
     );
   };
 
@@ -547,14 +553,15 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
   const ApiKeyInputStep = () => {
     const needsCustomEnv = !selectedProvider?.env;
 
-    useInput((input, key) => {
+    useKeyboard((key) => {
+    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
       if (loading) return;
-      if (needsCustomEnv && key.tab) {
+      if (needsCustomEnv && (key.name === "tab")) {
         setActiveField((f) => f === 0 ? 1 : 0);
         return;
       }
-      if (key.escape) { setStep(STEPS.API_KEY_PROVIDER); setSelectedIdx(0); setStatus(null); return; }
-      if (key.backspace || key.delete) {
+      if ((key.name === "escape")) { setStep(STEPS.API_KEY_PROVIDER); setSelectedIdx(0); setStatus(null); return; }
+      if ((key.name === "backspace") || (key.name === "delete")) {
         if (needsCustomEnv && activeField === 1) {
           setField('customEnv', inputValues.customEnv.slice(0, -1));
         } else {
@@ -562,7 +569,7 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
         }
         return;
       }
-      if (key.return) {
+      if ((key.name === "return")) {
         submitApiKey();
         return;
       }
@@ -593,51 +600,51 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
     };
 
     return (
-      <Box flexDirection="column" alignItems="center">
+      <box flexDirection="column" alignItems="center">
         <StepIndicator current={2} total={3} />
-        <Box marginY={1}>
-          <Text color={theme.text} bold>
+        <box marginTop={1} marginBottom={1}>
+          <text fg={theme.text} bold>
             Enter {selectedProvider?.id || 'Provider'} API Key
-          </Text>
-        </Box>
-        <Box
+          </text>
+        </box>
+        <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.purple}
-          paddingY={1}
+          paddingTop={1} paddingBottom={1}
           width={56}
         >
           {needsCustomEnv && (
-            <Box marginBottom={1}>
-              <TextInput
+            <box marginBottom={1}>
+              <textInput
                 label="Env var"
                 value={inputValues.customEnv}
                 focused={activeField === 1}
                 placeholder="e.g. OPENAI_API_KEY"
               />
-            </Box>
+            </box>
           )}
-          <TextInput
+          <textInput
             label="API Key"
             value={inputValues.apiKey}
             focused={needsCustomEnv ? activeField === 0 : true}
             hidden={true}
             placeholder="sk-..."
           />
-          <Box paddingX={2} marginTop={1}>
-            <Text color={theme.dim}>
+          <box paddingLeft={2} paddingRight={2} marginTop={1}>
+            <text fg={theme.dim}>
               {needsCustomEnv ? 'tab switch · ' : ''}enter to save · esc back
-            </Text>
-          </Box>
-        </Box>
+            </text>
+          </box>
+        </box>
         {loading && (
-          <Box marginTop={1}>
-            <Text color={theme.green}>⟳ saving{dots}</Text>
-          </Box>
+          <box marginTop={1}>
+            <text fg={theme.green}>⟳ saving{dots}</text>
+          </box>
         )}
         {status && status.type === 'error' && <StatusMessage type="error" message={status.message} />}
         {status && status.type === 'ok' && <StatusMessage type="ok" message={status.message} />}
-      </Box>
+      </box>
     );
   };
 
@@ -656,18 +663,18 @@ export function OnboardingScreen({ onComplete, hasAccount, hasKey, config, apiHa
   if (!CurrentStep) return null;
 
   return (
-    <Box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">
+    <box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">
       <Logo />
-      <Box marginBottom={1}>
-        <Text color={theme.dim}>terminal-first, multi-model AI coding CLI</Text>
-      </Box>
+      <box marginBottom={1}>
+        <text fg={theme.dim}>terminal-first, multi-model AI coding CLI</text>
+      </box>
       <Divider />
-      <Box marginTop={1}>
+      <box marginTop={1}>
         <CurrentStep />
-      </Box>
-      <Box position="absolute" marginTop={2}>
-        <Text color="#1a1e22">v2.4.6</Text>
-      </Box>
-    </Box>
+      </box>
+      <box position="absolute" marginTop={2}>
+        <text fg="#1a1e22">v2.4.6</text>
+      </box>
+    </box>
   );
 }
