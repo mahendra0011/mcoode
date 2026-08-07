@@ -19,6 +19,9 @@ import { usageRoutes } from './routes/usage.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { keyRoutes } from './routes/keys.js';
 import { workspaceRoutes } from './routes/workspaces.js';
+import { settingsRoutes } from './routes/settings.js';
+import { designRoutes } from './routes/design.js';
+import { githubAuthRoutes, githubApiRoutes } from './routes/github.js';
 
 export async function startServer({ port = 3100, env = process.env } = {}) {
   const secret = env.JWT_SECRET || 'mcode-dev-secret-change-me';
@@ -85,6 +88,10 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/uploads', uploadRoutes({ secret }));
   app.use('/api/v1/keys', keyRoutes({ secret }));
   app.use('/api/v1/workspaces', workspaceRoutes({ secret }));
+  app.use('/api/v1/settings', settingsRoutes({ secret }));
+  app.use('/api/v1/auth/github', githubAuthRoutes({ secret }));
+  app.use('/api/v1/github', githubApiRoutes({ secret }));
+  app.use('/api/v1/design', designRoutes({ secret }));
 
   // error handler — consistent { error: { code, message } } shape
   app.use((err, _req, res, _next) => {

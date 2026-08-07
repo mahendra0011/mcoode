@@ -4,22 +4,25 @@ import { execa } from 'execa';
 import { EVENTS } from '@mcode/shared';
 import { redactSecrets, isNetworkAllowed } from './security.js';
 import { scoreRisk, RISK_LEVELS } from './audit.js';
+import { BrowserTool } from './browser-tool.js';
 
 /**
  * Scoped toolset handed to subagents. Writes go through a snapshot +
  * diff-preview layer so `/undo` can revert any todo's changes.
  */
 export class ToolExecutor {
-  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null }) {
+  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, requireEditApproval = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null }) {
     this.projectPath = resolve(projectPath);
     this.bus = bus;
     this.undoStack = undoStack;
     this.allowShellAll = allowShellAll;
+    this.requireEditApproval = requireEditApproval;
     this.domain = domain;
     this.todoId = todoId;
     this.cancelSignal = cancelSignal;
     this.networkWhitelist = networkWhitelist;
     this.auditLog = auditLog;
+    this.browserTool = null; // lazily created
   }
 
   tools() {
@@ -36,6 +39,13 @@ export class ToolExecutor {
     };
     if (this.domain !== 'docs') {
       t.run_shell = { description: 'Run a shell command inside the project (npm install, build, etc.)', parameters: { command: 'string' } };
+      // Browser automation tools
+      t.browser_navigate = { description: 'Open a URL in a real browser to test the running app', parameters: { url: 'string' } };
+      t.browser_click = { description: 'Click an element by CSS selector or visible text', parameters: { selector: 'string?', text: 'string?' } };
+      t.browser_type = { description: 'Type text into an input field', parameters: { selector: 'string', value: 'string' } };
+      t.browser_screenshot = { description: 'Take a screenshot of the current page state', parameters: { fullPage: 'boolean?' } };
+      t.browser_snapshot = { description: 'Get the accessibility tree of the current page (cheaper than a screenshot)', parameters: {} };
+      t.browser_get_console_errors = { description: 'Check for JS errors logged in the browser console', parameters: {} };
     }
     return t;
   }
@@ -194,6 +204,12 @@ export class ToolExecutor {
       if (answer !== 'y' && answer !== 'always') {
         return { ok: false, error: `Overwrite denied by user for ${path}` };
       }
+    } else if (this.requireEditApproval) {
+      // New file — prompt for approval when review-before-write is enabled
+      const answer = await this._askOverwrite(path, null, true);
+      if (answer !== 'y' && answer !== 'always') {
+        return { ok: false, error: `Write denied by user for ${path}` };
+      }
     }
     await this.undoStack?.snapshot(path, prev);
     await writeFile(full, content, 'utf8');
@@ -219,6 +235,15 @@ export class ToolExecutor {
     if (!prev.includes(oldText)) {
       return { ok: false, error: `old text not found in ${path}` };
     }
+
+    // Prompt for approval when review-before-write is enabled
+    if (this.requireEditApproval) {
+      const answer = await this._askOverwrite(path, prev);
+      if (answer !== 'y' && answer !== 'always') {
+        return { ok: false, error: `Edit denied by user for ${path}` };
+      }
+    }
+
     const content = prev.replace(oldText, newText);
     await this.undoStack?.snapshot(path, prev);
     await writeFile(full, content, 'utf8');
@@ -301,14 +326,16 @@ export class ToolExecutor {
     }
   }
 
-  /** Ask the user for permission to overwrite an existing file.
-   *  Emits a permission message on the bus and waits for PERMISSION_ANSWER.
+  /** Ask the user for permission before writing/editing a file.
+   *  When `requireEditApproval` is enabled this runs for every write/edit;
+   *  otherwise it only runs for overwrites. Emits a permission message on the
+   *  bus and waits for PERMISSION_ANSWER.
    *  Returns 'y' | 'n' | 'always'. 'always' is cached for this executor. */
-  async _askOverwrite(path, prev) {
+  async _askOverwrite(path, prev, isNew = false) {
     if (!this.bus) return 'y';
     if (this._alwaysApprove) return 'always';
 
-    const lineCount = String(prev || '').split('\n').length;
+    const lineCount = prev === null ? 0 : String(prev || '').split('\n').length;
 
     return new Promise((resolve) => {
       const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -331,7 +358,9 @@ export class ToolExecutor {
         block: 'permission',
         requestId,
         status: 'running',
-        prompt: `Overwrite existing file: ${path} (${lineCount} lines)`,
+        prompt: isNew
+          ? `Create new file: ${path}`
+          : `Overwrite existing file: ${path} (${lineCount} lines)`,
         command: `write_file → ${path}`,
         detail: '',
       });
@@ -361,30 +390,82 @@ export class ToolExecutor {
         return { ok: false, error: 'destructive command blocked by sandbox (use --allow-shell-all to bypass)' };
       }
     }
-    const { stdout, stderr } = await execa(command, {
+    const child = execa(command, {
       cwd: this.projectPath,
       shell: true,
       timeout: 120_000,
       cancelSignal: this.cancelSignal || undefined,
-      env: { ...process.env, FORCE_COLOR: '0' }
+      env: { ...process.env, FORCE_COLOR: '1' }
     });
+    child.stdout?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
+    child.stderr?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
+    
+    const { stdout, stderr } = await child;
     return { ok: true, stdout: stdout.slice(0, 4000), stderr: stderr.slice(0, 2000) };
   }
 
   async run_tests({ file = '' }) {
     try {
       const args = ['test', '--', ...(file ? [file] : [])];
-      const { stdout, stderr } = await execa('npm', args, {
+      const child = execa('npm', args, {
         cwd: this.projectPath,
         timeout: 180_000,
         cancelSignal: this.cancelSignal || undefined,
-        env: { ...process.env, FORCE_COLOR: '0' },
+        env: { ...process.env, FORCE_COLOR: '1' },
         reject: false
       });
+      child.stdout?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
+      child.stderr?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
+      
+      const { stdout, stderr } = await child;
       const passed = !/FAIL|failed/i.test(stdout + stderr);
       return { ok: true, passed, output: (stdout + stderr).slice(-1500) };
     } catch (err) {
       return { ok: false, error: err.message };
+    }
+  }
+
+  /* ── Browser automation tools (Antigravity/Codex/Claude-in-Chrome pattern) ── */
+
+  _getBrowserTool() {
+    if (!this.browserTool) {
+      this.browserTool = new BrowserTool({
+        projectPath: this.projectPath,
+        bus: this.bus,
+      });
+    }
+    return this.browserTool;
+  }
+
+  async browser_navigate({ url }) {
+    return await this._getBrowserTool().browser_navigate({ url });
+  }
+
+  async browser_click({ selector, text }) {
+    return await this._getBrowserTool().browser_click({ selector, text });
+  }
+
+  async browser_type({ selector, value }) {
+    return await this._getBrowserTool().browser_type({ selector, value });
+  }
+
+  async browser_screenshot({ fullPage = false } = {}) {
+    return await this._getBrowserTool().browser_screenshot({ fullPage });
+  }
+
+  async browser_snapshot() {
+    return await this._getBrowserTool().browser_snapshot();
+  }
+
+  async browser_get_console_errors() {
+    return await this._getBrowserTool().browser_get_console_errors();
+  }
+
+  /** Clean up browser resources when the executor is done. */
+  async cleanupBrowser() {
+    if (this.browserTool) {
+      await this.browserTool.close();
+      this.browserTool = null;
     }
   }
 }

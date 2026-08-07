@@ -25,7 +25,7 @@ export class ChatSession {
     this.history = [];
     this.undoStack = null;
     this.initialized = false;
-    this.config = { chatAgentTurns: 15, allowShellAll: false };
+    this.config = { chatAgentTurns: 15, allowShellAll: false, requireEditApproval: false };
   }
 
   /** Load user's API keys, decrypt, initialize providers + router. */
@@ -59,6 +59,25 @@ export class ChatSession {
     this.providers = await getProviders({ secrets });
     this.router = new ModelRouter({ secrets, config: this.config, ledger: new CostLedger(), providers: this.providers });
 
+    // Load user settings from DB and apply
+    const userSettings = await db().userSettings.findOne({ userId: this.userId });
+    if (userSettings) {
+      this.config.allowShellAll = Boolean(userSettings.allowShellAll);
+      this.config.requireEditApproval = Boolean(userSettings.requireEditApproval);
+      if (userSettings.modelOverrides) {
+        this.router.userModelOverrides = userSettings.modelOverrides;
+      }
+      if (userSettings.networkWhitelist) {
+        this.config.networkWhitelist = userSettings.networkWhitelist;
+      }
+      if (userSettings.watchDefaults) {
+        this.config.watchDefaults = userSettings.watchDefaults;
+      }
+      if (userSettings.godModeDefaults) {
+        this.config.godModeDefaults = userSettings.godModeDefaults;
+      }
+    }
+
     // Set up the undo stack for file operations in this workspace
     const userDir = join(homedir(), '.mcode', 'workspaces', String(this.userId).slice(-12));
     await mkdir(userDir, { recursive: true });
@@ -89,6 +108,11 @@ export class ChatSession {
         this.onEvent(S2C.CHAT_PERMISSION, msg);
       }
     });
+
+    this.bus.on('SUBAGENT_SHELL_OUTPUT', (payload) => {
+      this.onEvent('chat:shell_stream', payload);
+    });
+
     return true;
   }
 
@@ -154,6 +178,17 @@ export class ChatSession {
     }
 
     const { ChatAgent } = await import('mcode-cli/chat-agent');
+    const { Planner } = await import('mcode-cli/planner');
+
+    let plan = null;
+    try {
+      const planner = new Planner({ router: this.router, bus: this.bus });
+      plan = await planner.plan(prompt, { repoContext: '' });
+      this.onEvent(S2C.CHAT_TODO_PLAN, { todos: plan.todos, summary: plan.summary });
+    } catch (e) {
+      console.error('Planner error:', e);
+      // continue without a plan if it fails
+    }
 
     const agent = new ChatAgent({
       assignment,
@@ -164,9 +199,35 @@ export class ChatSession {
       reasoning: this.router?.reasoning || null,
       history: this.history,
       onTool: ({ tool, args }) => {
-        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, status: 'running' });
+        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, status: 'running', timestamp: Date.now() });
       }
     });
+
+    // Listen to messages to update todo status
+    const updateTodos = (msg) => {
+      if (plan && plan.todos && msg.kind === 'tool' && msg.status === 'done' && (msg.tool === 'write_file' || msg.tool === 'edit_file')) {
+        const changedFile = msg.path;
+        if (!changedFile) return;
+
+        for (const todo of plan.todos) {
+          if (todo.status === 'done') continue;
+          
+          if (todo.files && todo.files.includes(changedFile)) {
+            if (!todo.completedFiles) todo.completedFiles = new Set();
+            todo.completedFiles.add(changedFile);
+            
+            if (todo.completedFiles.size >= todo.files.length) {
+              todo.status = 'done';
+              this.onEvent(S2C.CHAT_TODO_UPDATE, { id: todo.id, status: 'done' });
+            } else {
+              todo.status = 'in_progress';
+              this.onEvent(S2C.CHAT_TODO_UPDATE, { id: todo.id, status: 'in_progress' });
+            }
+          }
+        }
+      }
+    };
+    this.bus.on(EVENTS.MESSAGE, updateTodos);
 
     this.chatAgent = agent;
     try {
@@ -179,6 +240,7 @@ export class ChatSession {
         mode: 'agent'
       });
     } finally {
+      this.bus.off(EVENTS.MESSAGE, updateTodos);
       this.chatAgent = null;
     }
   }

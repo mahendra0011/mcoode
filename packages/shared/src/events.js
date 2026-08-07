@@ -80,6 +80,8 @@ export const SOCKET = Object.freeze({
     CHAT_MESSAGE: 'chat:message',
     CHAT_TOOL_CALL: 'chat:tool_call',
     CHAT_PERMISSION: 'chat:permission',
+    CHAT_TODO_PLAN: 'chat:todo_plan',
+    CHAT_TODO_UPDATE: 'chat:todo_update',
     CHAT_DONE: 'chat:done',
     CHAT_ERROR: 'chat:error'
   }

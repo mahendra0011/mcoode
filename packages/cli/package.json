@@ -10,7 +10,9 @@
     "./chat-agent": "./src/core/chat-agent.js",
     "./tools": "./src/core/tools.js",
     "./router": "./src/core/router.js",
-    "./providers": "./src/providers/index.js"
+    "./providers": "./src/providers/index.js",
+    "./planner": "./src/core/planner.js",
+    "./browser-tool": "./src/core/browser-tool.js"
   },
   "bin": {
     "mcode": "bin/mcode.mjs"
@@ -42,6 +44,7 @@
     "eslint": "^9.18.0",
     "execa": "^9.5.2",
     "gradient-string": "^3.0.0",
+    "playwright": "^1.62.1",
     "react": "^19.2.0",
     "simple-git": "^3.27.0",
     "socket.io-client": "^4.8.1"

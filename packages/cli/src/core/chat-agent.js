@@ -108,6 +108,7 @@ export class ChatAgent {
     this.history = history ? history.slice(-20) : [];
     this.maxTurns = Math.max(1, Number(config.chatAgentTurns) || 12);
     this.allowShellAll = Boolean(config.allowShellAll);
+    this.requireEditApproval = Boolean(config.requireEditApproval);
     this.networkWhitelist = config.networkWhitelist || null;
     this.auditLog = config.auditLog || null;
     this.requirePermission = config.requirePermission !== false;
@@ -189,6 +190,12 @@ export class ChatAgent {
   _toolArgsPreview(name, args) {
     if (name === 'read_file' || name === 'write_file' || name === 'run_tests') return String(args.path || args.file || '');
     if (name === 'run_shell') return String(args.command || '');
+    if (name.startsWith('browser_navigate')) return String(args.url || '');
+    if (name.startsWith('browser_click')) return args.text ? `text: "${args.text}"` : String(args.selector || '');
+    if (name.startsWith('browser_type')) return `${args.selector} → "${String(args.value || '').slice(0, 30)}"`;
+    if (name.startsWith('browser_screenshot')) return args.fullPage ? 'full page' : 'viewport';
+    if (name.startsWith('browser_snapshot')) return 'accessibility tree';
+    if (name.startsWith('browser_get_console_errors')) return 'console check';
     return JSON.stringify(args || {}).slice(0, 80);
   }
 
@@ -209,6 +216,12 @@ export class ChatAgent {
     if (name === 'edit_file') return `${result?.diff?.changedLines ?? result?.diffLines?.length ?? '?'} lines changed in ${result.file}`;
     if (name === 'web_search') return `${(result?.results || []).length} results`;
     if (name === 'web_fetch') return `${String(result?.content || '').length} chars fetched`;
+    if (name === 'browser_navigate') return `Opened ${result.url || ''} — "${result.title || ''}"`;
+    if (name === 'browser_click') return 'clicked';
+    if (name === 'browser_type') return 'typed';
+    if (name === 'browser_screenshot') return 'screenshot captured';
+    if (name === 'browser_snapshot') return (result.snapshot?.children || []).length + ' nodes in tree';
+    if (name === 'browser_get_console_errors') return `${(result.errors || []).length} console errors`;
     return 'ok';
   }
 
@@ -333,6 +346,51 @@ export class ChatAgent {
         output: String((result?.files || []).join('\n')).slice(0, 3000)
       };
     }
+    if (name === 'browser_navigate') {
+      return {
+        block: 'browser-nav', path: String(args.url || ''), lines: [], command: '', relDir: '',
+        title: `Navigate to ${result.url || args.url || ''}`,
+        output: result.title || '',
+        url: result.url
+      };
+    }
+    if (name === 'browser_click') {
+      const target = args.text ? `"${args.text}" (text)` : args.selector;
+      return {
+        block: 'browser-interact', path: '', lines: [], command: '', relDir: '',
+        title: 'Click', output: typeof target === 'string' ? target : ''
+      };
+    }
+    if (name === 'browser_type') {
+      return {
+        block: 'browser-interact', path: '', lines: [], command: '', relDir: '',
+        title: 'Type', output: typeof args.value === 'string' ? args.value.slice(0, 100) : ''
+      };
+    }
+    if (name === 'browser_screenshot') {
+      return {
+        block: 'browser-screenshot', path: '', lines: [], command: '', relDir: '',
+        title: args.fullPage ? 'Full-page screenshot' : 'Viewport screenshot',
+        output: '',
+        image: result.image || ''
+      };
+    }
+    if (name === 'browser_snapshot') {
+      return {
+        block: 'browser-inspect', path: '', lines: [], command: '', relDir: '',
+        title: 'Accessibility snapshot',
+        output: '',
+        snapshot: result.snapshot || null
+      };
+    }
+    if (name === 'browser_get_console_errors') {
+      return {
+        block: 'browser-console', path: '', lines: [], command: '', relDir: '',
+        title: 'Console errors',
+        output: (result.errors || []).map((e) => e.text).join('\n').slice(0, 2000),
+        errors: result.errors || []
+      };
+    }
     return {
       block: 'command', path: '', lines: [], command: '', relDir: '',
       title: String(name), output: String(this._toolResultSummary(name, result))
@@ -347,6 +405,7 @@ export class ChatAgent {
       bus: this.bus,
       undoStack: this.undoStack,
       allowShellAll: this.allowShellAll,
+      requireEditApproval: this.requireEditApproval,
       networkWhitelist: this.networkWhitelist,
       auditLog: this.auditLog,
       domain: 'backend',
@@ -477,6 +536,9 @@ export class ChatAgent {
         }))
       });
     }
+
+    // Clean up browser resources
+    try { await tools.cleanupBrowser(); } catch { /* ignore */ }
 
     const full = this.narration.join('\n\n') || '...';
     this.history = this.history.slice(-20);

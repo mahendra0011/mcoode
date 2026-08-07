@@ -45,6 +45,18 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       socket.join(`project:${projectId}`);
     });
 
+    // Authenticated users join their personal room for design generation streaming
+    if (socket.userId) {
+      socket.join(`user:${socket.userId}`);
+    }
+
+    // Design generation events (streaming)
+    socket.on('design:generate', (payload = {}) => {
+      // The actual generation is handled by the REST endpoint POST /api/v1/design/generate
+      // which emits 'design:stream' and 'design:done' to the user's room
+      // This socket event is kept for future use (e.g., canceling generation)
+    });
+
     // CLI → server events, broadcast to connected web clients.
     // (Room-based fan-out is optional; web clients don't always join rooms yet.)
     for (const event of ['session:start', 'plan:generated', 'agent:started', 'agent:step', 'agent:file', 'agent:done', 'agent:failed', 'agent:needs_review', 'integration:pass', 'build:complete', 'toast']) {
@@ -145,6 +157,20 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       if (session) session.handlePermissionAnswer(payload);
     });
 
+    socket.on('chat:undo', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      if (session && session.undoStack) {
+        try {
+          const revertedFile = await session.undoStack.undo();
+          socket.emit('chat:undo_result', { ok: true, file: revertedFile });
+        } catch (e) {
+          socket.emit('chat:undo_result', { ok: false, error: e.message });
+        }
+      } else {
+        socket.emit('chat:undo_result', { ok: false, error: 'no active session or undo stack' });
+      }
+    });
+
     socket.on('chat:interrupt', () => {
       const session = chatSessions.get(socket.id);
       if (session) session.interrupt();
@@ -158,6 +184,9 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
     });
   });
+
+  // Expose the io instance globally so route handlers can emit to rooms
+  globalThis.__mcodeIo = io;
 
   return io;
 }

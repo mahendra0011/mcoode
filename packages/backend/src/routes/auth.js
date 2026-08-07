@@ -158,6 +158,19 @@ export function authRoutes({ secret }) {
     }
   });
 
+  router.delete('/me', authMiddleware({ secret }), async (req, res, next) => {
+    try {
+      await db().user.deleteOne({ _id: req.userId });
+      if (db().session) await db().session.deleteOne({ userId: req.userId });
+      if (db().apiKey) await db().apiKey.deleteOne({ userId: req.userId });
+      if (db().userSettings) await db().userSettings.deleteOne({ userId: req.userId });
+      if (db().githubAccount) await db().githubAccount.deleteOne({ userId: req.userId });
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.patch('/me', authMiddleware({ secret }), async (req, res, next) => {
     try {
       const user = await db().user.findById(req.userId);

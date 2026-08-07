@@ -135,7 +135,10 @@ export function db() {
     otp: 'Otp',
     apiKey: 'ApiKey',
     workspace: 'Workspace',
-    chatMessage: 'ChatMessage'
+    chatMessage: 'ChatMessage',
+    githubAccount: 'GithubAccount',
+    userSettings: 'UserSettings',
+    design: 'Design'
   };
   const out = {};
   for (const [key, modelName] of Object.entries(registry)) {

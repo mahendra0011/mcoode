@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { LandingPage } from './pages/LandingPage';
 import { AILandingPage } from './pages/AILandingPage';
@@ -7,8 +7,35 @@ import { CLIPage } from './pages/CLIPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { SettingsPage } from './pages/SettingsPage';
+
+const THEMES = {
+  emerald: '#10b981',
+  blue: '#3b82f6',
+  purple: '#8b5cf6',
+  amber: '#f59e0b',
+  red: '#ef4444',
+  teal: '#14b8a6'
+};
 
 function App() {
+  useEffect(() => {
+    // Load global UI preferences
+    const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
+    if (tokens.access) {
+      fetch('/api/v1/settings', {
+        headers: { 'Authorization': `Bearer ${tokens.access}` }
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.settings?.accentColor && THEMES[d.settings.accentColor]) {
+          document.documentElement.style.setProperty('--theme-accent', THEMES[d.settings.accentColor]);
+        }
+      })
+      .catch(console.error);
+    }
+  }, []);
+
   return (
     <Router>
       <Routes>
@@ -19,6 +46,7 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Routes>
     </Router>
   );

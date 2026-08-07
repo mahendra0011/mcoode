@@ -88,6 +88,8 @@ export function keyRoutes({ secret }) {
       const providers = [];
       for (const adapter of adapters) {
         try {
+          if (adapter.kind === 'local') continue;
+          
           const ok = await adapter.isAvailable();
           if (!ok) continue;
           const models = await adapter.listModels();
