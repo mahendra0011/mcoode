@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { 
   Folder, Puzzle, Github, Crown, Settings, 
   ChevronDown, Plus, Sparkles, Wand2, ArrowUp,
-  Search, MessageSquare, ChevronRight, FileCode, FileJson, FileType2
+  Search, MessageSquare, ChevronRight, FileCode, FileJson, FileType2, Shield
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function AIChatPage() {
   const [isBuilding, setIsBuilding] = useState(false);
   const [prompt, setPrompt] = useState('');
+  const [activeTab, setActiveTab] = useState('AI code Agent');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -47,10 +48,25 @@ export function AIChatPage() {
         </div>
 
         {/* Segmented Control */}
-        <div className="flex items-center bg-[#121212] p-0.5 rounded-lg border border-white/5">
-          <button className="px-3 py-1 text-xs font-medium text-white/50 hover:text-white rounded-md transition">Preview</button>
-          <button className="px-3 py-1 text-xs font-medium text-white/50 hover:text-white rounded-md transition">Design</button>
-          <button className="px-3 py-1 text-xs bg-blue-500 text-white rounded-md shadow font-medium">Code</button>
+        <div className="flex items-center bg-[#121212] p-0.5 rounded-lg border border-white/5 relative">
+          <div 
+            className="absolute inset-y-0.5 bg-blue-500 rounded-md transition-all duration-300 ease-out shadow"
+            style={{
+              width: activeTab === 'Design' ? '64px' : activeTab === 'Chat' ? '56px' : '116px',
+              left: activeTab === 'Design' ? '2px' : activeTab === 'Chat' ? '66px' : '122px'
+            }}
+          />
+          {['Design', 'Chat', 'AI code Agent'].map((tab) => (
+            <button 
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${activeTab === tab ? 'text-white' : 'text-white/50 hover:text-white'}`}
+              style={{ width: tab === 'Design' ? '64px' : tab === 'Chat' ? '56px' : '116px' }}
+            >
+              {tab === 'AI code Agent' && <Sparkles className="w-3 h-3"/>}
+              {tab}
+            </button>
+          ))}
         </div>
 
         {/* Right Actions */}
@@ -134,8 +150,8 @@ export function AIChatPage() {
                 </div>
 
                 {/* Glowing Chat Input Wrapper */}
-                <form onSubmit={handleSubmit} className="w-full max-w-2xl relative rounded-[20px] group">
-                  <div className="absolute -inset-[1px] bg-gradient-to-b from-emerald-400 via-blue-500/50 to-transparent rounded-[21px] opacity-100"></div>
+                <form onSubmit={handleSubmit} className="w-full max-w-xl relative rounded-[20px] group">
+                  <div className="absolute -top-[4px] -left-[2px] -right-[2px] -bottom-[1px] bg-gradient-to-r from-blue-600 via-teal-400 to-emerald-600 rounded-[22px] opacity-100 blur-[2px]"></div>
                   <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
                   <div className="relative z-10 rounded-[20px] p-3 flex flex-col gap-3">
                     <textarea 
@@ -154,7 +170,10 @@ export function AIChatPage() {
                           <Sparkles className="w-4 h-4" />
                         </button>
                         <button type="button" className="px-3 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-2 text-white/70 transition text-xs font-medium border border-white/5">
-                          <Wand2 className="w-3.5 h-3.5" /> Builder
+                          <Wand2 className="w-3.5 h-3.5" /> Model
+                        </button>
+                        <button type="button" className="px-3 h-8 rounded-lg bg-[#eab308]/10 hover:bg-[#eab308]/20 flex items-center gap-2 text-[#eab308] transition text-xs font-medium border border-[#eab308]/30 shadow-[0_0_15px_rgba(234,179,8,0.15)]">
+                          <Settings className="w-3.5 h-3.5" /> Advanced Mode
                         </button>
                       </div>
                       <button type="submit" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition disabled:opacity-50" disabled={!prompt.trim()}>
@@ -163,6 +182,73 @@ export function AIChatPage() {
                     </div>
                   </div>
                 </form>
+
+              </div>
+            ) : activeTab === 'Chat' ? (
+              /* FULL SCREEN CHAT VIEW */
+              <div className="flex flex-col w-full h-full animate-in fade-in duration-500 relative bg-[#0e0e0e] z-10">
+                
+                {/* Chat History Area */}
+                <div className="flex-1 overflow-y-auto p-6 md:p-12 flex flex-col gap-6 custom-scrollbar">
+                  
+                  {/* User Message */}
+                  <div className="flex justify-end w-full max-w-4xl mx-auto">
+                    <div className="bg-[#27272a] text-white/90 px-5 py-3 rounded-2xl text-sm max-w-[80%] border border-white/5 shadow-sm">
+                      hii
+                    </div>
+                  </div>
+
+                  {/* AI Message */}
+                  <div className="w-full max-w-4xl mx-auto flex flex-col gap-3">
+                    <div className="text-xs text-white/40 font-medium">
+                      Working for 2 s
+                    </div>
+                    <div className="h-px w-full bg-white/5"></div>
+                    <div className="text-sm text-white/90 leading-relaxed mt-1">
+                      Hello! How can I help you today? Are you working on something I can assist with?
+                    </div>
+                    <div className="mt-2 animate-spin-slow w-4 h-4 text-white/30">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+                    </div>
+                  </div>
+                  
+                </div>
+
+                {/* Fixed Bottom Chat Input (Original glowing style) */}
+                <div className="p-6 md:pb-8 w-full max-w-4xl mx-auto flex justify-center">
+                  <form onSubmit={(e) => { e.preventDefault(); setPrompt(''); }} className="w-full max-w-xl relative rounded-[20px] group">
+                    <div className="absolute -top-[4px] -left-[2px] -right-[2px] -bottom-[1px] bg-gradient-to-r from-blue-600 via-teal-400 to-emerald-600 rounded-[22px] opacity-100 blur-[2px]"></div>
+                    <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
+                    <div className="relative z-10 rounded-[20px] p-3 flex flex-col gap-3">
+                      <textarea 
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="Ask a follow-up..." 
+                        className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-2 py-2 min-h-[60px] text-[15px]"
+                        onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) setPrompt(''); }}
+                      />
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <button type="button" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 hover:border-white/20">
+                            <Plus className="w-4 h-4" />
+                          </button>
+                          <button type="button" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 hover:border-white/20">
+                            <Sparkles className="w-4 h-4 text-blue-400" />
+                          </button>
+                          <button type="button" className="px-3 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-2 text-white/90 transition text-xs font-medium border border-white/10 hover:border-white/20 backdrop-blur-md">
+                            <Wand2 className="w-3.5 h-3.5 text-emerald-400" /> Model
+                          </button>
+                          <button type="button" className="px-3 h-8 rounded-lg bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 hover:from-[#eab308]/20 hover:to-[#f59e0b]/20 flex items-center gap-2 text-[#fcd34d] transition-all duration-300 text-xs font-medium border border-[#eab308]/40 hover:border-[#eab308]/60 shadow-[0_0_15px_rgba(234,179,8,0.2)] hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] backdrop-blur-md">
+                            <Settings className="w-3.5 h-3.5" /> Advanced Mode
+                          </button>
+                        </div>
+                        <button type="button" onClick={() => setPrompt('')} className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 hover:from-blue-400 hover:to-emerald-300 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:shadow-[0_0_20px_rgba(16,185,129,0.6)]">
+                          <ArrowUp className="w-4 h-4 text-white drop-shadow-md" />
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
 
               </div>
             ) : (
@@ -329,7 +415,10 @@ export function AIChatPage() {
                               <Sparkles className="w-3.5 h-3.5" />
                             </button>
                             <button type="button" className="px-2 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-1.5 text-white/70 transition text-[10px] font-medium border border-white/5 ml-1">
-                              <Wand2 className="w-3 h-3" /> Builder
+                              <Wand2 className="w-3 h-3" /> Model
+                            </button>
+                            <button type="button" className="px-2 h-7 rounded-lg bg-[#eab308]/10 hover:bg-[#eab308]/20 flex items-center gap-1.5 text-[#eab308] transition text-[10px] font-medium border border-[#eab308]/30 shadow-[0_0_10px_rgba(234,179,8,0.15)] ml-1">
+                              <Settings className="w-3 h-3" /> Advanced Mode
                             </button>
                           </div>
                           <button type="button" onClick={() => setPrompt('')} className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition">

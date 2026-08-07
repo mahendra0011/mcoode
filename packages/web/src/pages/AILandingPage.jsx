@@ -9,11 +9,14 @@ export function AILandingPage() {
     <div className="min-h-screen bg-white font-sans selection:bg-accent/20 overflow-hidden relative">
       <Header />
       
-      {/* Background Image - Exactly like screenshot (full cover, centered) */}
+      {/* Background Image - Exactly like screenshot */}
       <div 
-        className="absolute inset-0 bg-no-repeat bg-cover bg-center z-0"
+        className="absolute inset-0 bg-no-repeat z-0"
         style={{ 
           backgroundImage: `url(${robotBg})`,
+          backgroundPosition: 'center 40px',
+          backgroundSize: '100% auto',
+          backgroundColor: '#ffffff'
         }}
         aria-hidden="true"
       />
@@ -44,7 +47,7 @@ export function AILandingPage() {
                 to="/ai/chat" 
                 className="group flex items-center gap-2 text-white/90 hover:text-white font-medium text-[15px] transition-colors"
               >
-                Chat with AI <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                Chat with AI -&gt;
               </Link>
               
               <button 
