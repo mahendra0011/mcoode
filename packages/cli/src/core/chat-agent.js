@@ -86,7 +86,7 @@ export function stripActions(text) {
     .replace(TOOL_CALL_XML, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return out || String(text || '').trim();
+  return out;
 }
 
 /** Stream a turn from any provider: native stream when available, else complete(). */

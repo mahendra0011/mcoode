@@ -50,15 +50,15 @@ export class ToolExecutor {
 
   async run(name, args) {
     const start = Date.now();
-    const { riskLevel } = scoreRisk(name, args);
-    this.bus?.emit('SUBAGENT_TOOL_CALL', { tool: name, args: JSON.stringify(args).slice(0, 200), risk: riskLevel });
+    const { score, level } = scoreRisk(name, args);
+    this.bus?.emit('SUBAGENT_TOOL_CALL', { tool: name, args: JSON.stringify(args).slice(0, 200), risk: level });
 
     // High-risk operations always require permission, even in agent mode
-    if (riskLevel === RISK_LEVELS.CRITICAL && this.bus && this.bus.listenerCount) {
+    if (level === RISK_LEVELS.CRITICAL && this.bus && this.bus.listenerCount) {
       const approved = await this._askPermissionIfNeeded(name, args);
       if (!approved) {
         this.auditLog?.logPermission(name, 'denied', { reason: 'high risk', args });
-        return { ok: false, error: `permission denied: ${name} flagged as ${riskLevel}` };
+        return { ok: false, error: `permission denied: ${name} flagged as ${level}` };
       }
       this.auditLog?.logPermission(name, 'approved', { args });
     }
@@ -71,7 +71,7 @@ export class ToolExecutor {
     } catch (err) {
       result = { ok: false, error: err.message };
     }
-    this.bus?.emit('SUBAGENT_TOOL_RESULT', { tool: name, ms: Date.now() - start, risk: riskLevel, truncated: String(result).slice(0, 300) });
+    this.bus?.emit('SUBAGENT_TOOL_RESULT', { tool: name, ms: Date.now() - start, risk: level, truncated: String(result).slice(0, 300) });
     return result;
   }
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 // Works in both bundled (CJS, __dirname defined) and source (ESM) contexts.
 const TEMPLATE_DIR = typeof __dirname !== 'undefined'
   ? join(__dirname, '..', 'templates')
-  : fileURLToPath(new URL('../templates/', import.meta.url));
+  : fileURLToPath(new URL('../../templates/', import.meta.url));
 
 export const TEMPLATES = {
   express: {
