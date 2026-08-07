@@ -38,6 +38,10 @@ class MemoryModel {
     return doc ? structuredClone(doc) : null;
   }
 
+  async findByEmail(email) {
+    return await this.findOne({ email });
+  }
+
   async findOne(query = {}) {
     for (const doc of this.rows.values()) {
       if (matches(doc, query)) return structuredClone(doc);
@@ -128,7 +132,10 @@ export function db() {
     watchProject: 'WatchProject',
     watchActivity: 'WatchActivity',
     plugin: 'Plugin',
-    otp: 'Otp'
+    otp: 'Otp',
+    apiKey: 'ApiKey',
+    workspace: 'Workspace',
+    chatMessage: 'ChatMessage'
   };
   const out = {};
   for (const [key, modelName] of Object.entries(registry)) {

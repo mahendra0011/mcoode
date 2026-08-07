@@ -1,6 +1,11 @@
 import { Server } from 'socket.io';
 import { verifyToken } from './auth.js';
 import { db } from './db.js';
+import { SOCKET } from '@mcode/shared';
+import { ChatSession } from './chat-session.js';
+
+// Per-socket chat sessions (web clients only)
+const chatSessions = new Map();
 
 /**
  * Socket.IO server — clients connect with `{ path: '/live' }`, which maps to
@@ -74,7 +79,84 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       });
     }
 
-    socket.on('disconnect', () => {});
+    // ── Web Chat / Agent events (authenticated users only) ─────────
+    // These bridge the CLI's ChatAgent to web clients via Socket.IO.
+    // CLI agents emit events without a token (role='emitter') and don't use chat.
+
+    socket.on('chat:start', async (payload = {}) => {
+      // Only authenticated users can start chats
+      if (!socket.userId) {
+        socket.emit('chat:error', { message: 'authentication required for chat' });
+        return;
+      }
+
+      const { workspaceId, modelRef } = payload;
+
+      // Resolve workspace path
+      let workspacePath = null;
+      if (workspaceId) {
+        const ws = await db().workspace.findOne({ _id: workspaceId, userId: socket.userId });
+        if (ws) workspacePath = ws.diskPath;
+      }
+      // Fallback: user's home workspace dir (auto-created)
+      if (!workspacePath) {
+        const { join } = await import('node:path');
+        const { homedir } = await import('node:os');
+        const { mkdir } = await import('node:fs/promises');
+        workspacePath = join(homedir(), '.mcode', 'workspaces', 'default');
+        await mkdir(workspacePath, { recursive: true });
+      }
+
+      // Create or reuse chat session for this socket
+      let session = chatSessions.get(socket.id);
+      if (session) session.cleanup();
+
+      session = new ChatSession({
+        userId: socket.userId,
+        secret,
+        workspacePath,
+        onEvent: (event, payload) => socket.emit(event, payload)
+      });
+      chatSessions.set(socket.id, session);
+
+      const ok = await session.start();
+      if (ok) {
+        socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_READY, { models: session.providers?.map((p) => ({ id: p.id, displayName: p.displayName })) || [] });
+      }
+    });
+
+    socket.on('chat:send', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      if (!session) {
+        socket.emit('chat:error', { message: 'chat session not started — send chat:start first' });
+        return;
+      }
+      const { prompt, mode = 'chat' } = payload;
+      if (!prompt) return;
+      try {
+        await session.sendMessage(prompt, mode);
+      } catch (err) {
+        socket.emit('chat:error', { message: err.message });
+      }
+    });
+
+    socket.on('chat:permission_answer', (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      if (session) session.handlePermissionAnswer(payload);
+    });
+
+    socket.on('chat:interrupt', () => {
+      const session = chatSessions.get(socket.id);
+      if (session) session.interrupt();
+    });
+
+    socket.on('disconnect', () => {
+      const session = chatSessions.get(socket.id);
+      if (session) {
+        session.cleanup();
+        chatSessions.delete(socket.id);
+      }
+    });
   });
 
   return io;

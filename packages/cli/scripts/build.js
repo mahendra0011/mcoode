@@ -24,7 +24,7 @@ const common = {
   define: { 'process.env.MCCODE_BUNDLED': '"1"' },
   // some CJS deps (commander) use dynamic require() — shim it for ESM
   banner: {
-    js: `import { createRequire as __mcodeCreateRequire } from 'node:module';\nconst require = __mcodeCreateRequire(import.meta.url);`
+    js: `import { createRequire as __mcodeCreateRequire } from 'node:module';\nimport { fileURLToPath as __mcodeFileURLToPath } from 'node:url';\nconst require = __mcodeCreateRequire(import.meta.url);\nconst __dirname = __mcodeFileURLToPath(new URL('.', import.meta.url));`
   }
 };
 

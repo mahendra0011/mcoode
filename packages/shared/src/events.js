@@ -67,6 +67,20 @@ export const SOCKET = Object.freeze({
     TOAST: 'toast',
     WATCH_SCAN: 'watch:scan',
     WATCH_FIX: 'watch:fix',
-    WATCH_STATUS: 'watch:status'
+    WATCH_STATUS: 'watch:status',
+    // Web chat / agent events
+    CHAT_START: 'chat:start',
+    CHAT_SEND: 'chat:send',
+    CHAT_PERMISSION_ANSWER: 'chat:permission_answer',
+    CHAT_INTERRUPT: 'chat:interrupt'
+  },
+  SERVER_TO_CLIENT: {
+    CHAT_READY: 'chat:ready',
+    CHAT_STREAM: 'chat:stream',
+    CHAT_MESSAGE: 'chat:message',
+    CHAT_TOOL_CALL: 'chat:tool_call',
+    CHAT_PERMISSION: 'chat:permission',
+    CHAT_DONE: 'chat:done',
+    CHAT_ERROR: 'chat:error'
   }
 });

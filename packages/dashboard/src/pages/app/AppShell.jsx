@@ -8,6 +8,7 @@ import { TerminalSquare, LogOut } from 'lucide-react';
 
 const NAV = [
   ['/app', 'Sessions', true],
+  ['/app/chat', 'Chat', false],
   ['/app/agents', 'Agents', false],
   ['/app/watch', 'Watch', false],
   ['/app/usage', 'Usage', false],

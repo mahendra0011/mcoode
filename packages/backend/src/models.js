@@ -104,6 +104,46 @@ const otpSchema = new mongoose.Schema({
 });
 otpSchema.index({ email: 1, createdAt: -1 });
 
+/** Per-user provider API keys — AES-256-GCM encrypted at rest. */
+const apiKeySchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+  providerId: { type: String, required: true },
+  envVar: { type: String, required: true }, // e.g. OPENROUTER_API_KEY
+  displayName: String,
+  encryptedKey: { type: String, required: true },
+  keyIv: { type: String, required: true },
+  keyTag: { type: String, required: true },
+  keySalt: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+apiKeySchema.index({ userId: 1, providerId: 1 }, { unique: true });
+
+const workspaceSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+  name: { type: String, required: true },
+  diskPath: { type: String, required: true },
+  gitUrl: String,
+  branch: String,
+  status: { type: String, default: 'active' },
+  createdAt: { type: Date, default: Date.now }
+});
+workspaceSchema.index({ userId: 1, name: 1 }, { unique: true });
+
+/** Individual chat messages stored for session history. */
+const chatMessageSchema = new mongoose.Schema({
+  sessionId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+  role: { type: String, enum: ['system', 'user', 'assistant'], required: true },
+  content: String,
+  kind: String,
+  block: String,
+  tool: String,
+  file: String,
+  command: String,
+  output: String,
+  timestamp: { type: Date, default: Date.now }
+});
+chatMessageSchema.index({ sessionId: 1, timestamp: 1 });
+
 export const User = mongoose.model('User', userSchema);
 export const Session = mongoose.model('Session', sessionSchema);
 export const AgentTranscript = mongoose.model('AgentTranscript', transcriptSchema);
@@ -111,3 +151,6 @@ export const WatchProject = mongoose.model('WatchProject', watchProjectSchema);
 export const WatchActivity = mongoose.model('WatchActivity', watchActivitySchema);
 export const Plugin = mongoose.model('Plugin', pluginSchema);
 export const Otp = mongoose.model('Otp', otpSchema);
+export const ApiKey = mongoose.model('ApiKey', apiKeySchema);
+export const Workspace = mongoose.model('Workspace', workspaceSchema);
+export const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);

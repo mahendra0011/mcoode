@@ -1,11 +1,24 @@
 import { readdir, readFile, stat, writeFile, mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Works in both bundled (CJS, __dirname defined) and source (ESM) contexts.
-const TEMPLATE_DIR = typeof __dirname !== 'undefined'
-  ? join(__dirname, '..', 'templates')
-  : fileURLToPath(new URL('../../templates/', import.meta.url));
+let TEMPLATE_DIR;
+{
+  if (typeof __dirname !== 'undefined') {
+    // bundled: dist/templates/ (dist/ also contains the bundle itself)
+    TEMPLATE_DIR = existsSync(join(__dirname, 'templates'))
+      ? join(__dirname, 'templates')
+      : join(__dirname, '..', 'templates');
+  } else {
+    // source: packages/cli/templates/ relative to this file
+    const srcCandidate = fileURLToPath(new URL('../../templates/', import.meta.url));
+    TEMPLATE_DIR = existsSync(srcCandidate)
+      ? srcCandidate
+      : join(process.cwd(), 'packages', 'cli', 'templates');
+  }
+}
 
 export const TEMPLATES = {
   express: {

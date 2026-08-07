@@ -5,7 +5,12 @@
   "type": "module",
   "main": "dist/mcode.mjs",
   "exports": {
-    ".": "./dist/mcode.mjs"
+    ".": "./dist/mcode.mjs",
+    "./orchestrator": "./src/core/orchestrator.js",
+    "./chat-agent": "./src/core/chat-agent.js",
+    "./tools": "./src/core/tools.js",
+    "./router": "./src/core/router.js",
+    "./providers": "./src/providers/index.js"
   },
   "bin": {
     "mcode": "bin/mcode.mjs"

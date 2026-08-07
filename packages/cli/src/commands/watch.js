@@ -53,7 +53,7 @@ export async function watchCommand({ background = false, scanIntervalMs = null, 
   });
 
   // persist state for `watch-status` / `watch-stop` from other terminals
-  await persistState(statePath, daemon, process.pid);
+  await persistState(await statePath(cwd), daemon, process.pid);
 
   const shutdown = async () => {
     await daemon.stop();

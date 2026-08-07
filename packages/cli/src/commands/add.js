@@ -1,4 +1,4 @@
-import { ok, fail } from '../core/logger.js';
+import { ok, fail, table } from '../core/logger.js';
 import { loadConfig, saveConfig } from '../core/store.js';
 import { PLUGIN_REGISTRY, listPlugins } from '@mcode/shared';
 
@@ -18,5 +18,13 @@ export async function addCommand(plugin) {
 }
 
 export async function pluginsListCommand({ category } = {}) {
-  return listPlugins({ category });
+  const ready = listPlugins({ category });
+  if (ready.length === 0) {
+    fail('no plugins found in registry');
+    return [];
+  }
+  table(ready.map((p) => [p.name, p.category, p.desc]), {
+    columns: ['PLUGIN', 'CATEGORY', 'DESCRIPTION']
+  });
+  return ready;
 }

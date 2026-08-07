@@ -604,6 +604,6 @@ export async function getProviders({ secrets = {}, config = {} } = {}) {
   return candidates;
 }
 
-export async function getProviderById(providers, id) {
+export function getProviderById(providers, id) {
   return providers.find((p) => p.id === id) || null;
 }

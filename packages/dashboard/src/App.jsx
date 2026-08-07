@@ -12,6 +12,7 @@ import { Agents } from './pages/app/Agents.jsx';
 import { Watch } from './pages/app/Watch.jsx';
 import { Usage } from './pages/app/Usage.jsx';
 import { Settings } from './pages/app/Settings.jsx';
+import { ChatPage } from './pages/app/Chat.jsx';
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="watch" element={<Watch />} />
           <Route path="usage" element={<Usage />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="chat" element={<ChatPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -17,6 +17,8 @@ import { pluginRoutes } from './routes/plugins.js';
 import { watchRoutes } from './routes/watch.js';
 import { usageRoutes } from './routes/usage.js';
 import { uploadRoutes } from './routes/uploads.js';
+import { keyRoutes } from './routes/keys.js';
+import { workspaceRoutes } from './routes/workspaces.js';
 
 export async function startServer({ port = 3100, env = process.env } = {}) {
   const secret = env.JWT_SECRET || 'mcode-dev-secret-change-me';
@@ -81,6 +83,8 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/watch', watchRoutes({ secret }));
   app.use('/api/v1/usage', usageRoutes({ secret }));
   app.use('/api/v1/uploads', uploadRoutes({ secret }));
+  app.use('/api/v1/keys', keyRoutes({ secret }));
+  app.use('/api/v1/workspaces', workspaceRoutes({ secret }));
 
   // error handler — consistent { error: { code, message } } shape
   app.use((err, _req, res, _next) => {
