@@ -28,8 +28,12 @@ export function ModelSelector({ compact = false }) {
   const { models, selectedModel, keysError } = useSelector((state) => state.chat);
   const hasKeys = keys.length > 0;
 
+  // Fetch saved API keys (with auth token)
   useEffect(() => {
-    fetch('/api/v1/keys')
+    const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
+    fetch('/api/v1/keys', {
+      headers: { 'Authorization': `Bearer ${tokens.access || ''}` }
+    })
       .then((res) => res.ok ? res.json() : { keys: [] })
       .then((data) => setKeys(data.keys || []))
       .catch(() => setKeys([]));
@@ -104,9 +108,12 @@ export function ModelSelector({ compact = false }) {
     return acc;
   }, {});
 
-  const selectedLabel = selectedModel
-    ? models.find((m) => m.ref === selectedModel)?.name || selectedModel
-    : 'Choose model';
+  const selectedModelObj = selectedModel
+    ? models.find((m) => m.ref === selectedModel)
+    : null;
+  const selectedLabel = selectedModelObj
+    ? `${selectedModelObj.name} (${selectedModelObj.provider})`
+    : (selectedModel || 'Choose model');
 
   return (
     <>

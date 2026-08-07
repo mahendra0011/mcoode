@@ -1,0 +1,11 @@
+{
+  "id": "sub-004",
+  "name": "Bob Wilson",
+  "email": "bob.wilson@example.com",
+  "status": "active",
+  "created_at": "2024-01-18T11:45:00Z",
+  "preferences": {
+    "notifications": true,
+    "theme": "light"
+  }
+}

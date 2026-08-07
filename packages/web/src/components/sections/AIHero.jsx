@@ -23,8 +23,8 @@ export function AIHero() {
 
   return (
     <section ref={heroRef} className="flex flex-col relative" style={{ colorScheme: 'light' }}>
-      <div className="flex items-start justify-start px-6 pt-64 max-[850px]:pt-32 relative z-10 max-w-7xl mx-auto w-full">
-        <div className="flex flex-col items-start text-left max-w-xl max-[850px]:w-full">
+      <div className="flex items-start justify-center px-6 pt-64 max-[850px]:pt-32 relative z-10">
+        <div className="flex flex-col items-center max-[850px]:items-start text-center max-[850px]:text-left max-w-4xl max-[850px]:w-full">
           
           <div className="hero-element inline-flex items-center gap-1.5 pl-4 pr-3 py-1.5 rounded-xl border border-black/10 bg-[#E5F5E9] text-black text-sm font-medium mb-6">
             <Sparkles className="w-4 h-4 text-emerald-600" /> MCode AI Agent <span className="text-emerald-600">✦</span>
@@ -41,7 +41,7 @@ export function AIHero() {
             Meet your new pair programmer. Describe what you want to build, and watch MCode AI generate production-ready code, fix bugs, and refactor architecture instantly.
           </p>
           
-          <div className="hero-element flex flex-col sm:flex-row items-center justify-start gap-4 w-full">
+          <div className="hero-element flex flex-col sm:flex-row items-center justify-center gap-4 w-full">
             <Link to="/ai/chat" className="group relative cursor-pointer inline-flex items-center max-[850px]:w-full">
               <span className="absolute right-0 inset-y-0 w-[calc(100%-2rem)] max-[850px]:w-full rounded-xl bg-emerald-500"></span>
               <span className="relative z-10 px-6 py-3 rounded-xl bg-black text-white font-medium max-[850px]:flex-1 text-center">

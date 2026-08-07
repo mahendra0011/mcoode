@@ -311,14 +311,23 @@ export function StepCard({ msg, undo }) {
           <span className="text-[13px] font-medium text-white/90">{title}</span>
         </div>
         
-        <div className="flex items-center gap-3">
-          {durationStr && <span className="text-[11px] font-mono text-white/30">{durationStr}</span>}
-          {expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-white/30" />
-          ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-white/30" />
-          )}
-        </div>
+	        <div className="flex items-center gap-3">
+	          {/* Screenshot thumbnail when collapsed */}
+	          {!expanded && msg.tool === 'browser_screenshot' && msg.image && (
+	            <motion.div
+	              layoutId={`screenshot-thumb-${msg.id || ''}`}
+	              className="w-12 h-8 rounded overflow-hidden border border-white/5 bg-[#0a0a0a]"
+	            >
+	              <img src={msg.image} alt="screenshot" className="w-full h-full object-cover" />
+	            </motion.div>
+	          )}
+	          {durationStr && <span className="text-[11px] font-mono text-white/30">{durationStr}</span>}
+	          {expanded ? (
+	            <ChevronDown className="w-3.5 h-3.5 text-white/30" />
+	          ) : (
+	            <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+	          )}
+	        </div>
       </div>
 
       {/* Expanded Content */}
@@ -361,7 +370,8 @@ export function StepCard({ msg, undo }) {
               {/* Browser screenshot — inline image */}
               {msg.tool === 'browser_screenshot' && msg.image && (
                 <div className="mt-2 rounded-lg overflow-hidden border border-white/5 bg-[#0a0a0a]">
-                  <img
+                  <motion.img
+                    layoutId={`screenshot-thumb-${msg.id || ''}`}
                     src={msg.image}
                     alt="Browser screenshot"
                     className="w-full h-auto object-contain"

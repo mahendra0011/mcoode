@@ -8,14 +8,30 @@ export function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    setError('');
+    try {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email, password: form.password })
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error?.message || 'Login failed');
+      }
+      const data = await res.json();
+      localStorage.setItem('mcode_tokens', JSON.stringify({ access: data.access, refresh: data.refresh }));
+      navigate('/ai/chat');
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setLoading(false);
-      navigate('/');
-    }, 1000);
+    }
   };
 
   return (
@@ -53,6 +69,12 @@ export function LoginPage() {
 
           <form className="space-y-4" onSubmit={submit}>
             
+            {error && (
+              <div className="p-3 bg-red-100 border border-red-300 text-red-800 text-sm rounded-xl">
+                {error}
+              </div>
+            )}
+
             {/* Email Field */}
             <div>
               <input 

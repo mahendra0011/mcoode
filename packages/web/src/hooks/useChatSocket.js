@@ -62,7 +62,7 @@ export function useChatSocket(workspaceId = null) {
   // ── Fetch available models from the backend (GET /api/v1/keys/models) ──
   const reloadModels = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/keys/models');
+      const res = await fetch('/api/v1/keys/models', { headers: getAuthHeaders() });
       if (!res.ok) {
         if (res.status === 401) {
           dispatch(chatError({ kind: 'keys', message: 'please select your api keys to use mcode' }));
@@ -71,9 +71,8 @@ export function useChatSocket(workspaceId = null) {
       }
       const data = await res.json();
       dispatch(setModels(data.models || []));
-      if (data.models?.length && !data.hasKeys === false) {
-        dispatch(chatReady(data.models));
-      }
+      // setModels reducer now auto-defaults selectedModel if it's invalid
+      // (e.g. was set to a provider id by the socket chat:ready path).
     } catch (err) {
       console.error('Failed to load models:', err);
     }
@@ -82,7 +81,7 @@ export function useChatSocket(workspaceId = null) {
   // ── Fetch saved API keys (for the ModelSelector dropdown) ──
   const fetchKeys = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/keys');
+      const res = await fetch('/api/v1/keys', { headers: getAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         return data.keys || [];

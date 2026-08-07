@@ -26,9 +26,21 @@ const chatSlice = createSlice({
     },
     chatReady: (state, action) => {
       state.status = 'ready';
-      state.models = action.payload || [];
+      const payload = action.payload || [];
+      // The socket emits provider objects ({id, displayName}) while the REST
+      // API emits model objects ({ref, provider, name, ...}). Only overwrite
+      // the models array when the payload contains actual model objects
+      // (has a `ref` field) so we don't lose the model list that reloadModels
+      // fetched from REST.
+      const hasModels = payload.length > 0 && payload.some((m) => m.ref);
+      if (hasModels) {
+        state.models = payload;
+      }
       if (!state.selectedModel && state.models.length > 0) {
-        state.selectedModel = state.models[0].id;
+        // Prefer poolside models when available (user's explicit choice).
+        const poolSide = state.models.find((m) => m.provider === 'poolside');
+        const first = poolSide || state.models[0];
+        state.selectedModel = first.ref || first.id;
       }
       state.keysError = null;
     },
@@ -48,6 +60,22 @@ const chatSlice = createSlice({
     },
     setModels: (state, action) => {
       state.models = action.payload || [];
+      state.keysError = null;
+      // Validate the currently selected model against the new list. If it no
+      // longer matches any model's ref (e.g. it was set to a provider id by
+      // the socket chat:ready path), default to the first model's ref.
+      // Prefer poolside models when available (they're the user's explicit
+      // provider choice), otherwise fall back to the first model.
+      if (state.models.length > 0) {
+        const valid = state.models.some((m) => m.ref === state.selectedModel);
+        if (!valid) {
+          const poolSide = state.models.find((m) => m.provider === 'poolside');
+          const first = poolSide || state.models[0];
+          state.selectedModel = first.ref || first.id;
+        }
+      } else {
+        state.selectedModel = null;
+      }
     },
     addMessage: (state, action) => {
       state.messages.push(action.payload);

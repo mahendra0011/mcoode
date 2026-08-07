@@ -1,27 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, FileCode, FileJson, FileType2, File as FileIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronRight, ChevronDown, FileCode, FileJson, FileType2, FileText, Folder, File } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const getFileIcon = (name) => {
-  if (name.endsWith('.jsx') || name.endsWith('.tsx')) return <FileType2 className="w-4 h-4 text-cyan-400" />;
-  if (name.endsWith('.js') || name.endsWith('.ts')) return <FileCode className="w-4 h-4 text-blue-400" />;
-  if (name.endsWith('.json')) return <FileJson className="w-4 h-4 text-yellow-400" />;
-  if (name.endsWith('.html')) return <FileCode className="w-4 h-4 text-orange-400" />;
-  return <FileIcon className="w-4 h-4 text-white/50" />;
+  if (name.endsWith('.jsx') || name.endsWith('.tsx') || name.endsWith('.js') || name.endsWith('.ts')) return <FileCode className="w-3.5 h-3.5 text-blue-400" />;
+  if (name.endsWith('.json')) return <FileJson className="w-3.5 h-3.5 text-yellow-400" />;
+  if (name.endsWith('.md')) return <FileText className="w-3.5 h-3.5 text-emerald-400" />;
+  if (name.endsWith('.css') || name.endsWith('.html')) return <FileType2 className="w-3.5 h-3.5 text-orange-400" />;
+  return <File className="w-3.5 h-3.5 text-white/50" />;
 };
 
-const TreeNode = ({ node, level, onSelect, activePath }) => {
-  const [expanded, setExpanded] = useState(false);
-  const isFolder = node.children && Object.keys(node.children).length > 0;
-  
-  if (!isFolder) {
+const TreeNode = ({ node, level = 0, onSelectFile, activePath }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const isDir = !!node.children;
+
+  if (!isDir) {
     const isActive = activePath === node.path;
     return (
       <div 
-        onClick={() => onSelect(node.path)}
-        className={`flex items-center gap-2 py-1.5 px-2 rounded cursor-pointer ${isActive ? 'bg-white/10 text-white font-medium' : 'hover:bg-white/5'}`}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        className={`flex items-center gap-1.5 py-1 px-2 cursor-pointer transition select-none hover:bg-white/10 ${isActive ? 'bg-white/10 text-white' : 'text-white/70'}`}
+        style={{ paddingLeft: `${level * 12 + 16}px` }}
+        onClick={() => onSelectFile(node.path)}
       >
-        {getFileIcon(node.name)} {node.name}
+        {getFileIcon(node.name)}
+        <span className="text-[13px] truncate">{node.name}</span>
       </div>
     );
   }
@@ -29,69 +31,72 @@ const TreeNode = ({ node, level, onSelect, activePath }) => {
   return (
     <div>
       <div 
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 py-1.5 px-2 hover:bg-white/5 rounded cursor-pointer"
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        className="flex items-center gap-1 py-1 px-2 cursor-pointer text-white/80 hover:bg-white/5 transition select-none"
+        style={{ paddingLeft: `${level * 12 + 4}px` }}
+        onClick={() => setIsOpen(!isOpen)}
       >
-        {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        <Folder className={`w-4 h-4 ${expanded ? 'text-blue-400' : 'text-white/40'}`} fill="currentColor"/> {node.name}
+        <span className="text-white/40">
+          {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        </span>
+        <Folder className="w-3.5 h-3.5 text-blue-300" />
+        <span className="text-[13px]">{node.name}</span>
       </div>
-      {expanded && (
-        <div>
-          {Object.values(node.children).map((child) => (
-            <TreeNode key={child.name} node={child} level={level + 1} onSelect={onSelect} activePath={activePath} />
-          ))}
-        </div>
-      )}
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
+            {Object.values(node.children).sort((a, b) => {
+              if (!!a.children === !!b.children) return a.name.localeCompare(b.name);
+              return !!a.children ? -1 : 1; // folders first
+            }).map(child => (
+              <TreeNode key={child.path || child.name} node={child} level={level + 1} onSelectFile={onSelectFile} activePath={activePath} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
-export function FileTree({ workspaceId, onFileSelect, activePath, triggerRefresh }) {
-  const [tree, setTree] = useState({ name: 'root', children: {} });
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!workspaceId) return;
-    setLoading(true);
-    fetch(`/api/v1/workspaces/${workspaceId}/files`)
-      .then(res => res.json())
-      .then(data => {
-        if (!data.files) return;
-        
-        // Build nested tree from flat paths
-        const root = { name: 'root', children: {} };
-        data.files.forEach(file => {
-          const parts = file.path.split('/');
-          let curr = root;
-          for (let i = 0; i < parts.length; i++) {
-            const part = parts[i];
-            if (i === parts.length - 1) {
-              curr.children[part] = { name: part, path: file.path };
-            } else {
-              if (!curr.children[part]) curr.children[part] = { name: part, children: {} };
-              curr = curr.children[part];
-            }
-          }
-        });
-        setTree(root);
-      })
-      .finally(() => setLoading(false));
-  }, [workspaceId, triggerRefresh]);
-
-  if (!workspaceId) {
-    return <div className="p-4 text-sm text-white/50 text-center">No workspace selected</div>;
+export const FileTree = ({ files = [], onSelectFile, activePath }) => {
+  // Convert flat array [{path, name}] to nested tree
+  const tree = { name: 'root', children: {} };
+  
+  for (const file of files) {
+    const parts = file.path.split('/');
+    let current = tree;
+    
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (i === parts.length - 1) {
+        // file
+        if (!current.children) current.children = {};
+        current.children[part] = { name: part, path: file.path };
+      } else {
+        // folder
+        if (!current.children) current.children = {};
+        if (!current.children[part]) {
+          current.children[part] = { name: part, path: parts.slice(0, i + 1).join('/'), children: {} };
+        }
+        current = current.children[part];
+      }
+    }
   }
 
-  if (loading && Object.keys(tree.children).length === 0) {
-    return <div className="p-4 text-sm text-white/50 text-center">Loading files...</div>;
+  const rootNodes = Object.values(tree.children || {}).sort((a, b) => {
+    if (!!a.children === !!b.children) return a.name.localeCompare(b.name);
+    return !!a.children ? -1 : 1;
+  });
+
+  if (files.length === 0) {
+    return <div className="p-4 text-xs text-white/40 italic">No files in workspace. Upload a ZIP or Clone a repo to begin.</div>;
   }
 
   return (
-    <div className="p-2 overflow-y-auto custom-scrollbar text-sm text-white/70 h-full">
-      {Object.values(tree.children).map(child => (
-        <TreeNode key={child.name} node={child} level={0} onSelect={onFileSelect} activePath={activePath} />
+    <div className="flex flex-col py-2 overflow-y-auto custom-scrollbar h-full">
+      {rootNodes.map(node => (
+        <TreeNode key={node.path || node.name} node={node} onSelectFile={onSelectFile} activePath={activePath} />
       ))}
     </div>
   );
-}
+};

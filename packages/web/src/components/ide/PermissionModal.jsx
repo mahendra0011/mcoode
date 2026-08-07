@@ -1,11 +1,21 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AlertTriangle } from 'lucide-react';
 
 export function PermissionModal({ request, onAnswer }) {
-  if (!request || request.status !== 'running') return null;
+  const isVisible = request && request.status === 'running';
 
   return (
-    <div className="w-full bg-[#1e1a0a] border border-[#eab308]/30 rounded-xl p-4 shadow-lg mb-4">
+    <AnimatePresence>
+      {isVisible && (
+        <motion.div
+          initial={{ opacity: 0, y: -12, height: 0 }}
+          animate={{ opacity: 1, y: 0, height: 'auto' }}
+          exit={{ opacity: 0, y: -12, height: 0 }}
+          transition={{ duration: 0.25, ease: [0.32, 0.4, 0.2, 1] }}
+          className="w-full mb-4"
+        >
+          <div className="w-full bg-[#1e1a0a] border border-[#eab308]/30 rounded-xl p-4 shadow-lg">
       <div className="flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-[#eab308] flex-shrink-0 mt-0.5" />
         <div className="flex flex-col gap-3 w-full">
@@ -37,6 +47,9 @@ export function PermissionModal({ request, onAnswer }) {
           </div>
         </div>
       </div>
-    </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

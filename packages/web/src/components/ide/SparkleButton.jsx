@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Play, Pause } from 'lucide-react';
 
 const SUGGESTIONS = [
   'Build a React dashboard',
@@ -11,7 +11,7 @@ const SUGGESTIONS = [
   'Add dark mode support',
 ];
 
-export function SparkleButton({ setPrompt }) {
+export function SparkleButton({ setPrompt, advancedMode, watchMode, onToggleWatch }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -62,6 +62,19 @@ export function SparkleButton({ setPrompt }) {
                 {s}
               </motion.button>
             ))}
+            {advancedMode && (
+              <motion.button
+                key="watch"
+                onClick={() => { onToggleWatch?.(); setOpen(false); }}
+                className="w-full text-left text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-3 py-2 rounded-lg transition flex items-center gap-2"
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: SUGGESTIONS.length * 0.03 }}
+              >
+                {watchMode ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                {watchMode ? 'Stop watching' : 'Watch this project'}
+              </motion.button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

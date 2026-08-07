@@ -1,0 +1,11 @@
+{
+  "id": "sub-003",
+  "name": "Alice Johnson",
+  "email": "alice.johnson@example.com",
+  "status": "active",
+  "created_at": "2024-01-17T09:15:00Z",
+  "preferences": {
+    "notifications": true,
+    "theme": "dark"
+  }
+}

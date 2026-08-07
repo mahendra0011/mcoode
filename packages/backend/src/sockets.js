@@ -103,6 +103,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
 
       const { workspaceId, modelRef } = payload;
+      console.error('[DEBUG chat:start] modelRef:', JSON.stringify(modelRef), 'userId:', socket.userId);
 
       // Resolve workspace path
       let workspacePath = null;
@@ -127,6 +128,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         userId: socket.userId,
         secret,
         workspacePath,
+        modelRef,
         onEvent: (event, payload) => socket.emit(event, payload)
       });
       chatSessions.set(socket.id, session);

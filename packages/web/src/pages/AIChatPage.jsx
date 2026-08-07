@@ -3,8 +3,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import { 
   Folder, Puzzle, Github, Crown, Settings, 
   ChevronDown, Plus, Sparkles, ArrowUp, Square,
-  UploadCloud, Download, GitBranch, Share, Loader2
+  UploadCloud, Download, GitBranch, Share, Loader2, Slash
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useChatSocket } from '../hooks/useChatSocket';
 import { setMode } from '../store/chatSlice';
@@ -34,14 +35,51 @@ export function AIChatPage() {
   const { send, interrupt, answerPermission, undo, reloadModels } = useChatSocket(activeWorkspaceId);
   const [openFiles, setOpenFiles] = useState([]);
   const [activePath, setActivePath] = useState(null);
-  const [prompt, setPrompt] = useState('');
-  
-  const [isModalsOpen, setIsModalsOpen] = useState(false);
-  const [githubAccount, setGithubAccount] = useState(null);
-  const [triggerRefresh, setTriggerRefresh] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
+	const [prompt, setPrompt] = useState('');
 
-  const handleAttachFiles = async (e) => {
+	// Auth guard — redirect to /login if no token
+	const getTokens = () => {
+		try {
+			// Check URL params first (for dev/testing token injection)
+			const params = new URLSearchParams(window.location.search);
+			const accessParam = params.get('access');
+			const refreshParam = params.get('refresh');
+			if (accessParam && refreshParam) {
+				const tokens = { access: accessParam, refresh: refreshParam };
+				localStorage.setItem('mcode_tokens', JSON.stringify(tokens));
+				return tokens;
+			}
+			return JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
+		} catch {
+			return {};
+		}
+	};
+	const { access: token } = getTokens();
+
+	const [isModalsOpen, setIsModalsOpen] = useState(false);
+	const [githubAccount, setGithubAccount] = useState(null);
+	const [triggerRefresh, setTriggerRefresh] = useState(0);
+	const [isUploading, setIsUploading] = useState(false);
+	const [watchMode, setWatchMode] = useState(false);
+
+	const toggleWatchMode = () => setWatchMode(!watchMode);
+
+	// Auth guard
+	useEffect(() => {
+		if (!token) {
+			window.location.href = '/login';
+		}
+	}, [token]);
+
+	// Toggle Advanced Mode — stays in Chat tab, just flips the engine mode.
+	// Advanced Mode ON = full CLI power (step cards, action bar, all tools).
+	// AI Code Agent tab = same power, IDE layout (switched via tab buttons, not this toggle).
+	// Per the master spec: "The only difference is the UI layout/skin."
+	const toggleAdvancedMode = () => {
+		dispatch(setMode(mode !== 'agent' ? 'agent' : 'chat'));
+	};
+
+	const handleAttachFiles = async (e) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !activeWorkspaceId) return;
 
@@ -320,14 +358,51 @@ export function AIChatPage() {
                   <button className="px-5 py-2.5 rounded-full border border-white/10 bg-transparent hover:bg-white/5 text-sm font-medium text-white transition" onClick={() => setPrompt('Build a mobile app')}>Build a mobile app</button>
                   <button className="px-5 py-2.5 rounded-full border border-white/10 bg-transparent hover:bg-white/5 text-sm font-medium text-white transition" onClick={() => setPrompt('Design a dashboard')}>Design a dashboard</button>
                 </div>
-                {keysError && (
-                  <div className="w-full max-w-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium px-4 py-2 rounded-lg mb-4 text-center">
-                    {keysError}
-                  </div>
+                <AnimatePresence>
+                  {keysError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      className="w-full max-w-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium px-4 py-2 rounded-lg mb-4 text-center"
+                    >
+                      {keysError}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                {/* Action Bar (Advanced Mode) */}
+                {mode === 'agent' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, delay: 0.1 }}
+                    className="flex items-center justify-center gap-1 mb-4 px-4 py-2 bg-[#121212] rounded-xl border border-white/5"
+                  >
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || !activeWorkspaceId} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Upload Project">
+                      {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5"/>}
+                      Upload
+                    </button>
+                    <button type="button" onClick={handleExport} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Export ZIP">
+                      <Download className="w-3.5 h-3.5"/> Export
+                    </button>
+                    <button type="button" onClick={handlePush} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git">
+                      <Share className="w-3.5 h-3.5"/> Push
+                    </button>
+                    <div className="w-px h-5 bg-white/10 mx-1"></div>
+                    <button type="button" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 transition" title="Branch">
+                      <GitBranch className="w-3.5 h-3.5"/> main <ChevronDown className="w-3 h-3"/>
+                    </button>
+                    <button type="button" onClick={handleGithubConnect} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'}>
+                      {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
+                      GitHub
+                    </button>
+                  </motion.div>
                 )}
                 {/* Chat Input */}
                 <form onSubmit={handleSubmit} className="w-full max-w-xl relative rounded-[20px] group">
-                  <div className="absolute -top-[4px] -left-[2px] -right-[2px] -bottom-[1px] bg-gradient-to-r from-blue-600 via-teal-400 to-emerald-600 rounded-[22px] opacity-100 blur-[2px]"></div>
+                  <div className="absolute -inset-[2px] rounded-[22px] overflow-hidden z-0">
+                    <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_70%,#10b981,#3b82f6)] opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
+                  </div>
                   <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
                   <div className="relative z-10 rounded-[20px] p-3 flex flex-col gap-3">
                     <textarea 
@@ -343,20 +418,45 @@ export function AIChatPage() {
                           {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                         </button>
                         <ModelSelector />
-                        <button type="button" onClick={() => dispatch(setMode(mode === 'agent' ? 'chat' : 'agent'))} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                        <button type="button" onClick={toggleAdvancedMode} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
                           <Settings className="w-3.5 h-3.5" /> Advanced Mode
                         </button>
-                        <SparkleButton setPrompt={setPrompt} />
+                        <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
+                        {mode === 'agent' && (
+                          <button type="button" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
+                            <Slash className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
-                      {isStreaming ? (
-                        <button type="button" onClick={interrupt} className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center transition-all border border-red-500/50">
-                          <Square className="w-3 h-3 text-red-400 fill-current" />
-                        </button>
-                      ) : (
-                        <button type="submit" className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" disabled={!prompt.trim()}>
-                          <ArrowUp className="w-4 h-4 drop-shadow-md" />
-                        </button>
-                      )}
+                      <AnimatePresence mode="wait">
+                        {isStreaming ? (
+                          <motion.button 
+                            key="stop-btn"
+                            type="button" 
+                            onClick={interrupt} 
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center transition-all border border-red-500/50"
+                          >
+                            <Square className="w-3 h-3 text-red-400 fill-current" />
+                          </motion.button>
+                        ) : (
+                          <motion.button 
+                            key="send-btn"
+                            type="submit" 
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
+                            disabled={!prompt.trim()}
+                          >
+                            <ArrowUp className="w-4 h-4 drop-shadow-md" />
+                          </motion.button>
+                        )}
+                      </AnimatePresence>
                     </div>
                   </div>
                 </form>
@@ -365,6 +465,16 @@ export function AIChatPage() {
               /* FULL SCREEN CHAT VIEW */
               <div className="flex flex-col w-full h-full animate-in fade-in duration-500 relative bg-[#0e0e0e] z-10">
                 <div className="flex-1 overflow-y-auto p-6 md:p-12 flex flex-col gap-6 custom-scrollbar">
+                  {keysError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      className="w-full max-w-4xl mx-auto bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium px-4 py-2 rounded-lg text-center"
+                    >
+                      {keysError}
+                    </motion.div>
+                  )}
                   <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
                     <TodoCard plan={plan} />
                     <PermissionModal request={permissionRequest} onAnswer={answerPermission} />
@@ -379,30 +489,52 @@ export function AIChatPage() {
                     ) : (
                       <div key={msg.id || idx} className="w-full max-w-4xl mx-auto flex flex-col gap-3">
                         {msg.text && (
-                          <>
-                            <div className="text-xs text-white/40 font-medium flex items-center gap-2">
-                              MCode AI
-                              {msg.kind === 'stream' && isStreaming && idx === messages.length - 1 && (
-                                <div className="animate-spin-slow w-3 h-3 text-white/50">
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
-                                </div>
-                              )}
-                            </div>
-                            <div className="h-px w-full bg-white/5"></div>
-                            <div className="text-sm text-white/90 leading-relaxed mt-1 whitespace-pre-wrap">
-                              {msg.text}
-                            </div>
-                          </>
+                          <div className="text-[15px] text-white/90 leading-relaxed whitespace-pre-wrap font-sans">
+                            {msg.text}
+                            {msg.kind === 'stream' && isStreaming && idx === messages.length - 1 && (
+                              <span className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse align-middle"></span>
+                            )}
+                          </div>
                         )}
                         {msg.kind === 'tool' && <StepCard msg={msg} undo={undo} />}
                       </div>
                     )
                   ))}
                 </div>
+                {/* Action Bar (Advanced Mode) */}
+                {mode === 'agent' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, delay: 0.1 }}
+                    className="w-full max-w-4xl mx-auto px-6 flex items-center gap-1 mb-2"
+                  >
+                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || !activeWorkspaceId} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Upload Project">
+                      {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5"/>}
+                      Upload
+                    </button>
+                    <button type="button" onClick={handleExport} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Export ZIP">
+                      <Download className="w-3.5 h-3.5"/> Export
+                    </button>
+                    <button type="button" onClick={handlePush} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git">
+                      <Share className="w-3.5 h-3.5"/> Push
+                    </button>
+                    <div className="w-px h-5 bg-white/10 mx-1"></div>
+                    <button type="button" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 transition" title="Branch">
+                      <GitBranch className="w-3.5 h-3.5"/> main <ChevronDown className="w-3 h-3"/>
+                    </button>
+                    <button type="button" onClick={handleGithubConnect} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'}>
+                      {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
+                      GitHub
+                    </button>
+                  </motion.div>
+                )}
                 {/* Chat Input Bottom */}
                 <div className="p-6 md:pb-8 w-full max-w-4xl mx-auto flex flex-col items-center">
                   <form onSubmit={handleSubmit} className="w-full max-w-xl relative rounded-[20px] group">
-                    <div className="absolute -top-[4px] -left-[2px] -right-[2px] -bottom-[1px] bg-gradient-to-r from-blue-600 via-teal-400 to-emerald-600 rounded-[22px] opacity-100 blur-[2px]"></div>
+                    <div className="absolute -inset-[2px] rounded-[22px] overflow-hidden z-0">
+                      <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_70%,#10b981,#3b82f6)] opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
+                    </div>
                     <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
                     <div className="relative z-10 rounded-[20px] p-3 flex flex-col gap-3">
                       <textarea 
@@ -417,21 +549,45 @@ export function AIChatPage() {
                           <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || !activeWorkspaceId} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
                             {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                           </button>
-                          <ModelSelector />
-                           <button type="button" onClick={() => dispatch(setMode(mode === 'agent' ? 'chat' : 'agent'))} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                          <button type="button" onClick={toggleAdvancedMode} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
                             <Settings className="w-3.5 h-3.5" /> Advanced Mode
                           </button>
-                          <SparkleButton setPrompt={setPrompt} />
+                          <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
+                          {mode === 'agent' && (
+                            <button type="button" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
+                              <Slash className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        {isStreaming ? (
-                          <button type="button" onClick={interrupt} className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center transition-all border border-red-500/50">
-                            <Square className="w-3 h-3 text-red-400 fill-current" />
-                          </button>
-                        ) : (
-                          <button type="submit" className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" disabled={!prompt.trim()}>
-                            <ArrowUp className="w-4 h-4 drop-shadow-md" />
-                          </button>
-                        )}
+                        <AnimatePresence mode="wait">
+                          {isStreaming ? (
+                            <motion.button 
+                              key="stop-btn"
+                              type="button" 
+                              onClick={interrupt} 
+                              initial={{ scale: 0.9, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0.9, opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center transition-all border border-red-500/50"
+                            >
+                              <Square className="w-3 h-3 text-red-400 fill-current" />
+                            </motion.button>
+                          ) : (
+                            <motion.button 
+                              key="send-btn"
+                              type="submit" 
+                              initial={{ scale: 0.9, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0.9, opacity: 0 }}
+                              transition={{ duration: 0.15 }}
+                              className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
+                              disabled={!prompt.trim()}
+                            >
+                              <ArrowUp className="w-4 h-4 drop-shadow-md" />
+                            </motion.button>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   </form>
@@ -455,6 +611,9 @@ export function AIChatPage() {
                    </button>
                    <button className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20 transition">
                      <GitBranch className="w-3.5 h-3.5"/> main <ChevronDown className="w-3 h-3"/>
+                   </button>
+                   <button onClick={handleGithubConnect} className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 px-2 py-1 rounded bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'}>
+                     {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
                    </button>
                 </div>
 
@@ -495,14 +654,17 @@ export function AIChatPage() {
                     {messages.map((msg, idx) => (
                       <div key={idx} className={`w-full flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start gap-3'}`}>
                         {msg.role === 'user' ? (
-                          <div className="bg-[#27272a] text-white/90 px-4 py-2.5 rounded-2xl text-sm max-w-[90%] border border-white/5 shadow-sm">
+                          <div className="bg-[#27272a] text-white/90 px-4 py-2.5 rounded-xl text-[13px] max-w-[90%] border border-white/5 shadow-sm">
                             {msg.text}
                           </div>
                         ) : (
                           <>
                             {msg.text && (
-                              <div className="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">
+                              <div className="text-[13px] text-white/90 leading-relaxed whitespace-pre-wrap">
                                 {msg.text}
+                                {msg.kind === 'stream' && isStreaming && idx === messages.length - 1 && (
+                                  <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-400 animate-pulse align-middle"></span>
+                                )}
                               </div>
                             )}
                             {msg.kind === 'tool' && <StepCard msg={msg} undo={undo} />}
@@ -515,7 +677,9 @@ export function AIChatPage() {
                   {/* Inline Chat Input */}
                   <div className="p-4 border-t border-white/5 bg-[#0c0c0c]">
                     <form onSubmit={handleSubmit} className="w-full relative rounded-[20px] group">
-                      <div className="absolute -inset-[1px] bg-gradient-to-b from-emerald-400 via-blue-500/50 to-transparent rounded-[21px] opacity-100"></div>
+                      <div className="absolute -inset-[1.5px] rounded-[21px] overflow-hidden z-0">
+                        <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_70%,#10b981,#3b82f6)] opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
+                      </div>
                       <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
                       <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2">
                         <textarea 
@@ -531,19 +695,36 @@ export function AIChatPage() {
                               {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                             </button>
                             <ModelSelector compact />
-                            <button type="button" onClick={() => dispatch(setMode(mode === 'agent' ? 'chat' : 'agent'))} className={`px-2 h-7 rounded-lg flex items-center gap-1.5 transition text-[10px] font-medium border ml-1 ${mode === 'agent' ? 'bg-[#eab308]/10 text-[#eab308] border-[#eab308]/30' : 'bg-white/5 text-white/50 border-white/5'}`}>
-                              <Settings className="w-3 h-3" /> Agent
-                            </button>
                           </div>
-                          {isStreaming ? (
-                            <button type="button" onClick={interrupt} className="w-7 h-7 rounded-full bg-red-500/20 flex items-center justify-center transition-all border border-red-500/50">
-                              <Square className="w-3 h-3 text-red-400 fill-current" />
-                            </button>
-                          ) : (
-                            <button type="submit" className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition disabled:opacity-50" disabled={!prompt.trim()}>
-                              <ArrowUp className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <AnimatePresence mode="wait">
+                            {isStreaming ? (
+                              <motion.button 
+                                key="stop-btn"
+                                type="button" 
+                                onClick={interrupt} 
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="w-7 h-7 rounded-full bg-red-500/20 flex items-center justify-center transition-all border border-red-500/50"
+                              >
+                                <Square className="w-3 h-3 text-red-400 fill-current" />
+                              </motion.button>
+                            ) : (
+                              <motion.button 
+                                key="send-btn"
+                                type="submit" 
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ duration: 0.15 }}
+                                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition disabled:opacity-50" 
+                                disabled={!prompt.trim()}
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </motion.button>
+                            )}
+                          </AnimatePresence>
                         </div>
                       </div>
                     </form>
@@ -563,25 +744,6 @@ export function AIChatPage() {
         onCloneGit={handleCloneGit} 
       />
 
-      <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.2);
-        }
-        .animate-spin-slow {
-          animation: spin 3s linear infinite;
-        }
-      `}} />
     </div>
   );
 }

@@ -1,0 +1,7 @@
+{
+  "id": "todo-03",
+  "title": "Complete data processing task",
+  "description": "Process all subscriber data files",
+  "status": "in-progress",
+  "priority": "high"
+}

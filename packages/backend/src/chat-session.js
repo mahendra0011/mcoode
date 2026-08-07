@@ -13,10 +13,11 @@ const S2C = SOCKET.SERVER_TO_CLIENT;
  * and provider adapters directly — no logic is reimplemented.
  */
 export class ChatSession {
-  constructor({ userId, secret, workspacePath, onEvent = () => {} } = {}) {
+  constructor({ userId, secret, workspacePath, modelRef = null, onEvent = () => {} } = {}) {
     this.userId = userId;
     this.secret = secret;
     this.workspacePath = workspacePath;
+    this.modelRef = modelRef; // user-selected model ref (e.g. "poolside:poolside/laguna-s-2.1")
     this.onEvent = onEvent; // (event, payload) => forwards to socket client
     this.bus = null;       // EventEmitter — passed to ChatAgent as its `bus`
     this.providers = null;
@@ -58,6 +59,18 @@ export class ChatSession {
 
     this.providers = await getProviders({ secrets });
     this.router = new ModelRouter({ secrets, config: this.config, ledger: new CostLedger(), providers: this.providers });
+
+    // Apply the user-selected model ref from the frontend as a router override.
+    // If modelRef is a provider id (e.g. "poolside"), router.find() falls back
+    // to the first model from that provider. If it's a full ref
+    // (e.g. "poolside:poolside/laguna-s-2.1"), it resolves exactly.
+    console.error('[DEBUG init] modelRef:', JSON.stringify(this.modelRef));
+    console.error('[DEBUG init] secrets keys:', Object.keys(secrets));
+    console.error('[DEBUG init] provider ids:', this.providers.map(p => `${p.id} (apiKey=${!!p.apiKey}, kind=${p.kind})`));
+    if (this.modelRef) {
+      this.router.modelOverride = this.modelRef;
+      console.error('[DEBUG init] modelOverride set to:', JSON.stringify(this.router.modelOverride));
+    }
 
     // Load user settings from DB and apply
     const userSettings = await db().userSettings.findOne({ userId: this.userId });
@@ -130,41 +143,56 @@ export class ChatSession {
     }
   }
 
-  /** Plain LLM chat (no tools) — mirrors Orchestrator.chat() non-agent path. */
+  /** Plain LLM chat with limited tools (read/search only) — no writes, no shell. */
   async runChat(prompt) {
     const assignment = (this.router.modelOverride && await this.router.find(this.router.modelOverride))
       || await this.router.pick('general');
+
+    console.error('[DEBUG runChat] modelOverride:', JSON.stringify(this.router.modelOverride));
+    console.error('[DEBUG runChat] find() result:', assignment ? `${assignment.provider.id}:${assignment.model.id}` : 'null');
+    console.error('[DEBUG runChat] assignment:', JSON.stringify(assignment));
 
     if (!assignment) {
       this.onEvent(S2C.CHAT_ERROR, { message: 'no model available for chat' });
       return;
     }
 
-    const messages = [
-      { role: 'system', content: 'You are mcode, a coding assistant. Be concise and technical.' },
-      ...this.history,
-      { role: 'user', content: prompt }
-    ];
-    this.history.push({ role: 'user', content: prompt });
-    this.history = this.history.slice(-20);
+    const { ChatAgent } = await import('mcode-cli/chat-agent');
 
-    this.onEvent(S2C.CHAT_TOOL_CALL, { tool: 'llm', args: { model: assignment.ref }, status: 'running' });
+    // Create a strict read-only config for normal chat
+    const chatConfig = {
+      ...this.config,
+      allowShellAll: false,
+      requireEditApproval: true,
+      domain: 'chat' // This will be passed to ToolExecutor to restrict tools
+    };
 
-    const stream = assignment.provider.stream(assignment.model.id, {
-      messages,
-      temperature: 0.3,
-      reasoning: this.router?.reasoning || null
+    const agent = new ChatAgent({
+      assignment,
+      projectPath: this.workspacePath,
+      bus: this.bus,
+      undoStack: this.undoStack,
+      config: chatConfig,
+      reasoning: this.router?.reasoning || null,
+      history: this.history,
+      onTool: ({ tool, args }) => {
+        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, status: 'running', timestamp: Date.now() });
+      }
     });
 
-    let full = '';
-    for await (const chunk of stream) {
-      full += chunk;
-      this.onEvent(S2C.CHAT_STREAM, { text: full });
+    this.chatAgent = agent;
+    try {
+      const out = await agent.run(prompt);
+      this.history = out.history;
+      this.onEvent(S2C.CHAT_DONE, {
+        text: out.text,
+        turns: out.turns,
+        interrupted: Boolean(out.interrupted),
+        mode: 'chat'
+      });
+    } finally {
+      this.chatAgent = null;
     }
-
-    this.history.push({ role: 'assistant', content: full });
-    this.history = this.history.slice(-20);
-    this.onEvent(S2C.CHAT_DONE, { text: full, interrupted: false, mode: 'chat' });
   }
 
   /** Full agent mode — uses ChatAgent with tools (read/write/edit/shell/search/git/test). */

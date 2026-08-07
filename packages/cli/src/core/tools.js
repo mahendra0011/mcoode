@@ -30,15 +30,15 @@ export class ToolExecutor {
       read_file: { description: 'Read a file from the project', parameters: { path: 'string' } },
       list_files: { description: 'List files matching a glob', parameters: { glob: 'string' } },
       search_code: { description: 'Search the codebase for text', parameters: { query: 'string' } },
-      write_file: { description: 'Write a file (creates parent dirs)', parameters: { path: 'string', content: 'string' } },
-      edit_file: { description: 'Edit a file by replacing text', parameters: { path: 'string', old: 'string', new: 'string' } },
       web_search: { description: 'Search the web for information', parameters: { query: 'string' } },
       web_fetch: { description: 'Fetch and extract text content from a URL', parameters: { url: 'string' } },
-      git_status: { description: 'Show current git status / diff summary', parameters: {} },
-      run_tests: { description: 'Run the project test suite (or one file)', parameters: { file: 'string' } }
+      git_status: { description: 'Show current git status / diff summary', parameters: {} }
     };
-    if (this.domain !== 'docs') {
+    if (this.domain !== 'chat' && this.domain !== 'docs') {
+      t.write_file = { description: 'Write a file (creates parent dirs)', parameters: { path: 'string', content: 'string' } };
+      t.edit_file = { description: 'Edit a file by replacing text', parameters: { path: 'string', old: 'string', new: 'string' } };
       t.run_shell = { description: 'Run a shell command inside the project (npm install, build, etc.)', parameters: { command: 'string' } };
+      t.run_tests = { description: 'Run the project test suite (or one file)', parameters: { file: 'string' } };
       // Browser automation tools
       t.browser_navigate = { description: 'Open a URL in a real browser to test the running app', parameters: { url: 'string' } };
       t.browser_click = { description: 'Click an element by CSS selector or visible text', parameters: { selector: 'string?', text: 'string?' } };

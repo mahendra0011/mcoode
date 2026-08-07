@@ -1,115 +1,85 @@
 import React, { useState } from 'react';
-import { UploadCloud, Github, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Github, UploadCloud, X, FolderUp, Loader2 } from 'lucide-react';
 
 export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
-  const [mode, setMode] = useState(null); // 'zip' | 'git'
   const [gitUrl, setGitUrl] = useState('');
-  const [file, setFile] = useState(null);
-  const [loading, setLoading] = useState(false);
-
+  
   if (!isOpen) return null;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (mode === 'zip' && file) {
-        await onUploadZip(file);
-      } else if (mode === 'git' && gitUrl) {
-        await onCloneGit(gitUrl);
-      }
-      onClose();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to create workspace');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#151515] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white transition">
-          <X className="w-5 h-5" />
-        </button>
-        
-        <h2 className="text-xl font-bold text-white mb-6">Add your project</h2>
-        
-        {loading ? (
-          <div className="py-8 flex flex-col items-center justify-center gap-4">
-            <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin"></div>
-            <p className="text-sm text-white/70">
-              {mode === 'zip' ? 'Extracting archive...' : 'Cloning repository...'}
-            </p>
+    <AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      >
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-[#18181b] border border-white/10 rounded-2xl w-[400px] overflow-hidden shadow-2xl"
+        >
+          <div className="flex justify-between items-center p-4 border-b border-white/5 bg-white/5">
+            <h3 className="font-semibold text-white/90">Add your project</h3>
+            <button onClick={onClose} className="text-white/40 hover:text-white"><X className="w-4 h-4" /></button>
           </div>
-        ) : !mode ? (
-          <div className="grid grid-cols-2 gap-4">
-            <button 
-              onClick={() => setMode('zip')}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition group"
+          
+          <div className="p-4 flex flex-col gap-4">
+            <div 
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.zip';
+                input.onchange = (e) => {
+                  if (e.target.files[0]) {
+                    onUploadZip(e.target.files[0]);
+                    onClose();
+                  }
+                };
+                input.click();
+              }}
+              className="border-2 border-dashed border-white/10 rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-white/20 hover:bg-white/5 transition"
             >
-              <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition">
-                <UploadCloud className="w-6 h-6 text-blue-400" />
-              </div>
-              <span className="text-sm font-medium text-white/90">Upload ZIP</span>
-            </button>
-
-            <button 
-              onClick={() => setMode('git')}
-              className="flex flex-col items-center justify-center gap-3 p-6 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition group"
-            >
-              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center group-hover:scale-110 transition">
-                <Github className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-sm font-medium text-white/90">Clone GitHub</span>
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {mode === 'zip' ? (
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1">ZIP Archive</label>
-                <input 
-                  type="file" 
-                  accept=".zip"
-                  onChange={(e) => setFile(e.target.files[0])}
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-                  required
-                />
-              </div>
-            ) : (
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1">GitHub Repo URL</label>
-                <input 
-                  type="url" 
-                  placeholder="https://github.com/user/repo"
-                  value={gitUrl}
-                  onChange={(e) => setGitUrl(e.target.value)}
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50"
-                  required
-                />
-              </div>
-            )}
-            <div className="flex gap-3 mt-4">
-              <button 
-                type="button" 
-                onClick={() => setMode(null)}
-                className="flex-1 px-4 py-2 rounded-lg border border-white/10 hover:bg-white/5 text-sm font-medium text-white transition"
-              >
-                Back
-              </button>
-              <button 
-                type="submit" 
-                disabled={mode === 'zip' && !file}
-                className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 text-sm font-medium transition disabled:opacity-50"
-              >
-                Continue
-              </button>
+              <FolderUp className="w-8 h-8 text-white/30" />
+              <span className="text-sm font-medium text-white/80">Upload ZIP</span>
+              <span className="text-xs text-white/40">Select a local project archive</span>
             </div>
-          </form>
-        )}
-      </div>
-    </div>
+            
+            <div className="relative flex items-center">
+              <div className="flex-grow border-t border-white/10"></div>
+              <span className="flex-shrink-0 mx-4 text-white/30 text-xs uppercase tracking-wider">or</span>
+              <div className="flex-grow border-t border-white/10"></div>
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-white/60 flex items-center gap-1.5"><Github className="w-3.5 h-3.5" /> Paste GitHub repo URL</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={gitUrl}
+                  onChange={e => setGitUrl(e.target.value)}
+                  placeholder="https://github.com/user/repo"
+                  className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && gitUrl) {
+                      onCloneGit(gitUrl);
+                      onClose();
+                    }
+                  }}
+                />
+                <button 
+                  disabled={!gitUrl}
+                  onClick={() => {
+                    onCloneGit(gitUrl);
+                    onClose();
+                  }}
+                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition"
+                >
+                  Clone
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
