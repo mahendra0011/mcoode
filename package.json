@@ -14,8 +14,6 @@
     "mcode": "node packages/cli/bin/mcode.js",
     "dev:cli": "node --watch packages/cli/bin/mcode.js",
     "serve": "node packages/cli/bin/mcode.js serve",
-    "dev:dashboard": "npm run dev --workspace @mcode/dashboard",
-    "build:dashboard": "npm run build --workspace @mcode/dashboard",
     "build:cli": "node packages/cli/scripts/build.js",
     "test": "vitest run",
     "lint": "eslint packages --ext .js,.jsx",

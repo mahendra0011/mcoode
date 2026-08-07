@@ -19,7 +19,7 @@ const SLASH_COMMANDS = [
   { cmd: 'ui-mode', desc: 'Special UI modes (zen/focus/presentation/batch/daemon/service)' },
   { cmd: 'agent', desc: 'Toggle agent mode (read/edit/run in chat)' },
   { cmd: 'stack', desc: 'Detect and show tech stack' },
-  { cmd: 'analytics', desc: 'Open build analytics dashboard' },
+  { cmd: 'analytics', desc: 'Open build analytics web view' },
   { cmd: 'security', desc: 'Show security settings' },
   { cmd: 'audit', desc: 'Show recent audit log entries' },
   { cmd: 'workspaces', desc: 'List team workspaces' },

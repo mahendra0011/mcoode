@@ -9,7 +9,7 @@ export const TASK_DOMAINS = Object.freeze([
   'bugfix'
 ]);
 
-/** Hex colors shared 1:1 between terminal UI and web dashboard. */
+/** Hex colors shared 1:1 between terminal UI and web app. */
 export const DOMAIN_COLORS = Object.freeze({
   planning: '#b18aff',
   frontend: '#5b9dff',

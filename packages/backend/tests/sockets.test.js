@@ -54,7 +54,7 @@ afterAll(async () => {
 });
 
 describe('socket forwarding', () => {
-  it('forwards CLI events to authenticated dashboard clients', async () => {
+  it('forwards CLI events to authenticated web clients', async () => {
     const { access } = signTokens('user-1', { secret: SECRET });
     const dash = authClient(access);
     const cli = emitterClient();
@@ -68,7 +68,7 @@ describe('socket forwarding', () => {
     cli.close();
   });
 
-  it('forwards build:complete to dashboard clients', async () => {
+  it('forwards build:complete to web clients', async () => {
     const { access } = signTokens('user-2', { secret: SECRET });
     const dash = authClient(access);
     const cli = emitterClient();
@@ -82,7 +82,7 @@ describe('socket forwarding', () => {
     cli.close();
   });
 
-  it('forwards watch events to dashboard clients', async () => {
+  it('forwards watch events to web clients', async () => {
     const { access } = signTokens('user-3', { secret: SECRET });
     const dash = authClient(access);
     const cli = emitterClient();

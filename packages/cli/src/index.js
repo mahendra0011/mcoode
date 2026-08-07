@@ -236,7 +236,7 @@ export async function run(argv) {
   program
     .command('serve')
     .description('start the backend (Express + Socket.IO) for the dashboard')
-    .option('-p, --port <port>', 'port (default 3100)', parseFloat)
+    .option('-p, --port <port>', 'port (default 3100)', (v) => Number(v))
     .action(async (opts) => {
       const { serveCommand } = await import('./commands/config.js');
       await serveCommand({ port: opts.port });

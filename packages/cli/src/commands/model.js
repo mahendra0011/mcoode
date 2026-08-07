@@ -51,7 +51,7 @@ export async function modelShowCommand({ domain = null } = {}) {
   ]), { columns: ['DOMAIN', 'ACTIVE MODEL'] });
 }
 
-export async function modelSetCommand(domain, ref, { asJson = false } = {}) {
+export async function modelSetCommand(domain, ref, _opts = {}) {
   if (!domain) {
     fail('usage: mcode model set <domain> <provider:model>');
     process.exit(1);
@@ -67,7 +67,7 @@ export async function modelSetCommand(domain, ref, { asJson = false } = {}) {
   ok(`model pinned: ${domain} -> ${ref} (saved to ~/.mcode/config.json)`);
 }
 
-export async function modelResetCommand({ domain = null, asJson = false } = {}) {
+export async function modelResetCommand({ domain = null } = {}) {
   const config = await loadConfig();
   if (domain) {
     delete config.routing?.[domain];

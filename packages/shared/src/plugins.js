@@ -1,7 +1,7 @@
 /**
  * Official mcode plugin registry — single source of truth for the CLI
  * (`mcode add`) and the backend plugin catalog (seed script + `/api/plugins`).
- * Keep this list honest: the dashboard advertises "40+ official plugins".
+ * Keep this list honest: the web app advertises "40+ official plugins".
  */
 export const PLUGIN_REGISTRY = {
   // lint

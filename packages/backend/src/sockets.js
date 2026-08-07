@@ -10,7 +10,7 @@ const chatSessions = new Map();
 /**
  * Socket.IO server — clients connect with `{ path: '/live' }`, which maps to
  * the default namespace '/' (path is the engine.io URL path, not a namespace).
- * CLI agents connect without a token and only EMIT; dashboard clients
+ * CLI agents connect without a token and only EMIT; web clients
  * authenticate so they can join rooms.
  */
 export function attachSockets(httpServer, { secret, ioOptions = {} }) {
@@ -45,8 +45,8 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       socket.join(`project:${projectId}`);
     });
 
-    // CLI → server events, broadcast to connected dashboard clients.
-    // (Room-based fan-out is optional; the dashboard never joins rooms yet.)
+    // CLI → server events, broadcast to connected web clients.
+    // (Room-based fan-out is optional; web clients don't always join rooms yet.)
     for (const event of ['session:start', 'plan:generated', 'agent:started', 'agent:step', 'agent:file', 'agent:done', 'agent:failed', 'agent:needs_review', 'integration:pass', 'build:complete', 'toast']) {
       socket.on(event, (payload = {}) => {
         io.emit(event, payload);

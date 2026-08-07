@@ -108,7 +108,7 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     nodeVersion: process.version,
   }));
 
-  // demo worker: dashboard-triggered god builds log their progress
+  // demo worker: web-triggered god builds log their progress
   const queue = jobQueue('subagents');
   await startWorker('subagents', async (job) => {
     logger.info({ job }, 'subagent job started');

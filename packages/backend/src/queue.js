@@ -1,6 +1,6 @@
 /**
  * Job queue — BullMQ when Redis is available, otherwise a tiny in-process
- * queue with the same interface so dashboard-triggered builds still run.
+ * queue with the same interface so web-triggered builds still run.
  */
 let mode = 'memory';
 let queueImpl = null;

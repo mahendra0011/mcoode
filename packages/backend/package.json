@@ -1,7 +1,7 @@
 {
   "name": "@mcode/backend",
   "version": "2.4.6",
-  "description": "Optional mcode backend — Express + Socket.IO + Mongo/Redis (with in-memory fallback) for the web dashboard",
+  "description": "Optional mcode backend - Express + Socket.IO + Mongo/Redis (with in-memory fallback) for the web app",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

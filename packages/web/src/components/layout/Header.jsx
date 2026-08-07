@@ -21,6 +21,9 @@ export function Header() {
           <Link to="/ai" className="px-4 py-2 text-sm font-medium text-foreground/80 hover:text-foreground transition-colors rounded-full hover:bg-foreground/5">
             AI
           </Link>
+          <Link to="/cli" className="px-4 py-2 text-sm font-medium text-foreground/80 hover:text-foreground transition-colors rounded-full hover:bg-foreground/5">
+            CLI
+          </Link>
           <button className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-foreground/80 hover:text-foreground transition-colors rounded-full hover:bg-foreground/5">
             Resources <ChevronDown className="w-4 h-4" />
           </button>
@@ -30,18 +33,18 @@ export function Header() {
         </nav>
         
         <div className="flex items-center gap-4 max-[850px]:hidden">
-          <a href="#" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors">
-            Sign in
-          </a>
-          <a href="#" className="group relative inline-flex items-center">
+          <Link to="/login" className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors">
+            Log in
+          </Link>
+          <Link to="/signup" className="group relative inline-flex items-center">
             <span className="absolute right-0 inset-y-0 w-[calc(100%-1.5rem)] rounded-xl bg-accent"></span>
-            <span className="relative z-10 px-5 py-3 rounded-xl bg-foreground text-background text-sm font-medium">
-              Try for free
+            <span className="relative z-10 px-5 py-2.5 rounded-xl bg-foreground text-background text-sm font-medium">
+              Sign up
             </span>
             <span className="relative -left-px z-10 w-10 h-10 rounded-xl flex items-center justify-center text-black">
               <ArrowDownRight className="w-4 h-4 transition-transform duration-300 group-hover:-rotate-45" />
             </span>
-          </a>
+          </Link>
         </div>
         
         <button className="hidden max-[850px]:flex items-center justify-center w-10 h-10" aria-label="Open menu">

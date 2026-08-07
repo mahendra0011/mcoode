@@ -29,3 +29,4 @@ export async function serveCommand({ port = process.env.MCCODE_PORT || 3100 } = 
   out(`mcode backend listening on http://localhost:${port}  (dashboard: http://localhost:5173)`);
   return server;
 }
+

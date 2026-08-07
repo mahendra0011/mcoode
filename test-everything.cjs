@@ -637,7 +637,6 @@ function runCli(args = []) {
     ['./packages/cli/src/commands/run.js', 'runCommand'],
     ['./packages/cli/src/commands/test.js', 'testCommand'],
     ['./packages/cli/src/commands/config.js', 'configCommand'],
-    ['./packages/cli/src/commands/config.js', 'serveCommand'],
     ['./packages/cli/src/commands/env.js', 'envCommand'],
     ['./packages/cli/src/commands/env.js', 'envListCommand'],
     ['./packages/cli/src/commands/doctor.js', 'doctorCommand'],

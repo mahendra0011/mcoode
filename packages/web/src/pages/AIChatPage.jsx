@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-export function AIPage() {
+export function AIChatPage() {
   const [isBuilding, setIsBuilding] = useState(false);
   const [prompt, setPrompt] = useState('');
 
