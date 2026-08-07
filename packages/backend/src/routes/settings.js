@@ -4,6 +4,21 @@ import { authMiddleware } from '../auth.js';
 
 export function settingsRoutes({ secret }) {
   const r = Router();
+
+  // GET /api/v1/settings/providers -> List all remote provider IDs (public: no secrets exposed)
+  r.get('/providers', async (req, res) => {
+    try {
+      const { getAllAdapters } = await import('mcode-cli/providers');
+      const adapters = getAllAdapters({});
+      const remoteProviders = adapters
+        .filter((a) => a.kind !== 'local')
+        .map((a) => ({ id: a.id, displayName: a.displayName, envVar: a.envVar }));
+      res.json({ ok: true, providers: remoteProviders });
+    } catch (e) {
+      res.status(500).json({ error: { message: 'Failed to fetch providers' } });
+    }
+  });
+
   r.use(authMiddleware({ secret }));
 
   const DEFAULTS = {

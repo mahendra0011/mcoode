@@ -3,12 +3,15 @@ import { useDispatch, useSelector } from 'react-redux';
 import { ChevronDown, Plus, Key, Check, X, Loader2 } from 'lucide-react';
 import { setSelectedModel } from '../../store/chatSlice';
 
-const PROVIDER_OPTIONS = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'google', label: 'Google' },
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'mistral', label: 'Mistral' }
+/** All CLI providers are fetched from the backend — this just seeds the
+ * initial dropdown while the API call is in flight. */
+const FALLBACK_PROVIDERS = [
+  { id: 'openai', displayName: 'OpenAI', envVar: 'OPENAI_API_KEY' },
+  { id: 'anthropic', displayName: 'Anthropic', envVar: 'ANTHROPIC_API_KEY' },
+  { id: 'google', displayName: 'Google', envVar: 'GOOGLE_API_KEY' },
+  { id: 'openrouter', displayName: 'OpenRouter', envVar: 'OPENROUTER_API_KEY' },
+  { id: 'deepseek', displayName: 'DeepSeek', envVar: 'DEEPSEEK_API_KEY' },
+  { id: 'mistral', displayName: 'Mistral', envVar: 'MISTRAL_API_KEY' }
 ];
 
 export function ModelSelector({ compact = false }) {
@@ -16,6 +19,7 @@ export function ModelSelector({ compact = false }) {
   const [open, setOpen] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keys, setKeys] = useState([]);
+  const [providers, setProviders] = useState(FALLBACK_PROVIDERS);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [keyForm, setKeyForm] = useState({ providerId: '', apiKey: '', displayName: '' });
@@ -29,6 +33,18 @@ export function ModelSelector({ compact = false }) {
       .then((res) => res.ok ? res.json() : { keys: [] })
       .then((data) => setKeys(data.keys || []))
       .catch(() => setKeys([]));
+  }, []);
+
+  // Fetch all available providers from the backend (same list as CLI)
+  useEffect(() => {
+    fetch('/api/v1/settings/providers')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.providers?.length) setProviders(data.providers);
+      })
+      .catch(() => {
+        /* keep fallback list */
+      });
   }, []);
 
   // Close dropdown when clicking outside
@@ -47,14 +63,21 @@ export function ModelSelector({ compact = false }) {
     if (!keyForm.providerId || !keyForm.apiKey) return;
     setSaving(true);
     try {
+      const provider = providers.find((p) => p.id === keyForm.providerId);
+      const envVar = provider?.envVar || `${keyForm.providerId.toUpperCase()}_API_KEY`;
       const res = await fetch('/api/v1/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(keyForm)
+        body: JSON.stringify({
+          providerId: keyForm.providerId,
+          envVar,
+          displayName: keyForm.displayName || provider?.displayName || keyForm.providerId,
+          apiKey: keyForm.apiKey
+        })
       });
       const data = await res.json();
       if (data.ok) {
-        const newKey = { providerId: keyForm.providerId, envVar: keyForm.providerId.toUpperCase() + '_API_KEY', displayName: keyForm.displayName || keyForm.providerId };
+        const newKey = { providerId: keyForm.providerId, envVar, displayName: keyForm.displayName || provider?.displayName || keyForm.providerId };
         setKeys([...keys, newKey]);
         setShowKeyModal(false);
         setKeyForm({ providerId: '', apiKey: '', displayName: '' });
@@ -168,8 +191,8 @@ export function ModelSelector({ compact = false }) {
                   required
                 >
                   <option value="">Select a provider</option>
-                  {PROVIDER_OPTIONS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>{p.displayName}</option>
                   ))}
                 </select>
               </div>
