@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { FileType2, FileCode, FileJson, File as FileIcon } from 'lucide-react';
+import { getAuthHeaders } from '../../lib/api';
 
 const getFileIcon = (name) => {
   if (name.endsWith('.jsx') || name.endsWith('.tsx')) return <FileType2 className="w-4 h-4 text-cyan-400" />;
@@ -23,6 +24,7 @@ const getLanguage = (path) => {
 export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, closeFile }) {
   const [fileContents, setFileContents] = useState({});
   const [loading, setLoading] = useState(false);
+  const [dirty, setDirty] = useState(new Set());  // paths with unsaved local edits
 
   // Fetch content when a new file is opened
   useEffect(() => {
@@ -30,7 +32,9 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
     if (fileContents[activePath] !== undefined) return; // already loaded
 
     setLoading(true);
-    fetch(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`)
+    fetch(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, {
+      headers: getAuthHeaders()
+    })
       .then(res => res.json())
       .then(data => {
         if (data.content !== undefined) {
@@ -43,18 +47,28 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
   const handleEditorChange = useCallback((value) => {
     if (!activePath) return;
     setFileContents(prev => ({ ...prev, [activePath]: value }));
+    setDirty(prev => new Set(prev).add(activePath));
   }, [activePath]);
 
   // Handle Save (Cmd+S)
   const handleSave = useCallback(() => {
     if (!workspaceId || !activePath) return;
     const content = fileContents[activePath];
-    
+
     fetch(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ content })
-    }).catch(console.error);
+    })
+      .then(async res => {
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
+        if (!res.ok) throw new Error('Save failed');
+        setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
+      })
+      .catch(err => console.error(err));
   }, [workspaceId, activePath, fileContents]);
 
   // Listen for file:changed events from the agent (write/edit tool completions)
@@ -63,16 +77,26 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
     const handleFileChanged = (e) => {
       const changedPath = e.detail?.path;
       if (!changedPath || !openFiles.includes(changedPath)) return;
-      // Clear cached content so the useEffect above re-fetches
+      // If the user has unsaved local edits, warn before overwriting
+      if (dirty.has(changedPath)) {
+        const reload = window.confirm(
+          'This file was changed by the AI agent while you have unsaved edits. ' +
+          'OK to reload the agent\'s version (your local changes will be lost), ' +
+          'Cancel to keep your current edits.'
+        );
+        if (!reload) return; // keep user's version
+      }
+      // Clear cached content so the fetch useEffect re-fetches from disk
       setFileContents(prev => {
         const next = { ...prev };
         delete next[changedPath];
         return next;
       });
+      setDirty(prev => { const d = new Set(prev); d.delete(changedPath); return d; });
     };
     document.addEventListener('file:changed', handleFileChanged);
     return () => document.removeEventListener('file:changed', handleFileChanged);
-  }, [openFiles]);
+  }, [openFiles, dirty]);
 
   // Bind Cmd+S globally when Editor has focus
   useEffect(() => {
@@ -98,9 +122,10 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
     <div className="flex-1 flex flex-col min-w-0 bg-[#0e0e0e] h-full">
       {/* Editor Tabs */}
       <div className="flex items-center border-b border-white/5 bg-[#151515] overflow-x-auto custom-scrollbar flex-shrink-0">
-        {openFiles.map(path => {
+          {openFiles.map(path => {
           const name = path.split('/').pop();
           const isActive = activePath === path;
+          const isDirty = dirty.has(path);
           return (
             <div 
               key={path}
@@ -112,9 +137,16 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
               }`}
             >
               {getFileIcon(name)} {name}
+              {isDirty && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Unsaved changes" />
+              )}
               <span 
                 className="text-white/30 ml-2 hover:text-white cursor-pointer px-1 rounded hover:bg-white/10"
-                onClick={(e) => { e.stopPropagation(); closeFile(path); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isDirty && !window.confirm('This file has unsaved changes. Close anyway?')) return;
+                  closeFile(path);
+                }}
               >
                 ×
               </span>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, FileCode, FileJson, FileType2, FileText, Folder, File } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getAuthHeaders } from '../../lib/api';
 
 const getFileIcon = (name) => {
   if (name.endsWith('.jsx') || name.endsWith('.tsx') || name.endsWith('.js') || name.endsWith('.ts')) return <FileCode className="w-3.5 h-3.5 text-blue-400" />;
@@ -46,8 +47,8 @@ const TreeNode = ({ node, level = 0, onSelectFile, activePath }) => {
         {isOpen && (
           <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
             {Object.values(node.children).sort((a, b) => {
-              if (!!a.children === !!b.children) return a.name.localeCompare(b.name);
-              return !!a.children ? -1 : 1; // folders first
+              if (Boolean(a.children) === Boolean(b.children)) return a.name.localeCompare(b.name);
+              return a.children ? -1 : 1; // folders first
             }).map(child => (
               <TreeNode key={child.path || child.name} node={child} level={level + 1} onSelectFile={onSelectFile} activePath={activePath} />
             ))}
@@ -58,7 +59,33 @@ const TreeNode = ({ node, level = 0, onSelectFile, activePath }) => {
   );
 };
 
-export const FileTree = ({ files = [], onSelectFile, activePath }) => {
+export function FileTree({ workspaceId, onSelectFile, activePath, triggerRefresh = 0 }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch files from the workspace when workspaceId or triggerRefresh changes
+  useEffect(() => {
+    if (!workspaceId) {
+      setFiles([]);
+      return;
+    }
+
+    setLoading(true);
+    fetch(`/api/v1/workspaces/${workspaceId}/files`, { headers: getAuthHeaders() })
+      .then(res => {
+        if (!res.ok) throw new Error(`Failed to fetch files (${res.status})`);
+        return res.json();
+      })
+      .then(data => {
+        setFiles(data.files || []);
+      })
+      .catch(err => {
+        console.error('Failed to load workspace files:', err);
+        setFiles([]);
+      })
+      .finally(() => setLoading(false));
+  }, [workspaceId, triggerRefresh]);
+
   // Convert flat array [{path, name}] to nested tree
   const tree = { name: 'root', children: {} };
   
@@ -84,9 +111,17 @@ export const FileTree = ({ files = [], onSelectFile, activePath }) => {
   }
 
   const rootNodes = Object.values(tree.children || {}).sort((a, b) => {
-    if (!!a.children === !!b.children) return a.name.localeCompare(b.name);
-    return !!a.children ? -1 : 1;
+    if (Boolean(a.children) === Boolean(b.children)) return a.name.localeCompare(b.name);
+    return a.children ? -1 : 1;
   });
+
+  if (!workspaceId) {
+    return <div className="p-4 text-xs text-white/40 italic">Select or create a workspace to begin.</div>;
+  }
+
+  if (loading) {
+    return <div className="p-4 text-xs text-white/40">Loading files…</div>;
+  }
 
   if (files.length === 0) {
     return <div className="p-4 text-xs text-white/40 italic">No files in workspace. Upload a ZIP or Clone a repo to begin.</div>;
@@ -99,4 +134,4 @@ export const FileTree = ({ files = [], onSelectFile, activePath }) => {
       ))}
     </div>
   );
-};
+}

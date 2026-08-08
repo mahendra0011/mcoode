@@ -117,7 +117,23 @@ const chatSlice = createSlice({
       // In ChatAgent, a tool_call is just an announcement, but _blockMeta returns a replaceKey.
       // We will push a new message placeholder here that `agentMessage` can replace later.
       const id = Date.now().toString();
-      const replaceKey = action.payload.args?.replaceKey || action.payload.replaceKey || `t-${id}`;
+      const replaceKey = action.payload.replaceKey || action.payload.args?.replaceKey || `t-${id}`;
+      // The same tool call is forwarded via two channels: chat:tool_call (this
+      // action) and chat:message → agentMessage. If agentMessage already created
+      // the running card with this replaceKey, update it in place instead of
+      // pushing a duplicate that can never be matched by the 'done' message.
+      const existingIdx = state.messages.findIndex(m => m.replaceKey === replaceKey);
+      if (existingIdx !== -1) {
+        state.messages[existingIdx] = {
+          id: state.messages[existingIdx].id,
+          role: 'assistant',
+          kind: 'tool',
+          replaceKey,
+          ...action.payload,
+          status: 'running'
+        };
+        return;
+      }
       state.messages.push({
          id,
          role: 'assistant',
@@ -160,6 +176,9 @@ const chatSlice = createSlice({
     setDesigns: (state, action) => {
       state.designs = action.payload || [];
     },
+    removeDesign: (state, action) => {
+      state.designs = state.designs.filter((d) => d._id !== action.payload);
+    },
     setCurrentDesign: (state, action) => {
       state.currentDesign = action.payload;
       state.designStatus = 'ready';
@@ -168,6 +187,11 @@ const chatSlice = createSlice({
     setDesignStreaming: (state) => {
       state.designStatus = 'generating';
       state.designError = null;
+      // Initialize a placeholder so streaming chunks can append without
+      // needing the full design object to exist yet.
+      if (!state.currentDesign) {
+        state.currentDesign = { html: '', version: 1, _id: null };
+      }
     },
     setDesignStream: (state, action) => {
       state.designStatus = 'generating';
@@ -178,9 +202,14 @@ const chatSlice = createSlice({
     setDesignDone: (state, action) => {
       state.designStatus = 'ready';
       state.designError = null;
-      if (state.currentDesign && action.payload) {
+      if (!state.currentDesign) {
+        state.currentDesign = { html: '', version: 1, _id: null };
+      }
+      if (action.payload) {
         state.currentDesign.html = action.payload.html || state.currentDesign.html;
         state.currentDesign.version = action.payload.version || state.currentDesign.version;
+        if (action.payload.designId) state.currentDesign._id = action.payload.designId;
+        if (action.payload.parentId) state.currentDesign.parentId = action.payload.parentId;
       }
     },
     setDesignError: (state, action) => {
@@ -213,6 +242,7 @@ export const {
   chatDone,
   clearChat,
   setDesigns,
+  removeDesign,
   setCurrentDesign,
   setDesignStreaming,
   setDesignStream,

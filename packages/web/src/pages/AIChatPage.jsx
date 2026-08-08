@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   Folder, Puzzle, Github, Crown, Settings, 
   ChevronDown, Plus, Sparkles, ArrowUp, Square,
-  UploadCloud, Download, GitBranch, Share, Loader2, Slash
+  UploadCloud, Download, GitBranch, Share, Loader2, Slash,
+  AlertCircle, CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useChatSocket } from '../hooks/useChatSocket';
+import { getAuthHeaders } from '../lib/api';
 import { setMode } from '../store/chatSlice';
 
 import { FileTree } from '../components/ide/FileTree';
@@ -59,10 +61,25 @@ export function AIChatPage() {
 	const [isModalsOpen, setIsModalsOpen] = useState(false);
 	const [githubAccount, setGithubAccount] = useState(null);
 	const [triggerRefresh, setTriggerRefresh] = useState(0);
+
+  // Branch selector state
+  const [branches, setBranches] = useState([]);
+  const [activeBranch, setActiveBranch] = useState('main');
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
 	const [isUploading, setIsUploading] = useState(false);
 	const [watchMode, setWatchMode] = useState(false);
 
 	const toggleWatchMode = () => setWatchMode(!watchMode);
+
+	// Toast notifications (replaces native alert())
+	const [toasts, setToasts] = useState([]);
+	const showToast = useCallback((message, type = 'success') => {
+		const id = Date.now().toString();
+		setToasts((prev) => [...prev, { id, message, type }]);
+		setTimeout(() => {
+			setToasts((prev) => prev.filter((t) => t.id !== id));
+		}, 3500);
+	}, []);
 
 	// Auth guard
 	useEffect(() => {
@@ -92,6 +109,7 @@ export function AIChatPage() {
     try {
       const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/upload`, {
         method: 'POST',
+        headers: { Authorization: getAuthHeaders().Authorization },
         body: formData
       });
       const data = await res.json();
@@ -111,7 +129,7 @@ export function AIChatPage() {
 
   // Fetch initial data
   useEffect(() => {
-    fetch('/api/v1/workspaces')
+    fetch('/api/v1/workspaces', { headers: getAuthHeaders() })
       .then(res => res.json())
       .then(data => {
         if (data.workspaces) {
@@ -121,7 +139,7 @@ export function AIChatPage() {
       })
       .catch(console.error);
 
-    fetch('/api/v1/github/status')
+    fetch('/api/v1/github/status', { headers: getAuthHeaders() })
       .then(res => res.json())
       .then(data => {
         if (data.connected) setGithubAccount(data);
@@ -129,40 +147,142 @@ export function AIChatPage() {
       .catch(console.error);
   }, []);
 
+  // Close branch dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showBranchDropdown && !e.target.closest('.branch-dropdown')) {
+        setShowBranchDropdown(false);
+      }
+    };
+    if (showBranchDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showBranchDropdown]);
+
+  // Fetch branches when workspace changes
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      fetchBranches();
+    }
+  }, [activeWorkspaceId, fetchBranches]);
+
   const handleUploadZip = async (file) => {
     const formData = new FormData();
     formData.append('name', file.name.replace('.zip', ''));
     formData.append('source', 'zip');
     formData.append('zipfile', file);
 
-    const res = await fetch('/api/v1/workspaces', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data.workspace) {
-      setWorkspaces([...workspaces, data.workspace]);
-      setActiveWorkspaceId(data.workspace._id);
-      setTriggerRefresh(r => r + 1);
+    try {
+      const res = await fetch('/api/v1/workspaces', {
+        method: 'POST',
+        headers: { Authorization: getAuthHeaders().Authorization },
+        body: formData
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error?.message || `Upload failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (data.workspace) {
+        setWorkspaces([...workspaces, data.workspace]);
+        setActiveWorkspaceId(data.workspace._id);
+        setTriggerRefresh(r => r + 1);
+        showToast('Project uploaded successfully');
+      } else {
+        throw new Error(data.error?.message || 'Upload failed — no workspace returned');
+      }
+    } catch (err) {
+      console.error('Upload failed:', err);
+      showToast(err.message || 'Failed to upload project', 'error');
     }
   };
 
   const handleCloneGit = async (repoUrl) => {
     const name = repoUrl.split('/').pop().replace('.git', '');
-    const res = await fetch('/api/v1/workspaces', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, source: 'git', repoUrl })
-    });
-    const data = await res.json();
-    if (data.workspace) {
-      setWorkspaces([...workspaces, data.workspace]);
-      setActiveWorkspaceId(data.workspace._id);
-      setTriggerRefresh(r => r + 1);
+    try {
+      const res = await fetch('/api/v1/workspaces', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ name, source: 'git', repoUrl })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error?.message || `Clone failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (data.workspace) {
+        setWorkspaces([...workspaces, data.workspace]);
+        setActiveWorkspaceId(data.workspace._id);
+        setTriggerRefresh(r => r + 1);
+        showToast('Project cloned successfully');
+      } else {
+        throw new Error(data.error?.message || 'Clone failed — no workspace returned');
+      }
+    } catch (err) {
+      console.error('Clone failed:', err);
+      showToast(err.message || 'Failed to clone repository', 'error');
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!activeWorkspaceId) return;
-    window.location.href = `/api/v1/workspaces/${activeWorkspaceId}/export`;
+    try {
+      const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/export`, {
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `workspace-export-${activeWorkspaceId}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+      showToast('Failed to export workspace', 'error');
+    }
   };
+
+  // Fetch available git branches for the current workspace
+  const fetchBranches = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    try {
+      const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/branches`, {
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBranches(data.branches || []);
+        if (data.current) setActiveBranch(data.current);
+      }
+    } catch (err) {
+      console.error('Failed to fetch branches:', err);
+    }
+  }, [activeWorkspaceId]);
+
+  // Switch (or create) the active git branch
+  const switchBranch = useCallback(async (branch, create = false) => {
+    if (!activeWorkspaceId) return;
+    try {
+      const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/checkout`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ branch, create })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveBranch(data.branch);
+        setShowBranchDropdown(false);
+        if (!create && !branches.includes(data.branch)) {
+          setBranches(prev => [...prev, data.branch]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to switch branch:', err);
+    }
+  }, [activeWorkspaceId, branches]);
 
   const handlePush = async () => {
     if (!activeWorkspaceId) return;
@@ -172,20 +292,18 @@ export function AIChatPage() {
     try {
       const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/push`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg, branch: 'main' })
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ message: msg, branch: activeBranch })
       });
       const data = await res.json();
-      if (data.ok) alert('Pushed successfully!');
-      else alert('Failed to push: ' + (data.error?.message || 'Unknown error'));
+      if (data.ok) showToast('Pushed successfully!');
+      else showToast('Failed to push: ' + (data.error?.message || 'Unknown error'), 'error');
     } catch (e) {
-      alert('Error pushing');
+      showToast('Error pushing', 'error');
     }
   };
 
   const handleGithubConnect = () => {
-    // Generate a temporary auth token for state (simulate it for now since we're client side without the real session JWT, usually the backend handles this if we redirect directly)
-    // Here we just redirect to the auth endpoint.
     window.location.href = `/api/v1/auth/github`;
   };
 
@@ -389,8 +507,8 @@ export function AIChatPage() {
                       <Share className="w-3.5 h-3.5"/> Push
                     </button>
                     <div className="w-px h-5 bg-white/10 mx-1"></div>
-                    <button type="button" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 transition" title="Branch">
-                      <GitBranch className="w-3.5 h-3.5"/> main <ChevronDown className="w-3 h-3"/>
+                    <button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 transition" title="Branch">
+                      <GitBranch className="w-3.5 h-3.5"/> {activeBranch} <ChevronDown className="w-3 h-3"/>
                     </button>
                     <button type="button" onClick={handleGithubConnect} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'}>
                       {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
@@ -520,8 +638,8 @@ export function AIChatPage() {
                       <Share className="w-3.5 h-3.5"/> Push
                     </button>
                     <div className="w-px h-5 bg-white/10 mx-1"></div>
-                    <button type="button" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 transition" title="Branch">
-                      <GitBranch className="w-3.5 h-3.5"/> main <ChevronDown className="w-3 h-3"/>
+                    <button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 transition" title="Branch">
+                      <GitBranch className="w-3.5 h-3.5"/> {activeBranch} <ChevronDown className="w-3 h-3"/>
                     </button>
                     <button type="button" onClick={handleGithubConnect} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'}>
                       {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
@@ -609,8 +727,8 @@ export function AIChatPage() {
                    <button onClick={handlePush} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 transition">
                      <Share className="w-3.5 h-3.5"/> Push ↑
                    </button>
-                   <button className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20 transition">
-                     <GitBranch className="w-3.5 h-3.5"/> main <ChevronDown className="w-3 h-3"/>
+                   <button onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20 transition">
+                     <GitBranch className="w-3.5 h-3.5"/> {activeBranch} <ChevronDown className="w-3 h-3"/>
                    </button>
                    <button onClick={handleGithubConnect} className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 px-2 py-1 rounded bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'}>
                      {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
@@ -743,6 +861,79 @@ export function AIChatPage() {
         onUploadZip={handleUploadZip} 
         onCloneGit={handleCloneGit} 
       />
+
+      {/* Branch selector dropdown */}
+      <AnimatePresence>
+        {showBranchDropdown && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -8 }}
+            transition={{ duration: 0.15 }}
+            className="branch-dropdown fixed top-16 right-6 z-[200] w-56 bg-[#151515] border border-white/10 rounded-xl shadow-xl overflow-hidden"
+          >
+            <div className="p-2 border-b border-white/5 text-xs font-semibold text-white/50 uppercase tracking-wider">
+              Switch Branch
+            </div>
+            <div className="max-h-60 overflow-y-auto custom-scrollbar">
+              {branches.map((branch) => (
+                <button
+                  key={branch}
+                  onClick={() => switchBranch(branch)}
+                  className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition ${
+                    branch === activeBranch
+                      ? 'bg-blue-500/10 text-blue-400 border-l-2 border-blue-500'
+                      : 'text-white/70 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <GitBranch className="w-3.5 h-3.5" /> {branch}
+                </button>
+              ))}
+              {branches.length === 0 && !activeWorkspaceId && (
+                <div className="px-3 py-2 text-xs text-white/40">No branches found</div>
+              )}
+            </div>
+            <div className="p-2 border-t border-white/5">
+              <button
+                onClick={() => {
+                  const name = window.prompt('New branch name:');
+                  if (name) switchBranch(name, true);
+                }}
+                className="w-full text-left px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition flex items-center gap-2"
+              >
+                <Plus className="w-3.5 h-3.5" /> Create new branch
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast notifications (top-right, auto-dismissing) */}
+      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: 100, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 100, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className={`max-w-sm px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 border ${
+                toast.type === 'error'
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              }}`}
+            >
+              {toast.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              )}
+              <span>{toast.message}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
     </div>
   );

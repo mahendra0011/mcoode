@@ -78,9 +78,13 @@ export function TerminalPane({ messages }) {
     const term = xtermRef.current;
 
     messages.forEach(msg => {
+      // Use replaceKey (stable across start→done) instead of msg.id, which
+      // may be undefined/colliding for multiple messages from the backend.
+      const key = msg.replaceKey || msg.id || 'unknown';
+
       // Whenever a shell command starts (status='running'), we print the prompt
       if ((msg.tool === 'run_shell' || msg.tool === 'run_tests') && msg.status === 'running') {
-        const cmdKey = `start-${msg.id}`;
+        const cmdKey = `start-${key}`;
         if (!processedRef.current.has(cmdKey)) {
           const cmd = msg.command || msg.args?.command || msg.args?.file || '...';
           term.write(`\x1b[34m$ ${cmd}\x1b[0m\r\n`);
@@ -91,7 +95,7 @@ export function TerminalPane({ messages }) {
 
       // When done, add trailing newlines to separate from the next command
       if ((msg.tool === 'run_shell' || msg.tool === 'run_tests') && msg.status === 'done') {
-        const endKey = `end-${msg.id}`;
+        const endKey = `end-${key}`;
         if (!processedRef.current.has(endKey)) {
           term.write('\r\n\r\n');
           processedRef.current.add(endKey);

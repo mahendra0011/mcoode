@@ -461,13 +461,17 @@ export class ChatAgent {
         args: preview,
         status: 'running'
       });
-      this.onTool?.({ tool: action.tool, args: action.args });
+      this.onTool?.({ tool: action.tool, args: action.args, replaceKey });
 
       let result;
       if (typeof tools[action.tool] === 'function') {
         if (action.tool === 'run_shell' && !this.allowShellAll && this.requirePermission) {
           const answer = await this._askPermission(String(action.args?.command || ''));
           if (answer === 'aborted' || this.aborted) break;
+          if (answer === 'always') {
+            this.allowShellAll = true;
+            this.bus?.emit('permission:always_granted', { tool: 'run_shell' });
+          }
           if (answer !== 'yes' && answer !== 'always') {
             result = { ok: false, error: 'permission denied by user' };
             this.bus?.emit(EVENTS.MESSAGE, {

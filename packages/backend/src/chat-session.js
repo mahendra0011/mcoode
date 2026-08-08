@@ -126,6 +126,20 @@ export class ChatSession {
       this.onEvent('chat:shell_stream', payload);
     });
 
+    // Persist "Always Allow" from the permission modal so future sessions
+    // (and page refreshes) don't re-prompt for shell commands.
+    this.bus.on('permission:always_granted', async () => {
+      this.config.allowShellAll = true;
+      try {
+        await db().userSettings.updateOne(
+          { userId: this.userId },
+          { $set: { allowShellAll: true } }
+        );
+      } catch (e) {
+        console.error('Failed to persist allowShellAll to user settings:', e);
+      }
+    });
+
     return true;
   }
 
@@ -175,8 +189,8 @@ export class ChatSession {
       config: chatConfig,
       reasoning: this.router?.reasoning || null,
       history: this.history,
-      onTool: ({ tool, args }) => {
-        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, status: 'running', timestamp: Date.now() });
+      onTool: ({ tool, args, replaceKey }) => {
+        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, replaceKey, status: 'running', timestamp: Date.now() });
       }
     });
 
@@ -226,8 +240,8 @@ export class ChatSession {
       config: this.config,
       reasoning: this.router?.reasoning || null,
       history: this.history,
-      onTool: ({ tool, args }) => {
-        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, status: 'running', timestamp: Date.now() });
+      onTool: ({ tool, args, replaceKey }) => {
+        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, replaceKey, status: 'running', timestamp: Date.now() });
       }
     });
 

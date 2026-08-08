@@ -10,7 +10,7 @@ import {
   setCurrentDesign,
   setDesignError,
   setDesigns,
-  clearDesign
+  removeDesign
 } from '../../store/chatSlice';
 
 /** Starter templates — each pre-fills the prompt box. */
@@ -81,7 +81,6 @@ export function DesignTab() {
     const designId = currentDesign?._id || null;
 
     dispatch(setDesignStreaming());
-    dispatch(clearDesign());
 
     try {
       const res = await fetch('/api/v1/design/generate', {
@@ -103,6 +102,7 @@ export function DesignTab() {
   const handleRefine = async () => {
     if (!prompt.trim() || !currentDesign) return;
     dispatch(setDesignStreaming());
+
 
     try {
       const res = await fetch('/api/v1/design/generate', {
@@ -160,7 +160,7 @@ export function DesignTab() {
   const handleDeleteDesign = (id) => {
     if (window.confirm('Delete this design and all its versions?')) {
       fetch(`/api/v1/design/${id}`, { method: 'DELETE', headers: getAuthHeaders() })
-        .then(() => dispatch(setDesigns((prev) => prev.filter((d) => d._id !== id))))
+        .then(() => dispatch(removeDesign(id)))
         .catch(console.error);
     }
   };

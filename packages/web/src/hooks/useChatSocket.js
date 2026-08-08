@@ -19,7 +19,8 @@ import {
   setDesignDone,
   setDesignError,
   setCurrentDesign,
-  setDesigns
+  setDesigns,
+  removeDesign
 } from '../store/chatSlice';
 
 function getAuthHeaders() {
@@ -330,7 +331,7 @@ export function useChatSocket(workspaceId = null) {
   const deleteDesign = useCallback(async (designId) => {
     try {
       await fetch(`/api/v1/design/${designId}`, { method: 'DELETE', headers: getAuthHeaders() });
-      dispatch(setDesigns((prev) => prev.filter((d) => d._id !== designId)));
+      dispatch(removeDesign(designId));
     } catch (err) {
       console.error('Failed to delete design:', err);
     }
