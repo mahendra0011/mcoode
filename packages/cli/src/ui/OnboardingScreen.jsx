@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useKeyboard, useRenderer } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { Logo } from './Logo.jsx';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 
 // ─── Small reusable primitives ──────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ function StepIndicator({ current, total }) {
 
 function SelectionItem({ label, description, isSelected, index }) {
   return (
-    <box paddingLeft={2} paddingRight={2}>
+    <box paddingLeft={SPACING.md} paddingRight={SPACING.md}>
       <text fg={isSelected ? theme.greenBright : '#1f2937'}>
         {isSelected ? '▸ ' : '  '}
       </text>
@@ -49,12 +49,12 @@ function SelectionItem({ label, description, isSelected, index }) {
 function TextInput({ label, value, focused, hidden = false, placeholder = '' }) {
   const displayValue = hidden ? '•'.repeat(value.length) : value;
   return (
-    <box paddingLeft={2} paddingRight={2} flexDirection="row">
+    <box paddingLeft={SPACING.md} paddingRight={SPACING.md} flexDirection="row">
       <text fg={theme.dim}>{label}: </text>
       <box
         borderStyle="round"
         borderColor={focused ? theme.green : '#1f2937'}
-        paddingLeft={1} paddingRight={1}
+        paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
         minWidth={32}
       >
         {value.length > 0 ? (
@@ -72,7 +72,7 @@ function StatusMessage({ type, message }) {
   const icons = { ok: '✓', error: '✗', warn: '⚠', info: '●' };
   const colors = { ok: theme.green, error: theme.red, warn: theme.amber, info: theme.blue };
   return (
-    <box paddingLeft={2} paddingRight={2} marginTop={1}>
+    <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm}>
       <text fg={colors[type] || theme.dim}>{icons[type] || '●'} {message}</text>
     </box>
   );
@@ -162,7 +162,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
     return (
       <box flexDirection="column" alignItems="center">
-        <box marginBottom={1}>
+        <box marginBottom={SPACING.sm}>
           <text fg={theme.dim}>
             welcome{config?.account?.name ? `, ${config.account.name}` : ''}!
           </text>
@@ -171,7 +171,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
           flexDirection="column"
           borderStyle="round"
           borderColor="#1f2937"
-          paddingTop={1} paddingBottom={1}
+          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
           width={56}
         >
           {options.map((opt, i) => (
@@ -184,7 +184,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
             />
           ))}
         </box>
-        <box marginTop={1}>
+        <box marginTop={SPACING.sm}>
           <text fg={theme.gray}>↑↓</text>
           <text fg={theme.dim}> navigate  </text>
           <text fg={theme.gray}>enter</text>
@@ -286,12 +286,12 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
     return (
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={0} total={totalSteps} />
-        <box marginTop={1} marginBottom={1}><text fg={theme.text} attributes={TextAttributes.BOLD}>Create Account</text></box>
+        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}><text fg={theme.text} attributes={TextAttributes.BOLD}>Create Account</text></box>
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.green}
-          paddingTop={1} paddingBottom={1}
+          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
           width={56}
         >
           {!isOtpMode ? (
@@ -307,26 +307,26 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
                   />
                 </box>
               ))}
-              <box paddingLeft={2} paddingRight={2} marginTop={1}>
+              <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm}>
                 <text fg={theme.dim}>tab/↑↓ switch fields · enter to submit · esc back</text>
               </box>
             </>
           ) : (
-            <box flexDirection="column" paddingLeft={2} paddingRight={2}>
+            <box flexDirection="column" paddingLeft={SPACING.md} paddingRight={SPACING.md}>
               <StatusMessage type="ok" message={status.message} />
               {status.devOtp && (
                 <StatusMessage type="info" message={`Dev mode OTP: ${status.devOtp}`} />
               )}
-              <box marginTop={1}>
+              <box marginTop={SPACING.sm}>
                 <text fg={theme.dim}>Enter 6-digit code: </text>
-                <box borderStyle="round" borderColor={theme.green} paddingLeft={1} paddingRight={1} minWidth={12}>
+                <box borderStyle="round" borderColor={theme.green} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} minWidth={12}>
                   <text fg={theme.text} attributes={TextAttributes.BOLD}>
                     {inputValues.otp.split('').join(' ')}
                     {'  '.repeat(Math.max(0, 6 - inputValues.otp.length))}
                   </text>
                 </box>
               </box>
-              <box marginTop={1}>
+              <box marginTop={SPACING.sm}>
                 <text fg={theme.dim}>
                   {inputValues.otp.length}/6 digits · enter to verify · esc back
                 </text>
@@ -335,7 +335,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
           )}
         </box>
         {loading && (
-          <box marginTop={1}>
+          <box marginTop={SPACING.sm}>
             <text fg={theme.green}>⟳ processing{dots}</text>
           </box>
         )}
@@ -405,12 +405,12 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
     return (
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={0} total={totalSteps} />
-        <box marginTop={1} marginBottom={1}><text fg={theme.text} attributes={TextAttributes.BOLD}>Login</text></box>
+        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}><text fg={theme.text} attributes={TextAttributes.BOLD}>Login</text></box>
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.blue}
-          paddingTop={1} paddingBottom={1}
+          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
           width={56}
         >
           {fields.map((field, i) => (
@@ -424,12 +424,12 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
               />
             </box>
           ))}
-          <box paddingLeft={2} paddingRight={2} marginTop={1}>
+          <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm}>
             <text fg={theme.dim}>tab/↑↓ switch fields · enter to submit · esc back</text>
           </box>
         </box>
         {loading && (
-          <box marginTop={1}>
+          <box marginTop={SPACING.sm}>
             <text fg={theme.green}>⟳ processing{dots}</text>
           </box>
         )}
@@ -461,18 +461,18 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
     return (
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={1} total={3} />
-        <box marginTop={1} marginBottom={1} flexDirection="column" alignItems="center">
+        <box marginTop={SPACING.sm} marginBottom={SPACING.sm} flexDirection="column" alignItems="center">
           <text fg={theme.amber}>● </text>
           <text fg={theme.text} attributes={TextAttributes.BOLD}>API Key Setup</text>
         </box>
-        <box marginBottom={1}>
+        <box marginBottom={SPACING.sm}>
           <text fg={theme.dim}>You need an AI provider API key for chat and god mode</text>
         </box>
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.amber}
-          paddingTop={1} paddingBottom={1}
+          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
           width={56}
         >
           {options.map((opt, i) => (
@@ -485,7 +485,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
             />
           ))}
         </box>
-        <box marginTop={1}>
+        <box marginTop={SPACING.sm}>
           <text fg={theme.gray}>↑↓</text>
           <text fg={theme.dim}> navigate  </text>
           <text fg={theme.gray}>enter</text>
@@ -518,16 +518,16 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
     return (
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={2} total={3} />
-        <box marginTop={1} marginBottom={1}><text fg={theme.text} attributes={TextAttributes.BOLD}>Select Provider</text></box>
+        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}><text fg={theme.text} attributes={TextAttributes.BOLD}>Select Provider</text></box>
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.purple}
-          paddingTop={1} paddingBottom={1}
+          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
           width={56}
         >
           {PROVIDER_CHOICES.map((p, i) => (
-            <box key={i} paddingLeft={2} paddingRight={2}>
+            <box key={i} paddingLeft={SPACING.md} paddingRight={SPACING.md}>
               <text fg={i === selectedIdx ? theme.greenBright : '#1f2937'}>
                 {i === selectedIdx ? '▸ ' : '  '}
               </text>
@@ -543,7 +543,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
             </box>
           ))}
         </box>
-        <box marginTop={1}>
+        <box marginTop={SPACING.sm}>
           <text fg={theme.gray}>↑↓</text>
           <text fg={theme.dim}> navigate  </text>
           <text fg={theme.gray}>enter</text>
@@ -609,7 +609,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
     return (
       <box flexDirection="column" alignItems="center">
         <StepIndicator current={2} total={3} />
-        <box marginTop={1} marginBottom={1}>
+        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}>
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
             Enter {selectedProvider?.id || 'Provider'} API Key
           </text>
@@ -618,11 +618,11 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.purple}
-          paddingTop={1} paddingBottom={1}
+          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
           width={56}
         >
           {needsCustomEnv && (
-            <box marginBottom={1}>
+            <box marginBottom={SPACING.sm}>
               <TextInput
                 label="Env var"
                 value={inputValues.customEnv}
@@ -638,14 +638,14 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
             hidden={true}
             placeholder="sk-..."
           />
-          <box paddingLeft={2} paddingRight={2} marginTop={1}>
+          <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm}>
             <text fg={theme.dim}>
               {needsCustomEnv ? 'tab switch · ' : ''}enter to save · esc back
             </text>
           </box>
         </box>
         {loading && (
-          <box marginTop={1}>
+          <box marginTop={SPACING.sm}>
             <text fg={theme.green}>⟳ saving{dots}</text>
           </box>
         )}
@@ -672,14 +672,14 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
   return (
     <box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">
       <Logo />
-      <box marginBottom={1}>
+      <box marginBottom={SPACING.sm}>
         <text fg={theme.dim}>terminal-first, multi-model AI coding CLI</text>
       </box>
       <Divider />
-      <box marginTop={1}>
+      <box marginTop={SPACING.sm}>
         <CurrentStep />
       </box>
-      <box position="absolute" marginTop={2}>
+      <box position="absolute" marginTop={SPACING.md}>
         <text fg="#1a1e22">v2.4.6</text>
       </box>
     </box>

@@ -1,5 +1,13 @@
 import { themes, THEME_NAMES, getTheme } from './themes.js';
 
+export const SPACING = {
+  none: 0,
+  xs: 0, // reserved if we need it
+  sm: 1,
+  md: 2,
+  lg: 4
+};
+
 /**
  * Mutable theme proxy. All UI components import this single `theme` object.
  * Calling `setTheme(name)` swaps the underlying color properties in-place,

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 
 export function SelectModal({ title, options, onSelect, onClose, placeholder = 'Search' }) {
   const [search, setSearch] = useState('');
@@ -87,15 +87,15 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
         border
         borderColor={theme.green}
         backgroundColor={theme.panel}
-        paddingLeft={1} paddingRight={1}
-        paddingTop={1} paddingBottom={1}
+        paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
+        paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
       >
-        <box justifyContent="space-between" marginBottom={1}>
+        <box justifyContent="space-between" marginBottom={SPACING.sm}>
         <text attributes={TextAttributes.BOLD}>{title}</text>
         <text fg="gray">esc</text>
       </box>
 
-      <box marginBottom={1}>
+      <box marginBottom={SPACING.sm}>
         {search.length === 0 ? (
           <text fg={theme.gray}>
             <span fg={theme.green}>{placeholder.charAt(0)}</span>
@@ -122,7 +122,7 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
               <box 
                 key={`item-${actualIdx}`} 
                 backgroundColor={isSelected ? theme.green : undefined} 
-                paddingLeft={1} paddingRight={1}
+                paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
                 width="100%"
               >
                 <text fg={isSelected ? 'black' : theme.text}>

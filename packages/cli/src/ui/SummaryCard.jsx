@@ -1,5 +1,5 @@
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 
 function fmtTime(secs) {
   const s = Math.round(Number(secs) || 0);
@@ -17,8 +17,8 @@ export function BuildSummaryCard({ projectName = '', data = {}, marginTop = 1 })
   const allOk = total > 0 && done === total && failed === 0;
 
   return (
-    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={1}>
-      <box flexDirection="column" borderStyle="round" border borderColor={allOk ? theme.green : theme.amber} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1} backgroundColor={theme.surface}>
+    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={SPACING.sm}>
+      <box flexDirection="column" borderStyle="round" border borderColor={allOk ? theme.green : theme.amber} paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingTop={SPACING.sm} paddingBottom={SPACING.sm} backgroundColor={theme.surface}>
         <box flexDirection="row">
           <text fg={allOk ? theme.diffGreen : theme.amber}>{allOk ? '\u2713' : '\u26a0'} </text>
           <text fg={theme.textBright} attributes={TextAttributes.BOLD}>
@@ -26,7 +26,7 @@ export function BuildSummaryCard({ projectName = '', data = {}, marginTop = 1 })
           </text>
         </box>
 
-        <box flexDirection="row" marginTop={1}>
+        <box flexDirection="row" marginTop={SPACING.sm}>
           <text fg={theme.dim}>{done}/{total} todos </text>
           <text fg={theme.muted}>{'\u00b7'} </text>
           <text fg={theme.text}>{files} files </text>
@@ -36,14 +36,14 @@ export function BuildSummaryCard({ projectName = '', data = {}, marginTop = 1 })
           <text fg={theme.green}>est. ${Number(cost).toFixed(2)}</text>
         </box>
         {failed > 0 && (
-          <box flexDirection="row" marginTop={0}>
+          <box flexDirection="row" marginTop={SPACING.none}>
             <text fg={theme.red}>{failed} failed</text>
             {needsReview > 0 && <text fg={theme.amber}>{' '}\u00b7 {needsReview} need review</text>}
           </box>
         )}
 
         {models.length > 0 && (
-          <box flexDirection="column" marginTop={1} paddingLeft={1}>
+          <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
             {models.map((m, i) => (
               <text key={i} fg={theme.dim}>
                 <span fg={theme.text}>{m.domain}</span>
@@ -56,12 +56,12 @@ export function BuildSummaryCard({ projectName = '', data = {}, marginTop = 1 })
         )}
 
         {(tokensIn > 0 || tokensOut > 0) && (
-          <box flexDirection="row" marginTop={1}>
+          <box flexDirection="row" marginTop={SPACING.sm}>
             <text fg={theme.muted}>{`tokens: ${fmtTokens(tokensIn)} in \u00b7 ${fmtTokens(tokensOut)} out`}</text>
           </box>
         )}
 
-        <box flexDirection="row" marginTop={1}>
+        <box flexDirection="row" marginTop={SPACING.sm}>
           <text fg={theme.dim}>integration: </text>
           <text fg={integration?.status === 'passed' ? theme.green : integration?.status === 'failed' ? theme.red : theme.dim}>
             {integration?.status || 'skipped'}

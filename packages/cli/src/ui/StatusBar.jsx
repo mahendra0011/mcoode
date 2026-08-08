@@ -1,5 +1,6 @@
 import { useTerminalDimensions } from '@opentui/react';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
+import { useAnimatedProgress } from './useAnimatedProgress.js';
 
 const CONTEXT_LIMIT = 200_000;
 
@@ -13,9 +14,11 @@ export function StatusBar({ tokens = 0, percent = 0, cwd = '', isGenerating = fa
   const termWidth = tw || 80;
   const tokenLabel = tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}K` : `${tokens}`;
 
+  const animatedPercent = useAnimatedProgress(percent);
+
   // Visual usage bar (8 chars wide)
   const barWidth = 8;
-  const filled = Math.round((percent / 100) * barWidth);
+  const filled = Math.round((animatedPercent / 100) * barWidth);
   const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
 
   const modeColor = mode === 'god' || mode === 'max' ? theme.red : mode === 'high' || mode === 'extra' ? theme.amber : theme.green;
@@ -23,13 +26,14 @@ export function StatusBar({ tokens = 0, percent = 0, cwd = '', isGenerating = fa
   const elapsedLabel = elapsed > 0 ? `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}` : '';
   const costLabel = Number(cost).toFixed(2);
   const dirtyIndicator = gitDirty ? <text fg={theme.amber}>{' \u00b7 modified'}</text> : null;
+  const sep = termWidth < 100 ? '\u2502' : '  \u2502  ';
 
   return (
     <box
       width="100%"
       flexDirection="row"
       justifyContent="space-between"
-      paddingLeft={1} paddingRight={1}
+      paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
       flexShrink={0}
       borderStyle="single"
       border={['top']}
@@ -49,49 +53,53 @@ export function StatusBar({ tokens = 0, percent = 0, cwd = '', isGenerating = fa
             <text fg={modeColor}>{mode}</text>
             {watching && <text fg={theme.amber}>{'  '}{'\u25c9'} watch</text>}
             {specialMode && <text fg={theme.blue}>{'  '}{'◉'} {specialMode}</text>}
-            <text fg={theme.dim}>{'  \u2502  '}</text>
+            <text fg={theme.dim}>{sep}</text>
             <text fg={theme.text}>{modelLabel}</text>
-            {providers > 0 && (
+            {providers > 0 && termWidth >= 90 && (
               <>
-                <text fg={theme.dim}>{'  \u2502  '}</text>
+                <text fg={theme.dim}>{sep}</text>
                 <text fg={theme.green}>{providers}</text>
                 <text fg={theme.dim}> providers</text>
               </>
             )}
-            {agentsTotal > 0 && (
+            {agentsTotal > 0 && termWidth >= 90 && (
               <>
-                <text fg={theme.dim}>{'  \u2502  '}</text>
+                <text fg={theme.dim}>{sep}</text>
                 <text fg={theme.green}>{agentsRunning}</text>
                 <text fg={theme.dim}>/{agentsTotal} agents</text>
               </>
             )}
-            {elapsedLabel && (
+            {elapsedLabel && termWidth >= 90 && (
               <>
-                <text fg={theme.dim}>{'  \u2502  '}</text>
+                <text fg={theme.dim}>{sep}</text>
                 <text fg={theme.dim}>{elapsedLabel}</text>
               </>
             )}
-            {cost > 0 && (
+            {cost > 0 && termWidth >= 120 && (
               <>
-                <text fg={theme.dim}>{'  \u2502  '}</text>
+                <text fg={theme.dim}>{sep}</text>
                 <text fg={theme.dim}>${costLabel}</text>
               </>
             )}
-            {latency > 0 && (
+            {latency > 0 && termWidth >= 120 && (
               <>
-                <text fg={theme.dim}>{'  \u2502  '}</text>
+                <text fg={theme.dim}>{sep}</text>
                 <text fg={theme.latency || theme.dim}>{(latency / 1000).toFixed(1)}s</text>
               </>
             )}
-            <text fg={theme.dim}>{'  \u2502  '}</text>
-            <text fg={theme.dim}>{String(cwd || '').split('/').pop() || 'project'}</text>
-            {branch && <text fg={gitDirty ? theme.amber : theme.green}>:{branch}</text>}
-            {dirtyIndicator}
+            {termWidth >= 100 && (
+              <>
+                <text fg={theme.dim}>{sep}</text>
+                <text fg={theme.dim}>{termWidth >= 140 ? cwd : (String(cwd || '').split('/').pop() || 'project')}</text>
+                {branch && <text fg={gitDirty ? theme.amber : theme.green}>:{branch}</text>}
+                {dirtyIndicator}
+              </>
+            )}
           </>
         )}
       </box>
       <box flexDirection="row" flexShrink={0} alignItems="center">
-        {(tokenIn > 0 || tokenOut > 0) ? (
+        {(tokenIn > 0 || tokenOut > 0) && termWidth >= 120 ? (
           <>
             <text fg={theme.dim}>tokens: </text>
             <text fg={theme.text}>{fmtTokens(tokenIn)}</text>
@@ -105,7 +113,7 @@ export function StatusBar({ tokens = 0, percent = 0, cwd = '', isGenerating = fa
             <text fg={theme.dim}>({percent}%)</text>
           </>
         )}
-        <text fg={theme.dim}>{'  \u2502  '}</text>
+        <text fg={theme.dim}>{sep}</text>
         <text fg={theme.text}>ctrl+p</text>
         <text fg={theme.dim}> commands</text>
       </box>

@@ -90,6 +90,17 @@ export const SOCKET = Object.freeze({
     CHAT_SHELL_STREAM: 'chat:shell_stream',
     CHAT_UNDO_RESULT: 'chat:undo_result',
     DESIGN_STREAM: 'design:stream',
-    DESIGN_DONE: 'design:done'
+    DESIGN_DONE: 'design:done',
+    // God-mode parallel subagent events
+    SUBAGENT_STARTED: 'subagent:started',
+    SUBAGENT_STEP: 'subagent:step',
+    SUBAGENT_DONE: 'subagent:done',
+    SUBAGENT_FAILED: 'subagent:failed',
+    SUBAGENT_FILE: 'subagent:file',
+    WAVE_START: 'wave:start',
+    WAVE_COMPLETE: 'wave:complete',
+    INTEGRATION_PASS: 'integration:pass',
+    BUILD_COMPLETE: 'build:complete',
+    TOAST: 'toast'
   }
 });

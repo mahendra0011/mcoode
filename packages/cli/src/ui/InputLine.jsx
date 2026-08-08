@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
+import { useTicker } from './useTicker.js';
 
 const SLASH_COMMANDS = [
   { cmd: 'agents', desc: 'List active subagents' },
@@ -59,21 +60,22 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
     }
   };
 
+  const ticks = useTicker();
   useEffect(() => {
     if (!isActive || isGenerating) return;
-    const id = setInterval(() => {
-      // hold the cursor solid while typing — blinking resumes after a pause
-      if (Date.now() - lastKeyAt.current > 250) setCursorOn((c) => !c);
-    }, 530);
-    return () => clearInterval(id);
-  }, [isActive, isGenerating]);
+    // Blink cursor via shared ticker: floor(ticks/6) % 2 → ~480ms cycle (80ms × 6)
+    // Hold solid while typing (resume after 250ms pause = ~3 ticks)
+    const blink = Math.floor(ticks / 6) % 2;
+    const shouldBlink = Date.now() - lastKeyAt.current > 250;
+    setCursorOn(shouldBlink ? blink : true);
+  }, [ticks, isActive, isGenerating]);
 
   useKeyboard((key) => {
     if (!isActive) return;
     if (isGenerating) return;
     lastKeyAt.current = Date.now();
     setCursorOn(true);
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+    const input = key.sequence && !key.sequence.includes('\u001b') ? key.sequence : '';
     const currentMatches = menuOpen 
       ? SLASH_COMMANDS.filter((c) => c.cmd.startsWith(value.slice(1).toLowerCase()))
       : [];
@@ -100,7 +102,6 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       if (menuOpen && currentMatches.length > 0) {
         const nextIdx = (menuIdx - 1 + currentMatches.length) % currentMatches.length;
         setMenuIdx(nextIdx);
-        setValue('/' + currentMatches[nextIdx].cmd);
         return;
       }
       if (histIdx === history.length && value !== '') draftRef.current = value;
@@ -115,7 +116,6 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       if (menuOpen && currentMatches.length > 0) {
         const nextIdx = (menuIdx + 1) % currentMatches.length;
         setMenuIdx(nextIdx);
-        setValue('/' + currentMatches[nextIdx].cmd);
         return;
       }
       if (histIdx < history.length) {
@@ -136,10 +136,9 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       return;
     }
 
-    if (key.name === 'tab' && menuOpen && currentMatches.length > 0) {
-      const nextIdx = (menuIdx + 1) % currentMatches.length;
-      setMenuIdx(nextIdx);
-      setValue('/' + currentMatches[nextIdx].cmd);
+    if ((key.name === 'tab' || key.name === 'right') && menuOpen && currentMatches.length > 0) {
+      setValue('/' + currentMatches[menuIdx].cmd + ' ');
+      setMenuOpen(false);
       return;
     }
     
@@ -148,7 +147,13 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
         setValue((v) => v + '\n');
         return;
       }
-      const submitted = value.trim();
+      
+      let submitted = value;
+      if (menuOpen && currentMatches.length > 0 && currentMatches[menuIdx]) {
+        submitted = '/' + currentMatches[menuIdx].cmd;
+      }
+      
+      submitted = submitted.trim();
       setValue('');
       setMenuOpen(false);
       setMenuIdx(0);
@@ -165,7 +170,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       setMenuIdx(0);
       return;
     }
-    if (input && input.length === 1 && !key.ctrl && !key.meta) {
+    if (input && !key.ctrl && !key.meta) {
       exitHistoryPreview();
       if (!menuOpen && value.length === 0 && input === '/') {
         setMenuOpen(true);
@@ -182,25 +187,80 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
     ? SLASH_COMMANDS.filter((c) => c.cmd.startsWith(value.slice(1).toLowerCase()))
     : [];
 
-  const displayMatches = matches.slice(0, 6);
-  const hasMore = matches.length > 6;
+  const WINDOW_SIZE = 6;
+  const page = Math.floor(menuIdx / WINDOW_SIZE);
+  const startIndex = page * WINDOW_SIZE;
+  const displayMatches = matches.slice(startIndex, startIndex + WINDOW_SIZE);
+  const hasMoreDown = startIndex + WINDOW_SIZE < matches.length;
+  const hasMoreUp = startIndex > 0;
 
-  const renderMenu = () => (
-    menuOpen && displayMatches.length > 0 && (
-      <box flexDirection="column" borderStyle="round" border borderColor={theme.accent} backgroundColor={theme.surface} paddingLeft={0} paddingRight={0} paddingTop={0} paddingBottom={0} marginBottom={0}>
-        {displayMatches.map((item, i) => {
-          const isSelected = i === menuIdx;
-          return (
-            <box key={item.cmd} paddingLeft={1} paddingRight={1} backgroundColor={isSelected ? theme.accent : undefined} flexDirection="row">
-              <text fg={isSelected ? '#000000' : theme.text} attributes={isSelected ? TextAttributes.BOLD : 0}>{`/${item.cmd}`.padEnd(15, ' ')}</text>
-              <text fg={isSelected ? '#1e3a5f' : theme.dim}>{item.desc.padEnd(45, ' ')}</text>
-            </box>
-          );
-        })}
-        {hasMore && <box paddingLeft={1} paddingRight={1}><text fg={theme.muted}>{'\u2026'} {matches.length - 6} more</text></box>}
+  const handleWheel = (e) => {
+    if (e.type === 'wheel' || e.type === 'mouse') {
+      const delta = e.button === 1 ? -1 : 1;
+      setMenuIdx((prev) => Math.max(0, Math.min(matches.length - 1, prev + delta)));
+    }
+  };
+
+  const renderMenu = () => {
+    if (!menuOpen || displayMatches.length === 0) return null;
+
+    const totalLines = displayMatches.length + (hasMoreUp ? 1 : 0) + (hasMoreDown ? 1 : 0);
+    const thumbHeight = Math.max(1, Math.floor((WINDOW_SIZE / Math.max(1, matches.length)) * totalLines));
+    const thumbPos = Math.floor((menuIdx / Math.max(1, matches.length)) * totalLines);
+    
+    const scrollbarLines = Array(totalLines).fill('│');
+    for (let i = 0; i < thumbHeight; i++) {
+      if (thumbPos + i < totalLines) {
+        scrollbarLines[thumbPos + i] = '█';
+      }
+    }
+
+    return (
+      <box flexDirection="row" borderStyle="round" border borderColor={theme.accent} backgroundColor={theme.surface} paddingLeft={SPACING.none} paddingRight={SPACING.none} paddingTop={SPACING.none} paddingBottom={SPACING.none} marginBottom={SPACING.none} onWheel={handleWheel}>
+        <box flexDirection="column" flexGrow={1}>
+          {hasMoreUp && <box paddingLeft={SPACING.sm} paddingRight={SPACING.sm}><text fg={theme.muted}>{'\u2191'} {startIndex} above</text></box>}
+          {displayMatches.map((item, i) => {
+            const trueIdx = startIndex + i;
+            const isSelected = trueIdx === menuIdx;
+            return (
+              <box 
+                key={item.cmd} 
+                paddingLeft={SPACING.sm} 
+                paddingRight={SPACING.sm} 
+                backgroundColor={isSelected ? theme.accent : undefined} 
+                flexDirection="row"
+                onMouseDown={() => {
+                  setMenuIdx(trueIdx);
+                  setValue('/' + matches[trueIdx].cmd + ' ');
+                  setMenuOpen(false);
+                }}
+              >
+                <text fg={isSelected ? '#000000' : theme.text} attributes={isSelected ? TextAttributes.BOLD : 0}>{`/${item.cmd}`.padEnd(15, ' ')}</text>
+                <text fg={isSelected ? '#1e3a5f' : theme.dim}>{item.desc.padEnd(45, ' ')}</text>
+              </box>
+            );
+          })}
+          {hasMoreDown && <box paddingLeft={SPACING.sm} paddingRight={SPACING.sm}><text fg={theme.muted}>{'\u2193'} {matches.length - (startIndex + WINDOW_SIZE)} more</text></box>}
+        </box>
+        
+        {matches.length > WINDOW_SIZE && (
+          <box flexDirection="column" paddingLeft={1} paddingRight={0}>
+            {scrollbarLines.map((char, i) => (
+              <box 
+                key={i} 
+                onMouseDown={() => {
+                  const fraction = i / totalLines;
+                  setMenuIdx(Math.min(matches.length - 1, Math.floor(fraction * matches.length)));
+                }}
+              >
+                <text fg={char === '█' ? theme.accent : theme.muted}>{char}</text>
+              </box>
+            ))}
+          </box>
+        )}
       </box>
-    )
-  );
+    );
+  };
 
   const placeholder = value.length === 0
     ? (isGenerating ? 'Generating\u2026' : 'Ask anything\u2026  \u00b7  / for commands')
@@ -211,7 +271,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
     return (
       <box flexDirection="column" width={64}>
         {renderMenu()}
-        <box width={64} borderStyle="single" border={['left']} borderColor={theme.accent} backgroundColor={theme.userBg} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1} flexDirection="column">
+        <box width={64} borderStyle="single" border={['left']} borderColor={theme.accent} backgroundColor={theme.userBg} paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingTop={SPACING.sm} paddingBottom={SPACING.sm} flexDirection="column">
           <text fg={placeholderColor}>
             {value.length === 0 ? 'Ask anything\u2026 "build a rest api for orders"' : value}
             {cursorOn && <span fg={theme.green}>{'\u258d'}</span>}
@@ -230,7 +290,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
   return (
     <box flexDirection="column" width="100%">
       {renderMenu()}
-      <box width="100%" borderStyle="single" border={['left']} borderColor={theme.accent} backgroundColor={theme.userBg} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1} flexDirection="column">
+      <box width="100%" borderStyle="single" border={['left']} borderColor={theme.accent} backgroundColor={theme.userBg} paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingTop={SPACING.sm} paddingBottom={SPACING.sm} flexDirection="column">
         <text fg={placeholderColor}>{placeholder}{cursorOn && <span fg={theme.green}>{'\u258d'}</span>}</text>
         <text> </text>
         <box flexDirection="row">

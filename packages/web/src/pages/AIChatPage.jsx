@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { 
-  Folder, Puzzle, Github, Crown, Settings, 
+import {
+  Folder, Puzzle, Github, Crown, Settings,
   ChevronDown, Plus, Sparkles, ArrowUp, Square,
-  UploadCloud, Download, GitBranch, Share, Loader2, Slash,
-  AlertCircle, CheckCircle2
+  UploadCloud, Download, GitBranch, Share, Loader2, Slash, Zap,
+  AlertCircle, CheckCircle2, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useChatSocket } from '../hooks/useChatSocket';
 import { getAuthHeaders } from '../lib/api';
-import { setMode, addMessage } from '../store/chatSlice';
+import { setMode, addMessage, clearChat, setGodMode } from '../store/chatSlice';
+import { handleSlashCommand, isSlashCommand } from '../lib/slashCommands';
 
 import { FileTree } from '../components/ide/FileTree';
 import { EditorPane } from '../components/ide/EditorPane';
@@ -22,6 +23,7 @@ import { PermissionModal } from '../components/ide/PermissionModal';
 import { ModelSelector } from '../components/ide/ModelSelector';
 import { SparkleButton } from '../components/ide/SparkleButton';
 import { DesignTab } from '../components/ide/DesignTab';
+import { WaveProgress } from '../components/ide/WaveProgress';
 
 export function AIChatPage() {
   const dispatch = useDispatch();
@@ -33,7 +35,7 @@ export function AIChatPage() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
   const [activeTab, setActiveTab] = useState('Chat');
 
-  const { messages, keysError, isStreaming, mode, plan, permissionRequest, models, selectedModel } = useSelector(state => state.chat);
+  const { messages, keysError, isStreaming, mode, plan, permissionRequest, models, selectedModel, godMode, waves, subagents, buildSummary, serverToasts } = useSelector(state => state.chat);
   const { send, interrupt, answerPermission, undo, reloadModels } = useChatSocket(activeWorkspaceId);
   const [openFiles, setOpenFiles] = useState([]);
   const [activePath, setActivePath] = useState(null);
@@ -66,20 +68,29 @@ export function AIChatPage() {
   const [branches, setBranches] = useState([]);
   const [activeBranch, setActiveBranch] = useState('main');
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
-	const [isUploading, setIsUploading] = useState(false);
-	const [watchMode, setWatchMode] = useState(false);
+		const [isUploading, setIsUploading] = useState(false);
+		const [watchMode, setWatchMode] = useState(false);
+		const [debugMode, setDebugMode] = useState(false);
+
+		// Modal for commit message (replaces window.prompt)
+		const [showCommitModal, setShowCommitModal] = useState(false);
+		const [commitMessage, setCommitMessage] = useState('Initial commit');
+		// Modal for new branch name (replaces window.prompt)
+		const [showBranchModal, setShowBranchModal] = useState(false);
+		const [branchName, setBranchName] = useState('');
 
 	const toggleWatchMode = () => setWatchMode(!watchMode);
+	const toggleDebug = () => setDebugMode(!debugMode);
 
-	// Toast notifications (replaces native alert())
-	const [toasts, setToasts] = useState([]);
-	const showToast = useCallback((message, type = 'success') => {
-		const id = Date.now().toString();
-		setToasts((prev) => [...prev, { id, message, type }]);
-		setTimeout(() => {
-			setToasts((prev) => prev.filter((t) => t.id !== id));
-		}, 3500);
-	}, []);
+		// Toast notifications (replaces native alert())
+		const [localToasts, setLocalToasts] = useState([]);
+		const showToast = useCallback((message, type = 'success') => {
+			const id = Date.now().toString();
+			setLocalToasts((prev) => [...prev, { id, message, type }]);
+			setTimeout(() => {
+				setLocalToasts((prev) => prev.filter((t) => t.id !== id));
+			}, 3500);
+		}, []);
 
 	// Auth guard
 	useEffect(() => {
@@ -288,21 +299,28 @@ export function AIChatPage() {
 
   const handlePush = async () => {
     if (!activeWorkspaceId) return;
-    const msg = window.prompt("Enter commit message:");
-    if (!msg) return;
+    if (!commitMessage.trim()) return;
 
     try {
       const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/push`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ message: msg, branch: activeBranch })
+        body: JSON.stringify({ message: commitMessage, branch: activeBranch })
       });
       const data = await res.json();
       if (data.ok) showToast('Pushed successfully!');
       else showToast('Failed to push: ' + (data.error?.message || 'Unknown error'), 'error');
     } catch (e) {
       showToast('Error pushing', 'error');
+    } finally {
+      setShowCommitModal(false);
     }
+  };
+
+  const handleCreateBranch = () => {
+    if (!branchName.trim()) return;
+    switchBranch(branchName, true);
+    setShowBranchModal(false);
   };
 
   const handleGithubConnect = () => {
@@ -327,16 +345,36 @@ export function AIChatPage() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (prompt.trim() && !isStreaming) {
-      // Echo the user's message into the Redux store so it appears in the chat UI
-      dispatch(addMessage({
-        id: Date.now().toString(),
-        role: 'user',
-        text: prompt,
-      }));
-      send(prompt);
-      setPrompt('');
+    if (!prompt.trim() || isStreaming) return;
+
+    // Handle slash commands client-side before sending to backend
+    if (isSlashCommand(prompt)) {
+      const handled = handleSlashCommand(prompt, dispatch, { send, undo }, {
+        setPrompt,
+        toggleWatchMode,
+        toggleAdvancedMode,
+        watchMode,
+        debugMode,
+        toggleDebug,
+        handleExport,
+        clearMessages: () => dispatch(clearChat()),
+      });
+      if (handled) {
+        setPrompt('');
+        return;
+      }
     }
+
+    // Echo the user's message into the Redux store so it appears in the chat UI
+    dispatch(addMessage({
+      id: Date.now().toString(),
+      role: 'user',
+      text: prompt,
+    }));
+    // In advanced mode, god-mode toggle sends with 'god' mode for parallel subagent execution
+    const effectiveMode = (mode === 'agent' && godMode) ? 'god' : mode;
+    send(prompt, effectiveMode);
+    setPrompt('');
   };
 
   return (
@@ -508,7 +546,7 @@ export function AIChatPage() {
                     <button type="button" onClick={handleExport} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Export ZIP">
                       <Download className="w-3.5 h-3.5"/> Export
                     </button>
-                    <button type="button" onClick={handlePush} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git">
+                    <button type="button" onClick={() => setShowCommitModal(true)} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git">
                       <Share className="w-3.5 h-3.5"/> Push
                     </button>
                     <div className="w-px h-5 bg-white/10 mx-1"></div>
@@ -544,9 +582,14 @@ export function AIChatPage() {
                         <button type="button" onClick={toggleAdvancedMode} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
                           <Settings className="w-3.5 h-3.5" /> Advanced Mode
                         </button>
+                        {mode === 'agent' && (
+                          <button type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                            <Zap className="w-3.5 h-3.5" /> God
+                          </button>
+                        )}
                         <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
                         {mode === 'agent' && (
-                          <button type="button" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
+                          <button type="button" onClick={() => setPrompt('/')} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
                             <Slash className="w-4 h-4" />
                           </button>
                         )}
@@ -602,6 +645,16 @@ export function AIChatPage() {
                     <TodoCard plan={plan} />
                     <PermissionModal request={permissionRequest} onAnswer={answerPermission} />
                   </div>
+                  {godMode && (
+                    <div className="w-full max-w-4xl mx-auto">
+                      <WaveProgress
+                        waves={waves}
+                        subagents={subagents}
+                        buildSummary={buildSummary}
+                        godMode={godMode}
+                      />
+                    </div>
+                  )}
                   {messages.map((msg, idx) => (
                     msg.role === 'user' ? (
                       <div key={msg.id || idx} className="flex justify-end w-full max-w-4xl mx-auto">
@@ -639,7 +692,7 @@ export function AIChatPage() {
                     <button type="button" onClick={handleExport} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Export ZIP">
                       <Download className="w-3.5 h-3.5"/> Export
                     </button>
-                    <button type="button" onClick={handlePush} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git">
+                    <button type="button" onClick={() => setShowCommitModal(true)} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git">
                       <Share className="w-3.5 h-3.5"/> Push
                     </button>
                     <div className="w-px h-5 bg-white/10 mx-1"></div>
@@ -677,7 +730,7 @@ export function AIChatPage() {
                           </button>
                           <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
                           {mode === 'agent' && (
-                            <button type="button" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
+                            <button type="button" onClick={() => setPrompt('/')} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
                               <Slash className="w-4 h-4" />
                             </button>
                           )}
@@ -729,7 +782,7 @@ export function AIChatPage() {
                      <Download className="w-3.5 h-3.5"/> Export
                    </button>
                    <div className="w-px h-4 bg-white/10 mx-1"></div>
-                   <button onClick={handlePush} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 transition">
+                   <button onClick={() => setShowCommitModal(true)} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 transition">
                      <Share className="w-3.5 h-3.5"/> Push ↑
                    </button>
                    <button onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20 transition">
@@ -773,6 +826,16 @@ export function AIChatPage() {
                   
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 custom-scrollbar">
                     <TodoCard plan={plan} />
+                    {godMode && (
+                      <div className="mb-2">
+                        <WaveProgress
+                          waves={waves}
+                          subagents={subagents}
+                          buildSummary={buildSummary}
+                          godMode={godMode}
+                        />
+                      </div>
+                    )}
                     <PermissionModal request={permissionRequest} onAnswer={answerPermission} />
                     {messages.map((msg, idx) => (
                       <div key={idx} className={`w-full flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start gap-3'}`}>
@@ -900,10 +963,7 @@ export function AIChatPage() {
             </div>
             <div className="p-2 border-t border-white/5">
               <button
-                onClick={() => {
-                  const name = window.prompt('New branch name:');
-                  if (name) switchBranch(name, true);
-                }}
+                onClick={() => { setBranchName(''); setShowBranchModal(true); }}
                 className="w-full text-left px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition flex items-center gap-2"
               >
                 <Plus className="w-3.5 h-3.5" /> Create new branch
@@ -916,7 +976,7 @@ export function AIChatPage() {
       {/* Toast notifications (top-right, auto-dismissing) */}
       <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
         <AnimatePresence>
-          {toasts.map((toast) => (
+          {(localToasts ?? []).map((toast) => (
             <motion.div
               key={toast.id}
               initial={{ opacity: 0, x: 100, scale: 0.95 }}
@@ -927,7 +987,7 @@ export function AIChatPage() {
                 toast.type === 'error'
                   ? 'bg-red-500/10 border-red-500/30 text-red-400'
                   : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-              }}`}
+              }`}
             >
               {toast.type === 'error' ? (
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -938,7 +998,128 @@ export function AIChatPage() {
             </motion.div>
           ))}
         </AnimatePresence>
-      </div>
+        {/* Server-side toasts (god-mode, from Redux store) */}
+        <AnimatePresence>
+          {(serverToasts ?? []).map((toast) => {
+            const isError = toast.kind === 'error' || toast.kind === 'failed';
+            return (
+              <motion.div
+                key={toast.id}
+                initial={{ opacity: 0, x: 100, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 100, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className={`max-w-sm px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 border ${
+                  isError
+                    ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                }`}
+              >
+                {isError ? (
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                )}
+                <span>{toast.text || toast.message}</span>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+	      </div>
+
+      {/* Commit Message Modal (replaces window.prompt) */}
+      <AnimatePresence>
+        {showCommitModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowCommitModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="bg-[#18181b] border border-white/20 rounded-xl p-6 w-80 mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-medium text-white/80 mb-4">Commit Message</h3>
+              <input
+                type="text"
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                placeholder="Enter commit message..."
+                className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition mb-4"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') handlePush(); if (e.key === 'Escape') setShowCommitModal(false); }}
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowCommitModal(false)}
+                  className="px-3 py-1.5 text-xs text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePush}
+                  className="px-3 py-1.5 text-xs text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition"
+                >
+                  Commit & Push
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* New Branch Modal (replaces window.prompt) */}
+      <AnimatePresence>
+        {showBranchModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowBranchModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="bg-[#18181b] border border-white/20 rounded-xl p-6 w-80 mx-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-medium text-white/80 mb-4">New Branch</h3>
+              <input
+                type="text"
+                value={branchName}
+                onChange={(e) => setBranchName(e.target.value)}
+                placeholder="Enter branch name..."
+                className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition mb-4"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateBranch(); if (e.key === 'Escape') setShowBranchModal(false); }}
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowBranchModal(false)}
+                  className="px-3 py-1.5 text-xs text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateBranch}
+                  className="px-3 py-1.5 text-xs text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition"
+                >
+                  Create
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 
 const TOAST_TTL_MS = 5000;
 
@@ -34,7 +34,7 @@ export function Toasts({ toasts }) {
         const fading = dying.includes(t.text);
         const cfg = KIND_CONFIG[t.kind] || { icon: '\u2022', color: theme.dim };
         return (
-          <box key={`${t.text}-${i}`} flexDirection="row" paddingLeft={2}>
+          <box key={`${t.text}-${i}`} flexDirection="row" paddingLeft={SPACING.md}>
             <text fg={fading ? theme.muted : cfg.color}>{fading ? '\u25e6' : cfg.icon} </text>
             <text fg={fading ? theme.muted : theme.text}>{t.text}</text>
           </box>

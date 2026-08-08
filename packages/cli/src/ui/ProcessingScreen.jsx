@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { useTicker } from './useTicker.js';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 import { SPIN_FRAMES } from './blocks.jsx';
+import { useAnimatedProgress } from './useAnimatedProgress.js';
 
 const CONTEXT_LIMIT = 200_000;
 const BAR_WIDTH = 24;
@@ -25,6 +27,63 @@ function progressBar(filled, total = 100, width = BAR_WIDTH) {
   return bar;
 }
 
+function TodoRow({ t, isLast, status, runningAgent, failedAgent, frame, icon, color, dc, depColor }) {
+  const [justCompleted, setJustCompleted] = useState(false);
+  const prevStatus = useRef(status);
+
+  useEffect(() => {
+    if (prevStatus.current !== 'done' && status === 'done') {
+      setJustCompleted(true);
+      const id = setTimeout(() => setJustCompleted(false), 400);
+      return () => clearTimeout(id);
+    }
+    prevStatus.current = status;
+  }, [status]);
+
+  const step = runningAgent?.step || 0;
+  const total = runningAgent?.totalSteps || 10;
+  const pcts = total > 0 ? Math.round((step / total) * 100) : 0;
+  
+  const animatedPct = useAnimatedProgress(status === 'done' ? 100 : runningAgent ? pcts : 0);
+  const bar = progressBar(animatedPct, 100, 12);
+
+  const label = runningAgent
+    ? `step ${step}/${total}`
+    : status === 'done'
+      ? 'done'
+      : runningAgent?.message
+        ? String(runningAgent.message).slice(0, 20)
+        : 'queued';
+  const prefix = isLast ? '\u2514\u2500\u2500' : '\u251c\u2500\u2500';
+  const hasDeps = t.dependsOn && t.dependsOn.length > 0;
+  const retryCount = failedAgent?.retryCount || 0;
+
+  const bgProps = justCompleted ? { backgroundColor: theme.green } : {};
+  const fgColor = justCompleted ? theme.textBright : color;
+  const textAttr = justCompleted ? TextAttributes.BOLD : undefined;
+
+  return (
+    <box flexDirection="column" flexShrink={0} {...bgProps}>
+      <box flexDirection="row" alignItems="center" marginBottom={SPACING.none} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
+        <text fg={depColor}>{prefix} </text>
+        <text fg={fgColor} attributes={textAttr}>{icon} </text>
+        <text fg={theme.text}>{String(t.id).padEnd(5)} </text>
+        <text fg={dc}>[{String(t.domain).slice(0, 8).padEnd(8)}] </text>
+        <text fg={theme.dim}>{bar} </text>
+        <text fg={theme.dim}>{label}</text>
+        {retryCount > 0 && (
+          <text fg={theme.amber}>{'  '}\u21bb{retryCount}</text>
+        )}
+      </box>
+      {hasDeps && (
+        <text fg={theme.amber} paddingLeft={SPACING.lg} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
+          {'\u2502'} depends on: {t.dependsOn.join(', ')}
+        </text>
+      )}
+    </box>
+  );
+}
+
 export function ProcessingScreen({
   plan = null,
   waves = [],
@@ -39,12 +98,9 @@ export function ProcessingScreen({
   onInterrupt = null,
   height = 24
 }) {
-  const [frame, setFrame] = useState(0);
+  const ticks = useTicker();
+  const frame = ticks % SPIN_FRAMES.length;
 
-  useEffect(() => {
-    const id = setInterval(() => setFrame((f) => (f + 1) % SPIN_FRAMES.length), 120);
-    return () => clearInterval(id);
-  }, []);
 
   const statusColor = (s) => {
     if (s === 'done') return theme.diffGreen;
@@ -139,66 +195,52 @@ export function ProcessingScreen({
       const dot = isActive ? SPIN_FRAMES[frame] : isPast ? '\u2713' : '\u25cb';
       const dotColor = isActive ? theme.green : isPast ? theme.diffGreen : theme.muted;
 
+      const animatedWavePct = useAnimatedProgress(waveDone.pct);
+
       sections.push(
-        <box key={`wave-${waveNum}`} flexDirection="column" marginTop={1} flexShrink={0}>
-          <box flexDirection="row" alignItems="center" marginBottom={1}>
+        <box key={`wave-${waveNum}`} flexDirection="column" marginTop={SPACING.sm} flexShrink={0}>
+          <box flexDirection="row" alignItems="center" marginBottom={SPACING.sm}>
             <text fg={dotColor}>{dot} </text>
             <text fg={isActive ? theme.textBright : isPast ? theme.green : theme.muted}
               attributes={isActive ? TextAttributes.BOLD : undefined}>
               Wave {waveNum}/{totalWaves}
             </text>
             <text fg={theme.dim}>{'  '}\u2502{'  '}</text>
-            <text fg={theme.dim}>{progressBar(waveDone.pct, 100, 10)}</text>
+            <text fg={theme.dim}>{progressBar(animatedWavePct, 100, 10)}</text>
             <text fg={theme.dim}> {waveDone.done}/{waveDone.total}</text>
           </box>
 
-          <box flexDirection="column" paddingLeft={2} flexShrink={0}>
-          {waveTodos.map((t, ti) => {
-            const status = statusById.get(t.id) || 'pending';
-            const runningAgent = agentByTodoId.get(t.id);
-            const icon = statusIcon(status);
-            const color = statusColor(status);
-            const step = runningAgent?.step || 0;
-            const total = runningAgent?.totalSteps || 10;
-            const pcts = total > 0 ? Math.round((step / total) * 100) : 0;
-            const bar = runningAgent ? progressBar(pcts, 100, 12) : progressBar(status === 'done' ? 100 : 0, 100, 12);
-            const dc = domainColor(t.domain);
-            const label = runningAgent
-              ? `step ${step}/${total}`
-              : status === 'done'
-                ? 'done'
-                : runningAgent?.message
-                  ? String(runningAgent.message).slice(0, 20)
-                  : 'queued';
+          {isActive && (
+            <box flexDirection="column" paddingLeft={SPACING.md} flexShrink={0}>
+            {waveTodos.map((t, ti) => {
+              const status = statusById.get(t.id) || 'pending';
+              const runningAgent = agentByTodoId.get(t.id);
+              const icon = statusIcon(status);
+              const color = statusColor(status);
               const isLast = ti === waveTodos.length - 1;
-              const prefix = isLast ? '\u2514\u2500\u2500' : '\u251c\u2500\u2500';
               const hasDeps = t.dependsOn && t.dependsOn.length > 0;
               const depColor = hasDeps ? theme.amber : theme.divider;
               const failedAgent = agentByTodoId.get(t.id);
-              const retryCount = failedAgent?.retryCount || 0;
+              const dc = domainColor(t.domain);
 
-            return (
-              <box key={t.id} flexDirection="column" flexShrink={0}>
-                <box flexDirection="row" alignItems="center" marginBottom={0} paddingTop={0} paddingBottom={0}>
-                  <text fg={depColor}>{prefix} </text>
-                  <text fg={color}>{icon} </text>
-                  <text fg={theme.text}>{String(t.id).padEnd(5)} </text>
-                  <text fg={dc}>[{String(t.domain).slice(0, 8).padEnd(8)}] </text>
-                  <text fg={theme.dim}>{bar} </text>
-                  <text fg={theme.dim}>{label}</text>
-                  {retryCount > 0 && (
-                    <text fg={theme.amber}>{'  '}\u21bb{retryCount}</text>
-                  )}
-                </box>
-                {hasDeps && (
-                  <text fg={theme.amber} paddingLeft={3} paddingTop={0} paddingBottom={0}>
-                    {'\u2502'} depends on: {t.dependsOn.join(', ')}
-                  </text>
-                )}
-              </box>
-            );
-          })}
-          </box>
+              return (
+                <TodoRow
+                  key={t.id}
+                  t={t}
+                  isLast={isLast}
+                  status={status}
+                  runningAgent={runningAgent}
+                  failedAgent={failedAgent}
+                  frame={frame}
+                  icon={icon}
+                  color={color}
+                  dc={dc}
+                  depColor={depColor}
+                />
+              );
+            })}
+            </box>
+          )}
         </box>
       );
     }
@@ -206,13 +248,13 @@ export function ProcessingScreen({
     // Integration / bugfix phase
     if (currentWave === totalWaves && doneTodos + failedTodos >= totalTodos) {
       sections.push(
-        <box key="integration" flexDirection="column" marginTop={1} flexShrink={0}>
-          <box flexDirection="row" alignItems="center" marginBottom={1}>
+        <box key="integration" flexDirection="column" marginTop={SPACING.sm} flexShrink={0}>
+          <box flexDirection="row" alignItems="center" marginBottom={SPACING.sm}>
             <text fg={theme.amber}>{SPIN_FRAMES[frame]} </text>
             <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Verification </text>
             <text fg={theme.dim}>{progressBar(0, 100, 14)}</text>
           </box>
-          <box flexDirection="column" paddingLeft={2} flexShrink={0}>
+          <box flexDirection="column" paddingLeft={SPACING.md} flexShrink={0}>
             <box flexDirection="row">
               <text fg={theme.dim}>integration tests</text>
               <text fg={theme.dim}>{' '}\u2502{' '}</text>
@@ -227,7 +269,8 @@ export function ProcessingScreen({
   };
 
   const contextPct = Math.round((contextTokens / CONTEXT_LIMIT) * 100);
-  const contextBar = progressBar(contextPct, 100, 20);
+  const animatedContextPct = useAnimatedProgress(contextPct);
+  const contextBar = progressBar(animatedContextPct, 100, 20);
 
   const timeLabel = fmtElapsed(elapsed);
 
@@ -252,7 +295,7 @@ export function ProcessingScreen({
       flexShrink={0}
     >
       {/* Header */}
-      <box flexDirection="row" alignItems="center" paddingLeft={1} paddingRight={1} paddingTop={1} paddingBottom={1}
+      <box flexDirection="row" alignItems="center" paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
         borderStyle="single" border={['bottom']} borderColor={theme.divider}>
         <text fg={theme.amber}>{'\u25b8 '}</text>
         <text fg={theme.textBright} attributes={TextAttributes.BOLD}>God Mode </text>
@@ -265,13 +308,13 @@ export function ProcessingScreen({
       </box>
 
       {/* Wave DAG */}
-      <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1} marginTop={1} overflow="hidden">
+      <box flexDirection="column" flexGrow={1} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} marginTop={SPACING.sm} overflow="hidden">
         {renderWaves()}
       </box>
 
       {/* Context / Metrics footer */}
       <box flexDirection="row" justifyContent="space-between"
-        paddingLeft={1} paddingRight={1} paddingTop={1} paddingBottom={1}
+        paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
         borderStyle="single" border={['top']} borderColor={theme.divider}>
         <box flexDirection="row" alignItems="center">
           <text fg={theme.dim}>Context: </text>

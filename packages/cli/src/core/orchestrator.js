@@ -65,6 +65,52 @@ export class Orchestrator extends EventEmitter {
     this.chatHistory = [];
   }
 
+  /**
+   * Get or create a domain-specialized agent.
+   * Instead of a single ChatAgent for god-mode, creates dedicated agents
+   * per domain (frontend, backend, db, devops, test, bugfix, docs, planning)
+   * so they can work in parallel with domain-optimized model selection.
+   * Mirrors Z Code's specialized subagent pattern.
+   */
+  async getSpecializedAgent(domain) {
+    if (!this._specializedAgents) this._specializedAgents = new Map();
+
+    if (this._specializedAgents.has(domain)) {
+      return this._specializedAgents.get(domain);
+    }
+
+    // Use cached assignment if available (warmed up at init)
+    const assignment = this.router.getCachedAssignment(domain) || await this.router.pick(domain);
+    if (!assignment) return null;
+
+    const { ChatAgent } = await import('./chat-agent.js');
+    const agent = new ChatAgent({
+      assignment,
+      projectPath: this.projectPath,
+      bus: this.bus,
+      undoStack: this.undoStack,
+      config: { ...this.config, forceDomain: domain },
+      reasoning: this.router?.reasoning || null,
+      history: [], // each domain gets its own context window
+      maxTurns: this.config?.maxTurnsPerAgent || 15,
+      allowShellAll: this.config?.allowShellAll || false,
+      domain: domain
+    });
+
+    this._specializedAgents.set(domain, agent);
+    return agent;
+  }
+
+  /** Clear specialized agents to free context windows between builds */
+  clearSpecializedAgents() {
+    if (this._specializedAgents) {
+      for (const agent of this._specializedAgents.values()) {
+        agent.clearHistory?.();
+      }
+      this._specializedAgents.clear();
+    }
+  }
+
   /** Switch the quality/speed dial. Persisted by the caller. */
   setMode(mode) {
     this.mode = this.router ? this.router.setMode(mode) : mode;
@@ -105,6 +151,10 @@ export class Orchestrator extends EventEmitter {
       }
     });
     this._tryConnectBackend();
+
+    // Warm up model assignments for all domains (non-blocking)
+    this.router.warmUp().catch(() => { /* models will be resolved on-demand */ });
+
     return this;
   }
 
@@ -272,9 +322,15 @@ export class Orchestrator extends EventEmitter {
     return { text: full, interrupted: false };
   }
 
-  /** Cancel an in-flight chat run (Esc / Ctrl+C mid-turn). */
+  /** Cancel an in-flight chat run or specialized agents (Esc / Ctrl+C mid-turn). */
   interrupt() {
     this.chatAgent?.abort();
+    // Interrupt any running specialized agents in god-mode
+    if (this._specializedAgents) {
+      for (const agent of this._specializedAgents.values()) {
+        agent?.abort?.();
+      }
+    }
   }
 
   /** Resolve a pending permission prompt (y/n/always). */
@@ -282,9 +338,9 @@ export class Orchestrator extends EventEmitter {
     this.bus.emit(EVENTS.PERMISSION_ANSWER, { requestId, answer });
   }
 
-  async undo() {
-    const file = await this.undoStack.undo();
-    this.emit(EVENTS.UNDO, { file });
+  async undo(id = null) {
+    const file = await this.undoStack.undo(id);
+    this.emit(EVENTS.UNDO, { file, undoId: id });
     return file;
   }
 
@@ -300,6 +356,8 @@ export class Orchestrator extends EventEmitter {
   /** God Mode — full one-prompt-to-delivery pipeline. */
   async runGod(prompt, { confirmFn = null, addMessage = null, fresh = false, deployTarget = null, noTests = false } = {}) {
     const t0 = Date.now();
+    // Clear any existing specialized agents to free context windows
+    this.clearSpecializedAgents();
     this.emit(EVENTS.MESSAGE, { kind: 'system', text: `\u25b8 god mode: "${String(prompt).slice(0, 100)}"` });
     const plan = await this.plan(prompt, { fresh });
     if (addMessage) addMessage({ kind: 'ok', text: `\u2713 plan generated — ${plan.todos.length} todos across ${new Set(plan.todos.map((t) => t.domain)).size} domains` });

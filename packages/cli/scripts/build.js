@@ -15,7 +15,7 @@ const common = {
   jsx: 'automatic',
   jsxImportSource: '@opentui/react',
   loader: { '.js': 'jsx' },
-  external: ['@mcode/backend'],
+  external: ['@mcode/backend', 'chromium-bidi/lib/cjs/bidiMapper/BidiMapper', 'chromium-bidi/lib/cjs/cdp/CdpConnection'],
   alias: {
     'react-devtools-core': join(root, 'scripts', 'stubs', 'react-devtools-core.js')
   },

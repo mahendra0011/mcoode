@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText, Pencil, Terminal, FolderTree, GitBranch,
   Search, Globe, Loader2, CheckCircle2, XCircle, ChevronRight, ChevronDown,
-  MousePointerClick, Camera, TreePine, AlertCircle
+  MousePointerClick, Camera, TreePine, AlertCircle, Undo
 } from 'lucide-react';
 
 // Diffs viewer using framer-motion stagger
@@ -321,12 +321,22 @@ export function StepCard({ msg, undo }) {
 	              <img src={msg.image} alt="screenshot" className="w-full h-full object-cover" />
 	            </motion.div>
 	          )}
-	          {durationStr && <span className="text-[11px] font-mono text-white/30">{durationStr}</span>}
-	          {expanded ? (
-	            <ChevronDown className="w-3.5 h-3.5 text-white/30" />
-	          ) : (
-	            <ChevronRight className="w-3.5 h-3.5 text-white/30" />
-	          )}
+          {durationStr && <span className="text-[11px] font-mono text-white/30">{durationStr}</span>}
+          {/* Undo button visible in collapsed header for done edit blocks */}
+          {!expanded && isDone && !actionTaken && (msg.tool === 'write_file' || msg.tool === 'edit_file') && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setActionTaken('undone'); undo?.(msg); }}
+              className="p-1 text-red-400/50 hover:text-red-400 hover:bg-red-500/10 rounded transition"
+              title="Undo change"
+            >
+              <Undo className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {expanded ? (
+            <ChevronDown className="w-3.5 h-3.5 text-white/30" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+          )}
 	        </div>
       </div>
 
@@ -357,13 +367,13 @@ export function StepCard({ msg, undo }) {
                 <DiffViewer diffLines={msg.diffLines} />
               )}
               
-              {/* Read -> Lines */}
-              {msg.tool === 'read_file' && msg.lines && (
+              {/* Read / Web Fetch -> Lines */}
+              {(msg.tool === 'read_file' || msg.tool === 'web_fetch') && msg.lines && (
                 <TerminalViewer output={msg.lines.join('\n')} />
               )}
 
-              {/* Command -> Output */}
-              {(msg.tool === 'run_shell' || msg.tool === 'run_tests' || msg.tool === 'list_files' || msg.tool === 'git_status') && msg.output && (
+              {/* Command / Search -> Output */}
+              {(msg.tool === 'run_shell' || msg.tool === 'run_tests' || msg.tool === 'list_files' || msg.tool === 'search_code' || msg.tool === 'web_search' || msg.tool === 'git_status') && msg.output && (
                 <TerminalViewer output={msg.output} />
               )}
 
@@ -401,7 +411,7 @@ export function StepCard({ msg, undo }) {
               {isDone && !actionTaken && (msg.tool === 'write_file' || msg.tool === 'edit_file') && (
                 <div className="mt-3 flex items-center justify-end gap-2 border-t border-white/5 pt-3">
                   <button 
-                    onClick={(e) => { e.stopPropagation(); setActionTaken('undone'); undo?.(); }}
+                    onClick={(e) => { e.stopPropagation(); setActionTaken('undone'); undo?.(msg); }}
                     className="px-3 py-1.5 text-[11px] font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded transition"
                   >
                     ✕ Undo

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useKeyboard, useTerminalDimensions, useRenderer } from '@opentui/react';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 import { MainPane } from './MainPane.jsx';
 import { InputLine } from './InputLine.jsx';
 import { Toasts } from './Toasts.jsx';
@@ -422,6 +422,15 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
     };
     bus.on(EVENTS.WATCH_FIX, onWatchFix);
     bus.on(EVENTS.HOOK_EXECUTED, onHookExecuted);
+    
+    const onAlwaysGranted = async (p) => {
+      if (p.tool === 'run_shell') {
+        const { saveConfig } = await import('../core/store.js');
+        await saveConfig({ allowShellAll: true });
+        toast({ kind: 'ok', text: 'Terminal permissions saved for all future runs' });
+      }
+    };
+    bus.on('permission:always_granted', onAlwaysGranted);
 
     return () => {
       bus.off(EVENTS.PLAN_GENERATED, onPlan);
@@ -441,6 +450,7 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
       bus.off(EVENTS.WATCH_SCAN, onWatchScan);
       bus.off(EVENTS.WATCH_FIX, onWatchFix);
       bus.off(EVENTS.HOOK_EXECUTED, onHookExecuted);
+      bus.off('permission:always_granted', onAlwaysGranted);
     };
   }, [orchestrator]);
 
@@ -1057,7 +1067,7 @@ const handleSlash = async (raw) => {
               agentsTotal={agents.length}
               elapsed={elapsed}
             />
-            <box flexDirection="column" flexGrow={1} overflow="hidden" paddingLeft={1} paddingRight={1}>
+            <box flexDirection="column" flexGrow={1} overflow="hidden" paddingLeft={SPACING.sm} paddingRight={SPACING.sm}>
                 <MainPane
                   messages={messages}
                   streamingMessage={streamingMessage}

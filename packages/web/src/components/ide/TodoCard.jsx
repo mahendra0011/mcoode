@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { Circle } from 'lucide-react';
 
 export function TodoCard({ plan }) {
   if (!plan || !plan.todos) return null;
@@ -29,10 +29,38 @@ export function TodoCard({ plan }) {
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
                   >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <motion.svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-emerald-400 w-4 h-4"
+                    >
+                      <motion.path
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 1 }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        d="M5 12.5l5 5 9-9"
+                      />
+                    </motion.svg>
                   </motion.div>
                 ) : isRunning ? (
-                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                  <motion.div
+                    animate={{
+                      scale: [1, 1.4, 1],
+                      opacity: [0.4, 1, 0.4]
+                    }}
+                    transition={{
+                      duration: 1.5,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                    className="w-4 h-4 rounded-full bg-blue-400"
+                  />
                 ) : (
                   <Circle className="w-4 h-4 text-white/20" />
                 )}

@@ -4,7 +4,8 @@ import { TextInputModal } from './TextInputModal.jsx';
 import { getAllAdapters } from '../providers/index.js';
 import { loadVault, saveVault } from '../core/vault.js';
 import { loadConfig, saveConfig } from '../core/store.js';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
+import { useAnimatedProgress } from './useAnimatedProgress.js';
 
 export function ProviderWizard({ mode = 'connect', onClose }) {
   const [step, setStep] = useState('loading');
@@ -89,11 +90,41 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
     onClose();
   };
 
+  const pctMap = {
+    'loading': 0,
+    'select-provider': 25,
+    'select-configured-provider': 25,
+    'enter-key': 50,
+    'validating': 75,
+    'loading-models': 75,
+    'select-model': 100
+  };
+  const animatedPct = useAnimatedProgress(pctMap[step] || 0);
+  const barWidth = 12;
+  const filled = Math.round((animatedPct / 100) * barWidth);
+  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(barWidth - filled);
+
+  const [justCompleted, setJustCompleted] = useState(false);
+  const [lastStep, setLastStep] = useState(step);
+  useEffect(() => {
+    if (step !== lastStep) {
+       if ((pctMap[step] || 0) > (pctMap[lastStep] || 0)) {
+         setJustCompleted(true);
+         const timer = setTimeout(() => setJustCompleted(false), 400);
+         setLastStep(step);
+         return () => clearTimeout(timer);
+       }
+       setLastStep(step);
+    }
+  }, [step, lastStep]);
+
+  const flashColor = justCompleted ? theme.green : theme.accent;
+
   if (step === 'loading' || step === 'validating' || step === 'loading-models') {
     return (
       <box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
-        <box padding={1} borderStyle="single" border borderColor={theme.green} backgroundColor={theme.panel}>
-          <text>{step === 'loading-models' ? 'Fetching models...' : (step === 'validating' ? 'Validating key...' : 'Loading...')}</text>
+        <box padding={SPACING.sm} borderStyle="single" border borderColor={flashColor} backgroundColor={justCompleted ? '#062012' : theme.panel}>
+          <text>{step === 'loading-models' ? 'Fetching models...' : (step === 'validating' ? 'Validating key...' : 'Loading...')}  <span fg={theme.green}>{bar}</span></text>
         </box>
       </box>
     );
@@ -123,7 +154,7 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
 
     return (
       <SelectModal 
-        title={step === 'select-provider' ? "Connect a provider" : "Select provider"}
+        title={step === 'select-provider' ? `Connect a provider  ${bar}` : `Select provider  ${bar}`}
         placeholder="Search"
         options={options}
         onSelect={(opt) => handleProviderSelect(opt.raw)}
@@ -135,7 +166,7 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
   if (step === 'enter-key') {
     return (
       <TextInputModal
-        title={`Manually enter API Key`}
+        title={`Manually enter API Key  ${bar}`}
         placeholder="API key"
         password={true}
         error={error}
@@ -156,7 +187,7 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
 
     return (
       <SelectModal 
-        title="Select model"
+        title={`Select model  ${bar}`}
         placeholder="Search"
         options={options}
         onSelect={(opt) => handleModelSelect(opt.raw)}

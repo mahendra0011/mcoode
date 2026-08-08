@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 
 export function PermissionModal({ request, onAnswer, onClose }) {
   useKeyboard((key) => {
@@ -26,6 +27,12 @@ export function PermissionModal({ request, onAnswer, onClose }) {
   const prompt = request?.prompt || 'Allow this action?';
   const detail = request?.detail || '';
 
+  const [flash, setFlash] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setFlash(false), 150);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">
       <box
@@ -33,24 +40,24 @@ export function PermissionModal({ request, onAnswer, onClose }) {
         flexDirection="column"
         borderStyle="single"
         border
-        borderColor={theme.amber}
+        borderColor={flash ? theme.textBright : theme.amber}
         backgroundColor={theme.panel}
-        paddingLeft={1} paddingRight={1}
-        paddingTop={1} paddingBottom={1}
+        paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
+        paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
       >
-        <box justifyContent="space-between" marginBottom={1}>
+        <box justifyContent="space-between" marginBottom={SPACING.sm}>
           <text attributes={TextAttributes.BOLD} fg={theme.amber}>{'\u26a0'} permission required</text>
           <text fg={theme.muted}>esc cancel</text>
         </box>
 
-        <box marginBottom={1} flexDirection="column">
+        <box marginBottom={SPACING.sm} flexDirection="column">
           <text fg={theme.text}>{prompt}</text>
           {detail ? (
             <text fg={theme.dim}>{String(detail).slice(0, 200)}</text>
           ) : null}
         </box>
 
-        <box flexDirection="row" marginTop={1}>
+        <box flexDirection="row" marginTop={SPACING.sm}>
           <text fg={theme.text}>
             <span attributes={TextAttributes.BOLD} fg={theme.green}>y</span>
             <span fg={theme.dim}> yes</span>

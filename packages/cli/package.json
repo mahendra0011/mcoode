@@ -12,7 +12,11 @@
     "./router": "./src/core/router.js",
     "./providers": "./src/providers/index.js",
     "./planner": "./src/core/planner.js",
-    "./browser-tool": "./src/core/browser-tool.js"
+    "./browser-tool": "./src/core/browser-tool.js",
+    "./audit": "./src/core/audit.js",
+    "./watch-daemon": "./src/core/watch-daemon.js",
+    "./subagent-manager": "./src/core/subagent-manager.js",
+    "./techstack": "./src/core/techstack.js"
   },
   "bin": {
     "mcode": "bin/mcode.mjs"

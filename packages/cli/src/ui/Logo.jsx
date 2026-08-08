@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 import { MCODE_GLYPH } from './logo.js';
 
 const RAW_COLORS = [
@@ -36,7 +36,7 @@ export function Logo({ compact = false, mini = false }) {
     <box flexDirection="column" alignItems="center">
       {/* Top accent line */}
       {!compact && !mini && (
-        <box marginBottom={1} flexDirection="row">
+        <box marginBottom={SPACING.sm} flexDirection="row">
           <text fg="#1a3a2a">{ACCENT_LINE.repeat(4)}</text>
           <text fg="#2a5a3a">{ACCENT_LINE.repeat(6)}</text>
           <text fg={tick % 24 < 12 ? theme.greenBright : '#2a5a3a'}>{'  ◆  '}</text>
@@ -60,7 +60,7 @@ export function Logo({ compact = false, mini = false }) {
 
       {/* Bottom accent line */}
       {!compact && !mini && (
-        <box marginTop={1} flexDirection="row">
+        <box marginTop={SPACING.sm} flexDirection="row">
           <text fg="#1a3a2a">{ACCENT_LINE.repeat(4)}</text>
           <text fg="#2a5a3a">{ACCENT_LINE.repeat(6)}</text>
           <text fg={tick % 24 > 12 ? theme.greenBright : '#2a5a3a'}>{'  ◆  '}</text>

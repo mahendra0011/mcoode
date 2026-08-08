@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { highlight } from 'cli-highlight';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 import { BgBox } from './BgBox.jsx';
 import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, TOOL_VERBS, READ_MAX, CMD_MAX } from './blocks.jsx';
 import { BuildSummaryCard } from './SummaryCard.jsx';
@@ -37,14 +37,14 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     }
     const lines = isExpanded ? highlighted.split('\n') : [];
     return (
-      <box key={id} flexDirection="column" marginTop={1} flexShrink={0} paddingLeft={1}>
-        <box flexDirection="column" backgroundColor={theme.surface} borderStyle="round" border borderColor={isFocused ? theme.accent : theme.divider} paddingLeft={1} paddingRight={1} paddingTop={0} paddingBottom={0}>
+      <box key={id} flexDirection="column" marginTop={SPACING.sm} flexShrink={0} paddingLeft={SPACING.sm}>
+        <box flexDirection="column" backgroundColor={theme.surface} borderStyle="round" border borderColor={isFocused ? theme.accent : theme.divider} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
           <box flexDirection="row" paddingBottom={isExpanded ? 1 : 0} borderStyle={isExpanded ? 'single' : undefined} border={isExpanded ? ['bottom'] : undefined} borderColor={theme.divider}>
             <text fg={theme.teal}>{'\u25ce'} </text>
             <text fg={theme.textBright}>{title}</text>
           </box>
           {isExpanded && (
-            <box flexDirection="column" marginTop={1} paddingLeft={1}>
+            <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
               {lines.slice(0, 30).map((l, i) => (
                 <text key={i}>{l || ' '}</text>
               ))}
@@ -52,7 +52,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
             </box>
           )}
           {isExpanded && (
-            <box flexDirection="row" marginTop={1} paddingTop={1} borderStyle="single" border={['top']} borderColor={theme.divider}>
+            <box flexDirection="row" marginTop={SPACING.sm} paddingTop={SPACING.sm} borderStyle="single" border={['top']} borderColor={theme.divider}>
               <text fg={theme.dim}>[y] Apply   [c] Copy   [r] Run</text>
             </box>
           )}
@@ -153,7 +153,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
               <text key={r} fg={theme.accent}>{'\u2502'}</text>
             ))}
           </box>
-          <box flexGrow={1} flexDirection="column" backgroundColor={theme.userBg} paddingLeft={2} paddingRight={2} paddingTop={1} paddingBottom={1}>
+          <box flexGrow={1} flexDirection="column" backgroundColor={theme.userBg} paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingTop={SPACING.sm} paddingBottom={SPACING.sm}>
             {lines.map((line, li) => (
               <text key={li} fg={theme.textBright}>{line}</text>
             ))}
@@ -187,21 +187,21 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     }
     if (msg.kind === 'ok') {
       return (
-        <box key={i} flexShrink={0} paddingLeft={1}>
+        <box key={i} flexShrink={0} paddingLeft={SPACING.sm}>
           <text fg={theme.green}>{'\u2713'} {msg.text}</text>
         </box>
       );
     }
     if (msg.kind === 'warn') {
       return (
-        <box key={i} flexShrink={0} paddingLeft={1}>
+        <box key={i} flexShrink={0} paddingLeft={SPACING.sm}>
           <text fg={theme.amber}>{'\u26a0'} {msg.text}</text>
         </box>
       );
     }
     if (msg.kind === 'err') {
       return (
-        <box key={i} flexShrink={0} paddingLeft={1}>
+        <box key={i} flexShrink={0} paddingLeft={SPACING.sm}>
           <text fg={theme.red}>{'\u2717'} {msg.text}</text>
         </box>
       );
@@ -218,15 +218,15 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     return (
       <box key={i} flexDirection="column" marginTop={isFirst ? 0 : 1} flexShrink={0}>
         {msg.thought && (
-          <box marginBottom={1}>
+          <box marginBottom={SPACING.sm}>
             <ThoughtBlock text={msg.thought.text} seconds={msg.thought.secs} />
           </box>
         )}
-        <box flexDirection="column" paddingLeft={1}>
+        <box flexDirection="column" paddingLeft={SPACING.sm}>
           <text fg={theme.text}>{msg.text}</text>
         </box>
         {msg.meta && (
-          <box marginTop={1} paddingLeft={1} flexDirection="row" alignItems="center">
+          <box marginTop={SPACING.sm} paddingLeft={SPACING.sm} flexDirection="row" alignItems="center">
             <text fg={theme.blue}>{'\u25aa '}</text>
             <text fg={theme.textBright} attributes={TextAttributes.BOLD}>{agentMode}</text>
             <text fg={theme.meta}>

@@ -22,7 +22,20 @@ import {
   setDesignError,
   setCurrentDesign,
   setDesigns,
-  removeDesign
+  removeDesign,
+  // God-mode
+  setGodMode,
+  setSubagentStarted,
+  setSubagentStep,
+  setSubagentDone,
+  setSubagentFailed,
+  setSubagentFile,
+  setWaveStart,
+  setWaveComplete,
+  setIntegrationPass,
+  setBuildComplete,
+  addToast,
+  removeToast
 } from '../store/chatSlice';
 
 let socketSingleton = null;
@@ -194,6 +207,25 @@ export function useChatSocket(workspaceId = null) {
       dispatch(setStatus('idle'));
     };
 
+    // ── God-mode socket event handlers ──
+    const onSubagentStarted = (payload) => { dispatch(setSubagentStarted(payload)); };
+    const onSubagentStep = (payload) => { dispatch(setSubagentStep(payload)); };
+    const onSubagentDone = (payload) => { dispatch(setSubagentDone(payload)); };
+    const onSubagentFailed = (payload) => { dispatch(setSubagentFailed(payload)); };
+    const onSubagentFile = (payload) => { dispatch(setSubagentFile(payload)); };
+    const onWaveStart = (payload) => { dispatch(setWaveStart(payload)); };
+    const onWaveComplete = (payload) => { dispatch(setWaveComplete(payload)); };
+    const onIntegrationPass = (payload) => { dispatch(setIntegrationPass(payload)); };
+    const onBuildComplete = (payload) => { dispatch(setBuildComplete(payload)); };
+    const onToast = (payload) => {
+      if (payload) {
+        const id = Date.now().toString();
+        dispatch(addToast({ ...payload, id }));
+        // Auto-dismiss after 5s
+        setTimeout(() => dispatch(removeToast(id)), 5000);
+      }
+    };
+
     socket.on('connect', onConnect);
     socket.on('chat:ready', onChatReady);
     socket.on('chat:error', onChatError);
@@ -209,6 +241,18 @@ export function useChatSocket(workspaceId = null) {
     socket.on('design:stream', onDesignStream);
     socket.on('design:done', onDesignDone);
     socket.on('disconnect', onDisconnect);
+
+    // God-mode events
+    socket.on('subagent:started', onSubagentStarted);
+    socket.on('subagent:step', onSubagentStep);
+    socket.on('subagent:done', onSubagentDone);
+    socket.on('subagent:failed', onSubagentFailed);
+    socket.on('subagent:file', onSubagentFile);
+    socket.on('wave:start', onWaveStart);
+    socket.on('wave:complete', onWaveComplete);
+    socket.on('integration:pass', onIntegrationPass);
+    socket.on('build:complete', onBuildComplete);
+    socket.on('toast', onToast);
 
     // Load available models on mount
     reloadModels();
@@ -248,6 +292,18 @@ export function useChatSocket(workspaceId = null) {
       socket.off('design:stream', onDesignStream);
       socket.off('design:done', onDesignDone);
       socket.off('disconnect', onDisconnect);
+
+      // God-mode cleanup
+      socket.off('subagent:started', onSubagentStarted);
+      socket.off('subagent:step', onSubagentStep);
+      socket.off('subagent:done', onSubagentDone);
+      socket.off('subagent:failed', onSubagentFailed);
+      socket.off('subagent:file', onSubagentFile);
+      socket.off('wave:start', onWaveStart);
+      socket.off('wave:complete', onWaveComplete);
+      socket.off('integration:pass', onIntegrationPass);
+      socket.off('build:complete', onBuildComplete);
+      socket.off('toast', onToast);
       window.removeEventListener('mcode:reload-models', reloadHandler);
       window.removeEventListener('storage', storageHandler);
     };
@@ -262,9 +318,10 @@ export function useChatSocket(workspaceId = null) {
     }
   }, [workspaceId, selectedModel]);
 
-  const send = useCallback((prompt) => {
+    const send = useCallback((prompt, overrideMode = null) => {
     if (socketRef.current) {
-      socketRef.current.emit('chat:send', { prompt, mode });
+      const effectiveMode = overrideMode || mode;
+      socketRef.current.emit('chat:send', { prompt, mode: effectiveMode });
     }
   }, [mode]);
 
@@ -282,9 +339,9 @@ export function useChatSocket(workspaceId = null) {
     dispatch(clearPermission());
   }, [dispatch]);
 
-  const undo = useCallback(() => {
+  const undo = useCallback((msg) => {
     if (socketRef.current) {
-      socketRef.current.emit('chat:undo');
+      socketRef.current.emit('chat:undo', { undoId: msg?.undoId });
     }
   }, []);
 

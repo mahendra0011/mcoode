@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TextAttributes, useKeyboard } from '@opentui/react';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 import { computeAnalytics } from '../core/analytics.js';
 
 function fmtCost(n) {
@@ -69,49 +69,49 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
   const renderOverview = () => {
     if (!data) return null;
     return (
-      <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
-        <box flexDirection="row" marginTop={1} marginBottom={1}>
+      <box flexDirection="column" flexGrow={1} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} overflow="hidden">
+        <box flexDirection="row" marginTop={SPACING.sm} marginBottom={SPACING.sm}>
           <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Build Success Rate</text>
         </box>
-        <box flexDirection="row" alignItems="center" marginBottom={1}>
+        <box flexDirection="row" alignItems="center" marginBottom={SPACING.sm}>
           <text fg={theme.green}>{'\u2588'.repeat(Math.round(data.successRate / 10))}</text>
           <text fg={theme.divider}>{'\u2591'.repeat(10 - Math.round(data.successRate / 10))}</text>
           <text fg={theme.dim}>{' '}{data.successRate}% ({data.successfulBuilds}/{data.totalBuilds})</text>
         </box>
 
         <box flexDirection="row" flexWrap="wrap">
-          <box flexDirection="column" marginRight={4} marginBottom={1}>
+          <box flexDirection="column" marginRight={SPACING.lg} marginBottom={SPACING.sm}>
             <text fg={theme.dim}>Total builds</text>
             <text fg={theme.textBright}>{data.totalBuilds}</text>
           </box>
-          <box flexDirection="column" marginRight={4} marginBottom={1}>
+          <box flexDirection="column" marginRight={SPACING.lg} marginBottom={SPACING.sm}>
             <text fg={theme.dim}>Avg duration</text>
             <text fg={theme.textBright}>{fmtDuration(data.avgBuildTime)}</text>
           </box>
-          <box flexDirection="column" marginRight={4} marginBottom={1}>
+          <box flexDirection="column" marginRight={SPACING.lg} marginBottom={SPACING.sm}>
             <text fg={theme.dim}>Total cost</text>
             <text fg={theme.green}>{fmtCost(data.totalCost)}</text>
           </box>
-          <box flexDirection="column" marginRight={4} marginBottom={1}>
+          <box flexDirection="column" marginRight={SPACING.lg} marginBottom={SPACING.sm}>
             <text fg={theme.dim}>Todo success</text>
             <text fg={theme.textBright}>{data.todoSuccessRate}%</text>
           </box>
-          <box flexDirection="column" marginBottom={1}>
+          <box flexDirection="column" marginBottom={SPACING.sm}>
             <text fg={theme.dim}>Health score</text>
             <text fg={data.healthScore >= 80 ? theme.green : data.healthScore >= 50 ? theme.amber : theme.red}>{data.healthScore}/100</text>
           </box>
         </box>
 
-        <box flexDirection="row" marginTop={1} marginBottom={1}>
+        <box flexDirection="row" marginTop={SPACING.sm} marginBottom={SPACING.sm}>
           <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Daily Trend (last 7 days)</text>
         </box>
-        <box flexDirection="column" paddingLeft={1}>
+        <box flexDirection="column" paddingLeft={SPACING.sm}>
           {data.trend.map((d) => {
             const maxCost = Math.max(...data.trend.map((t) => t.cost || 1));
             const barPct = d.builds > 0 ? (d.cost / maxCost) * 100 : 0;
             const barCells = Math.max(1, Math.round(barPct / 5));
             return (
-              <box key={d.day} flexDirection="row" alignItems="center" marginBottom={0} paddingTop={0} paddingBottom={0}>
+              <box key={d.day} flexDirection="row" alignItems="center" marginBottom={SPACING.none} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
                 <text fg={theme.muted}>{d.day.slice(5)}</text>
                 <text fg={theme.dim}>{' '}</text>
                 <text fg={theme.blue}>{'\u2588'.repeat(barCells)}</text>
@@ -128,13 +128,13 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
   const renderModels = () => {
     if (!data) return null;
     return (
-      <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
-        <box flexDirection="row" marginTop={1} marginBottom={1}>
+      <box flexDirection="column" flexGrow={1} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} overflow="hidden">
+        <box flexDirection="row" marginTop={SPACING.sm} marginBottom={SPACING.sm}>
           <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Top Models by Usage</text>
         </box>
-        <box flexDirection="column" paddingLeft={1}>
+        <box flexDirection="column" paddingLeft={SPACING.sm}>
           {data.topModels.map((m, i) => (
-            <box key={m.model} flexDirection="row" alignItems="center" marginBottom={0} paddingTop={0} paddingBottom={0}>
+            <box key={m.model} flexDirection="row" alignItems="center" marginBottom={SPACING.none} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
               <text fg={theme.muted}>{`${i + 1}.`}</text>
               <text fg={theme.blue}>{' '}{String(m.model).split(':').pop().slice(0, 24)}</text>
               <text fg={theme.dim}>{' ['}{m.domain}{'] '} </text>
@@ -153,17 +153,17 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
   const renderDomains = () => {
     if (!data) return null;
     return (
-      <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
-        <box flexDirection="row" marginTop={1} marginBottom={1}>
+      <box flexDirection="column" flexGrow={1} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} overflow="hidden">
+        <box flexDirection="row" marginTop={SPACING.sm} marginBottom={SPACING.sm}>
           <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Domain Breakdown </text>
           <text fg={theme.dim}>({data.domainBreakdown?.length || 0} domains)</text>
         </box>
-        <box flexDirection="column" paddingLeft={1}>
+        <box flexDirection="column" paddingLeft={SPACING.sm}>
           {data.domainBreakdown?.map((d) => {
             const barLen = Math.round(d.successRate / 10);
             const color = d.successRate >= 80 ? theme.green : d.successRate >= 50 ? theme.amber : theme.red;
             return (
-              <box key={d.domain} flexDirection="column" marginBottom={1}>
+              <box key={d.domain} flexDirection="column" marginBottom={SPACING.sm}>
                 <box flexDirection="row" alignItems="center">
                   <text fg={theme.dim}>{String(d.domain).padEnd(14)}</text>
                   <text fg={color}>{'\u2588'.repeat(barLen)}</text>
@@ -179,15 +179,15 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
           )}
         </box>
 
-        <box flexDirection="row" marginTop={2} marginBottom={1}>
+        <box flexDirection="row" marginTop={SPACING.md} marginBottom={SPACING.sm}>
           <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Throughput (builds/day)</text>
         </box>
-          <box flexDirection="column" paddingLeft={1}>
+          <box flexDirection="column" paddingLeft={SPACING.sm}>
             {data.throughput?.map((t) => {
             const maxBuilds = Math.max(...(data.throughput || [{ builds: 1 }]).map((x) => x.builds), 1);
             const barCells = Math.round((t.builds / maxBuilds) * 15);
             return (
-              <box key={t.day} flexDirection="row" alignItems="center" marginBottom={0}>
+              <box key={t.day} flexDirection="row" alignItems="center" marginBottom={SPACING.none}>
                 <text fg={theme.muted}>{t.day.slice(5)}</text>
                 <text fg={theme.dim}>{' '}</text>
                 <text fg={theme.blue}>{'\u2588'.repeat(barCells)}</text>
@@ -204,8 +204,8 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
   const renderErrors = () => {
     if (!data) return null;
     return (
-      <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
-        <box flexDirection="row" marginTop={1} marginBottom={1}>
+      <box flexDirection="column" flexGrow={1} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} overflow="hidden">
+        <box flexDirection="row" marginTop={SPACING.sm} marginBottom={SPACING.sm}>
           <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Error Patterns </text>
           <text fg={theme.dim}>({data.errorPatterns?.length || 0} unique)</text>
         </box>
@@ -217,9 +217,9 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
           viewportOptions={{ flexGrow: 1 }}
           scrollbarOptions={{ visible: true }}
         >
-          <box flexDirection="column" paddingLeft={1} paddingRight={1} paddingTop={1}>
+          <box flexDirection="column" paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.sm}>
             {data.errorPatterns?.map((e, i) => (
-              <box key={i} flexDirection="column" marginBottom={1} borderBottom={1} borderBottomColor={theme.divider}>
+              <box key={i} flexDirection="column" marginBottom={SPACING.sm} borderBottom={1} borderBottomColor={theme.divider}>
                 <box flexDirection="row" alignItems="center">
                   <text fg={theme.muted}>{`${i + 1}.`}</text>
                   <text fg={theme.red}>{' '}</text>
@@ -227,7 +227,7 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
                   <text fg={theme.dim}>{' '}{e.count}x</text>
                 </box>
                 {e.domains.length > 0 && (
-                  <text fg={theme.muted} paddingLeft={2}>domains: {e.domains.join(', ')}</text>
+                  <text fg={theme.muted} paddingLeft={SPACING.md}>domains: {e.domains.join(', ')}</text>
                 )}
               </box>
             ))}
@@ -243,13 +243,13 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
   const renderProjects = () => {
     if (!data) return null;
     return (
-      <box flexDirection="column" flexGrow={1} paddingLeft={1} paddingRight={1} overflow="hidden">
-        <box flexDirection="row" marginTop={1} marginBottom={1}>
+      <box flexDirection="column" flexGrow={1} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} overflow="hidden">
+        <box flexDirection="row" marginTop={SPACING.sm} marginBottom={SPACING.sm}>
           <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Projects by Cost</text>
         </box>
-        <box flexDirection="column" paddingLeft={1}>
+        <box flexDirection="column" paddingLeft={SPACING.sm}>
           {data.topProjects.map((p) => (
-            <box key={p.name} flexDirection="row" alignItems="center" marginBottom={0} paddingTop={0} paddingBottom={0}>
+            <box key={p.name} flexDirection="row" alignItems="center" marginBottom={SPACING.none} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
               <text fg={theme.dim}>{String(p.name).slice(0, 20).padEnd(20)}</text>
               <text fg={theme.dim}>{' '}{p.builds}b </text>
               <text fg={theme.green}>{fmtCost(p.cost)}</text>
@@ -276,11 +276,11 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
     return (
       <box flexDirection="column" flexGrow={1}>
         <box
-          marginTop={1}
+          marginTop={SPACING.sm}
           flexDirection="row"
           backgroundColor={theme.surface}
-          paddingLeft={1}
-          paddingRight={1}
+          paddingLeft={SPACING.sm}
+          paddingRight={SPACING.sm}
         >
           <text fg={theme.accent}>{'\u25b0'} </text>
           <text fg={theme.dim}>search </text>
@@ -296,11 +296,11 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
           viewportOptions={{ flexGrow: 1 }}
           scrollbarOptions={{ visible: true }}
         >
-          <box flexDirection="column" paddingLeft={1} paddingRight={1} paddingTop={1}>
+          <box flexDirection="column" paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.sm}>
             {filtered.map((b) => {
             const statusLabel = b.status === 'completed' ? 'done' : 'issues';
             return (
-              <box key={b.id} flexDirection="column" marginBottom={1} borderBottom={1} borderBottomColor={theme.divider}>
+              <box key={b.id} flexDirection="column" marginBottom={SPACING.sm} borderBottom={1} borderBottomColor={theme.divider}>
                 <box flexDirection="row" alignItems="center">
                   <text fg={theme.green}>{'\u2713'}</text>
                   <text fg={theme.textBright} attributes={TextAttributes.BOLD}>{' '}{b.projectName}</text>
@@ -309,7 +309,7 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
                   <box flexGrow={1} />
                   <text fg={theme.amber}>{' '}{statusLabel}</text>
                 </box>
-                <text fg={theme.muted} paddingLeft={1}>{fmtDate(b.startedAt)}</text>
+                <text fg={theme.muted} paddingLeft={SPACING.sm}>{fmtDate(b.startedAt)}</text>
               </box>
             );
           })}
@@ -334,17 +334,17 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
       borderColor={theme.accent}
       flexShrink={0}
     >
-      <box flexDirection="row" paddingBottom={1} borderStyle="single" border={['bottom']} borderColor={theme.divider} justifyContent="space-between">
+      <box flexDirection="row" paddingBottom={SPACING.sm} borderStyle="single" border={['bottom']} borderColor={theme.divider} justifyContent="space-between">
         <text fg={theme.textBright} attributes={TextAttributes.BOLD}> Analytics </text>
         <text fg={theme.muted}>esc close</text>
       </box>
 
       {/* Tab strip */}
-      <box flexDirection="row" flexShrink={0} paddingLeft={1} paddingBottom={1} borderBottom={1} borderBottomColor={theme.divider}>
+      <box flexDirection="row" flexShrink={0} paddingLeft={SPACING.sm} paddingBottom={SPACING.sm} borderBottom={1} borderBottomColor={theme.divider}>
         {TABS.map((t) => (
           <box
             key={t.id}
-            marginRight={2}
+            marginRight={SPACING.md}
             borderBottom={tab === t.id ? ['bottom'] : undefined}
             borderBottomColor={tab === t.id ? theme.accent : undefined}
             onMouseDown={() => setTab(t.id)}
@@ -371,7 +371,7 @@ export function AnalyticsPanel({ width = 52, height = 24, onBack = null }) {
         </>
       )}
 
-      <box flexDirection="row" paddingTop={1} borderStyle="single" border={['top']} borderColor={theme.divider}>
+      <box flexDirection="row" paddingTop={SPACING.sm} borderStyle="single" border={['top']} borderColor={theme.divider}>
         <text fg={theme.muted}>esc close \u00b7 tab switch</text>
       </box>
     </box>

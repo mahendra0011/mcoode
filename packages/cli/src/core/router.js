@@ -156,6 +156,37 @@ export class ModelRouter {
     return out.sort((a, b) => b.bestScore - a.bestScore);
   }
 
+  /**
+   * Prefetch model selection for all task domains.
+   * Called at session start to warm up the routing cache,
+   * so the first agent call doesn't block on provider enumeration.
+   * Mirrors Z Code's predictive model selection pattern.
+   */
+  async warmUp() {
+    await this._init();
+    const domains = ['planning', 'frontend', 'backend', 'db', 'devops', 'test', 'docs', 'bugfix'];
+
+    // Warm up in parallel — each pick() resolves the best model per domain
+    const assignments = await Promise.all(
+      domains.map((domain) => this.pick(domain).catch(() => null))
+    );
+
+    // Cache results for fast lookup in specialized agents
+    this._assignments = {};
+    domains.forEach((domain, i) => {
+      if (assignments[i]) {
+        this._assignments[domain] = assignments[i];
+      }
+    });
+
+    return this._assignments;
+  }
+
+  /** Get a cached model assignment for a domain (warmed up at init). */
+  getCachedAssignment(domain) {
+    return this._assignments?.[domain] || null;
+  }
+
   /** Resolve a `provider:model` ref to an assignment, or null if unusable. */
   async find(ref) {
     if (!ref || typeof ref !== 'string') return null;

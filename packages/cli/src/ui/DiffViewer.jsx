@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 import { diffStats, gitDiff } from '../core/git.js';
+import { useEntrance } from './useEntrance.js';
 
 export function DiffViewer({ width = 80, height = 30, cwd = process.cwd(), onBack = null }) {
   const [files, setFiles] = useState([]);
@@ -49,17 +50,17 @@ export function DiffViewer({ width = 80, height = 30, cwd = process.cwd(), onBac
       <box
         flexDirection="row"
         justifyContent="space-between"
-        paddingBottom={1}
+        paddingBottom={SPACING.sm}
         borderBottom={1}
         borderBottomColor={theme.divider}
-        paddingLeft={2}
-        paddingRight={2}
+        paddingLeft={SPACING.md}
+        paddingRight={SPACING.md}
       >
         <text fg={theme.textBright} attributes={TextAttributes.BOLD}> Git Changes </text>
         <text fg={theme.muted}>esc close</text>
       </box>
 
-      <box flexDirection="row" paddingLeft={2} paddingRight={2} paddingBottom={1}>
+      <box flexDirection="row" paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingBottom={SPACING.sm}>
         <text fg={theme.green}>{`\u2261 ${totalAdded} lines added`}</text>
         <text fg={theme.dim}>{'  \u2502  '}</text>
         <text fg={theme.red}>{`\u2212 ${totalDeleted} lines removed`}</text>
@@ -78,13 +79,13 @@ export function DiffViewer({ width = 80, height = 30, cwd = process.cwd(), onBac
           viewportOptions={{ flexGrow: 1 }}
           scrollbarOptions={{ visible: true }}
         >
-          <box flexDirection="column" paddingLeft={1} paddingRight={1} paddingTop={1}>
+          <box flexDirection="column" paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.sm}>
             {files.length === 0 ? (
               <text fg={theme.muted}>No uncommitted changes</text>
             ) : (
               files.map((f) => (
-                <box key={f.file} flexDirection="column" marginBottom={1}>
-                  <box flexDirection="row" alignItems="center" paddingLeft={1} onMouseDown={() => toggle(f.file)}>
+                <box key={f.file} flexDirection="column" marginBottom={SPACING.sm}>
+                  <box flexDirection="row" alignItems="center" paddingLeft={SPACING.sm} onMouseDown={() => toggle(f.file)}>
                     <text fg={theme.muted}>{expanded[f.file] ? '\u25bc' : '\u25b6'}</text>
                     <text fg={theme.dim}>{' '}</text>
                     <text fg={theme.textBright}>{String(f.file).slice(0, width - 20)}</text>
@@ -127,16 +128,19 @@ function ExpandedDiff({ file, cwd, width }) {
   }, [file, cwd]);
 
   if (!loaded) {
-    return <text fg={theme.dim} paddingLeft={2}>loading diff…</text>;
+    return <text fg={theme.dim} paddingLeft={SPACING.md}>loading diff…</text>;
   }
 
   if (!diff) {
-    return <text fg={theme.muted} paddingLeft={2}>(no diff available)</text>;
+    return <text fg={theme.muted} paddingLeft={SPACING.md}>(no diff available)</text>;
   }
 
+  const lines = diff.split('\n');
+  const visibleLines = useEntrance(lines.length, 0.375); // ~30ms per line
+
   return (
-    <box flexDirection="column" marginTop={1} paddingLeft={2} paddingRight={1}>
-      {diff.split('\n').map((line, i) => {
+    <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.md} paddingRight={SPACING.sm}>
+      {lines.slice(0, visibleLines).map((line, i) => {
         const trimmed = line.slice(0, width - 2);
         if (line.startsWith('+') && !line.startsWith('+++')) {
           return <text key={i} fg={theme.green}>{trimmed}</text>;

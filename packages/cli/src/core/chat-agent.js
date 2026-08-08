@@ -47,37 +47,102 @@ const TOOL_CALL_XML = /<tool_call>\s*([\w_-]+)([\s\S]*?)<\/tool_call>/g;
 const ARG_PAIR = /<arg_key>\s*([^<]+?)\s*<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g;
 
 export function extractAction(text) {
+  const actions = extractActions(text);
+  return actions[0] || null;
+}
+
+/**
+ * Extract ALL tool actions from a response (for parallel execution).
+ * Returns array of { tool, args } — empty if none found.
+ * Supports multiple JSON action fences in a single response.
+ */
+export function extractActions(text) {
   const source = String(text || '');
-  const matches = [...source.matchAll(ACTION_FENCE)];
-  if (matches.length > 0) {
-    const raw = matches[matches.length - 1][1].trim();
+  const actions = [];
+
+  // Parse all JSON action fences: ```mcode-action {tool, args} ```
+  const fenceRegex = /```mcode-action\s*([\s\S]*?)```/g;
+  for (const match of source.matchAll(fenceRegex)) {
+    const raw = match[1].trim();
     const start = raw.indexOf('{');
-    if (start !== -1) {
-      let end = start;
-      while ((end = raw.indexOf('}', end)) !== -1) {
-        try {
-          const parsed = JSON.parse(raw.slice(start, end + 1));
-          if (parsed && typeof parsed.tool === 'string') {
-            return { tool: parsed.tool, args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {} };
-          }
-        } catch {
-          /* keep scanning for the end of the object */
+    if (start === -1) continue;
+
+    // Find matching closing brace
+    let depth = 0;
+    let end = start;
+    for (let i = start; i < raw.length; i++) {
+      if (raw[i] === '{') depth++;
+      if (raw[i] === '}') {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
         }
-        end += 1;
+      }
+    }
+
+    try {
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      if (parsed && typeof parsed.tool === 'string') {
+        actions.push({
+          tool: parsed.tool,
+          args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
+        });
+      }
+    } catch {
+      /* JSON parse failed — try next brace position */
+      try {
+        const parsed = JSON.parse(raw.slice(start, raw.lastIndexOf('}') + 1));
+        if (parsed && typeof parsed.tool === 'string') {
+          actions.push({
+            tool: parsed.tool,
+            args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
+          });
+        }
+      } catch {
+        /* skip this action fence */
       }
     }
   }
-  const xml = [...source.matchAll(TOOL_CALL_XML)];
-  if (xml.length > 0) {
-    const block = xml[xml.length - 1];
-    const tool = block[1];
-    const args = {};
-    for (const pair of block[2].matchAll(ARG_PAIR)) {
-      args[pair[1].trim()] = pair[2].trim();
+
+  // Fallback: parse XML-style <tool_call> blocks
+  if (actions.length === 0) {
+    const xml = [...source.matchAll(TOOL_CALL_XML)];
+    for (const block of xml) {
+      const tool = block[1];
+      const args = {};
+      for (const pair of block[2].matchAll(ARG_PAIR)) {
+        args[pair[1].trim()] = pair[2].trim();
+      }
+      actions.push({ tool, args });
     }
-    return { tool, args };
   }
-  return null;
+
+  return actions;
+}
+
+/**
+ * Classify a tool call as safe for parallel execution (no dependencies).
+ * Destructive tools (write_file, edit_file, run_shell) are NOT parallelized
+ * unless explicitly marked as independent.
+ */
+function canParallelize(toolName, args, changedFiles) {
+  // Read-only tools can always run in parallel
+  const readOnly = ['read_file', 'list_files', 'search_code', 'web_search', 'web_fetch', 'git_status'];
+  if (readOnly.includes(toolName)) return true;
+
+  // write_file/edit_file depend on file state — parallelize only if different files
+  if (toolName === 'write_file' || toolName === 'edit_file') {
+    const targetPath = args?.path || args?.file || '';
+    const conflict = changedFiles.some(f => f.path === targetPath);
+    return !conflict;
+  }
+
+  // run_tests can run in parallel if different files
+  if (toolName === 'run_tests' && args?.file) return true;
+
+  // run_shell is potentially destructive — don't parallelize
+  return false;
 }
 
 export function stripActions(text) {
@@ -99,14 +164,16 @@ async function* streamText(assignment, model, params) {
   }
 }
 export class ChatAgent {
-  constructor({ assignment, projectPath, bus, undoStack, config = {}, reasoning = null, history = [], onTool = null }) {
+  constructor({ assignment, projectPath, bus, undoStack, config = {}, reasoning = null, history = [], onTool = null, domain = null }) {
     this.assignment = assignment;
     this.projectPath = projectPath;
+    this.config = config;
+    this.domain = domain; // domain specialization for context isolation
     this.bus = bus;
     this.undoStack = undoStack;
     this.reasoning = reasoning;
     this.history = history ? history.slice(-20) : [];
-    this.maxTurns = Math.max(1, Number(config.chatAgentTurns) || 12);
+    this.maxTurns = Math.max(1, Number(config.chatAgentTurns) || config.maxTurnsPerAgent || 12);
     this.allowShellAll = Boolean(config.allowShellAll);
     this.requireEditApproval = Boolean(config.requireEditApproval);
     this.networkWhitelist = config.networkWhitelist || null;
@@ -122,6 +189,11 @@ export class ChatAgent {
     this.abortWaiters = [];
     this.pendingPermission = null;
     this.abortController = null;
+  }
+
+  /** Clear conversation history for this specialized agent (frees context window). */
+  clearHistory() {
+    this.history = [];
   }
 
   /** Cancel the current run (user pressed escape/Ctrl+C). */
@@ -265,7 +337,8 @@ export class ChatAgent {
         command: '',
         relDir: '',
         title: '',
-        output: ''
+        output: '',
+        undoId: result?.undoId
       };
     }
     if (name === 'edit_file') {
@@ -278,7 +351,8 @@ export class ChatAgent {
         command: '',
         relDir: '',
         title: '',
-        output: ''
+        output: '',
+        undoId: result?.undoId
       };
     }
     if (name === 'run_shell') {
@@ -443,8 +517,8 @@ export class ChatAgent {
       messages.push({ role: 'assistant', content: text });
       this.history.push({ role: 'assistant', content: stripActions(text) });
 
-      const action = extractAction(text);
-      if (!action) {
+      const actions = extractActions(text);
+      if (actions.length === 0) {
         this.narration.push(stripActions(text));
         break;
       }
@@ -452,81 +526,130 @@ export class ChatAgent {
       const toolText = stripActions(text);
       if (toolText) this.narration.push(toolText);
 
-      const preview = this._toolArgsPreview(action.tool, action.args);
-      const seq = ++this.toolSeq;
-      const replaceKey = `t${seq}`;
-      this.bus?.emit(EVENTS.MESSAGE, {
-        kind: 'tool',
-        replaceKey,
-        tool: action.tool,
-        args: preview,
-        status: 'running'
-      });
-      this.onTool?.({ tool: action.tool, args: action.args, replaceKey });
-
-      let result;
-      if (typeof tools[action.tool] === 'function') {
-        if (action.tool === 'run_shell' && !this.allowShellAll && this.requirePermission) {
-          const answer = await this._askPermission(String(action.args?.command || ''));
-          if (answer === 'aborted' || this.aborted) break;
-          if (answer === 'always') {
-            this.allowShellAll = true;
-            this.bus?.emit('permission:always_granted', { tool: 'run_shell' });
-          }
-          if (answer !== 'yes' && answer !== 'always') {
-            result = { ok: false, error: 'permission denied by user' };
-            this.bus?.emit(EVENTS.MESSAGE, {
-              kind: 'tool',
-              replaceKey,
-              tool: action.tool,
-              args: preview,
-              status: 'done',
-              block: 'command',
-              path: '',
-              lines: [],
-              command: String(action.args?.command || ''),
-              relDir: '',
-              title: '',
-              output: ''
-            });
-            messages.push({ role: 'user', content: `TOOL RESULT: ${JSON.stringify(result)}` });
-            this.history.push({ role: 'user', content: `TOOL RESULT (${action.tool}): permission denied by user` });
-            continue;
-          }
-        }
-        try {
-          result = await tools.run(action.tool, action.args || {});
-        } catch (err) {
-          if (this.aborted) break;
-          result = { ok: false, error: `tool error: ${err.message}` };
-        }
-      } else {
-        result = { ok: false, error: `unknown tool "${action.tool}"` };
-      }
-
-      const ok = !result || result.ok !== false;
-      this.bus?.emit(EVENTS.MESSAGE, {
-        kind: 'tool',
-        replaceKey,
-        tool: action.tool,
-        args: preview,
-        status: ok ? 'done' : 'failed',
-        error: ok ? '' : String(result?.error || 'failed').slice(0, 300),
-        ...this._blockMeta(action.tool, action.args || {}, result)
-      });
-
-      if (ok && action.tool === 'write_file') {
-        const diff = Array.isArray(result?.diffLines) ? result.diffLines : [];
-        this.changedFiles.push({
-          path: result?.file || this._fullPath(action.args?.path || action.args?.file || ''),
-          added: diff.filter((l) => l.kind === 'add').length,
-          removed: diff.filter((l) => l.kind === 'remove').length,
-          created: Boolean(result?.created)
+      // Batch process all actions — run independent tools in parallel
+      const batch = actions.map((action) => {
+        const seq = ++this.toolSeq;
+        const replaceKey = `t${seq}`;
+        const preview = this._toolArgsPreview(action.tool, action.args);
+        this.bus?.emit(EVENTS.MESSAGE, {
+          kind: 'tool',
+          replaceKey,
+          tool: action.tool,
+          args: preview,
+          status: 'running'
         });
-      }
+        this.onTool?.({ tool: action.tool, args: action.args, replaceKey });
+        return { action, replaceKey, preview, seq };
+      });
 
-      messages.push({ role: 'user', content: `TOOL RESULT: ${JSON.stringify(result).slice(0, 4000)}` });
-      this.history.push({ role: 'user', content: `TOOL RESULT (${action.tool}): ${this._toolResultSummary(action.tool, result)}` });
+      // Determine if all actions can run in parallel
+      const parallelizable = batch.every(
+        ({ action }) => canParallelize(action.tool, action.args, this.changedFiles)
+      );
+
+      // Execute tools — in parallel if safe, sequentially if not
+      const results = parallelizable && batch.length > 1
+        ? await Promise.all(
+            batch.map(async ({ action, replaceKey }) => {
+              let result;
+              if (typeof tools[action.tool] === 'function') {
+                if (action.tool === 'run_shell' && !this.allowShellAll && this.requirePermission) {
+                  const answer = await this._askPermission(String(action.args?.command || ''));
+                  if (answer === 'aborted' || this.aborted) throw new Error('aborted');
+                  if (answer === 'always') {
+                    this.allowShellAll = true;
+                    tools.allowShellAll = true;
+                    this.bus?.emit('permission:always_granted', { tool: 'run_shell' });
+                  }
+                  if (answer !== 'yes' && answer !== 'always') {
+                    result = { ok: false, error: 'permission denied by user' };
+                    this.bus?.emit(EVENTS.MESSAGE, {
+                      kind: 'tool', replaceKey, tool: action.tool, args: this._toolArgsPreview(action.tool, action.args),
+                      status: 'done', block: 'command', path: '', lines: [],
+                      command: String(action.args?.command || ''), relDir: '', title: '', output: ''
+                    });
+                  } else {
+                    try { result = await tools.run(action.tool, action.args || {}); }
+                    catch (err) { result = { ok: false, error: `tool error: ${err.message}` }; }
+                  }
+                } else {
+                  try { result = await tools.run(action.tool, action.args || {}); }
+                  catch (err) { result = { ok: false, error: `tool error: ${err.message}` }; }
+                }
+              } else {
+                result = { ok: false, error: `unknown tool "${action.tool}"` };
+              }
+              return { action, replaceKey, preview: this._toolArgsPreview(action.tool, action.args), result };
+            })
+          )
+        : await (async () => {
+            // Sequential fallback
+            const seqResults = [];
+            for (const { action, replaceKey, preview } of batch) {
+              let result;
+              if (typeof tools[action.tool] === 'function') {
+                if (action.tool === 'run_shell' && !this.allowShellAll && this.requirePermission) {
+                  const answer = await this._askPermission(String(action.args?.command || ''));
+                  if (answer === 'aborted' || this.aborted) break;
+                  if (answer === 'always') {
+                    this.allowShellAll = true;
+                    tools.allowShellAll = true;
+                    this.bus?.emit('permission:always_granted', { tool: 'run_shell' });
+                  }
+                  if (answer !== 'yes' && answer !== 'always') {
+                    result = { ok: false, error: 'permission denied by user' };
+                    this.bus?.emit(EVENTS.MESSAGE, {
+                      kind: 'tool', replaceKey, tool: action.tool, args: preview,
+                      status: 'done', block: 'command', path: '', lines: [],
+                      command: String(action.args?.command || ''), relDir: '', title: '', output: ''
+                    });
+                    messages.push({ role: 'user', content: `TOOL RESULT: ${JSON.stringify(result)}` });
+                    this.history.push({ role: 'user', content: `TOOL RESULT (${action.tool}): permission denied by user` });
+                    seqResults.push({ action, replaceKey, preview, result });
+                    continue;
+                  }
+                }
+                try {
+                  result = await tools.run(action.tool, action.args || {});
+                } catch (err) {
+                  if (this.aborted) break;
+                  result = { ok: false, error: `tool error: ${err.message}` };
+                }
+              } else {
+                result = { ok: false, error: `unknown tool "${action.tool}"` };
+              }
+              seqResults.push({ action, replaceKey, preview, result });
+            }
+            return seqResults;
+          })();
+
+      // Process results
+      for (const { action, replaceKey, preview, result } of results.filter(r => r)) {
+        if (!result) continue;
+        const ok = !result || result.ok !== false;
+        this.bus?.emit(EVENTS.MESSAGE, {
+          kind: 'tool',
+          replaceKey,
+          tool: action.tool,
+          args: preview,
+          status: ok ? 'done' : 'failed',
+          error: ok ? '' : String(result?.error || 'failed').slice(0, 300),
+          ...this._blockMeta(action.tool, action.args || {}, result)
+        });
+
+        if (ok && action.tool === 'write_file') {
+          const diff = Array.isArray(result?.diffLines) ? result.diffLines : [];
+          this.changedFiles.push({
+            path: result?.file || this._fullPath(action.args?.path || action.args?.file || ''),
+            added: diff.filter((l) => l.kind === 'add').length,
+            removed: diff.filter((l) => l.kind === 'remove').length,
+            created: Boolean(result?.created)
+          });
+        }
+
+        messages.push({ role: 'user', content: `TOOL RESULT: ${JSON.stringify(result).slice(0, 4000)}` });
+        this.history.push({ role: 'user', content: `TOOL RESULT (${action.tool}): ${this._toolResultSummary(action.tool, result)}` });
+      }
     }
 
     if (this.aborted) {

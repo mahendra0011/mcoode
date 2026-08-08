@@ -166,7 +166,11 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       const { prompt, mode = 'chat' } = payload;
       if (!prompt) return;
       try {
-        await session.sendMessage(prompt, mode);
+        if (mode === 'god') {
+          await session.runGod(prompt);
+        } else {
+          await session.sendMessage(prompt, mode);
+        }
       } catch (err) {
         socket.emit('chat:error', { message: err.message });
       }
@@ -181,7 +185,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       const session = chatSessions.get(socket.id);
       if (session && session.undoStack) {
         try {
-          const revertedFile = await session.undoStack.undo();
+          const revertedFile = await session.undoStack.undo(payload?.undoId);
           socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_UNDO_RESULT, { ok: true, file: revertedFile });
         } catch (e) {
           socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_UNDO_RESULT, { ok: false, error: e.message });

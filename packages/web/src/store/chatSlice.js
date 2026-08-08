@@ -11,6 +11,12 @@ const initialState = {
   isStreaming: false,
   models: [],
   selectedModel: null,
+  // God-mode state
+  godMode: false, // true when god-mode parallel build is active
+  waves: [], // [{ wave, total, completed }]
+  subagents: {}, // { todoId: { todoId, domain, status, message, progress } }
+  buildSummary: null, // { done, total, failed, needsReview, elapsedSecs }
+  toasts: [], // [{ id, kind, text }]
   // Design tab state
   designs: [], // list of saved designs
   currentDesign: null, // { _id, html, prompt, version, versions[], device }
@@ -224,6 +230,80 @@ const chatSlice = createSlice({
       state.currentDesign = null;
       state.designStatus = 'idle';
       state.designError = null;
+    },
+
+    // ── God-mode reducers ───────────────────────────────────────────
+    setGodMode: (state, action) => {
+      state.godMode = action.payload;
+    },
+    setSubagentStarted: (state, action) => {
+      const p = action.payload || {};
+      state.subagents[p.todoId] = {
+        todoId: p.todoId,
+        domain: p.domain,
+        status: 'running',
+        message: p.message || '',
+        progress: 0
+      };
+    },
+    setSubagentStep: (state, action) => {
+      const p = action.payload || {};
+      if (p.todoId && state.subagents[p.todoId]) {
+        state.subagents[p.todoId].message = p.message || state.subagents[p.todoId].message;
+        if (p.tokens != null) state.subagents[p.todoId].tokens = p.tokens;
+        if (p.secs != null) state.subagents[p.todoId].secs = p.secs;
+      }
+    },
+    setSubagentDone: (state, action) => {
+      const p = action.payload || {};
+      if (p.todoId && state.subagents[p.todoId]) {
+        state.subagents[p.todoId].status = 'done';
+        state.subagents[p.todoId].progress = 100;
+      }
+    },
+    setSubagentFailed: (state, action) => {
+      const p = action.payload || {};
+      if (p.todoId && state.subagents[p.todoId]) {
+        state.subagents[p.todoId].status = 'failed';
+      }
+    },
+    setSubagentFile: (state, action) => {
+      const p = action.payload || {};
+      if (p.todoId && state.subagents[p.todoId]) {
+        state.subagents[p.todoId].lastFile = p.file;
+      }
+    },
+    setWaveStart: (state, action) => {
+      const p = action.payload || {};
+      state.waves.push({
+        wave: p.wave,
+        total: p.total || 0,
+        completed: 0,
+        status: 'running'
+      });
+    },
+    setWaveComplete: (state, action) => {
+      const p = action.payload || {};
+      const wave = state.waves.find(w => w.wave === p.wave);
+      if (wave) {
+        wave.status = 'complete';
+        wave.completed = p.completed || wave.total;
+      }
+    },
+    setIntegrationPass: (state, action) => {
+      state.buildIntegration = action.payload || {};
+    },
+    setBuildComplete: (state, action) => {
+      state.buildSummary = action.payload;
+      state.isStreaming = false;
+      state.godMode = false;
+    },
+    addToast: (state, action) => {
+      const { id, kind = 'info', text } = action.payload || {};
+      state.toasts.push({ id: id || Date.now().toString(), kind, text });
+    },
+    removeToast: (state, action) => {
+      state.toasts = state.toasts.filter((t) => t.id !== action.payload);
     }
   }
 });
@@ -253,7 +333,20 @@ export const {
   setDesignStream,
   setDesignDone,
   setDesignError,
-  clearDesign
+  clearDesign,
+  // God-mode
+  setGodMode,
+  setSubagentStarted,
+  setSubagentStep,
+  setSubagentDone,
+  setSubagentFailed,
+  setSubagentFile,
+  setWaveStart,
+  setWaveComplete,
+  setIntegrationPass,
+  setBuildComplete,
+  addToast,
+  removeToast
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

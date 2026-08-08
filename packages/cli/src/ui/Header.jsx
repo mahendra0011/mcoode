@@ -1,10 +1,15 @@
 import { Logo } from './Logo.jsx';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
+import { useTicker } from './useTicker.js';
+import { SPIN_FRAMES } from './blocks.jsx';
 
 export function Header({ projectName, model, watching, email = '', version = '', agentsRunning = 0, agentsTotal = 0, elapsed = 0 }) {
+  const ticks = useTicker();
+  const frame = ticks % SPIN_FRAMES.length;
   const status = watching ? 'Working' : 'Ready';
   const statusColor = watching ? theme.amber : theme.green;
+  const statusIcon = watching ? SPIN_FRAMES[frame] : theme.circle;
   const truncate = (s, n) => (s && s.length > n ? s.slice(0, n - 1) + '\u2026' : s);
   const modelLabel = truncate(model, 26);
   const emailLabel = truncate(email, 30);
@@ -17,12 +22,12 @@ export function Header({ projectName, model, watching, email = '', version = '',
       border
       borderColor={theme.divider}
       backgroundColor={theme.panel}
-      paddingLeft={2} paddingRight={3}
-      paddingTop={0} paddingBottom={0}
-      marginBottom={1}
+      paddingLeft={SPACING.md} paddingRight={SPACING.lg}
+      paddingTop={SPACING.none} paddingBottom={SPACING.none}
+      marginBottom={SPACING.sm}
       alignItems="center"
       >
-      <box flexShrink={0} marginRight={3}>
+      <box flexShrink={0} marginRight={SPACING.lg}>
         <Logo mini />
       </box>
       <box flexDirection="row" flexGrow={1} justifyContent="space-between">
@@ -32,7 +37,7 @@ export function Header({ projectName, model, watching, email = '', version = '',
             <text fg={theme.text} attributes={TextAttributes.BOLD}>mcode CLI </text>
             <text fg={theme.dim}>{version}</text>
           </box>
-          <box flexDirection="row" marginTop={1}>
+          <box flexDirection="row" marginTop={SPACING.sm}>
             <text fg={theme.blue}>{'\u25a3'} </text>
             <text fg={theme.text} attributes={TextAttributes.BOLD}>{String(projectName).slice(0, 28)}</text>
           </box>
@@ -40,12 +45,12 @@ export function Header({ projectName, model, watching, email = '', version = '',
 
         <box flexDirection="column" alignItems="center" justifyContent="center">
           <text fg={theme.dim}>{emailLabel}</text>
-          <text fg={theme.green} marginTop={1}>{modelLabel}</text>
+          <text fg={theme.green} marginTop={SPACING.sm}>{modelLabel}</text>
         </box>
 
         <box flexDirection="column" alignItems="flex-end" justifyContent="center">
           <box flexDirection="row">
-            <text fg={statusColor}>{theme.circle} </text>
+            <text fg={statusColor}>{statusIcon} </text>
             <text fg={theme.text} attributes={TextAttributes.BOLD}>{status}</text>
             {watching && (agentsTotal > 0 || elapsed > 0) && (
               <text fg={theme.dim}>{` \u00b7 ${agentsRunning}/${agentsTotal} agents \u00b7 ${elapsed}s`}</text>

@@ -211,7 +211,7 @@ export class ToolExecutor {
         return { ok: false, error: `Write denied by user for ${path}` };
       }
     }
-    await this.undoStack?.snapshot(path, prev);
+    const undoId = await this.undoStack?.snapshot(path, prev);
     await writeFile(full, content, 'utf8');
     const created = prev === null;
     const diff = created ? null : lineDiff(prev || '', content);
@@ -223,7 +223,7 @@ export class ToolExecutor {
       language: path.split('.').pop() || 'txt',
       timestamp: Date.now()
     });
-    return { ok: true, file: path, created, diff, diffLines: diff?.lines || [], content };
+    return { ok: true, file: path, created, diff, diffLines: diff?.lines || [], content, undoId };
   }
 
   async edit_file({ path, old: oldText, new: newText }) {
@@ -245,7 +245,7 @@ export class ToolExecutor {
     }
 
     const content = prev.replace(oldText, newText);
-    await this.undoStack?.snapshot(path, prev);
+    const undoId = await this.undoStack?.snapshot(path, prev);
     await writeFile(full, content, 'utf8');
     const diff = lineDiff(prev, content);
     this.bus?.emit(EVENTS.SUBAGENT_FILE, {
@@ -256,7 +256,7 @@ export class ToolExecutor {
       language: path.split('.').pop() || 'txt',
       timestamp: Date.now()
     });
-    return { ok: true, file: path, diff, diffLines: diff?.lines || [], content };
+    return { ok: true, file: path, diff, diffLines: diff?.lines || [], content, undoId };
   }
 
   /** Strip HTML tags and decode entities to plain text. */
@@ -538,7 +538,8 @@ export class UndoStack {
   }
 
   async snapshot(relPath, prevContent) {
-    this.entries.push({ at: new Date().toISOString(), file: relPath, prev: prevContent });
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    this.entries.push({ id, at: new Date().toISOString(), file: relPath, prev: prevContent });
     if (this.entries.length > this.maxEntries) this.entries.shift();
     if (this.filePath) {
       try {
@@ -547,6 +548,7 @@ export class UndoStack {
         /* best-effort persistence */
       }
     }
+    return id;
   }
 
   async load() {
@@ -559,21 +561,27 @@ export class UndoStack {
     }
   }
 
-  /** Revert the most recent write. Returns the reverted file or null. */
-  async undo() {
+  /** Revert a write by id (when provided) or the most recent write (LIFO fallback).
+   *  Returns the reverted file path or null if the stack is empty. */
+  async undo(id) {
     await this.load();
-    const last = this.entries.pop();
-    if (!last) return null;
-    const full = this.projectPath ? resolve(this.projectPath, last.file) : resolve(process.cwd(), last.file);
-    if (last.prev === null) {
+    let entry;
+    if (id) {
+      const idx = this.entries.findIndex((e) => e.id === id);
+      if (idx !== -1) entry = this.entries.splice(idx, 1)[0];
+    }
+    if (!entry) entry = this.entries.pop();
+    if (!entry) return null;
+    const full = this.projectPath ? resolve(this.projectPath, entry.file) : resolve(process.cwd(), entry.file);
+    if (entry.prev === null) {
       await rm(full, { force: true });
     } else {
-      await writeFile(full, last.prev, 'utf8');
+      await writeFile(full, entry.prev, 'utf8');
     }
     if (this.filePath) {
       await writeFile(this.filePath, JSON.stringify(this.entries), 'utf8').catch(() => {});
     }
-    return last.file;
+    return entry.file;
   }
 
   pending() {

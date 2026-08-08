@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 
 export function TextInputModal({ title, placeholder, onSubmit, onClose, password = false, error = null }) {
   const [value, setValue] = useState('');
 
   useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+    const input = key.sequence && !key.sequence.includes('\u001b') ? key.sequence : '';
     if ((key.name === "escape")) {
       onClose();
       return;
@@ -40,15 +40,15 @@ export function TextInputModal({ title, placeholder, onSubmit, onClose, password
         border
         borderColor={theme.green}
         backgroundColor={theme.panel}
-        paddingLeft={1} paddingRight={1}
-        paddingTop={1} paddingBottom={1}
+        paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
+        paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
       >
-        <box justifyContent="space-between" marginBottom={1}>
+        <box justifyContent="space-between" marginBottom={SPACING.sm}>
         <text attributes={TextAttributes.BOLD}>{title}</text>
         <text fg="gray">esc</text>
       </box>
 
-      <box marginBottom={1}>
+      <box marginBottom={SPACING.sm}>
         {value.length === 0 ? (
           <text fg={theme.gray}>
             <span fg={theme.green}>{placeholder.charAt(0)}</span>
@@ -60,7 +60,7 @@ export function TextInputModal({ title, placeholder, onSubmit, onClose, password
       </box>
 
       {error && (
-        <box marginBottom={1}>
+        <box marginBottom={SPACING.sm}>
           <text fg="red">{error}</text>
         </box>
       )}

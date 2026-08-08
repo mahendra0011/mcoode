@@ -65,8 +65,9 @@ const TerminalViewer = ({ output }) => {
   );
 };
 
-export const StepCard = ({ msg }) => {
+export const StepCard = ({ msg, undo }) => {
   const [expanded, setExpanded] = useState(msg.status === 'failed' || msg.status === 'running');
+  const [actionTaken, setActionTaken] = useState(false);
   const [duration, setDuration] = useState('');
 
   // Automatically update duration while running
@@ -156,6 +157,29 @@ export const StepCard = ({ msg }) => {
               {(msg.tool === 'read_file' || msg.tool === 'web_fetch') && (
                 <div className="mt-2 text-[12px] font-mono bg-black/30 p-3 rounded-lg border border-white/5 max-h-48 overflow-y-auto custom-scrollbar whitespace-pre-wrap text-white/60">
                   {msg.lines ? msg.lines.join('\n') : msg.output}
+                </div>
+              )}
+
+              {/* Action Bar for Edits — Undo / Keep buttons (matching IDE StepCards pattern) */}
+              {msg.status === 'done' && !actionTaken && (msg.tool === 'write_file' || msg.tool === 'edit_file') && (
+                <div className="mt-3 flex items-center justify-end gap-2 border-t border-white/5 pt-3">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setActionTaken('undone'); undo?.(msg); }}
+                    className="px-3 py-1.5 text-[11px] font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded transition"
+                  >
+                    ✕ Undo
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setActionTaken('kept'); }}
+                    className="px-3 py-1.5 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded transition"
+                  >
+                    ✓ Keep
+                  </button>
+                </div>
+              )}
+              {actionTaken === 'undone' && (
+                <div className="mt-3 pt-2 text-center text-[10px] font-medium text-red-400 border-t border-white/5">
+                  Change reverted.
                 </div>
               )}
             </div>

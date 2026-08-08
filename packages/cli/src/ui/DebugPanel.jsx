@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 
 const EVENT_COLORS = {
   USER_PROMPT: '#4da6ff',
@@ -70,7 +70,7 @@ export function DebugPanel({ events = [], onClose = null }) {
       borderColor={theme.accent}
       flexShrink={0}
     >
-      <box flexDirection="row" justifyContent="space-between" paddingBottom={1} borderBottom={1} borderBottomColor={theme.divider}>
+      <box flexDirection="row" justifyContent="space-between" paddingBottom={SPACING.sm} borderBottom={1} borderBottomColor={theme.divider}>
         <box flexDirection="row">
           <text fg={theme.accentDim}>{'◆ '}</text>
           <text fg={theme.textBright} attributes={{ BOLD: true }}>Event Inspector </text>
@@ -94,14 +94,14 @@ export function DebugPanel({ events = [], onClose = null }) {
         viewportOptions={{ flexGrow: 1 }}
         scrollbarOptions={{ visible: true }}
       >
-        <box flexDirection="column" paddingTop={1} paddingLeft={1} paddingRight={1}>
+        <box flexDirection="column" paddingTop={SPACING.sm} paddingLeft={SPACING.sm} paddingRight={SPACING.sm}>
           {displayed.length === 0 ? (
             <text fg={theme.muted}>No events yet…</text>
           ) : (
             displayed.map((e, i) => {
               const color = EVENT_COLORS[e.type] || EVENT_COLORS.default;
               return (
-                <box key={i} flexDirection="row" marginBottom={0} paddingTop={0} paddingBottom={0}>
+                <box key={i} flexDirection="row" marginBottom={SPACING.none} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
                   <text fg={theme.muted}>{fmtTime(e.timestamp)}</text>
                   <text fg={theme.dim}>{' '}</text>
                   <text fg={color}>{String(e.type).slice(0, 20).padEnd(20)}</text>

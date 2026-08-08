@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
-import { theme } from './theme.js';
+import { theme, SPACING } from './theme.js';
 import { SLASH_COMMANDS } from './InputLine.jsx';
+import { useEntrance } from './useEntrance.js';
 
 export function CommandPalette({ onRun, onClose }) {
   const { width: tw, height: th } = useTerminalDimensions();
@@ -70,6 +71,8 @@ export function CommandPalette({ onRun, onClose }) {
   const rows = th || 30;
   const left = Math.max(0, Math.floor((cols - width) / 2));
   const top = Math.max(0, Math.floor((rows - height) / 2));
+  
+  const visibleResults = useEntrance(Math.min(10, matches.length), 0.5, query); // ~40ms per line
 
   return (
     <box
@@ -83,8 +86,8 @@ export function CommandPalette({ onRun, onClose }) {
       border
       borderColor={theme.accent}
       backgroundColor={theme.panel}
-      paddingLeft={1} paddingRight={1}
-      paddingTop={1} paddingBottom={1}
+      paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
+      paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
     >
       {/* ── Header ──────────────── */}
       <box flexDirection="row">
@@ -96,16 +99,16 @@ export function CommandPalette({ onRun, onClose }) {
       </box>
 
       {/* ── Search input ─────────── */}
-      <box marginTop={1} flexDirection="row" backgroundColor={theme.surface} paddingLeft={1} paddingRight={1}>
+      <box marginTop={SPACING.sm} flexDirection="row" backgroundColor={theme.surface} paddingLeft={SPACING.sm} paddingRight={SPACING.sm}>
         <text fg={theme.accent}>{'\u25b8'} /</text>
         <text fg={theme.textBright}>{query}</text>
         <text fg={theme.accent}>{'\u2588'}</text>
       </box>
 
       {/* ── Results ──────────────── */}
-      <box flexDirection="column" marginTop={1}>
-        {matches.slice(0, 10).map((c, i) => (
-          <box key={c.cmd} backgroundColor={i === sel ? theme.accent : undefined} flexDirection="row" paddingLeft={1} paddingRight={1}>
+      <box flexDirection="column" marginTop={SPACING.sm}>
+        {matches.slice(0, visibleResults).map((c, i) => (
+          <box key={c.cmd} backgroundColor={i === sel ? theme.accent : undefined} flexDirection="row" paddingLeft={SPACING.sm} paddingRight={SPACING.sm}>
             <text fg={i === sel ? '#000000' : theme.text} attributes={i === sel ? TextAttributes.BOLD : 0}>{`/${c.cmd}`.padEnd(14, ' ')}</text>
             <text fg={i === sel ? '#1e3a5f' : theme.dim}>{c.desc}</text>
           </box>
@@ -115,7 +118,7 @@ export function CommandPalette({ onRun, onClose }) {
 
       {/* ── Footer hint ──────────── */}
       {matches.length > 10 && (
-        <box marginTop={1} paddingLeft={1}>
+        <box marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
           <text fg={theme.muted}>{'\u2026'} {matches.length - 10} more results</text>
         </box>
       )}
