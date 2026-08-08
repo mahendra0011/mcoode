@@ -117,9 +117,11 @@ export function AIChatPage() {
         const attachText = data.uploadedFiles.map(f => `[Attached File: ${f}]`).join('\n');
         setPrompt(prev => prev ? `${prev}\n${attachText}\n` : `${attachText}\n`);
         setTriggerRefresh(r => r + 1); // Refresh file tree
+      } else {
+        showToast(data.error?.message || 'Failed to attach files', 'error');
       }
     } catch (err) {
-      console.error('Upload failed:', err);
+      showToast('Network error while attaching files', 'error');
     } finally {
       setIsUploading(false);
       // Reset input
@@ -498,7 +500,7 @@ export function AIChatPage() {
                     transition={{ duration: 0.2, delay: 0.1 }}
                     className="flex items-center justify-center gap-1 mb-4 px-4 py-2 bg-[#121212] rounded-xl border border-white/5"
                   >
-                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || !activeWorkspaceId} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Upload Project">
+                    <button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition disabled:opacity-50" title="Upload Project">
                       {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5"/>}
                       Upload
                     </button>
@@ -629,7 +631,7 @@ export function AIChatPage() {
                     transition={{ duration: 0.2, delay: 0.1 }}
                     className="w-full max-w-4xl mx-auto px-6 flex items-center gap-1 mb-2"
                   >
-                    <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || !activeWorkspaceId} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Upload Project">
+                    <button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition disabled:opacity-50" title="Upload Project">
                       {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5"/>}
                       Upload
                     </button>
