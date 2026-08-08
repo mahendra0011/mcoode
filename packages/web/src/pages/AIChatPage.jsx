@@ -306,7 +306,8 @@ export function AIChatPage() {
   };
 
   const handleGithubConnect = () => {
-    window.location.href = `/api/v1/auth/github`;
+    const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
+    window.location.href = `/api/v1/auth/github?token=${encodeURIComponent(tokens.access || '')}`;
   };
 
   const handleFileSelect = (path) => {

@@ -21,7 +21,7 @@ export function githubAuthRoutes({ secret }) {
     if (!CLIENT_ID) {
        return res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'GITHUB_CLIENT_ID not set' }});
     }
-    const redirectUri = `http://localhost:3100/api/v1/auth/github/callback`; // Should ideally be dynamic based on req.get('host')
+    const redirectUri = `http://localhost:3100/api/v1/auth/github/callback`;
     const scope = 'repo user'; // We need repo access for cloning private repos and pushing
     // Pass the token we received from the frontend as state so we know who they are on callback
     const state = req.query.token || ''; 
@@ -79,7 +79,7 @@ export function githubAuthRoutes({ secret }) {
       }
 
       // 5. Redirect back to frontend IDE
-      res.redirect('http://localhost:5174/ai/chat?github_connected=1');
+      res.redirect('http://localhost:5173/ai/chat?github_connected=1');
 
     } catch (err) {
       next(err);
