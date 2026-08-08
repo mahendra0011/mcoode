@@ -40,8 +40,9 @@ export function authRoutes({ secret }) {
         return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'too many OTP requests — wait a few minutes' } });
       }
       const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      const codeHash = hashPassword(code);
       await db().otp.deleteOne({ email, intent });
-      await db().otp.create({ email, code, intent, expiresAt: new Date(Date.now() + OTP_TTL_MS), attempts: 0 });
+      await db().otp.create({ email, codeHash, intent, expiresAt: new Date(Date.now() + OTP_TTL_MS), attempts: 0 });
       const mail = await sendMail({
         to: email,
         subject: `mcode verification code: ${code}`,
@@ -69,7 +70,7 @@ export function authRoutes({ secret }) {
       if (pending.attempts >= OTP_MAX_ATTEMPTS) {
         return res.status(400).json({ error: { code: 'OTP_EXPIRED', message: 'too many attempts — request a new code' } });
       }
-      if (pending.code !== otp) {
+      if (!verifyPassword(otp, pending.codeHash)) {
         await db().otp.updateOne({ _id: pending._id }, { attempts: pending.attempts + 1 });
         return res.status(401).json({ error: { code: 'BAD_OTP', message: 'incorrect code' } });
       }

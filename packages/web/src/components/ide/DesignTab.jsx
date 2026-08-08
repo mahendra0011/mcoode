@@ -5,6 +5,7 @@ import {
   Search, Sparkles, Copy, Download, ExternalLink,
   Monitor, Tablet, Smartphone, Trash2, Edit3, History
 } from 'lucide-react';
+import { getAuthHeaders } from '../../lib/api';
 import {
   setDesignStreaming,
   setCurrentDesign,
@@ -31,11 +32,6 @@ const DEVICE_PRESETS = [
   { id: 'tablet', name: 'Tablet', icon: Tablet, width: 'max-w-[768px]' },
   { id: 'mobile', name: 'Mobile', icon: Smartphone, width: 'max-w-[375px]' },
 ];
-
-function getAuthHeaders() {
-  const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
-  return { Authorization: `Bearer ${tokens.access || ''}`, 'Content-Type': 'application/json' };
-}
 
 /**
  * DesignTab — the "Design" tab inside AIChatPage.

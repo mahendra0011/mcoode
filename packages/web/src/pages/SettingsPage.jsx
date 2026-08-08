@@ -5,6 +5,7 @@ import {
   Plus, Trash2, Check, AlertTriangle, Eye, EyeOff, ChevronDown,
   Palette, Globe, Radar, Zap, X
 } from 'lucide-react';
+import { getAuthHeaders } from '../lib/api';
 
 const PROVIDERS = [
   { id: 'openrouter', name: 'OpenRouter', envVar: 'OPENROUTER_API_KEY', placeholder: 'sk-...' },
@@ -166,11 +167,6 @@ const TABS = [
   { id: 'account', label: 'Account', icon: User },
   { id: 'connections', label: 'Connections', icon: Github },
 ];
-
-function getAuthHeaders() {
-  const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
-  return { 'Authorization': `Bearer ${tokens.access}`, 'Content-Type': 'application/json' };
-}
 
 /* ─────────────────── PERMISSIONS TAB ─────────────────── */
 function PermissionsTab({ settings, onUpdate, saving }) {

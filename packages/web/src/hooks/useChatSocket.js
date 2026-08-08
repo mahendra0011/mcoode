@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { io } from 'socket.io-client';
+import { getAuthHeaders, getToken } from '../lib/api';
 import {
   setStatus,
   chatReady,
@@ -23,16 +24,6 @@ import {
   setDesigns,
   removeDesign
 } from '../store/chatSlice';
-
-function getAuthHeaders() {
-  const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
-  return { 'Authorization': `Bearer ${tokens.access || ''}`, 'Content-Type': 'application/json' };
-}
-
-const getToken = () => {
-  const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
-  return tokens.access || '';
-};
 
 let socketSingleton = null;
 

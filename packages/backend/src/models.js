@@ -96,7 +96,7 @@ pluginSchema.index({ name: 'text', description: 'text' });
 
 const otpSchema = new mongoose.Schema({
   email: { type: String, index: true },
-  code: String,
+  codeHash: String,
   intent: { type: String, enum: ['signup', 'login'] },
   expiresAt: Date,
   attempts: { type: Number, default: 0 },
@@ -104,19 +104,65 @@ const otpSchema = new mongoose.Schema({
 });
 otpSchema.index({ email: 1, createdAt: -1 });
 
-/** Per-user provider API keys — AES-256-GCM encrypted at rest. */
+/** Per-user provider API keys — AES-256-GCM encrypted at rest.
+ *  The encryptedKey blob already contains salt + iv + tag + ciphertext
+ *  (see secret-enc.js), so the individual keyIv/keyTag/keySalt fields are
+ *  kept optional for backward-compatibility with legacy imports. */
 const apiKeySchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
   providerId: { type: String, required: true },
   envVar: { type: String, required: true }, // e.g. OPENROUTER_API_KEY
   displayName: String,
   encryptedKey: { type: String, required: true },
-  keyIv: { type: String, required: true },
-  keyTag: { type: String, required: true },
-  keySalt: { type: String, required: true },
+  keyIv: String,
+  keyTag: String,
+  keySalt: String,
   createdAt: { type: Date, default: Date.now }
 });
 apiKeySchema.index({ userId: 1, providerId: 1 }, { unique: true });
+
+/** GitHub OAuth tokens — encrypted at rest using per-user master key. */
+const githubAccountSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true, unique: true },
+  accessToken: { type: String, required: true },
+  username: String,
+  avatarUrl: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+/** Per-user settings persisted in MongoDB (fallback to in-memory defaults). */
+const userSettingsSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true, unique: true },
+  allowShellAll: { type: Boolean, default: false },
+  requireEditApproval: { type: Boolean, default: false },
+  modelOverrides: { type: Map, of: String, default: {} },
+  accentColor: { type: String, default: 'emerald' },
+  networkWhitelist: [{ type: String }],
+  watchDefaults: {
+    intervalMs: { type: Number, default: 30000 },
+    autoFix: { type: Boolean, default: false }
+  },
+  godModeDefaults: {
+    concurrency: { type: Number, default: 3 },
+    deployTarget: { type: String, default: '' },
+    skipTests: { type: Boolean, default: false }
+  },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+/** Generated designs stored for history/versioning. */
+const designSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+  prompt: String,
+  html: String,
+  version: { type: Number, default: 1 },
+  parentId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
+  device: { type: String, default: 'desktop' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+designSchema.index({ userId: 1, parentId: 1 });
 
 const workspaceSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
@@ -154,3 +200,6 @@ export const Otp = mongoose.model('Otp', otpSchema);
 export const ApiKey = mongoose.model('ApiKey', apiKeySchema);
 export const Workspace = mongoose.model('Workspace', workspaceSchema);
 export const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
+export const GithubAccount = mongoose.model('GithubAccount', githubAccountSchema);
+export const UserSettings = mongoose.model('UserSettings', userSettingsSchema);
+export const Design = mongoose.model('Design', designSchema);

@@ -40,7 +40,7 @@ export function githubAuthRoutes({ secret }) {
       try {
         const { verify } = await import('jsonwebtoken');
         const decoded = verify(authToken, secret);
-        userId = decoded.userId;
+        userId = decoded.sub;
       } catch (err) {
         return res.status(401).send('Invalid or missing state token for authentication');
       }
