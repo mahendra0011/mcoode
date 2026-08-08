@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { ChevronDown, Plus, Key, Check, X, Loader2 } from 'lucide-react';
 import { setSelectedModel } from '../../store/chatSlice';
+import { getAuthHeaders } from '../../lib/api';
 
 /** All CLI providers are fetched from the backend — this just seeds the
  * initial dropdown while the API call is in flight. */
@@ -32,7 +33,7 @@ export function ModelSelector({ compact = false }) {
   useEffect(() => {
     const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
     fetch('/api/v1/keys', {
-      headers: { 'Authorization': `Bearer ${tokens.access || ''}` }
+      headers: { Authorization: `Bearer ${tokens.access || ''}` }
     })
       .then((res) => res.ok ? res.json() : { keys: [] })
       .then((data) => setKeys(data.keys || []))
@@ -71,7 +72,7 @@ export function ModelSelector({ compact = false }) {
       const envVar = provider?.envVar || `${keyForm.providerId.toUpperCase()}_API_KEY`;
       const res = await fetch('/api/v1/keys', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           providerId: keyForm.providerId,
           envVar,

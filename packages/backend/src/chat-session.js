@@ -64,12 +64,8 @@ export class ChatSession {
     // If modelRef is a provider id (e.g. "poolside"), router.find() falls back
     // to the first model from that provider. If it's a full ref
     // (e.g. "poolside:poolside/laguna-s-2.1"), it resolves exactly.
-    console.error('[DEBUG init] modelRef:', JSON.stringify(this.modelRef));
-    console.error('[DEBUG init] secrets keys:', Object.keys(secrets));
-    console.error('[DEBUG init] provider ids:', this.providers.map(p => `${p.id} (apiKey=${!!p.apiKey}, kind=${p.kind})`));
     if (this.modelRef) {
       this.router.modelOverride = this.modelRef;
-      console.error('[DEBUG init] modelOverride set to:', JSON.stringify(this.router.modelOverride));
     }
 
     // Load user settings from DB and apply
@@ -161,10 +157,6 @@ export class ChatSession {
   async runChat(prompt) {
     const assignment = (this.router.modelOverride && await this.router.find(this.router.modelOverride))
       || await this.router.pick('general');
-
-    console.error('[DEBUG runChat] modelOverride:', JSON.stringify(this.router.modelOverride));
-    console.error('[DEBUG runChat] find() result:', assignment ? `${assignment.provider.id}:${assignment.model.id}` : 'null');
-    console.error('[DEBUG runChat] assignment:', JSON.stringify(assignment));
 
     if (!assignment) {
       this.onEvent(S2C.CHAT_ERROR, { message: 'no model available for chat' });

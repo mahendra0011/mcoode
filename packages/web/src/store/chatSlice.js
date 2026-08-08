@@ -85,7 +85,7 @@ const chatSlice = createSlice({
     streamUpdate: (state, action) => {
       const text = action.payload;
       const lastMessage = state.messages[state.messages.length - 1];
-      if (lastMessage && lastMessage.role === 'assistant') {
+      if (lastMessage && lastMessage.role === 'assistant' && lastMessage.kind === 'stream') {
         lastMessage.text = (lastMessage.text || '') + text;
       } else {
         state.messages.push({

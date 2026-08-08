@@ -103,7 +103,6 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
 
       const { workspaceId, modelRef } = payload;
-      console.error('[DEBUG chat:start] modelRef:', JSON.stringify(modelRef), 'userId:', socket.userId);
 
       // Resolve workspace path
       let workspacePath = null;
@@ -120,9 +119,26 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         await mkdir(workspacePath, { recursive: true });
       }
 
-      // Create or reuse chat session for this socket
+      // Create or reuse chat session for this socket.
+      // When only modelRef changes (workspace stays the same) we reuse the
+      // existing ChatSession so conversation context / history is preserved.
       let session = chatSessions.get(socket.id);
-      if (session) session.cleanup();
+      if (session) {
+        if (session.workspacePath === workspacePath) {
+          // Same workspace — update the model override on the existing session
+          // so conversation context and history are preserved across model switches
+          session.modelRef = modelRef;
+          if (session.router) {
+            session.router.modelOverride = modelRef;
+          }
+          socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_READY, {
+            models: session.providers?.map((p) => ({ id: p.id, displayName: p.displayName })) || []
+          });
+          return;
+        }
+        // Workspace changed — discard the old session and create a fresh one
+        session.cleanup();
+      }
 
       session = new ChatSession({
         userId: socket.userId,
@@ -135,7 +151,9 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
       const ok = await session.start();
       if (ok) {
-        socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_READY, { models: session.providers?.map((p) => ({ id: p.id, displayName: p.displayName })) || [] });
+        socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_READY, {
+          models: session.providers?.map((p) => ({ id: p.id, displayName: p.displayName })) || []
+        });
       }
     });
 

@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useChatSocket } from '../hooks/useChatSocket';
 import { getAuthHeaders } from '../lib/api';
-import { setMode } from '../store/chatSlice';
+import { setMode, addMessage } from '../store/chatSlice';
 
 import { FileTree } from '../components/ide/FileTree';
 import { EditorPane } from '../components/ide/EditorPane';
@@ -325,12 +325,14 @@ export function AIChatPage() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (prompt.trim() && !isStreaming) {
-      // In IDE mode, agent needs to know the active workspace
+      // Echo the user's message into the Redux store so it appears in the chat UI
+      dispatch(addMessage({
+        id: Date.now().toString(),
+        role: 'user',
+        text: prompt,
+      }));
       send(prompt);
       setPrompt('');
-      if (activeTab === 'Chat' && mode === 'agent') {
-         // Auto-switch to AI code Agent if they use agent mode (optional UX choice, sticking to user choice for now)
-      }
     }
   };
 
@@ -403,7 +405,7 @@ export function AIChatPage() {
           <div className="w-6 h-6 rounded-full bg-white/20 overflow-hidden">
             <img src="https://i.pravatar.cc/100?img=33" alt="User" className="w-full h-full object-cover" />
           </div>
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-xs font-medium transition">
+          <button onClick={() => showToast('Invite link copied to clipboard')} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-xs font-medium transition">
             Invite
           </button>
         </div>

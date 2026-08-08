@@ -257,7 +257,9 @@ export function useChatSocket(workspaceId = null) {
     if (socketRef.current) {
       socketRef.current.emit('chat:permission_answer', { requestId, answer });
     }
-  }, []);
+    // Clear the permission modal from Redux state now that we've answered
+    dispatch(clearPermission());
+  }, [dispatch]);
 
   const undo = useCallback(() => {
     if (socketRef.current) {
