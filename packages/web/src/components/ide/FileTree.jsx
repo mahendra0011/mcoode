@@ -11,7 +11,7 @@ const getFileIcon = (name) => {
   return <File className="w-3.5 h-3.5 text-white/50" />;
 };
 
-const TreeNode = ({ node, level = 0, onSelectFile, activePath }) => {
+const TreeNode = ({ node, level = 0, onFileSelect, activePath }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isDir = !!node.children;
 
@@ -21,7 +21,7 @@ const TreeNode = ({ node, level = 0, onSelectFile, activePath }) => {
       <div 
         className={`flex items-center gap-1.5 py-1 px-2 cursor-pointer transition select-none hover:bg-white/10 ${isActive ? 'bg-white/10 text-white' : 'text-white/70'}`}
         style={{ paddingLeft: `${level * 12 + 16}px` }}
-        onClick={() => onSelectFile(node.path)}
+        onClick={() => onFileSelect(node.path)}
       >
         {getFileIcon(node.name)}
         <span className="text-[13px] truncate">{node.name}</span>
@@ -50,7 +50,7 @@ const TreeNode = ({ node, level = 0, onSelectFile, activePath }) => {
               if (Boolean(a.children) === Boolean(b.children)) return a.name.localeCompare(b.name);
               return a.children ? -1 : 1; // folders first
             }).map(child => (
-              <TreeNode key={child.path || child.name} node={child} level={level + 1} onSelectFile={onSelectFile} activePath={activePath} />
+              <TreeNode key={child.path || child.name} node={child} level={level + 1} onFileSelect={onFileSelect} activePath={activePath} />
             ))}
           </motion.div>
         )}
@@ -59,7 +59,7 @@ const TreeNode = ({ node, level = 0, onSelectFile, activePath }) => {
   );
 };
 
-export function FileTree({ workspaceId, onSelectFile, activePath, triggerRefresh = 0 }) {
+export function FileTree({ workspaceId, onFileSelect, activePath, triggerRefresh = 0 }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -130,7 +130,7 @@ export function FileTree({ workspaceId, onSelectFile, activePath, triggerRefresh
   return (
     <div className="flex flex-col py-2 overflow-y-auto custom-scrollbar h-full">
       {rootNodes.map(node => (
-        <TreeNode key={node.path || node.name} node={node} onSelectFile={onSelectFile} activePath={activePath} />
+        <TreeNode key={node.path || node.name} node={node} onFileSelect={onFileSelect} activePath={activePath} />
       ))}
     </div>
   );
