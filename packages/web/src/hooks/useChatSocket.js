@@ -10,6 +10,7 @@ import {
   toolCallStarted,
   permissionRequested,
   clearPermission,
+  setUndoResult,
   setPlan,
   setModels,
   updateTodo,
@@ -168,6 +169,10 @@ export function useChatSocket(workspaceId = null) {
       dispatch(chatDone());
     };
 
+    const onUndoResult = (payload) => {
+      dispatch(setUndoResult(payload));
+    };
+
     const onShellStream = (payload) => {
       if (payload && payload.chunk) {
         document.dispatchEvent(new CustomEvent('terminal:write', { detail: payload.chunk }));
@@ -201,6 +206,7 @@ export function useChatSocket(workspaceId = null) {
     socket.on('chat:todo_plan', onChatTodoPlan);
     socket.on('chat:todo_update', onChatTodoUpdate);
     socket.on('chat:done', onChatDone);
+    socket.on('chat:undo_result', onUndoResult);
     socket.on('chat:shell_stream', onShellStream);
     socket.on('design:stream', onDesignStream);
     socket.on('design:done', onDesignDone);
@@ -213,6 +219,21 @@ export function useChatSocket(workspaceId = null) {
     const reloadHandler = () => reloadModels();
     window.addEventListener('mcode:reload-models', reloadHandler);
 
+    // Force reconnection when auth token changes (e.g. re-login in another tab)
+    // so the socket doesn't carry a stale Bearer token.
+    const handleTokenChange = () => {
+      const newToken = getToken();
+      if (socketRef.current && !socketRef.current.disconnected) {
+        socketRef.current.auth = { token: newToken || '' };
+        socketRef.current.disconnect();
+        socketRef.current.connect();
+      }
+    };
+    const storageHandler = (e) => {
+      if (e.key === 'mcode_tokens') handleTokenChange();
+    };
+    window.addEventListener('storage', storageHandler);
+
     return () => {
       socket.off('connect', onConnect);
       socket.off('chat:ready', onChatReady);
@@ -224,11 +245,13 @@ export function useChatSocket(workspaceId = null) {
       socket.off('chat:todo_plan', onChatTodoPlan);
       socket.off('chat:todo_update', onChatTodoUpdate);
       socket.off('chat:done', onChatDone);
+      socket.off('chat:undo_result', onUndoResult);
       socket.off('chat:shell_stream', onShellStream);
       socket.off('design:stream', onDesignStream);
       socket.off('design:done', onDesignDone);
       socket.off('disconnect', onDisconnect);
       window.removeEventListener('mcode:reload-models', reloadHandler);
+      window.removeEventListener('storage', storageHandler);
     };
   }, [dispatch, reloadModels]);
 

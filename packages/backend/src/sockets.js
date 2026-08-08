@@ -177,17 +177,17 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       if (session) session.handlePermissionAnswer(payload);
     });
 
-    socket.on('chat:undo', async (payload = {}) => {
+    socket.on(SOCKET.CLIENT_TO_SERVER.CHAT_UNDO, async (payload = {}) => {
       const session = chatSessions.get(socket.id);
       if (session && session.undoStack) {
         try {
           const revertedFile = await session.undoStack.undo();
-          socket.emit('chat:undo_result', { ok: true, file: revertedFile });
+          socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_UNDO_RESULT, { ok: true, file: revertedFile });
         } catch (e) {
-          socket.emit('chat:undo_result', { ok: false, error: e.message });
+          socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_UNDO_RESULT, { ok: false, error: e.message });
         }
       } else {
-        socket.emit('chat:undo_result', { ok: false, error: 'no active session or undo stack' });
+        socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_UNDO_RESULT, { ok: false, error: 'no active session or undo stack' });
       }
     });
 

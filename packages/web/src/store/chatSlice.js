@@ -149,6 +149,9 @@ const chatSlice = createSlice({
     clearPermission: (state) => {
        state.permissionRequest = null;
     },
+    setUndoResult: (state, action) => {
+       state.lastUndoResult = action.payload;
+    },
     setPlan: (state, action) => {
        state.plan = action.payload;
     },
@@ -237,6 +240,7 @@ export const {
   toolCallStarted,
   permissionRequested,
   clearPermission,
+  setUndoResult,
   setPlan,
   updateTodo,
   chatDone,

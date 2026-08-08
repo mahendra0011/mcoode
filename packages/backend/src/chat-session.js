@@ -26,6 +26,7 @@ export class ChatSession {
     this.history = [];
     this.undoStack = null;
     this.initialized = false;
+    this.running = false;
     this.config = { chatAgentTurns: 15, allowShellAll: false, requireEditApproval: false };
   }
 
@@ -110,7 +111,14 @@ export class ChatSession {
     // Create a fresh EventEmitter for this chat session
     this.bus = new EventEmitter();
     this.bus.on(EVENTS.MESSAGE, (msg) => {
-      // Forward all MESSAGE events to the client
+      // Stream chunks must go through CHAT_STREAM so the client appends
+      // text to the last message instead of creating a new one per chunk.
+      // All other message types (tool results, system, summary, etc.)
+      // are forwarded as CHAT_MESSAGE.
+      if (msg.kind === 'stream') {
+        this.onEvent(S2C.CHAT_STREAM, msg);
+        return;
+      }
       this.onEvent(S2C.CHAT_MESSAGE, msg);
       // Special: permission requests need a dedicated client event
       if (msg.block === 'permission' && msg.status === 'running') {
@@ -119,7 +127,7 @@ export class ChatSession {
     });
 
     this.bus.on('SUBAGENT_SHELL_OUTPUT', (payload) => {
-      this.onEvent('chat:shell_stream', payload);
+      this.onEvent(S2C.CHAT_SHELL_STREAM, payload);
     });
 
     // Persist "Always Allow" from the permission modal so future sessions
@@ -281,14 +289,23 @@ export class ChatSession {
 
   /** Send a message — dispatches to chat or agent mode. */
   async sendMessage(prompt, mode = 'chat') {
+    if (this.running) {
+      this.onEvent(S2C.CHAT_ERROR, { message: 'a message is already being processed — please wait' });
+      return;
+    }
     if (!this.bus) {
       await this.start();
       if (!this.initialized) return;
     }
-    if (mode === 'agent') {
-      await this.runAgent(prompt);
-    } else {
-      await this.runChat(prompt);
+    this.running = true;
+    try {
+      if (mode === 'agent') {
+        await this.runAgent(prompt);
+      } else {
+        await this.runChat(prompt);
+      }
+    } finally {
+      this.running = false;
     }
   }
 
@@ -297,5 +314,6 @@ export class ChatSession {
     this.interrupt();
     this.bus = null;
     this.chatAgent = null;
+    this.running = false;
   }
 }

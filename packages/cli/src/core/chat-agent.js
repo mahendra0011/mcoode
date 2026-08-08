@@ -408,7 +408,7 @@ export class ChatAgent {
       requireEditApproval: this.requireEditApproval,
       networkWhitelist: this.networkWhitelist,
       auditLog: this.auditLog,
-      domain: 'backend',
+      domain: this.config.domain || 'backend',
       todoId: null,
       cancelSignal: signal
     });

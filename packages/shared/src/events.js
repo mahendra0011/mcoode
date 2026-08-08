@@ -72,7 +72,8 @@ export const SOCKET = Object.freeze({
     CHAT_START: 'chat:start',
     CHAT_SEND: 'chat:send',
     CHAT_PERMISSION_ANSWER: 'chat:permission_answer',
-    CHAT_INTERRUPT: 'chat:interrupt'
+    CHAT_INTERRUPT: 'chat:interrupt',
+    CHAT_UNDO: 'chat:undo'
   },
   SERVER_TO_CLIENT: {
     CHAT_READY: 'chat:ready',
@@ -83,6 +84,10 @@ export const SOCKET = Object.freeze({
     CHAT_TODO_PLAN: 'chat:todo_plan',
     CHAT_TODO_UPDATE: 'chat:todo_update',
     CHAT_DONE: 'chat:done',
-    CHAT_ERROR: 'chat:error'
+    CHAT_ERROR: 'chat:error',
+    CHAT_SHELL_STREAM: 'chat:shell_stream',
+    CHAT_UNDO_RESULT: 'chat:undo_result',
+    DESIGN_STREAM: 'design:stream',
+    DESIGN_DONE: 'design:done'
   }
 });

@@ -448,7 +448,7 @@ export function AIChatPage() {
             {activeTab === 'Design' ? (
               /* DESIGN TAB */
               <DesignTab />
-            ) : messages.length === 0 && activeTab !== 'AI code Agent' ? (
+            ) : messages.length === 0 ? (
               /* EMPTY STATE (For Chat) */
               <div className="w-full h-full flex flex-col items-center justify-center px-4 relative z-10">
                 <div className="w-24 h-24 mb-10 relative animate-spin-slow">
@@ -571,7 +571,7 @@ export function AIChatPage() {
                             exit={{ scale: 0.9, opacity: 0 }}
                             transition={{ duration: 0.15 }}
                             className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
-                            disabled={!prompt.trim()}
+                            disabled={!prompt.trim() || isStreaming}
                           >
                             <ArrowUp className="w-4 h-4 drop-shadow-md" />
                           </motion.button>
@@ -702,7 +702,7 @@ export function AIChatPage() {
                               exit={{ scale: 0.9, opacity: 0 }}
                               transition={{ duration: 0.15 }}
                               className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
-                              disabled={!prompt.trim()}
+                              disabled={!prompt.trim() || isStreaming}
                             >
                               <ArrowUp className="w-4 h-4 drop-shadow-md" />
                             </motion.button>
@@ -839,7 +839,7 @@ export function AIChatPage() {
                                 exit={{ scale: 0.9, opacity: 0 }}
                                 transition={{ duration: 0.15 }}
                                 className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition disabled:opacity-50" 
-                                disabled={!prompt.trim()}
+                                disabled={!prompt.trim() || isStreaming}
                               >
                                 <ArrowUp className="w-3.5 h-3.5" />
                               </motion.button>
