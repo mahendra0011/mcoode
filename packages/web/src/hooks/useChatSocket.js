@@ -61,6 +61,13 @@ export function useChatSocket(workspaceId = null) {
   const socketRef = useRef(null);
   const { mode, selectedModel } = useSelector((state) => state.chat);
 
+  // Refs so the onConnect handler always uses the latest workspace/model
+  // even after a socket reconnection (avoids stale closure from effect deps)
+  const workspaceIdRef = useRef(workspaceId);
+  workspaceIdRef.current = workspaceId;
+  const selectedModelRef = useRef(selectedModel);
+  selectedModelRef.current = selectedModel;
+
   // ── Fetch available models from the backend (GET /api/v1/keys/models) ──
   const reloadModels = useCallback(async () => {
     try {
@@ -113,8 +120,8 @@ export function useChatSocket(workspaceId = null) {
 
     const onConnect = () => {
       dispatch(setStatus('connecting'));
-      // Emit chat:start with current workspace + model
-      socket.emit('chat:start', { workspaceId, modelRef: selectedModel });
+      // Emit chat:start with current workspace + model (use refs for latest values)
+      socket.emit('chat:start', { workspaceId: workspaceIdRef.current, modelRef: selectedModelRef.current });
     };
 
     const onChatReady = (payload) => {

@@ -7,6 +7,7 @@ const initialState = {
   messages: [], // { id, role, kind, text, blocks, replaceKey }
   plan: null, // { summary, todos }
   permissionRequest: null,
+  lastUndoResult: null,
   isStreaming: false,
   models: [],
   selectedModel: null,

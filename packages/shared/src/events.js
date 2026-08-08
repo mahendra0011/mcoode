@@ -37,6 +37,8 @@ export const SUBAGENT_STATUS = Object.freeze({
 
 export const SESSION_MODES = Object.freeze({
   GOD: 'god',
+  CHAT: 'chat',
+  AGENT: 'agent',
   INIT: 'init',
   RUN: 'run',
   WATCH: 'watch',

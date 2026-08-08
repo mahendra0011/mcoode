@@ -178,6 +178,7 @@ export class ChatAgent {
       this.bus?.emit(EVENTS.MESSAGE, {
         kind: 'tool',
         replaceKey: requestId,
+        requestId,
         block: 'permission',
         status: 'running',
         permission: 'pending',
