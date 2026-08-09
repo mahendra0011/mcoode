@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { theme, SPACING } from './theme.js';
+import { useTicker } from './useTicker.js';
 import { MCODE_GLYPH } from './logo.js';
 
 const RAW_COLORS = [
@@ -20,13 +21,14 @@ const MINI_GLYPH = [
 const MINI_COLORS = ['#3E9F49', '#4ADE80'];
 
 export function Logo({ compact = false, mini = false }) {
-  const [tick, setTick] = useState(0);
   const [palette, setPalette] = useState([]);
+  const ticks = useTicker();
+  // Use the shared 80ms ticker: tick at half-rate so the color wave
+  // cycles smoothly without each logo needing its own setInterval.
+  const tick = Math.floor(ticks / 2);
 
   useEffect(() => {
     setPalette(ramp(RAW_COLORS)(24)); // 24 smooth steps
-    const timer = setInterval(() => setTick((t) => t + 1), 60); // ~16fps smooth animation
-    return () => clearInterval(timer);
   }, []);
 
   const ACCENT_LINE = '━';

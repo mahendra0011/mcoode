@@ -19,11 +19,13 @@ export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
         >
           <div className="flex justify-between items-center p-4 border-b border-white/5 bg-white/5">
             <h3 className="font-semibold text-white/90">Add your project</h3>
-            <button onClick={onClose} className="text-white/40 hover:text-white"><X className="w-4 h-4" /></button>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={onClose} className="text-white/40 hover:text-white"><X className="w-4 h-4" /></motion.button>
           </div>
           
           <div className="p-4 flex flex-col gap-4">
-            <div 
+            <motion.div
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               onClick={() => {
                 const input = document.createElement('input');
                 input.type = 'file';
@@ -41,7 +43,7 @@ export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
               <FolderUp className="w-8 h-8 text-white/30" />
               <span className="text-sm font-medium text-white/80">Upload ZIP</span>
               <span className="text-xs text-white/40">Select a local project archive</span>
-            </div>
+            </motion.div>
             
             <div className="relative flex items-center">
               <div className="flex-grow border-t border-white/10"></div>
@@ -65,7 +67,7 @@ export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
                     }
                   }}
                 />
-                <button 
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} 
                   disabled={!gitUrl}
                   onClick={() => {
                     onCloneGit(gitUrl);
@@ -74,7 +76,7 @@ export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
                   className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition"
                 >
                   Clone
-                </button>
+                </motion.button>
               </div>
             </div>
           </div>

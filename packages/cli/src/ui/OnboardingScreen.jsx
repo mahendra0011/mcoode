@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useKeyboard, useRenderer } from '@opentui/react';
+import { useTicker } from './useTicker.js';
 import { TextAttributes } from '@opentui/core';
 import { Logo } from './Logo.jsx';
 import { theme, SPACING } from './theme.js';
@@ -118,12 +119,16 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [dots, setDots] = useState('');
 
-  // Loading animation
+  // Loading animation — use shared ticker clock instead of setInterval
+  const ticks = useTicker();
   useEffect(() => {
-    if (!loading) return;
-    const id = setInterval(() => setDots((d) => d.length >= 3 ? '' : d + '.'), 300);
-    return () => clearInterval(id);
-  }, [loading]);
+    if (loading) {
+      const dotsLength = Math.floor(ticks / 5) % 4; // 0 to 3 dots, ~400ms cycle
+      setDots('.'.repeat(dotsLength));
+    } else {
+      setDots('');
+    }
+  }, [loading, ticks]);
 
   // Skip if already onboarded
   useEffect(() => {

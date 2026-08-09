@@ -236,15 +236,40 @@ const chatSlice = createSlice({
     setGodMode: (state, action) => {
       state.godMode = action.payload;
     },
-    setSubagentStarted: (state, action) => {
+    setSubagentCreated: (state, action) => {
       const p = action.payload || {};
       state.subagents[p.todoId] = {
         todoId: p.todoId,
         domain: p.domain,
-        status: 'running',
-        message: p.message || '',
+        status: 'pending',
+        message: '',
         progress: 0
       };
+    },
+    setSubagentAssigned: (state, action) => {
+      const p = action.payload || {};
+      if (p.todoId && state.subagents[p.todoId]) {
+        state.subagents[p.todoId].status = 'assigned';
+        state.subagents[p.todoId].model = p.model;
+        state.subagents[p.todoId].title = p.title;
+      }
+    },
+    setSubagentStarted: (state, action) => {
+      const p = action.payload || {};
+      if (!state.subagents[p.todoId]) {
+        state.subagents[p.todoId] = {
+          todoId: p.todoId,
+          domain: p.domain,
+          status: 'running',
+          message: '',
+          progress: 0
+        };
+      } else {
+        state.subagents[p.todoId].status = 'running';
+      }
+      state.subagents[p.todoId].startedAt = p.startedAt;
+      state.subagents[p.todoId].tokens = p.tokens;
+      state.subagents[p.todoId].latency = p.latency;
     },
     setSubagentStep: (state, action) => {
       const p = action.payload || {};
@@ -271,6 +296,26 @@ const chatSlice = createSlice({
       const p = action.payload || {};
       if (p.todoId && state.subagents[p.todoId]) {
         state.subagents[p.todoId].lastFile = p.file;
+      }
+    },
+    setSubagentToolCall: (state, action) => {
+      const p = action.payload || {};
+      if (p.todoId && state.subagents[p.todoId]) {
+        state.subagents[p.todoId].lastTool = p.tool;
+        state.subagents[p.todoId].lastToolArgs = p.args;
+      }
+    },
+    setSubagentToolResult: (state, action) => {
+      const p = action.payload || {};
+      if (p.todoId && state.subagents[p.todoId]) {
+        state.subagents[p.todoId].lastToolResult = { tool: p.tool, ms: p.ms, risk: p.risk };
+      }
+    },
+    setSubagentNeedsReview: (state, action) => {
+      const p = action.payload || {};
+      if (p.todoId && state.subagents[p.todoId]) {
+        state.subagents[p.todoId].status = 'needs_review';
+        state.subagents[p.todoId].reviewReason = p.reason;
       }
     },
     setWaveStart: (state, action) => {
@@ -336,11 +381,16 @@ export const {
   clearDesign,
   // God-mode
   setGodMode,
+  setSubagentCreated,
+  setSubagentAssigned,
   setSubagentStarted,
   setSubagentStep,
   setSubagentDone,
   setSubagentFailed,
   setSubagentFile,
+  setSubagentToolCall,
+  setSubagentToolResult,
+  setSubagentNeedsReview,
   setWaveStart,
   setWaveComplete,
   setIntegrationPass,

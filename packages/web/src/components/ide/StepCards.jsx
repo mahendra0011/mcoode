@@ -66,7 +66,8 @@ const TerminalViewer = ({ output }) => {
         initial="hidden"
         animate="visible"
         variants={{
-          visible: { transition: { staggerChildren: 0.015 } }
+          hidden: { opacity: 0 },
+          visible: { opacity: 1, transition: { staggerChildren: 0.015 } }
         }}
       >
         {lines.map((line, i) => (
@@ -103,7 +104,9 @@ const SnapshotTree = ({ snapshot }) => {
 
     return (
       <div key={key} style={{ marginLeft: depth * 12 }}>
-        <div
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
           className="flex items-center gap-1 cursor-pointer hover:bg-white/5 rounded px-1"
           onClick={(e) => { e.stopPropagation(); if (hasChildren) toggle(key); }}
         >
@@ -116,11 +119,30 @@ const SnapshotTree = ({ snapshot }) => {
           )}
           <span className="text-[11px] text-white/70 truncate">{label}</span>
           {node.value && <span className="text-[10px] text-white/40 ml-auto">"{node.value}"</span>}
-        </div>
-        {hasChildren && isOpen && (
-          <div>
-            {children.map((child, i) => renderNode(child, depth + 1))}
-          </div>
+        </motion.div>
+        {hasChildren && (
+          <AnimatePresence initial={false}>
+            {isOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                {children.map((child, i) => (
+                  <motion.div
+                    key={child.name || child.role || i}
+                    initial={{ opacity: 0, x: -3 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.02 }}
+                  >
+                    {renderNode(child, depth + 1)}
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         )}
       </div>
     );
@@ -149,7 +171,8 @@ const ConsoleErrorList = ({ errors }) => {
         initial="hidden"
         animate="visible"
         variants={{
-          visible: { transition: { staggerChildren: 0.03 } }
+          hidden: { opacity: 0 },
+          visible: { opacity: 1, transition: { staggerChildren: 0.03 } }
         }}
       >
         {errors.slice(0, 20).map((err, i) => (
@@ -286,7 +309,9 @@ export function StepCard({ msg, undo }) {
       className="w-full bg-[#151515] rounded-xl border border-white/5 overflow-hidden shadow-sm"
     >
       {/* Header */}
-      <div 
+      <motion.div
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
         className="px-3 py-2.5 flex items-center justify-between cursor-pointer hover:bg-white/5 transition select-none"
         onClick={() => setExpanded(!expanded)}
       >
@@ -309,36 +334,36 @@ export function StepCard({ msg, undo }) {
             </AnimatePresence>
           </div>
           <span className="text-[13px] font-medium text-white/90">{title}</span>
-        </div>
-        
-	        <div className="flex items-center gap-3">
-	          {/* Screenshot thumbnail when collapsed */}
-	          {!expanded && msg.tool === 'browser_screenshot' && msg.image && (
-	            <motion.div
-	              layoutId={`screenshot-thumb-${msg.id || ''}`}
-	              className="w-12 h-8 rounded overflow-hidden border border-white/5 bg-[#0a0a0a]"
-	            >
-	              <img src={msg.image} alt="screenshot" className="w-full h-full object-cover" />
-	            </motion.div>
-	          )}
-          {durationStr && <span className="text-[11px] font-mono text-white/30">{durationStr}</span>}
-          {/* Undo button visible in collapsed header for done edit blocks */}
-          {!expanded && isDone && !actionTaken && (msg.tool === 'write_file' || msg.tool === 'edit_file') && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setActionTaken('undone'); undo?.(msg); }}
-              className="p-1 text-red-400/50 hover:text-red-400 hover:bg-red-500/10 rounded transition"
-              title="Undo change"
-            >
-              <Undo className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {expanded ? (
-            <ChevronDown className="w-3.5 h-3.5 text-white/30" />
-          ) : (
-            <ChevronRight className="w-3.5 h-3.5 text-white/30" />
-          )}
 	        </div>
-      </div>
+	        
+		        <div className="flex items-center gap-3">
+		          {/* Screenshot thumbnail when collapsed */}
+		          {!expanded && msg.tool === 'browser_screenshot' && msg.image && (
+		            <motion.div
+		              layoutId={`screenshot-thumb-${msg.id || ''}`}
+		              className="w-12 h-8 rounded overflow-hidden border border-white/5 bg-[#0a0a0a]"
+		            >
+		              <img src={msg.image} alt="screenshot" className="w-full h-full object-cover" />
+		            </motion.div>
+		          )}
+	          {durationStr && <span className="text-[11px] font-mono text-white/30">{durationStr}</span>}
+	          {/* Undo button visible in collapsed header for done edit blocks */}
+	          {!expanded && isDone && !actionTaken && (msg.tool === 'write_file' || msg.tool === 'edit_file') && (
+	            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+	              onClick={(e) => { e.stopPropagation(); setActionTaken('undone'); undo?.(msg); }}
+	              className="p-1 text-red-400/50 hover:text-red-400 hover:bg-red-500/10 rounded transition"
+	              title="Undo change"
+	            >
+	              <Undo className="w-3.5 h-3.5" />
+	            </motion.button>
+	          )}
+	          {expanded ? (
+	            <ChevronDown className="w-3.5 h-3.5 text-white/30" />
+	          ) : (
+	            <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+	          )}
+		        </div>
+	      </motion.div>
 
       {/* Expanded Content */}
       <AnimatePresence initial={false}>
@@ -410,18 +435,18 @@ export function StepCard({ msg, undo }) {
               {/* Action Bar for Edits */}
               {isDone && !actionTaken && (msg.tool === 'write_file' || msg.tool === 'edit_file') && (
                 <div className="mt-3 flex items-center justify-end gap-2 border-t border-white/5 pt-3">
-                  <button 
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} 
                     onClick={(e) => { e.stopPropagation(); setActionTaken('undone'); undo?.(msg); }}
                     className="px-3 py-1.5 text-[11px] font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded transition"
                   >
                     ✕ Undo
-                  </button>
-                  <button 
+                  </motion.button>
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} 
                     onClick={(e) => { e.stopPropagation(); setActionTaken('kept'); }}
                     className="px-3 py-1.5 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded transition"
                   >
                     ✓ Keep
-                  </button>
+                  </motion.button>
                 </div>
               )}
               {actionTaken === 'undone' && (

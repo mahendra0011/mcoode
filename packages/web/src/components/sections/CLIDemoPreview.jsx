@@ -1,8 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-
-gsap.registerPlugin(ScrollTrigger);
+import React, { useEffect, useState, useRef } from 'react';
+import { motion, useInView } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 
 const demoLines = [
   { text: "$ mcode create next-app", delay: 500, color: "text-green-500" },
@@ -23,33 +21,23 @@ const demoLines = [
 
 export function CLIDemoPreview() {
   const containerRef = useRef(null);
+  const isInView = useInView(containerRef, { once: true, margin: '-20% 0px' });
   const [visibleLines, setVisibleLines] = useState([]);
   const [hasStarted, setHasStarted] = useState(false);
 
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.from(containerRef.current, {
-        scrollTrigger: {
-          trigger: containerRef.current,
-          start: "top 80%",
-          onEnter: () => setHasStarted(true)
-        },
-        y: 40,
-        opacity: 0,
-        duration: 1,
-        ease: 'power3.out'
-      });
-    }, containerRef);
-    return () => ctx.revert();
-  }, []);
+    if (isInView) {
+      setHasStarted(true);
+    }
+  }, [isInView]);
 
   useEffect(() => {
     if (!hasStarted) return;
-    
+
     let timeouts = [];
-    demoLines.forEach((line, index) => {
+    demoLines.forEach((line) => {
       const timeout = setTimeout(() => {
-        setVisibleLines(prev => [...prev, line]);
+        setVisibleLines((prev) => [...prev, line]);
       }, line.delay);
       timeouts.push(timeout);
     });
@@ -58,45 +46,112 @@ export function CLIDemoPreview() {
   }, [hasStarted]);
 
   return (
-    <div ref={containerRef} className="relative px-6 mt-16 max-[850px]:mt-10 mb-32 z-10">
-      <div className="relative max-w-4xl mx-auto">
-        <div className="relative bg-zinc-950/90 backdrop-blur-2xl rounded-2xl overflow-hidden border border-green-500/20 shadow-[0_30px_100px_rgba(0,255,100,0.15)] flex flex-col min-h-[450px]">
-          
+    <motion.div
+      ref={containerRef}
+      initial={{ opacity: 0, y: 40 }}
+      animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 40 }}
+      transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+      className="relative px-6 mt-16 max-[850px]:mt-10 mb-32 z-10"
+    >
+      <motion.div
+        className="relative max-w-4xl mx-auto"
+        initial={{ opacity: 0 }}
+        animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <motion.div
+          className="relative bg-zinc-950/90 backdrop-blur-2xl rounded-2xl overflow-hidden border border-green-500/20 shadow-[0_30px_100px_rgba(0,255,100,0.15)] flex flex-col min-h-[450px]"
+          whileHover={{ scale: 1.01 }}
+          transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+        >
           {/* Terminal Header */}
-          <div className="flex items-center px-4 py-3 border-b border-green-500/10 bg-zinc-900/80">
-            <div className="flex gap-2">
-              <div className="w-3.5 h-3.5 rounded-full bg-red-500/80 border border-red-500/20"></div>
-              <div className="w-3.5 h-3.5 rounded-full bg-yellow-500/80 border border-yellow-500/20"></div>
-              <div className="w-3.5 h-3.5 rounded-full bg-green-500/80 border border-green-500/20"></div>
-            </div>
-            <div className="mx-auto text-xs font-mono text-gray-400">bash - mcode</div>
-          </div>
+          <motion.div
+            className="flex items-center px-4 py-3 border-b border-green-500/10 bg-zinc-900/80"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <motion.div className="flex gap-2">
+              <motion.div
+                className="w-3.5 h-3.5 rounded-full bg-red-500/80 border border-red-500/20"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.1, type: 'spring', stiffness: 300 }}
+              />
+              <motion.div
+                className="w-3.5 h-3.5 rounded-full bg-yellow-500/80 border border-yellow-500/20"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.12, type: 'spring', stiffness: 300 }}
+              />
+              <motion.div
+                className="w-3.5 h-3.5 rounded-full bg-green-500/80 border border-green-500/20"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.14, type: 'spring', stiffness: 300 }}
+              />
+            </motion.div>
+            <motion.div
+              className="mx-auto text-xs font-mono text-gray-400"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              bash - mcode
+            </motion.div>
+          </motion.div>
 
           {/* Terminal Body with Animated Lines */}
           <div className="p-6 font-mono text-[14px] leading-relaxed space-y-2 flex-1">
-            {visibleLines.map((line, i) => (
-              <div key={i} className={`${line.color} animate-in fade-in slide-in-from-bottom-1 duration-300`}>
-                {line.text.startsWith('$') ? (
-                  <span className="font-semibold">{line.text}</span>
-                ) : line.text.startsWith('  ') ? (
-                  <span className="ml-4">{line.text}</span>
-                ) : (
-                  <span>{line.text}</span>
-                )}
-              </div>
-            ))}
-            
+            <AnimatePresence>
+              {visibleLines.map((line, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                  className={line.color}
+                >
+                  {line.text.startsWith('$') ? (
+                    <span className="font-semibold">{line.text}</span>
+                  ) : line.text.startsWith('  ') ? (
+                    <span className="ml-4">{line.text}</span>
+                  ) : (
+                    <span>{line.text}</span>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+
             {/* Blinking Cursor */}
             {hasStarted && (
-              <div className="mt-2">
-                {visibleLines.length === demoLines.length && <span className="text-green-500 mr-2">$</span>}
-                <span className="w-2.5 h-5 bg-white/80 inline-block align-middle animate-pulse"></span>
-              </div>
+              <motion.div
+                className="mt-2 flex items-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
+                {visibleLines.length === demoLines.length && (
+                  <motion.span
+                    className="text-green-500 mr-2"
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 300 }}
+                  >
+                    $
+                  </motion.span>
+                )}
+                <motion.span
+                  className="w-2.5 h-5 bg-white/80 inline-block align-middle"
+                  animate={{ opacity: [1, 0.3, 1] }}
+                  transition={{ duration: 0.8, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              </motion.div>
             )}
           </div>
-          
-        </div>
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }

@@ -1,4 +1,6 @@
 import { useTerminalDimensions } from '@opentui/react';
+import { useTicker } from './useTicker.js';
+import { SPIN_FRAMES } from './blocks.jsx';
 import { theme, SPACING } from './theme.js';
 import { useAnimatedProgress } from './useAnimatedProgress.js';
 
@@ -15,6 +17,9 @@ export function StatusBar({ tokens = 0, percent = 0, cwd = '', isGenerating = fa
   const tokenLabel = tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}K` : `${tokens}`;
 
   const animatedPercent = useAnimatedProgress(percent);
+
+  const ticks = useTicker();
+  const spinFrame = SPIN_FRAMES[ticks % SPIN_FRAMES.length];
 
   // Visual usage bar (8 chars wide)
   const barWidth = 8;
@@ -51,7 +56,7 @@ export function StatusBar({ tokens = 0, percent = 0, cwd = '', isGenerating = fa
           <>
             <text fg={theme.purple}>{agentMode} </text>
             <text fg={modeColor}>{mode}</text>
-            {watching && <text fg={theme.amber}>{'  '}{'\u25c9'} watch</text>}
+            {watching && <text fg={theme.amber}>{'  '}{spinFrame} watch</text>}
             {specialMode && <text fg={theme.blue}>{'  '}{'◉'} {specialMode}</text>}
             <text fg={theme.dim}>{sep}</text>
             <text fg={theme.text}>{modelLabel}</text>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useKeyboard, useTerminalDimensions, useRenderer } from '@opentui/react';
+import { useTicker } from './useTicker.js';
 import { theme, SPACING } from './theme.js';
 import { MainPane } from './MainPane.jsx';
 import { InputLine } from './InputLine.jsx';
@@ -57,6 +58,7 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
   const [panelPinned, setPanelPinned] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [isBuilding, setIsBuilding] = useState(false);
+  const ticks = useTicker();
   const [currentWave, setCurrentWave] = useState(0);
   const [totalWaves, setTotalWaves] = useState(0);
   const [buildWaves, setBuildWaves] = useState([]);
@@ -140,24 +142,20 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
   });
 
   useEffect(() => {
-    if (!isGenerating) {
+    if (isGenerating) {
+      setElapsed(Math.floor(ticks / 12.5)); // 80ms ticks → ~1000ms per second
+    } else {
       setElapsed(0);
-      return;
     }
-    const t0 = Date.now();
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
-    return () => clearInterval(id);
-  }, [isGenerating]);
+  }, [isGenerating, ticks]);
 
   useEffect(() => {
-    if (!isBuilding) {
+    if (isBuilding) {
+      setBuildElapsed(Math.floor(ticks / 12.5));
+    } else {
       setBuildElapsed(0);
-      return;
     }
-    const t0 = Date.now();
-    const id = setInterval(() => setBuildElapsed(Math.floor((Date.now() - t0) / 1000)), 1000);
-    return () => clearInterval(id);
-  }, [isBuilding]);
+  }, [isBuilding, ticks]);
 
   useEffect(() => {
     let cancelled = false;

@@ -4,7 +4,8 @@ import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
 import { BgBox } from './BgBox.jsx';
-import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, TOOL_VERBS, READ_MAX, CMD_MAX } from './blocks.jsx';
+import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, RunningToolBlock, TOOL_VERBS, READ_MAX, CMD_MAX, SPIN_FRAMES } from './blocks.jsx';
+import { useTicker } from './useTicker.js';
 import { BuildSummaryCard } from './SummaryCard.jsx';
 
 export function MainPane({ messages, streamingMessage, isGenerating = false, onInterrupt = null, onRetry = null, pendingPermission = null, onPermission = null, agentMode = 'Build' }) {
@@ -13,6 +14,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
   const [expanded, setExpanded] = useState(null);
   const [focus, setFocus] = useState(-1);
   const [genSecs, setGenSecs] = useState(0);
+  const ticks = useTicker();
   const itemsRef = useRef([]);
   const blocksRef = useRef([]);
   itemsRef.current.length = 0;
@@ -64,11 +66,24 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
   const renderReadWrite = (msg, key, isFirst) => {
     const lines = msg.lines || [];
     const truncated = lines.length > READ_MAX;
-    const iIdx = truncated ? registerItem({ type: 'tool', key }) : null;
+    // Register items for expand/collapse — read blocks always registerable
+    const iIdx = (truncated || msg.block === 'read') ? registerItem({ type: 'tool', key }) : null;
     const isExpanded = iIdx !== null && expanded === iIdx;
     return msg.block === 'write'
       ? <WriteBlock key={key} path={msg.path} lines={lines} expanded={isExpanded} marginTop={isFirst ? 0 : 1} />
       : <ReadBlock key={key} path={msg.path} lines={lines} expanded={isExpanded} marginTop={isFirst ? 0 : 1} />;
+  };
+
+  const renderRunningTool = (msg, key, isFirst) => {
+    const preview = msg.args || '...';
+    return (
+      <RunningToolBlock
+        key={key}
+        tool={msg.tool || 'tool'}
+        args={preview}
+        marginTop={isFirst ? 0 : 1}
+      />
+    );
   };
 
   const renderDiff = (msg, key, isFirst) => {
@@ -98,15 +113,14 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
     <ChangeSummaryBlock key={key} files={msg.files || []} marginTop={isFirst ? 0 : 1} />;
 
   // elapsed time for the live Thought header while generating
+  // Use the shared 80ms ticker clock for consistent animation timing
   useEffect(() => {
-    if (!isGenerating) {
+    if (isGenerating) {
+      setGenSecs((ticks / 12.5).toFixed(1));
+    } else {
       setGenSecs(0);
-      return;
     }
-    const t0 = Date.now();
-    const t = setInterval(() => setGenSecs(((Date.now() - t0) / 1000).toFixed(1)), 100);
-    return () => clearInterval(t);
-  }, [isGenerating]);
+  }, [isGenerating, ticks]);
 
   const runningTool = useMemo(
     () => messages.find((m) => m.kind === 'tool' && m.status === 'running' && m.block !== 'permission'),
@@ -162,7 +176,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
       );
     }
     if (msg.kind === 'tool') {
-      if (msg.status === 'running') return null;
+      if (msg.status === 'running') return renderRunningTool(msg, `t${i}`, isFirst);
       if (msg.block === 'read' || msg.block === 'write') return renderReadWrite(msg, `t${i}`, isFirst);
       if (msg.block === 'edit') return renderDiff(msg, `t${i}`, isFirst);
       if (msg.block === 'permission') return renderPermission(msg, `t${i}`, isFirst);

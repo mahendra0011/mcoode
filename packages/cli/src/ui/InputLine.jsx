@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
@@ -49,7 +49,6 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
   const [histIdx, setHistIdx] = useState(history.length);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuIdx, setMenuIdx] = useState(0);
-  const [cursorOn, setCursorOn] = useState(true);
   const lastKeyAt = useRef(0);
   const draftRef = useRef('');
 
@@ -60,21 +59,17 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
     }
   };
 
+  // Blink cursor via shared ticker: floor(ticks/6) % 2 → ~480ms cycle (80ms × 6)
+  // Hold solid while typing (resume after 250ms pause = ~3 ticks)
   const ticks = useTicker();
-  useEffect(() => {
-    if (!isActive || isGenerating) return;
-    // Blink cursor via shared ticker: floor(ticks/6) % 2 → ~480ms cycle (80ms × 6)
-    // Hold solid while typing (resume after 250ms pause = ~3 ticks)
-    const blink = Math.floor(ticks / 6) % 2;
-    const shouldBlink = Date.now() - lastKeyAt.current > 250;
-    setCursorOn(shouldBlink ? blink : true);
-  }, [ticks, isActive, isGenerating]);
+  const blink = Math.floor(ticks / 6) % 2;
+  const typingActive = isActive && !isGenerating && Date.now() - lastKeyAt.current <= 250;
+  const cursorOn = isActive && !isGenerating && (typingActive ? true : blink);
 
   useKeyboard((key) => {
     if (!isActive) return;
     if (isGenerating) return;
     lastKeyAt.current = Date.now();
-    setCursorOn(true);
     const input = key.sequence && !key.sequence.includes('\u001b') ? key.sequence : '';
     const currentMatches = menuOpen 
       ? SLASH_COMMANDS.filter((c) => c.cmd.startsWith(value.slice(1).toLowerCase()))

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Terminal as TerminalIcon, Trash2 } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -110,28 +111,67 @@ export function TerminalPane({ messages }) {
   };
 
   return (
-    <div className="h-48 border-t border-white/5 bg-[#0e0e0e] flex flex-col flex-shrink-0">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-[#121212]">
-        <div className="flex items-center gap-2">
-          <TerminalIcon className="w-4 h-4 text-white/50" />
-          <span className="text-xs font-semibold text-white/70 uppercase tracking-wider">Terminal</span>
-        </div>
-        <button 
+    <motion.div
+      className="h-48 border-t border-white/5 bg-[#0e0e0e] flex flex-col flex-shrink-0"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div
+        className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-[#121212]"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <motion.div
+          className="flex items-center gap-2"
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <motion.div
+            initial={{ rotate: -90, opacity: 0 }}
+            animate={{ rotate: 0, opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <TerminalIcon className="w-4 h-4 text-white/50" />
+          </motion.div>
+          <motion.span
+            className="text-xs font-semibold text-white/70 uppercase tracking-wider"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.15 }}
+          >
+            Terminal
+          </motion.span>
+        </motion.div>
+        <motion.button
           onClick={handleClear}
           className="text-white/40 hover:text-white/90 transition flex items-center justify-center p-1"
           title="Clear Terminal"
+          whileHover={{ scale: 1.1, rotate: 10 }}
+          whileTap={{ scale: 0.9 }}
         >
           <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
+
       <div className="flex-1 overflow-hidden p-2 relative">
-        {!hasContent && (
-          <div className="absolute inset-0 flex items-center justify-center text-white/30 italic text-sm pointer-events-none z-10">
-            No commands run yet — terminal output will appear here
-          </div>
-        )}
+        <AnimatePresence>
+          {!hasContent && (
+            <motion.div
+              key="placeholder"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute inset-0 flex items-center justify-center text-white/30 italic text-sm pointer-events-none z-10"
+            >
+              No commands run yet — terminal output will appear here
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="w-full h-full" ref={terminalRef}></div>
       </div>
-    </div>
+    </motion.div>
   );
 }

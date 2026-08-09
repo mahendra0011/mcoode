@@ -18,7 +18,15 @@ const TOOL_ICONS = {
 const DiffViewer = ({ diffLines }) => {
   if (!diffLines || !diffLines.length) return null;
   return (
-    <div className="mt-2 text-[13px] font-mono bg-black/40 p-3 rounded-lg border border-white/5 overflow-x-auto custom-scrollbar">
+    <motion.div
+      className="mt-2 text-[13px] font-mono bg-black/40 p-3 rounded-lg border border-white/5 overflow-x-auto custom-scrollbar"
+      initial="hidden"
+      animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: { opacity: 1, transition: { staggerChildren: 0.03 } }
+        }}
+    >
       {diffLines.map((line, idx) => {
         let lineClass = 'text-white/60';
         let prefix = ' ';
@@ -32,9 +40,10 @@ const DiffViewer = ({ diffLines }) => {
         return (
           <motion.div
             key={idx}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: idx * 0.02 }}
+            variants={{
+              hidden: { opacity: 0, x: -5 },
+              visible: { opacity: 1, x: 0 }
+            }}
             className={`whitespace-pre ${lineClass}`}
           >
             <span className="opacity-40 select-none mr-2">{prefix}</span>
@@ -42,26 +51,35 @@ const DiffViewer = ({ diffLines }) => {
           </motion.div>
         );
       })}
-    </div>
+    </motion.div>
   );
 };
 
 const TerminalViewer = ({ output }) => {
   if (!output) return null;
   return (
-    <div className="mt-2 text-[13px] font-mono bg-black/50 p-3 rounded-lg border border-white/5 overflow-x-auto custom-scrollbar max-h-64">
+    <motion.div
+      className="mt-2 text-[13px] font-mono bg-black/50 p-3 rounded-lg border border-white/5 overflow-x-auto custom-scrollbar max-h-64"
+      initial="hidden"
+      animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: { opacity: 1, transition: { staggerChildren: 0.015 } }
+        }}
+    >
       {output.split('\n').map((line, idx) => (
         <motion.div
           key={idx}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: Math.min(idx * 0.015, 1) }}
+          variants={{
+            hidden: { opacity: 0 },
+            visible: { opacity: 1 }
+          }}
           className="whitespace-pre text-white/80"
         >
           {line}
         </motion.div>
       ))}
-    </div>
+    </motion.div>
   );
 };
 
@@ -98,7 +116,9 @@ export const StepCard = ({ msg, undo }) => {
       transition={{ duration: 0.2 }}
       className={`border rounded-xl flex flex-col overflow-hidden backdrop-blur-sm transition-colors ${msg.status === 'failed' ? 'border-red-500/30 bg-red-500/5' : 'border-white/10 bg-white/5'}`}
     >
-      <div 
+      <motion.div
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
         className="px-3 py-2.5 flex items-center justify-between cursor-pointer hover:bg-white/5 transition"
         onClick={() => setExpanded(!expanded)}
       >
@@ -134,14 +154,20 @@ export const StepCard = ({ msg, undo }) => {
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            key="content"
+            initial="collapsed"
+            animate="open"
+            exit="collapsed"
+            variants={{
+              open: { opacity: 1, height: 'auto' },
+              collapsed: { opacity: 0, height: 0 }
+            }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 pt-1">
@@ -163,18 +189,22 @@ export const StepCard = ({ msg, undo }) => {
               {/* Action Bar for Edits — Undo / Keep buttons (matching IDE StepCards pattern) */}
               {msg.status === 'done' && !actionTaken && (msg.tool === 'write_file' || msg.tool === 'edit_file') && (
                 <div className="mt-3 flex items-center justify-end gap-2 border-t border-white/5 pt-3">
-                  <button 
+                  <motion.button 
                     onClick={(e) => { e.stopPropagation(); setActionTaken('undone'); undo?.(msg); }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     className="px-3 py-1.5 text-[11px] font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded transition"
                   >
                     ✕ Undo
-                  </button>
-                  <button 
+                  </motion.button>
+                  <motion.button 
                     onClick={(e) => { e.stopPropagation(); setActionTaken('kept'); }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     className="px-3 py-1.5 text-[11px] font-medium text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded transition"
                   >
                     ✓ Keep
-                  </button>
+                  </motion.button>
                 </div>
               )}
               {actionTaken === 'undone' && (

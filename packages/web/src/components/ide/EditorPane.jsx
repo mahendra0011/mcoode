@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { FileType2, FileCode, FileJson, File as FileIcon } from 'lucide-react';
 import { getAuthHeaders } from '../../lib/api';
 
@@ -112,36 +113,57 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
 
   if (openFiles.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#0e0e0e] text-white/30 text-sm">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex-1 flex items-center justify-center bg-[#0e0e0e] text-white/30 text-sm"
+      >
         Select a file from the explorer to open
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-[#0e0e0e] h-full">
+    <motion.div
+      className="flex-1 flex flex-col min-w-0 bg-[#0e0e0e] h-full"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
       {/* Editor Tabs */}
-      <div className="flex items-center border-b border-white/5 bg-[#151515] overflow-x-auto custom-scrollbar flex-shrink-0">
-          {openFiles.map(path => {
+      <motion.div
+        className="flex items-center border-b border-white/5 bg-[#151515] overflow-x-auto custom-scrollbar flex-shrink-0"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        {openFiles.map((path, i) => {
           const name = path.split('/').pop();
           const isActive = activePath === path;
           const isDirty = dirty.has(path);
           return (
-            <div 
+            <motion.div
               key={path}
+              initial={{ opacity: 0, x: -5 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -5 }}
+              transition={{ delay: i * 0.02 + 0.1 }}
               onClick={() => setActivePath(path)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm cursor-pointer whitespace-nowrap ${
-                isActive 
-                  ? 'bg-[#0e0e0e] border-t-2 border-blue-500 font-medium text-white' 
+                isActive
+                  ? 'bg-[#0e0e0e] border-t-2 border-blue-500 font-medium text-white'
                   : 'text-white/50 hover:bg-white/5 border-t-2 border-transparent'
               }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               {getFileIcon(name)} {name}
               {isDirty && (
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Unsaved changes" />
               )}
-              <span 
+              <motion.span
                 className="text-white/30 ml-2 hover:text-white cursor-pointer px-1 rounded hover:bg-white/10"
+                whileHover={{ scale: 1.15, rotate: 90 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (isDirty && !window.confirm('This file has unsaved changes. Close anyway?')) return;
@@ -149,15 +171,26 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
                 }}
               >
                 ×
-              </span>
-            </div>
+              </motion.span>
+            </motion.div>
           );
         })}
-      </div>
-      
+      </motion.div>
+
       {/* Monaco Editor */}
       <div className="flex-1 relative">
-        {loading && <div className="absolute inset-0 flex items-center justify-center bg-[#0e0e0e]/50 z-10 text-white/50 text-sm">Loading...</div>}
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center bg-[#0e0e0e]/50 z-10 text-white/50 text-sm"
+            >
+              Loading...
+            </motion.div>
+          )}
+        </AnimatePresence>
         {activePath && (
           <Editor
             height="100%"
@@ -177,6 +210,6 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
           />
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

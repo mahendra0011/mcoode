@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { ChevronDown, Plus, Key, Check, X, Loader2 } from 'lucide-react';
+import { ChevronDown, Plus, Key, Check, X, Loader2, Circle, ChevronRight, Settings } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { setSelectedModel } from '../../store/chatSlice';
 import { getAuthHeaders } from '../../lib/api';
 
@@ -17,8 +19,9 @@ const FALLBACK_PROVIDERS = [
 
 export function ModelSelector({ compact = false }) {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [hoveredProvider, setHoveredProvider] = useState(null);
   const [keys, setKeys] = useState([]);
   const [providers, setProviders] = useState(FALLBACK_PROVIDERS);
   const [loading, setLoading] = useState(false);
@@ -26,7 +29,7 @@ export function ModelSelector({ compact = false }) {
   const [keyForm, setKeyForm] = useState({ providerId: '', apiKey: '', displayName: '' });
   const dropdownRef = useRef(null);
 
-  const { models, selectedModel, keysError } = useSelector((state) => state.chat);
+  const { models, selectedModel, keysError, isStreaming } = useSelector((state) => state.chat);
   const hasKeys = keys.length > 0;
 
   // Fetch saved API keys (with auth token)
@@ -84,7 +87,6 @@ export function ModelSelector({ compact = false }) {
       if (data.ok) {
         const newKey = { providerId: keyForm.providerId, envVar, displayName: keyForm.displayName || provider?.displayName || keyForm.providerId };
         setKeys([...keys, newKey]);
-        setShowKeyModal(false);
         setKeyForm({ providerId: '', apiKey: '', displayName: '' });
         // Refresh models from backend
         window.dispatchEvent(new CustomEvent('mcode:reload-models'));
@@ -119,133 +121,112 @@ export function ModelSelector({ compact = false }) {
   return (
     <>
       <div className="relative" ref={dropdownRef}>
-        <button
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
           type="button"
           onClick={() => setOpen(!open)}
-          className={`rounded-lg flex items-center gap-2 transition text-xs font-medium border backdrop-blur-md ${
+          className={`rounded-[10px] flex items-center gap-2 transition text-[13px] font-medium backdrop-blur-md ${
             compact
-              ? 'w-7 h-7 p-0 justify-center'
-              : 'px-3 h-8'
+              ? 'w-7 h-7 p-0 justify-center bg-white/5 hover:bg-white/10 border border-white/10'
+              : 'px-3 h-8 bg-[#202020] hover:bg-[#282828] border border-white/5'
           } ${
             keysError
-              ? 'bg-red-500/10 border-red-500/50 text-red-400'
+              ? 'border-red-500/50 text-red-400'
               : hasKeys
-                ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white/90'
-                : 'bg-red-500/10 border-red-500/50 text-red-400'
+                ? (compact ? 'text-white/90' : 'text-[#f2bc8a]')
+                : 'border-red-500/50 text-red-400'
           }`}
           title={keysError || (hasKeys ? undefined : 'Add an API key to get started')}
         >
-          <Key className="w-3.5 h-3.5" />
+          {compact ? (
+            <Key className="w-3.5 h-3.5 text-white/70" />
+          ) : (
+            isStreaming ? (
+              <Loader2 className="w-4 h-4 text-white/40 animate-spin" />
+            ) : (
+              <Circle className="w-4 h-4 text-white/40" strokeWidth={3} />
+            )
+          )}
           {!compact && (
             <>
-              <span className="truncate max-w-[140px]">{selectedLabel}</span>
-              <ChevronDown className="w-3 h-3 opacity-50" />
+              <span className="truncate max-w-[200px] font-mono">{selectedLabel}</span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-40 ml-1" />
             </>
           )}
-        </button>
+        </motion.button>
 
-        {open && (
-          <div className={`absolute ${compact ? 'top-full right-0' : 'top-full left-0'} mt-1 w-64 max-h-80 overflow-y-auto bg-[#151515] border border-white/10 rounded-xl shadow-2xl z-50 custom-scrollbar`}>
-            <div className="p-2 text-[10px] font-semibold text-white/40 uppercase tracking-wider px-3 py-2">
-              Select Model
-            </div>
-            {hasKeys && Object.keys(modelsByProvider).length > 0 ? (
-              Object.entries(modelsByProvider).map(([provider, providerModels]) => (
-                <div key={provider}>
-                  <div className="text-[10px] font-semibold text-white/30 px-3 py-1">{provider}</div>
-                  {providerModels.map((m) => (
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 5 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 5 }}
+              transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+              className={`absolute ${compact ? 'bottom-full right-0' : 'bottom-full left-0'} mb-2 w-52 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 py-1.5`}
+              onMouseLeave={() => setHoveredProvider(null)}
+            >
+              {hasKeys && Object.keys(modelsByProvider).length > 0 ? (
+                Object.entries(modelsByProvider).map(([provider, providerModels]) => (
+                  <div
+                    key={provider}
+                    className="relative"
+                    onMouseEnter={() => setHoveredProvider(provider)}
+                  >
                     <button
-                      key={m.ref}
-                      onClick={() => handleSelectModel(m.ref)}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-white/5 transition ${
-                        selectedModel === m.ref ? 'text-emerald-400 bg-emerald-500/5' : 'text-white/80'
-                      }`}
+                      type="button"
+                      className="w-full flex items-center justify-between px-3 py-2 text-[13px] text-white/80 hover:bg-white/10 transition"
                     >
-                      <span>{m.name}</span>
-                      {selectedModel === m.ref && <Check className="w-3 h-3" />}
+                      <span className="capitalize">{provider}</span>
+                      <div className="flex items-center gap-1">
+                        {selectedModelObj?.provider === provider && (
+                          <Check className="w-3.5 h-3.5 text-white/50" />
+                        )}
+                        <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+                      </div>
                     </button>
-                  ))}
-                </div>
-              ))
-            ) : (
-              <div className="p-3 text-xs text-white/40">No models available</div>
-            )}
+                    
+                    {/* Submenu for models */}
+                    <AnimatePresence>
+                      {hoveredProvider === provider && (
+                        <motion.div
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: -10 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute bottom-0 left-full ml-1 w-64 max-h-80 overflow-y-auto bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 custom-scrollbar py-1.5"
+                        >
+                          {providerModels.map((m) => (
+                            <button
+                              key={m.ref}
+                              onClick={(e) => { e.stopPropagation(); handleSelectModel(m.ref); }}
+                              className={`w-full flex items-center justify-between px-3 py-2 text-[13px] text-left hover:bg-white/10 transition ${
+                                selectedModel === m.ref ? 'text-white' : 'text-white/70'
+                              }`}
+                            >
+                              <span className="truncate pr-2">{m.name}</span>
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-[13px] text-white/40">No models available</div>
+              )}
 
-            <div className="border-t border-white/5 mt-1">
+              <div className="h-px bg-white/10 my-1 mx-2" />
+              
               <button
-                onClick={() => { setOpen(false); setShowKeyModal(true); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-white/5 text-white/80 transition"
+                type="button"
+                onClick={() => { setOpen(false); navigate('/settings?tab=keys'); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left hover:bg-white/10 text-emerald-400 transition"
               >
-                <Plus className="w-3.5 h-3.5" />
-                Add API key
+                Manage models
               </button>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      {/* Add API Key Modal */}
-      {showKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#151515] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-lg font-bold text-white mb-4">Add API Key</h2>
-            <form onSubmit={handleAddKey} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1">Provider</label>
-                <select
-                  value={keyForm.providerId}
-                  onChange={(e) => setKeyForm({ ...keyForm, providerId: e.target.value })}
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-                  required
-                >
-                  <option value="">Select a provider</option>
-                  {providers.map((p) => (
-                    <option key={p.id} value={p.id}>{p.displayName}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1">Display Name</label>
-                <input
-                  type="text"
-                  placeholder="My OpenAI key"
-                  value={keyForm.displayName}
-                  onChange={(e) => setKeyForm({ ...keyForm, displayName: e.target.value })}
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-white/50 mb-1">API Key</label>
-                <input
-                  type="password"
-                  placeholder="sk-..."
-                  value={keyForm.apiKey}
-                  onChange={(e) => setKeyForm({ ...keyForm, apiKey: e.target.value })}
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 font-mono"
-                  required
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => { setShowKeyModal(false); setKeyForm({ providerId: '', apiKey: '', displayName: '' }); }}
-                  className="flex-1 px-4 py-2 rounded-lg border border-white/10 hover:bg-white/5 text-sm font-medium text-white transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving || !keyForm.providerId || !keyForm.apiKey}
-                  className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 text-sm font-medium transition disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   );
 }

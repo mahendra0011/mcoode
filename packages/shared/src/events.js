@@ -24,7 +24,8 @@ export const EVENTS = Object.freeze({
   WATCH_FIX: 'WATCH_FIX',
   WATCH_STATUS: 'WATCH_STATUS',
   UNDO: 'UNDO',
-  HOOK_EXECUTED: 'HOOK_EXECUTED'
+  HOOK_EXECUTED: 'HOOK_EXECUTED',
+  SUBAGENT_SHELL_OUTPUT: 'SUBAGENT_SHELL_OUTPUT'
 });
 
 export const SUBAGENT_STATUS = Object.freeze({
@@ -92,11 +93,16 @@ export const SOCKET = Object.freeze({
     DESIGN_STREAM: 'design:stream',
     DESIGN_DONE: 'design:done',
     // God-mode parallel subagent events
+    SUBAGENT_CREATED: 'subagent:created',
+    SUBAGENT_ASSIGNED: 'subagent:assigned',
     SUBAGENT_STARTED: 'subagent:started',
     SUBAGENT_STEP: 'subagent:step',
     SUBAGENT_DONE: 'subagent:done',
     SUBAGENT_FAILED: 'subagent:failed',
     SUBAGENT_FILE: 'subagent:file',
+    SUBAGENT_TOOL_CALL: 'subagent:tool_call',
+    SUBAGENT_TOOL_RESULT: 'subagent:tool_result',
+    SUBAGENT_NEEDS_REVIEW: 'subagent:needs_review',
     WAVE_START: 'wave:start',
     WAVE_COMPLETE: 'wave:complete',
     INTEGRATION_PASS: 'integration:pass',

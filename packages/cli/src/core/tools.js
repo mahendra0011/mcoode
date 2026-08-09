@@ -2,6 +2,7 @@ import { join, resolve, relative } from 'node:path';
 import { readFile, writeFile, readdir, mkdir, rm } from 'node:fs/promises';
 import { execa } from 'execa';
 import { EVENTS } from '@mcode/shared';
+import { isInteractive } from './logger.js';
 import { redactSecrets, isNetworkAllowed } from './security.js';
 import { scoreRisk, RISK_LEVELS } from './audit.js';
 import { BrowserTool } from './browser-tool.js';
@@ -61,7 +62,7 @@ export class ToolExecutor {
   async run(name, args) {
     const start = Date.now();
     const { score, level } = scoreRisk(name, args);
-    this.bus?.emit('SUBAGENT_TOOL_CALL', { tool: name, args: JSON.stringify(args).slice(0, 200), risk: level });
+    this.bus?.emit(EVENTS.SUBAGENT_TOOL_CALL, { tool: name, args: JSON.stringify(args).slice(0, 200), risk: level });
 
     // High-risk operations always require permission, even in agent mode
     if (level === RISK_LEVELS.CRITICAL && this.bus && this.bus.listenerCount) {
@@ -81,7 +82,7 @@ export class ToolExecutor {
     } catch (err) {
       result = { ok: false, error: err.message };
     }
-    this.bus?.emit('SUBAGENT_TOOL_RESULT', { tool: name, ms: Date.now() - start, risk: level, truncated: String(result).slice(0, 300) });
+    this.bus?.emit(EVENTS.SUBAGENT_TOOL_RESULT, { tool: name, ms: Date.now() - start, risk: level, truncated: String(result).slice(0, 300) });
     return result;
   }
 
@@ -333,6 +334,7 @@ export class ToolExecutor {
    *  Returns 'y' | 'n' | 'always'. 'always' is cached for this executor. */
   async _askOverwrite(path, prev, isNew = false) {
     if (!this.bus) return 'y';
+    if (!isInteractive()) return 'y';
     if (this._alwaysApprove) return 'always';
 
     const lineCount = prev === null ? 0 : String(prev || '').split('\n').length;
@@ -397,8 +399,8 @@ export class ToolExecutor {
       cancelSignal: this.cancelSignal || undefined,
       env: { ...process.env, FORCE_COLOR: '1' }
     });
-    child.stdout?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
-    child.stderr?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
+    child.stdout?.on('data', chunk => this.bus?.emit(EVENTS.SUBAGENT_SHELL_OUTPUT, { chunk: chunk.toString() }));
+    child.stderr?.on('data', chunk => this.bus?.emit(EVENTS.SUBAGENT_SHELL_OUTPUT, { chunk: chunk.toString() }));
     
     const { stdout, stderr } = await child;
     return { ok: true, stdout: stdout.slice(0, 4000), stderr: stderr.slice(0, 2000) };

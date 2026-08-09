@@ -48,6 +48,29 @@ export function SpinnerBlock({ label }) {
   );
 }
 
+/** Running tool indicator — spinner + args preview (matches Z Code's per-tool spinner pattern) */
+export function RunningToolBlock({ tool, args, marginTop = 1 }) {
+  const ticks = useTicker();
+  const frame = SPIN_FRAMES[ticks % SPIN_FRAMES.length];
+  const verb = TOOL_VERBS[tool] || 'Running…';
+  const preview = String(args || '').slice(0, 60);
+
+  return (
+    <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={SPACING.sm}>
+      <box flexDirection="column" backgroundColor={theme.surface} borderStyle="round" border borderColor={theme.divider} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
+        <box flexDirection="row" paddingBottom={SPACING.sm} borderStyle="single" border={['bottom']} borderColor={theme.divider}>
+          <text fg={theme.amber}>{frame} </text>
+          <text fg={theme.dim}>{TOOL_LABELS[tool] || tool} </text>
+          <text fg={theme.textBright}>{preview}</text>
+        </box>
+        <box flexDirection="row" paddingTop={SPACING.sm}>
+          <text fg={theme.muted}>{verb}</text>
+        </box>
+      </box>
+    </box>
+  );
+}
+
 // ── Thought ──────────────────────────────────────────────────────
 export function ThoughtBlock({ text, seconds, live = false, expanded = false }) {
   const ticks = useTicker();
@@ -130,24 +153,34 @@ export function ReadBlock({ path, lines, expanded = false, marginTop = 1 }) {
           <text fg={flash ? theme.diffGreen : theme.teal}>{'\u25ce'} </text>
           <text fg={theme.dim}>Read </text>
           <text fg={theme.textBright}>{crumbs}</text>
+          <box flexGrow={1} />
+          <text fg={theme.dim}>{expanded ? '▾' : '▸'}</text>
         </box>
-        <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
-          {highlighted.map((line, i) => (
-            <box key={i} flexDirection="row">
-              <text fg={theme.dim}>{String(i + 1).padStart(pad)} │ </text>
-              <text>{line || ' '}</text>
-            </box>
-          ))}
-          {truncated && (
-            <box flexDirection="row" marginTop={SPACING.sm}>
-              <text fg={theme.accentDim}>
-                {expanded
-                  ? '\u2026 press Esc to collapse'
-                  : `\u2026 ${lines.length - READ_MAX} more lines (Tab \u2192 Enter to expand)`}
-              </text>
-            </box>
-          )}
-        </box>
+        {/* Only show content lines when expanded — collapsed shows just header */}
+        {!expanded && (
+          <box flexDirection="row" marginTop={SPACING.sm} paddingLeft={SPACING.sm} paddingBottom={SPACING.sm}>
+            <text fg={theme.dim}>{lines.length} lines · Tab ↵ to expand</text>
+          </box>
+        )}
+        {expanded && (
+          <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
+            {highlighted.map((line, i) => (
+              <box key={i} flexDirection="row">
+                <text fg={theme.dim}>{String(i + 1).padStart(pad)} │ </text>
+                <text>{line || ' '}</text>
+              </box>
+            ))}
+            {truncated && (
+              <box flexDirection="row" marginTop={SPACING.sm}>
+                <text fg={theme.accentDim}>
+                  {expanded
+                    ? '\u2026 press Esc to collapse'
+                    : `\u2026 ${lines.length - READ_MAX} more lines (Tab \u2192 Enter to expand)`}
+                </text>
+              </box>
+            )}
+          </box>
+        )}
       </box>
     </box>
   );
@@ -390,12 +423,69 @@ export function TodoBlock({ items, marginTop = 1 }) {
     prevDone.current = currentDone;
   }, [items]);
 
-  const statusIcon = (s) =>
-    s === 'done' ? '\u2713'
-    : s === 'running' ? SPIN_FRAMES[ticks % SPIN_FRAMES.length]
-    : s === 'failed' || s === 'interrupt' ? '\u2717'
-    : s === 'paused' ? '\u25d0'
-    : '\u25cb';
+  /**
+   * Status icon with Z-Code-style terminal animation:
+   *  - done:    checkmark draw-in (dim → medium → bright → settled over ~320ms)
+   *  - running: spinner cycle + smooth 16-step brightness pulse
+   *  - failed:  cross
+   *  - paused:  hollow circle
+   *  - pending: hollow circle
+   */
+  const statusIcon = (s, id) => {
+    if (s === 'done') {
+      // Checkbox draw-in: progressively brighten over 8 ticks (~640ms)
+      // Phase 0: '|' (downstroke starting) → Phase 1: '/' (diagonal) → Phase 2-3: '✓' dim → Phase 4+: '✓' bright
+      if (flashDone.has(id)) {
+        const phase = Math.floor((ticks % 8) / 2); // 0-3 over 8 ticks
+        if (phase === 0) return '|';
+        if (phase === 1) return '/';
+        return '\u2713';
+      }
+      return '\u2713';
+    }
+    if (s === 'running') {
+      // Spinner frame + smooth brightness pulse for in-progress dot
+      return SPIN_FRAMES[ticks % SPIN_FRAMES.length];
+    }
+    if (s === 'failed' || s === 'interrupt') return '\u2717';
+    if (s === 'paused') return '\u25d0';
+    return '\u25cb';
+  };
+
+  // Smooth 16-step sine-like pulse for in-progress items (brighter around peak)
+  const pulseSteps = 16;
+  const pulsePhase = (ticks % (pulseSteps * 2)) / pulseSteps; // 0..2 sawtooth
+  const pulseBrightness = Math.abs(pulsePhase - 1); // 1 at edges, 0 at middle → invert
+  const pulseFactor = 0.3 + 0.7 * (1 - pulseBrightness); // 0.3 to 1.0 brightness
+
+  // Checkbox draw-in color: dim → medium → bright → settled (matches phase in statusIcon)
+  function todoFlashColor(id, status, t, theme) {
+    if (status !== 'done') return theme.textBright;
+    const phase = Math.floor((t % 8) / 2); // 0-3
+    if (phase === 0) return theme.muted;      // '|' dim
+    if (phase === 1) return theme.text;       // '/' medium
+    return theme.diffGreen;                   // '✓' bright green (settled)
+  }
+
+  // Running dot color: smooth brightness pulse between amber and textBright
+  function todoRunningColor(status, t, factor, theme, statusColorFn) {
+    if (status !== 'running') return statusColorFn(status);
+    const mix = (a, b, f) => {
+      const ah = a.replace('#', '');
+      const bh = b.replace('#', '');
+      const ar = parseInt(ah.slice(0, 2), 16);
+      const ag = parseInt(ah.slice(2, 4), 16);
+      const ab = parseInt(ah.slice(4, 6), 16);
+      const br = parseInt(bh.slice(0, 2), 16);
+      const bg2 = parseInt(bh.slice(2, 4), 16);
+      const bb = parseInt(bh.slice(4, 6), 16);
+      const r = Math.round(ar + (br - ar) * f);
+      const g = Math.round(ag + (bg2 - ag) * f);
+      const b2 = Math.round(ab + (bb - ab) * f);
+      return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b2.toString(16).padStart(2, '0')}`;
+    };
+    return mix(theme.amber, theme.textBright, factor);
+  }
 
   return (
     <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={SPACING.sm}>
@@ -414,7 +504,7 @@ export function TodoBlock({ items, marginTop = 1 }) {
               <box key={i} flexDirection="row">
                 {isSub && <text fg={theme.divider}> {'\u2514\u2500\u203a'} </text>}
                 {!isSub && <text> </text>}
-                <text fg={flashDone.has(t.id) ? theme.textBright : (t.status === 'running' && ticks % 2 === 0 ? theme.textBright : statusColor(t.status))}>{statusIcon(t.status)}</text>
+                <text fg={flashDone.has(t.id) ? todoFlashColor(t.id, t.status, ticks, theme) : todoRunningColor(t.status, ticks, pulseFactor, theme, statusColor)}>{statusIcon(t.status, t.id)}</text>
                 <text fg={theme.dim}> {t.id} </text>
                 <text fg={theme.dim}>{t.domain ? `[${t.domain}] ` : ''}</text>
                 <text fg={t.status === 'done' ? theme.dim : theme.text}>{t.title}</text>

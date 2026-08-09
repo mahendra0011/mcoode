@@ -18,30 +18,34 @@ const TreeNode = ({ node, level = 0, onFileSelect, activePath }) => {
   if (!isDir) {
     const isActive = activePath === node.path;
     return (
-      <div 
+      <motion.div
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         className={`flex items-center gap-1.5 py-1 px-2 cursor-pointer transition select-none hover:bg-white/10 ${isActive ? 'bg-white/10 text-white' : 'text-white/70'}`}
         style={{ paddingLeft: `${level * 12 + 16}px` }}
         onClick={() => onFileSelect(node.path)}
       >
         {getFileIcon(node.name)}
         <span className="text-[13px] truncate">{node.name}</span>
-      </div>
+      </motion.div>
     );
   }
 
   return (
     <div>
-      <div 
-        className="flex items-center gap-1 py-1 px-2 cursor-pointer text-white/80 hover:bg-white/5 transition select-none"
-        style={{ paddingLeft: `${level * 12 + 4}px` }}
-        onClick={() => setIsOpen(!isOpen)}
-      >
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="flex items-center gap-1 py-1 px-2 cursor-pointer text-white/80 hover:bg-white/5 transition select-none"
+          style={{ paddingLeft: `${level * 12 + 4}px` }}
+          onClick={() => setIsOpen(!isOpen)}
+        >
         <span className="text-white/40">
           {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </span>
         <Folder className="w-3.5 h-3.5 text-blue-300" />
         <span className="text-[13px]">{node.name}</span>
-      </div>
+      </motion.div>
       
       <AnimatePresence>
         {isOpen && (

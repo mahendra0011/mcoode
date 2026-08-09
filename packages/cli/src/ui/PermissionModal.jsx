@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
+import { useFlashOnMount } from './blocks.jsx';
 
 export function PermissionModal({ request, onAnswer, onClose }) {
   useKeyboard((key) => {
@@ -27,11 +27,7 @@ export function PermissionModal({ request, onAnswer, onClose }) {
   const prompt = request?.prompt || 'Allow this action?';
   const detail = request?.detail || '';
 
-  const [flash, setFlash] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setFlash(false), 150);
-    return () => clearTimeout(t);
-  }, []);
+  const flash = useFlashOnMount();
 
   return (
     <box position="absolute" width="100%" height="100%" justifyContent="center" alignItems="center">

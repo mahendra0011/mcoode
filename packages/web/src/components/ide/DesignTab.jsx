@@ -170,9 +170,20 @@ export function DesignTab() {
     <div className="flex h-full w-full bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden">
       {/* LEFT SIDEBAR — Template gallery + history */}
       <aside className="w-64 flex-shrink-0 flex flex-col border-r border-white/5 bg-[#0e0e0e]">
-        <div className="p-3 border-b border-white/5">
+        <motion.div
+          className="p-3 border-b border-white/5"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           <div className="relative">
-            <Search className="w-4 h-4 text-white/30 absolute left-2 top-1/2 -translate-y-1/2" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1, type: 'spring', stiffness: 300 }}
+            >
+              <Search className="w-4 h-4 text-white/30 absolute left-2 top-1/2 -translate-y-1/2" />
+            </motion.div>
             <input
               type="text"
               value={searchQuery}
@@ -181,32 +192,54 @@ export function DesignTab() {
               className="w-full bg-[#121212] border border-white/10 rounded-lg pl-8 pr-2 py-1.5 text-sm text-white/80 placeholder-white/30 outline-none"
             />
           </div>
-        </div>
+        </motion.div>
 
-        <div className="flex border-b border-white/5">
-          <button
+        <motion.div
+          className="flex border-b border-white/5"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15, staggerChildren: 0.05 }}
+        >
+          <motion.button
             onClick={() => setShowHistory(false)}
             className={`flex-1 py-2 text-xs font-medium transition ${
               !showHistory ? 'text-white border-b-2 border-blue-500' : 'text-white/40 hover:text-white/70'
             }`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
           >
             Templates
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             onClick={() => setShowHistory(true)}
             className={`flex-1 py-2 text-xs font-medium transition ${
               showHistory ? 'text-white border-b-2 border-blue-500' : 'text-white/40 hover:text-white/70'
             }`}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
           >
             History ({designs.length})
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <motion.div
+          className="flex-1 overflow-y-auto custom-scrollbar"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+        >
           {!showHistory ? (
-            <div className="p-2 space-y-1">
-              {filteredTemplates.map((t) => (
-                <button
+            <motion.div
+              className="p-2 space-y-1"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: { opacity: 0 },
+                visible: { opacity: 1, transition: { staggerChildren: 0.03, delayChildren: 0.2 } }
+              }}
+            >
+              {filteredTemplates.map((t, i) => (
+                <motion.button
                   key={t.id}
                   onClick={() => handleTemplateClick(t)}
                   className={`w-full text-left p-2.5 rounded-lg text-xs transition border ${
@@ -214,19 +247,53 @@ export function DesignTab() {
                       ? 'bg-white/10 border-blue-500/50 text-white'
                       : 'bg-[#151515]/50 border-white/5 hover:bg-white/5 text-white/70'
                   }`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 + i * 0.03 }}
+                  whileHover={{ scale: 1.02, x: 3 }}
+                  whileTap={{ scale: 0.98 }}
                 >
-                  <div className="font-medium">{t.name}</div>
-                  <div className="text-white/40 mt-0.5">{t.desc}</div>
-                </button>
+                  <motion.div
+                    className="font-medium"
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    transition={{ delay: 0.05 }}
+                  >
+                    {t.name}
+                  </motion.div>
+                  <motion.div
+                    className="text-white/40 mt-0.5"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.08 }}
+                  >
+                    {t.desc}
+                  </motion.div>
+                </motion.button>
               ))}
-            </div>
+            </motion.div>
           ) : (
-            <div className="p-2 space-y-1">
+            <motion.div
+              className="p-2 space-y-1"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: { opacity: 0 },
+                visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.1 } }
+              }}
+            >
               {designs.length === 0 ? (
-                <div className="text-center py-8 text-white/30 text-xs">No saved designs yet</div>
+                <motion.div
+                  className="text-center py-8 text-white/30 text-xs"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  No saved designs yet
+                </motion.div>
               ) : (
                 designs.map((d) => (
-                  <button
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     key={d._id}
                     onClick={() => {
                       fetch(`/api/v1/design/${d._id}`, { headers: getAuthHeaders() })
@@ -243,7 +310,7 @@ export function DesignTab() {
                       <span className="text-xs font-medium text-white/80 truncate">
                         {d.prompt?.slice(0, 30)}...
                       </span>
-                      <button
+                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteDesign(d._id);
@@ -251,17 +318,17 @@ export function DesignTab() {
                         className="opacity-0 group-hover:opacity-100 text-red-400/70 hover:text-red-400 transition p-1 rounded"
                       >
                         <Trash2 className="w-3 h-3" />
-                      </button>
+                      </motion.button>
                     </div>
                     <div className="text-[10px] text-white/30 mt-0.5">
                       v{d.version || 1}
                     </div>
-                  </button>
+                  </motion.button>
                 ))
               )}
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       </aside>
 
       {/* MAIN CONTENT — Preview canvas */}
@@ -273,7 +340,7 @@ export function DesignTab() {
               const Icon = d.icon;
               const isActive = device === d.id;
               return (
-                <button
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                   key={d.id}
                   onClick={() => setDevice(d.id)}
                   className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition ${
@@ -283,31 +350,31 @@ export function DesignTab() {
                   }`}
                 >
                   <Icon className="w-3 h-3" /> {d.name}
-                </button>
+                </motion.button>
               );
             })}
           </div>
 
           {currentDesign && (
             <div className="flex items-center gap-2">
-              <button
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 onClick={handleCopyCode}
                 className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-white/60 hover:text-white rounded-lg hover:bg-white/5 transition"
               >
                 <Copy className="w-3 h-3" /> Copy
-              </button>
-              <button
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 onClick={handleDownload}
                 className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-white/60 hover:text-white rounded-lg hover:bg-white/5 transition"
               >
                 <Download className="w-3 h-3" /> Download
-              </button>
-              <button
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 onClick={handleOpenInAgent}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-emerald-400 hover:text-emerald-300 rounded-lg hover:bg-emerald-500/10 transition border border-emerald-500/20"
               >
                 <ExternalLink className="w-3 h-3" /> Open in Agent
-              </button>
+              </motion.button>
             </div>
           )}
         </div>
@@ -410,7 +477,7 @@ export function DesignTab() {
               </div>
               <div className="space-y-1">
                 {versions.slice().reverse().map((v, idx) => (
-                  <button
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     key={v._id}
                     onClick={() => setVersionIndex(idx)}
                     className={`w-full text-left p-2 rounded-lg text-xs transition ${
@@ -420,7 +487,7 @@ export function DesignTab() {
                     }`}
                   >
                     <div>v{v.version} • {(v.prompt || '').slice(0, 30)}</div>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>

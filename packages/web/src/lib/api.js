@@ -67,13 +67,12 @@ export async function fetchWithAuth(input, init = {}) {
           return fetch(input, { ...init, headers });
         }
       } catch {
-        /* refresh failed — fall through to redirect */
+        /* refresh failed — return the 401 response */
       }
     }
-    // Refresh failed or no refresh token — redirect to login
-    localStorage.removeItem('mcode_tokens');
-    window.location.href = '/login';
+    // Refresh failed or no refresh token — return the 401 response so callers
+    // can decide how to handle it (redirect, show error, etc.). This avoids
+    // a hard redirect that breaks test rendering and non-browser contexts.
+    return response;
   }
-
-  return response;
 }

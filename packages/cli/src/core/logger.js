@@ -14,6 +14,10 @@ export function setInteractive(v) {
   interactive = v;
 }
 
+export function isInteractive() {
+  return interactive;
+}
+
 export function setQuiet(v) {
   quiet = Boolean(v);
 }

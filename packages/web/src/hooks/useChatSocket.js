@@ -25,11 +25,16 @@ import {
   removeDesign,
   // God-mode
   setGodMode,
+  setSubagentCreated,
+  setSubagentAssigned,
   setSubagentStarted,
   setSubagentStep,
   setSubagentDone,
   setSubagentFailed,
   setSubagentFile,
+  setSubagentToolCall,
+  setSubagentToolResult,
+  setSubagentNeedsReview,
   setWaveStart,
   setWaveComplete,
   setIntegrationPass,
@@ -208,11 +213,16 @@ export function useChatSocket(workspaceId = null) {
     };
 
     // ── God-mode socket event handlers ──
+    const onSubagentCreated = (payload) => { dispatch(setSubagentCreated(payload)); };
+    const onSubagentAssigned = (payload) => { dispatch(setSubagentAssigned(payload)); };
     const onSubagentStarted = (payload) => { dispatch(setSubagentStarted(payload)); };
     const onSubagentStep = (payload) => { dispatch(setSubagentStep(payload)); };
     const onSubagentDone = (payload) => { dispatch(setSubagentDone(payload)); };
     const onSubagentFailed = (payload) => { dispatch(setSubagentFailed(payload)); };
     const onSubagentFile = (payload) => { dispatch(setSubagentFile(payload)); };
+    const onSubagentToolCall = (payload) => { dispatch(setSubagentToolCall(payload)); };
+    const onSubagentToolResult = (payload) => { dispatch(setSubagentToolResult(payload)); };
+    const onSubagentNeedsReview = (payload) => { dispatch(setSubagentNeedsReview(payload)); };
     const onWaveStart = (payload) => { dispatch(setWaveStart(payload)); };
     const onWaveComplete = (payload) => { dispatch(setWaveComplete(payload)); };
     const onIntegrationPass = (payload) => { dispatch(setIntegrationPass(payload)); };
@@ -244,10 +254,17 @@ export function useChatSocket(workspaceId = null) {
 
     // God-mode events
     socket.on('subagent:started', onSubagentStarted);
+    socket.on('subagent:created', onSubagentCreated);
+    socket.on('subagent:assigned', onSubagentAssigned);
+    socket.on('subagent:started', onSubagentStarted);
     socket.on('subagent:step', onSubagentStep);
+    socket.on('subagent:done', onSubagentDone);
     socket.on('subagent:done', onSubagentDone);
     socket.on('subagent:failed', onSubagentFailed);
     socket.on('subagent:file', onSubagentFile);
+    socket.on('subagent:tool_call', onSubagentToolCall);
+    socket.on('subagent:tool_result', onSubagentToolResult);
+    socket.on('subagent:needs_review', onSubagentNeedsReview);
     socket.on('wave:start', onWaveStart);
     socket.on('wave:complete', onWaveComplete);
     socket.on('integration:pass', onIntegrationPass);
@@ -277,6 +294,7 @@ export function useChatSocket(workspaceId = null) {
     window.addEventListener('storage', storageHandler);
 
     return () => {
+      socket.disconnect();
       socket.off('connect', onConnect);
       socket.off('chat:ready', onChatReady);
       socket.off('chat:error', onChatError);
@@ -294,11 +312,16 @@ export function useChatSocket(workspaceId = null) {
       socket.off('disconnect', onDisconnect);
 
       // God-mode cleanup
+      socket.off('subagent:created', onSubagentCreated);
+      socket.off('subagent:assigned', onSubagentAssigned);
       socket.off('subagent:started', onSubagentStarted);
       socket.off('subagent:step', onSubagentStep);
       socket.off('subagent:done', onSubagentDone);
       socket.off('subagent:failed', onSubagentFailed);
       socket.off('subagent:file', onSubagentFile);
+      socket.off('subagent:tool_call', onSubagentToolCall);
+      socket.off('subagent:tool_result', onSubagentToolResult);
+      socket.off('subagent:needs_review', onSubagentNeedsReview);
       socket.off('wave:start', onWaveStart);
       socket.off('wave:complete', onWaveComplete);
       socket.off('integration:pass', onIntegrationPass);

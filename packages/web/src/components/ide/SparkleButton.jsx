@@ -27,7 +27,7 @@ export function SparkleButton({ setPrompt, advancedMode, watchMode, onToggleWatc
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button
+      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
         type="button"
         onClick={() => setOpen(!open)}
         className={`w-8 h-8 rounded-lg flex items-center justify-center transition text-xs font-medium border backdrop-blur-md ${
@@ -38,7 +38,7 @@ export function SparkleButton({ setPrompt, advancedMode, watchMode, onToggleWatc
         title="Quick prompt suggestions"
       >
         <Sparkles className="w-3.5 h-3.5" />
-      </button>
+      </motion.button>
 
       <AnimatePresence>
         {open && (

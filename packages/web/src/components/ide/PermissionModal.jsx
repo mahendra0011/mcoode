@@ -26,24 +26,24 @@ export function PermissionModal({ request, onAnswer }) {
             </div>
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <button
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               onClick={() => onAnswer(request.requestId, 'no')}
               className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 text-xs font-medium transition"
             >
               Deny
-            </button>
-            <button
+            </motion.button>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               onClick={() => onAnswer(request.requestId, 'yes')}
               className="px-3 py-1.5 rounded-lg bg-[#eab308]/20 hover:bg-[#eab308]/30 text-[#eab308] text-xs font-medium transition"
             >
               Allow Once
-            </button>
-            <button
+            </motion.button>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               onClick={() => onAnswer(request.requestId, 'always')}
               className="px-3 py-1.5 rounded-lg bg-[#eab308] hover:bg-[#eab308]/90 text-black text-xs font-bold transition"
             >
               Always Allow
-            </button>
+            </motion.button>
           </div>
         </div>
       </div>

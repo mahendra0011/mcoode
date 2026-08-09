@@ -71,10 +71,14 @@ export class MockProvider extends ModelProvider {
           summary: `Mock subagent completed "${String(lastUser.split('TOOL RESULT')[0]).slice(0, 60)}" — wrote MOCK_RESULT.md (install real provider keys for model output)`
         });
       } else {
+        // Derive a unique filename from the todo title to avoid overwrite conflicts
+        // when multiple subagents run concurrently in the same project root.
+        const taskTitle = String(lastUser || '').replace(/^Begin work on:\s*/, '').slice(0, 60);
+        const safeName = taskTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'task';
         text = JSON.stringify({
           tool: 'write_file',
           args: {
-            path: 'MOCK_RESULT.md',
+            path: `MOCK_${safeName}.md`,
             content: `# Mock result\n\nTask: ${lastUser.slice(0, 120)}\n\n_(No API keys configured — install keys via \`mcode env add OPENROUTER_API_KEY sk-...\` for real model output.)_`
           }
         });

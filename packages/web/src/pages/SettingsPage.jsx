@@ -1,151 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Shield, Key, Bot, User, Github, ArrowLeft, Loader2, 
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+
+const MotionLink = motion.create(Link);
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Shield, Key, Bot, User, Github, ArrowLeft, Loader2,
   Plus, Trash2, Check, AlertTriangle, Eye, EyeOff, ChevronDown,
-  Palette, Globe, Radar, Zap, X
+  Palette, Globe, Radar, Zap, X, Box
 } from 'lucide-react';
 import { getAuthHeaders } from '../lib/api';
 
-const PROVIDERS = [
-  { id: 'openrouter', name: 'OpenRouter', envVar: 'OPENROUTER_API_KEY', placeholder: 'sk-...' },
-  { id: 'opencodezen', name: 'OpenCode Zen', envVar: 'OPENCODE_ZEN_API_KEY', placeholder: 'sk-...' },
-  { id: 'openai', name: 'OpenAI', envVar: 'OPENAI_API_KEY', placeholder: 'sk-...' },
-  { id: 'groq', name: 'Groq', envVar: 'GROQ_API_KEY', placeholder: 'sk-...' },
-  { id: 'together', name: 'Together AI', envVar: 'TOGETHER_API_KEY', placeholder: 'sk-...' },
-  { id: 'mistral', name: 'Mistral', envVar: 'MISTRAL_API_KEY', placeholder: 'sk-...' },
-  { id: 'deepseek', name: 'DeepSeek', envVar: 'DEEPSEEK_API_KEY', placeholder: 'sk-...' },
-  { id: 'xai', name: 'xAI (Grok)', envVar: 'XAI_API_KEY', placeholder: 'sk-...' },
-  { id: 'fireworks', name: 'Fireworks AI', envVar: 'FIREWORKS_API_KEY', placeholder: 'sk-...' },
-  { id: 'perplexity', name: 'Perplexity', envVar: 'PERPLEXITY_API_KEY', placeholder: 'sk-...' },
-  { id: 'cerebras', name: 'Cerebras', envVar: 'CEREBRAS_API_KEY', placeholder: 'sk-...' },
-  { id: 'novita', name: 'Novita AI', envVar: 'NOVITA_API_KEY', placeholder: 'sk-...' },
-  { id: 'huggingface', name: 'HuggingFace', envVar: 'HUGGINGFACE_API_KEY', placeholder: 'sk-...' },
-  { id: 'vercel', name: 'Vercel AI Gateway', envVar: 'VERCEL_API_KEY', placeholder: 'sk-...' },
-  { id: 'requesty', name: 'Requesty', envVar: 'REQUESTY_API_KEY', placeholder: 'sk-...' },
-  { id: 'aihubmix', name: 'AIHubMix', envVar: 'AIHUBMIX_API_KEY', placeholder: 'sk-...' },
-  { id: 'digitalocean', name: 'DigitalOcean Inference', envVar: 'DIGITALOCEAN_API_KEY', placeholder: 'sk-...' },
-  { id: 'azure', name: 'Azure OpenAI', envVar: 'AZURE_OPENAI_API_KEY', placeholder: 'sk-...' },
-  { id: 'bedrock', name: 'AWS Bedrock', envVar: 'AWS_BEDROCK_API_KEY', placeholder: 'sk-...' },
-  { id: 'vertex', name: 'GCP Vertex AI', envVar: 'VERTEX_API_KEY', placeholder: 'sk-...' },
-  { id: 'oracle', name: 'Oracle Code Assist', envVar: 'ORACLE_API_KEY', placeholder: 'sk-...' },
-  { id: 'huawei', name: 'Huawei Cloud MaaS', envVar: 'HUAWEI_API_KEY', placeholder: 'sk-...' },
-  { id: 'sap', name: 'SAP AI Core', envVar: 'SAP_API_KEY', placeholder: 'sk-...' },
-  { id: 'sambanova', name: 'SambaNova', envVar: 'SAMBANOVA_API_KEY', placeholder: 'sk-...' },
-  { id: 'nebius', name: 'Nebius AI Studio', envVar: 'NEBIUS_API_KEY', placeholder: 'sk-...' },
-  { id: 'baseten', name: 'Baseten', envVar: 'BASETEN_API_KEY', placeholder: 'sk-...' },
-  { id: 'cohere', name: 'Cohere', envVar: 'COHERE_API_KEY', placeholder: 'sk-...' },
-  { id: 'qwen', name: 'Alibaba Cloud (Qwen)', envVar: 'QWEN_API_KEY', placeholder: 'sk-...' },
-  { id: 'moonshot', name: 'Moonshot AI', envVar: 'MOONSHOT_API_KEY', placeholder: 'sk-...' },
-  { id: 'minimax', name: 'MiniMax', envVar: 'MINIMAX_API_KEY', placeholder: 'sk-...' },
-  { id: 'zhipu', name: 'Zhipu AI', envVar: 'ZHIPU_API_KEY', placeholder: 'sk-...' },
-  { id: 'tencent', name: 'Tencent Hunyuan', envVar: 'TENCENT_API_KEY', placeholder: 'sk-...' },
-  { id: 'volcengine', name: 'Volcengine (Doubao)', envVar: 'VOLCENGINE_API_KEY', placeholder: 'sk-...' },
-  { id: 'asksage', name: 'AskSage', envVar: 'ASKSAGE_API_KEY', placeholder: 'sk-...' },
-  { id: 'dify', name: 'Dify.ai', envVar: 'DIFY_API_KEY', placeholder: 'sk-...' },
-  { id: 'hicap', name: 'Hicap', envVar: 'HICAP_API_KEY', placeholder: 'sk-...' },
-  { id: 'gitlab', name: 'GitLab Duo', envVar: 'GITLAB_API_KEY', placeholder: 'sk-...' },
-  { id: 'frogbot', name: 'FrogBot', envVar: 'FROGBOT_API_KEY', placeholder: 'sk-...' },
-  { id: 'ollamacloud', name: 'Ollama Cloud', envVar: 'OLLAMA_CLOUD_API_KEY', placeholder: 'sk-...' },
-  { id: 'replicate', name: 'Replicate', envVar: 'REPLICATE_API_TOKEN', placeholder: 'sk-...' },
-  { id: 'anyscale', name: 'Anyscale Endpoints', envVar: 'ANYSCALE_API_KEY', placeholder: 'sk-...' },
-  { id: 'deepinfra', name: 'DeepInfra', envVar: 'DEEPINFRA_API_KEY', placeholder: 'sk-...' },
-  { id: 'nvidia', name: 'NVIDIA NIM', envVar: 'NVIDIA_NIM_API_KEY', placeholder: 'sk-...' },
-  { id: 'friendli', name: 'FriendliAI', envVar: 'FRIENDLI_TOKEN', placeholder: 'sk-...' },
-  { id: 'galadriel', name: 'Galadriel', envVar: 'GALADRIEL_API_KEY', placeholder: 'sk-...' },
-  { id: 'lambda', name: 'Lambda Labs', envVar: 'LAMBDA_API_KEY', placeholder: 'sk-...' },
-  { id: 'modal', name: 'Modal', envVar: 'MODAL_API_KEY', placeholder: 'sk-...' },
-  { id: 'runpod', name: 'RunPod', envVar: 'RUNPOD_API_KEY', placeholder: 'sk-...' },
-  { id: 'scaleway', name: 'Scaleway', envVar: 'SCALEWAY_API_KEY', placeholder: 'sk-...' },
-  { id: 'nlpcloud', name: 'NLP Cloud', envVar: 'NLP_CLOUD_API_KEY', placeholder: 'sk-...' },
-  { id: 'predibase', name: 'Predibase', envVar: 'PREDIBASE_API_KEY', placeholder: 'sk-...' },
-  { id: 'oci', name: 'OCI Generative AI', envVar: 'OCI_GENAI_CONFIG_PATH', placeholder: 'sk-...' },
-  { id: 'datarobot', name: 'DataRobot', envVar: 'DATAROBOT_API_KEY', placeholder: 'sk-...' },
-  { id: 'saphub', name: 'SAP Generative AI Hub', envVar: 'SAP_AI_CORE_CLIENT_ID', placeholder: 'sk-...' },
-  { id: 'watsonx', name: 'watsonx (IBM)', envVar: 'WATSONX_API_KEY', placeholder: 'sk-...' },
-  { id: 'snowflake', name: 'Snowflake Cortex', envVar: 'SNOWFLAKE_CORTEX_TOKEN', placeholder: 'sk-...' },
-  { id: 'databricks', name: 'Databricks', envVar: 'DATABRICKS_TOKEN', placeholder: 'sk-...' },
-  { id: 'manus', name: 'Manus AI', envVar: 'MANUS_API_KEY', placeholder: 'sk-...' },
-  { id: 'chatgptpro', name: 'ChatGPT Pro', envVar: 'CHATGPT_PRO_TOKEN', placeholder: 'sk-...' },
-  { id: '302ai', name: '302.AI', envVar: '302_API_KEY', placeholder: 'sk-...' },
-  { id: 'azure_cognitive', name: 'Azure Cognitive Services', envVar: 'AZURE_COGNITIVE_API_KEY', placeholder: 'sk-...' },
-  { id: 'cloudflare_gateway', name: 'Cloudflare AI Gateway', envVar: 'CLOUDFLARE_GATEWAY_API_KEY', placeholder: 'sk-...' },
-  { id: 'cloudflare_workers', name: 'Cloudflare Workers AI', envVar: 'CLOUDFLARE_WORKERS_API_KEY', placeholder: 'sk-...' },
-  { id: 'cortecs', name: 'Cortecs', envVar: 'CORTECS_API_KEY', placeholder: 'sk-...' },
-  { id: 'github', name: 'GitHub Models', envVar: 'GITHUB_MODELS_API_KEY', placeholder: 'sk-...' },
-  { id: 'github_copilot', name: 'GitHub Copilot', envVar: 'GITHUB_COPILOT_API_KEY', placeholder: 'sk-...' },
-  { id: 'gmicloud', name: 'GMI Cloud', envVar: 'GMI_CLOUD_API_KEY', placeholder: 'sk-...' },
-  { id: 'helicone', name: 'Helicone', envVar: 'HELICONE_API_KEY', placeholder: 'sk-...' },
-  { id: 'ionet', name: 'IO.NET', envVar: 'IONET_API_KEY', placeholder: 'sk-...' },
-  { id: 'nebius_tf', name: 'Nebius Token Factory', envVar: 'NEBIUS_TOKEN_FACTORY_API_KEY', placeholder: 'sk-...' },
-  { id: 'poolside', name: 'Poolside', envVar: 'POOLSIDE_API_KEY', placeholder: 'sk-...' },
-  { id: 'stackit', name: 'STACKIT', envVar: 'STACKIT_API_KEY', placeholder: 'sk-...' },
-  { id: 'ovhcloud', name: 'OVHcloud AI Endpoints', envVar: 'OVHCLOUD_API_KEY', placeholder: 'sk-...' },
-  { id: 'venice', name: 'Venice AI', envVar: 'VENICE_API_KEY', placeholder: 'sk-...' },
-  { id: 'zai', name: 'Z.AI', envVar: 'ZAI_API_KEY', placeholder: 'sk-...' },
-  { id: 'zenmux', name: 'ZenMux', envVar: 'ZENMUX_API_KEY', placeholder: 'sk-...' },
-  { id: 'llm_gateway', name: 'LLM Gateway', envVar: 'LLM_GATEWAY_API_KEY', placeholder: 'sk-...' },
-  { id: 'daoxe', name: 'DaoXE', envVar: 'DAOXE_API_KEY', placeholder: 'sk-...' },
-  { id: 'unbound', name: 'Unbound', envVar: 'UNBOUND_API_KEY', placeholder: 'sk-...' },
-  { id: 'mixlayer', name: 'Mixlayer', envVar: 'MIXLAYER_API_KEY', placeholder: 'sk-...' },
-  { id: 'chutes', name: 'Chutes AI', envVar: 'CHUTES_API_KEY', placeholder: 'sk-...' },
-  { id: 'inception', name: 'Inception', envVar: 'INCEPTION_API_KEY', placeholder: 'sk-...' },
-  { id: 'v0', name: 'v0 (Vercel)', envVar: 'V0_API_KEY', placeholder: 'sk-...' },
-  { id: 'synthetic', name: 'Synthetic Provider', envVar: 'SYNTHETIC_API_KEY', placeholder: 'sk-...' },
-  { id: 'alibaba', name: 'Alibaba Cloud', envVar: 'ALIBABA_CLOUD_API_KEY', placeholder: 'sk-...' },
-  { id: 'kilogateway', name: 'Kilo Gateway', envVar: 'KILO_GATEWAY_API_KEY', placeholder: 'sk-...' },
-  { id: 'opencode_go', name: 'OpenCode Go', envVar: 'OPENCODE_GO_API_KEY', placeholder: 'sk-...' },
-  { id: 'litellm', name: 'LiteLLM (self-hosted gateway)', envVar: 'LITELLM_API_KEY', placeholder: 'sk-...' },
-  { id: 'kilo', name: 'Kilo Code', envVar: 'KILO_API_KEY', placeholder: 'sk-...' },
-  { id: 'nous', name: 'Nous Research', envVar: 'NOUS_RESEARCH_API_KEY', placeholder: 'sk-...' },
-  { id: 'octoai', name: 'OctoAI', envVar: 'OCTOAI_API_KEY', placeholder: 'sk-...' },
-  { id: 'ai21', name: 'AI21 Labs', envVar: 'AI21_API_KEY', placeholder: 'sk-...' },
-  { id: 'zerooneai', name: '01.AI', envVar: 'ZEROONE_API_KEY', placeholder: 'sk-...' },
-  { id: 'upstage', name: 'Upstage', envVar: 'UPSTAGE_API_KEY', placeholder: 'sk-...' },
-  { id: 'jina', name: 'Jina AI', envVar: 'JINA_API_KEY', placeholder: 'sk-...' },
-  { id: 'nomic', name: 'Nomic AI', envVar: 'NOMIC_API_KEY', placeholder: 'sk-...' },
-  { id: 'aleph_alpha', name: 'Aleph Alpha', envVar: 'ALEPH_ALPHA_API_KEY', placeholder: 'sk-...' },
-  { id: 'forefront', name: 'Forefront AI', envVar: 'FOREFRONT_API_KEY', placeholder: 'sk-...' },
-  { id: 'gradient', name: 'Gradient', envVar: 'GRADIENT_API_KEY', placeholder: 'sk-...' },
-  { id: 'banana', name: 'Banana.dev', envVar: 'BANANA_API_KEY', placeholder: 'sk-...' },
-  { id: 'inflection', name: 'Inflection AI', envVar: 'INFLECTION_API_KEY', placeholder: 'sk-...' },
-  { id: 'writer', name: 'Writer', envVar: 'WRITER_API_KEY', placeholder: 'sk-...' },
-  { id: 'monsterapi', name: 'MonsterAPI', envVar: 'MONSTER_API_KEY', placeholder: 'sk-...' },
-  { id: 'shuttleai', name: 'ShuttleAI', envVar: 'SHUTTLE_API_KEY', placeholder: 'sk-...' },
-  { id: 'nexusraven', name: 'NexusRaven', envVar: 'NEXUS_RAVEN_API_KEY', placeholder: 'sk-...' },
-  { id: 'reka', name: 'Reka AI', envVar: 'REKA_API_KEY', placeholder: 'sk-...' },
-  { id: 'baichuan', name: 'Baichuan', envVar: 'BAICHUAN_API_KEY', placeholder: 'sk-...' },
-  { id: 'sensetime', name: 'SenseTime', envVar: 'SENSETIME_API_KEY', placeholder: 'sk-...' },
-  { id: 'ernie', name: 'Ernie (Baidu)', envVar: 'ERNIE_API_KEY', placeholder: 'sk-...' },
-  { id: 'stepfun', name: 'StepFun', envVar: 'STEPFUN_API_KEY', placeholder: 'sk-...' },
-  { id: 'siliconflow', name: 'SiliconFlow', envVar: 'SILICONFLOW_API_KEY', placeholder: 'sk-...' },
-  { id: 'lepton', name: 'Lepton AI', envVar: 'LEPTON_API_KEY', placeholder: 'sk-...' },
-  { id: 'phind', name: 'Phind', envVar: 'PHIND_API_KEY', placeholder: 'sk-...' },
-  { id: 'you', name: 'You.com', envVar: 'YOU_API_KEY', placeholder: 'sk-...' },
-  { id: 'mindsdb', name: 'MindsDB', envVar: 'MINDSDB_API_KEY', placeholder: 'sk-...' },
-  { id: 'voyage', name: 'Voyage AI', envVar: 'VOYAGE_API_KEY', placeholder: 'sk-...' },
-  { id: 'kyutai', name: 'Kyutai', envVar: 'KYUTAI_API_KEY', placeholder: 'sk-...' },
-  { id: 'poe', name: 'Poe API', envVar: 'POE_API_KEY', placeholder: 'sk-...' },
-  { id: 'abacus', name: 'Abacus AI', envVar: 'ABACUS_API_KEY', placeholder: 'sk-...' },
-  { id: 'coreweave', name: 'CoreWeave AI', envVar: 'COREWEAVE_API_KEY', placeholder: 'sk-...' },
-  { id: 'braintrust', name: 'Braintrust Gateway', envVar: 'BRAINTRUST_API_KEY', placeholder: 'sk-...' },
-  { id: 'portkey', name: 'Portkey Gateway', envVar: 'PORTKEY_API_KEY', placeholder: 'sk-...' },
-  { id: 'pezzo', name: 'Pezzo', envVar: 'PEZZO_API_KEY', placeholder: 'sk-...' },
-  { id: 'promptlayer', name: 'PromptLayer', envVar: 'PROMPTLAYER_API_KEY', placeholder: 'sk-...' },
-  { id: 'vellum', name: 'Vellum', envVar: 'VELLUM_API_KEY', placeholder: 'sk-...' },
-  { id: 'h2o', name: 'H2O.ai', envVar: 'H2O_API_KEY', placeholder: 'sk-...' },
-  { id: 'llamacloud', name: 'LlamaCloud', envVar: 'LLAMACLOUD_API_KEY', placeholder: 'sk-...' },
-  { id: 'langsmith', name: 'LangSmith', envVar: 'LANGSMITH_API_KEY', placeholder: 'sk-...' },
-  { id: 'runhouse', name: 'RunHouse', envVar: 'RUNHOUSE_API_KEY', placeholder: 'sk-...' },
-  { id: 'replit', name: 'Replit ModelFarm', envVar: 'REPLIT_API_KEY', placeholder: 'sk-...' },
-  { id: 'akash', name: 'Akash Inference', envVar: 'AKASH_API_KEY', placeholder: 'sk-...' },
-  { id: 'deepgram', name: 'Deepgram', envVar: 'DEEPGRAM_API_KEY', placeholder: 'sk-...' },
-  { id: 'brave', name: 'Brave Search/LLM', envVar: 'BRAVE_API_KEY', placeholder: 'sk-...' },
-  { id: 'kagi', name: 'Kagi API', envVar: 'KAGI_API_KEY', placeholder: 'sk-...' },
-  { id: 'clarifai', name: 'Clarifai', envVar: 'CLARIFAI_API_KEY', placeholder: 'sk-...' },
-  { id: 'anthropic', name: 'Anthropic', envVar: 'ANTHROPIC_API_KEY', placeholder: 'sk-ant-...' },
-  { id: 'google', name: 'Google', envVar: 'GOOGLE_API_KEY', placeholder: 'AIza...' },
-];
 
 const ACCENT_COLORS = [
   { id: 'emerald', label: 'Emerald', color: '#10b981', gradient: 'from-emerald-500 to-teal-400' },
@@ -230,31 +94,43 @@ function PermissionsTab({ settings, onUpdate, saving }) {
 /* ─────────────────── API KEYS TAB ─────────────────── */
 function ApiKeysTab() {
   const [keys, setKeys] = useState([]);
+  const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [addingFor, setAddingFor] = useState(null);
+  const [activeProviderId, setActiveProviderId] = useState(null);
+  const [showKey, setShowKey] = useState(false);
   const [newKey, setNewKey] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
-  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
-  const fetchKeys = async () => {
+  const fetchData = async () => {
     try {
-      const res = await fetch('/api/v1/keys', { headers: getAuthHeaders() });
-      const data = await res.json();
-      setKeys(data.keys || []);
+      const [provRes, keyRes] = await Promise.all([
+        fetch('/api/v1/settings/providers').then(r => r.ok ? r.json() : { providers: [] }),
+        fetch('/api/v1/keys', { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : { keys: [] })
+      ]);
+      const provList = provRes.providers || [];
+      setProviders(provList);
+      setKeys(keyRes.keys || []);
+      if (!activeProviderId && provList.length > 0) {
+        setActiveProviderId(provList[0].id);
+      }
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
-  useEffect(() => { fetchKeys(); }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const handleTest = async (providerId) => {
+  const handleTest = async () => {
+    if (!newKey || !activeProviderId) return;
     setTesting(true);
     setTestResult(null);
     try {
       const res = await fetch('/api/v1/keys/test', {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ providerId, apiKey: newKey })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ providerId: activeProviderId, apiKey: newKey })
       });
       const data = await res.json();
       setTestResult(data.valid ? 'valid' : 'invalid');
@@ -262,91 +138,223 @@ function ApiKeysTab() {
     setTesting(false);
   };
 
-  const handleAdd = async (provider) => {
+  const handleAdd = async () => {
+    if (!newKey || !activeProviderId) return;
+    setSaving(true);
     try {
+      const provider = providers.find(p => p.id === activeProviderId);
       await fetch('/api/v1/keys', {
-        method: 'POST', headers: getAuthHeaders(),
-        body: JSON.stringify({ providerId: provider.id, envVar: provider.envVar, displayName: provider.name, apiKey: newKey })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          providerId: activeProviderId,
+          envVar: provider?.envVar || `${activeProviderId.toUpperCase()}_API_KEY`,
+          displayName: provider?.displayName || activeProviderId,
+          apiKey: newKey
+        })
       });
-      setAddingFor(null);
       setNewKey('');
       setTestResult(null);
-      fetchKeys();
+      setShowKey(false);
+      await fetchData();
+      window.dispatchEvent(new CustomEvent('mcode:reload-models'));
     } catch (e) { console.error(e); }
+    setSaving(false);
   };
 
   const handleRemove = async (id) => {
     try {
       await fetch(`/api/v1/keys/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      fetchKeys();
+      await fetchData();
+      window.dispatchEvent(new CustomEvent('mcode:reload-models'));
     } catch (e) { console.error(e); }
   };
 
   if (loading) return <div className="flex items-center gap-2 text-white/40 text-sm"><Loader2 className="w-4 h-4 animate-spin" /> Loading keys...</div>;
 
+  const activeProvider = providers.find(p => p.id === activeProviderId);
+  const existingKey = keys.find(k => k.providerId === activeProviderId);
+
+  const filteredProviders = search
+    ? providers.filter(p => (p.displayName || p.id).toLowerCase().includes(search.toLowerCase()))
+    : providers;
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">API Keys</h2>
-        <p className="text-sm text-white/40">Connect your AI provider keys. Keys are encrypted and stored securely.</p>
+    <div className="h-full flex flex-col">
+      <div className="mb-6">
+        <h2 className="text-2xl font-semibold text-white mb-2">Model settings</h2>
+        <p className="text-sm text-white/50">Manage custom model providers. Once configured, they can be selected during chat.</p>
       </div>
 
-      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
-        {PROVIDERS.map(provider => {
-          const existing = keys.find(k => k.providerId === provider.id);
-          const isAdding = addingFor === provider.id;
+      <div className="flex overflow-hidden border border-white/5 rounded-xl bg-[#151515]" style={{ height: 'calc(100vh - 200px)' }}>
+        {/* Sidebar */}
+        <div className="w-64 border-r border-white/5 flex flex-col flex-shrink-0">
+          {/* Search */}
+          <div className="p-3 border-b border-white/5">
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search providers..."
+              className="w-full bg-[#1e1e1e] border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-white/20 transition"
+            />
+          </div>
 
-          return (
-            <div key={provider.id} className="bg-[#151515] border border-white/5 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${existing ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]' : 'bg-white/20'}`} />
-                  <span className="text-sm font-medium text-white">{provider.name}</span>
-                  {existing && <span className="text-xs text-white/30 font-mono">{existing.masked}</span>}
-                </div>
-                <div>
-                  {existing ? (
-                    <button onClick={() => handleRemove(existing.id)} className="text-xs text-red-400/70 hover:text-red-400 transition flex items-center gap-1 px-2 py-1 rounded hover:bg-red-500/10">
-                      <Trash2 className="w-3 h-3" /> Remove
-                    </button>
+          <div className="flex-1 overflow-y-auto custom-scrollbar py-2">
+            {filteredProviders.map((provider) => {
+              const isActive = activeProviderId === provider.id;
+              const hasKey = keys.some(k => k.providerId === provider.id);
+              
+              return (
+                <button 
+                  key={provider.id}
+                  onClick={() => {
+                    setActiveProviderId(provider.id);
+                    setNewKey('');
+                    setTestResult(null);
+                    setShowKey(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-4 py-2 transition ${isActive ? 'bg-white/10' : 'hover:bg-white/5'}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Box className="w-4 h-4 text-white/60 flex-shrink-0" />
+                    <span className={`text-sm text-left truncate ${isActive ? 'text-white font-medium' : 'text-white/80'}`}>{provider.displayName}</span>
+                  </div>
+                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ml-2 ${hasKey ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-white/20'}`}></div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+          {activeProvider ? (
+            <>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h3 className="text-lg font-semibold text-white">{activeProvider.displayName}</h3>
+                  
+                  {existingKey ? (
+                    <>
+                      <div className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-medium ml-2 border border-emerald-500/20">
+                        Enabled
+                      </div>
+                      <button onClick={() => handleRemove(existingKey.id)} className="px-3 py-1 rounded-md bg-white/5 hover:bg-white/10 text-white/70 text-xs font-medium transition border border-white/5">
+                        Disable
+                      </button>
+                    </>
                   ) : (
-                    <button onClick={() => { setAddingFor(isAdding ? null : provider.id); setNewKey(''); setTestResult(null); }} className="text-xs text-blue-400/70 hover:text-blue-400 transition flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-500/10">
-                      <Plus className="w-3 h-3" /> {isAdding ? 'Cancel' : 'Add key'}
-                    </button>
+                    <div className="px-2.5 py-0.5 rounded-full bg-white/5 text-white/50 text-xs font-medium ml-2 border border-white/10">
+                      Not Configured
+                    </div>
                   )}
                 </div>
+                {existingKey && (
+                  <button onClick={() => handleRemove(existingKey.id)} className="text-white/40 hover:text-red-400 transition p-2 rounded-lg hover:bg-red-400/10">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
 
-              {isAdding && (
-                <div className="mt-4 space-y-3 pl-5 border-l-2 border-white/5">
-                  <div className="relative">
-                    <input
-                      type={showKey ? 'text' : 'password'}
-                      value={newKey}
-                      onChange={e => setNewKey(e.target.value)}
-                      placeholder={provider.placeholder}
-                      className="w-full bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-blue-500/50 pr-8 font-mono"
-                    />
-                    <button onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
-                      {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => handleTest(provider.id)} disabled={!newKey || testing} className="text-xs bg-white/5 hover:bg-white/10 text-white/70 px-3 py-1.5 rounded-lg transition disabled:opacity-40 border border-white/10">
-                      {testing ? <Loader2 className="w-3 h-3 animate-spin inline mr-1" /> : null} Test key
-                    </button>
-                    <button onClick={() => handleAdd(provider)} disabled={!newKey} className="text-xs bg-emerald-600/80 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-40">
-                      Save
-                    </button>
-                    {testResult === 'valid' && <span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> Valid</span>}
-                    {testResult === 'invalid' && <span className="text-xs text-red-400">Invalid key</span>}
-                    {testResult === 'error' && <span className="text-xs text-red-400">Test failed</span>}
+              {/* Form Fields */}
+              <div className="space-y-8">
+                {/* Env var */}
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">Environment variable</label>
+                  <div className="bg-[#1e1e1e] border border-white/10 rounded-xl px-4 py-3 text-sm text-white/60 font-mono">
+                    {activeProvider.envVar || `${activeProviderId.toUpperCase()}_API_KEY`}
                   </div>
                 </div>
-              )}
+
+                {/* API Key input */}
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">API key</label>
+                  <div className="flex items-start gap-3">
+                    <div className="relative flex-1">
+                      <input 
+                        type={showKey ? "text" : "password"} 
+                        value={existingKey ? (existingKey.masked || '••••••••••••••••••••••••') : newKey}
+                        onChange={(e) => { if(!existingKey) setNewKey(e.target.value); }}
+                        readOnly={!!existingKey}
+                        placeholder={`Enter your ${activeProvider.displayName} API key...`}
+                        className="w-full bg-[#1e1e1e] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition font-mono pr-10"
+                      />
+                      <button 
+                        onClick={() => setShowKey(!showKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition p-1"
+                      >
+                        {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                {!existingKey && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleTest}
+                      disabled={!newKey || testing}
+                      className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-white/80 text-sm font-medium rounded-xl transition border border-white/10 disabled:opacity-40 flex items-center gap-2"
+                    >
+                      {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      Test key
+                    </button>
+                    <button 
+                      onClick={handleAdd}
+                      disabled={!newKey || saving}
+                      className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-semibold rounded-xl transition shadow-[0_0_15px_rgba(16,185,129,0.2)] disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
+                    >
+                      {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                      Save
+                    </button>
+                  </div>
+                )}
+
+                {/* Test result */}
+                {testResult && (
+                  <div className={`flex items-center gap-2 text-sm px-4 py-3 rounded-xl border ${
+                    testResult === 'valid'
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                      : testResult === 'invalid'
+                        ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                        : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  }`}>
+                    {testResult === 'valid' ? (
+                      <><Check className="w-4 h-4" /> API key is valid</>
+                    ) : testResult === 'invalid' ? (
+                      <><AlertTriangle className="w-4 h-4" /> API key is invalid</>
+                    ) : (
+                      <><AlertTriangle className="w-4 h-4" /> Could not reach provider</>
+                    )}
+                  </div>
+                )}
+
+                {/* Existing key details */}
+                {existingKey && (
+                  <div className="bg-[#1a1a1a] border border-white/5 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-white/40">Provider ID</span>
+                      <span className="text-white/70 font-mono">{existingKey.providerId}</span>
+                    </div>
+                    {existingKey.createdAt && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-white/40">Added</span>
+                        <span className="text-white/70">{new Date(existingKey.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full text-white/30 text-sm">
+              Select a provider from the sidebar
             </div>
-          );
-        })}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -476,14 +484,14 @@ function AccountTab() {
 
         {/* Change password */}
         {!changingPw ? (
-          <button onClick={() => setChangingPw(true)} className="text-xs text-blue-400 hover:text-blue-300 transition">Change password</button>
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setChangingPw(true)} className="text-xs text-blue-400 hover:text-blue-300 transition">Change password</motion.button>
         ) : (
           <div className="space-y-3 pt-2 border-t border-white/5">
             <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Current password" className="w-full bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-blue-500/50" />
             <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="New password (min 8 chars)" className="w-full bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-blue-500/50" />
             <div className="flex items-center gap-2">
-              <button onClick={handleChangePw} disabled={!currentPw || newPw.length < 8} className="text-xs bg-emerald-600/80 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-40">Update</button>
-              <button onClick={() => { setChangingPw(false); setCurrentPw(''); setNewPw(''); }} className="text-xs text-white/40 hover:text-white/60 transition">Cancel</button>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleChangePw} disabled={!currentPw || newPw.length < 8} className="text-xs bg-emerald-600/80 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg transition disabled:opacity-40">Update</motion.button>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => { setChangingPw(false); setCurrentPw(''); setNewPw(''); }} className="text-xs text-white/40 hover:text-white/60 transition">Cancel</motion.button>
             </div>
           </div>
         )}
@@ -492,10 +500,10 @@ function AccountTab() {
 
       {/* Actions */}
       <div className="flex items-center gap-3">
-        <button onClick={handleLogout} className="text-xs bg-white/5 hover:bg-white/10 text-white/70 px-4 py-2 rounded-lg transition border border-white/10">Log out</button>
-        <button onClick={handleDelete} disabled={deleting} className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg transition border border-red-500/20 disabled:opacity-40">
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleLogout} className="text-xs bg-white/5 hover:bg-white/10 text-white/70 px-4 py-2 rounded-lg transition border border-white/10">Log out</motion.button>
+        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleDelete} disabled={deleting} className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-lg transition border border-red-500/20 disabled:opacity-40">
           {deleting ? 'Deleting...' : 'Delete account'}
-        </button>
+        </motion.button>
       </div>
     </div>
   );
@@ -546,9 +554,9 @@ function ConnectionsTab() {
             </div>
           </div>
           {githubAccount ? (
-            <button onClick={handleDisconnect} className="text-xs text-red-400/70 hover:text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition border border-transparent hover:border-red-500/20">Disconnect</button>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleDisconnect} className="text-xs text-red-400/70 hover:text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition border border-transparent hover:border-red-500/20">Disconnect</motion.button>
           ) : (
-            <button onClick={handleConnect} className="text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition border border-white/10">Connect</button>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleConnect} className="text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition border border-white/10">Connect</motion.button>
           )}
         </div>
       </div>
@@ -571,7 +579,7 @@ function ThemeTab({ settings, onUpdate }) {
         <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-4">Accent Color</h3>
         <div className="grid grid-cols-3 gap-3">
           {ACCENT_COLORS.map(c => (
-            <button
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               key={c.id}
               onClick={() => onUpdate({ accentColor: c.id })}
               className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
@@ -583,7 +591,7 @@ function ThemeTab({ settings, onUpdate }) {
               <div className="w-6 h-6 rounded-full shadow-lg" style={{ background: c.color }} />
               <span className="text-sm text-white/80">{c.label}</span>
               {current === c.id && <Check className="w-3.5 h-3.5 text-emerald-400 ml-auto" />}
-            </button>
+            </motion.button>
           ))}
         </div>
       </div>
@@ -597,7 +605,7 @@ function ThemeTab({ settings, onUpdate }) {
           </div>
         </div>
         <div className="flex items-center gap-3 mt-4">
-          <button className="px-4 py-2 rounded-lg text-sm text-white font-medium transition" style={{ background: ACCENT_COLORS.find(c => c.id === current)?.color }}>Primary Button</button>
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="px-4 py-2 rounded-lg text-sm text-white font-medium transition" style={{ background: ACCENT_COLORS.find(c => c.id === current)?.color }}>Primary Button</motion.button>
           <span className="text-xs" style={{ color: ACCENT_COLORS.find(c => c.id === current)?.color }}>Accent text</span>
         </div>
       </div>
@@ -643,7 +651,7 @@ function NetworkTab({ settings, onUpdate }) {
           {whitelist.map(d => (
             <span key={d} className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 font-mono">
               {d}
-              <button onClick={() => removeDomain(d)} className="text-white/30 hover:text-red-400 transition"><X className="w-3 h-3" /></button>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => removeDomain(d)} className="text-white/30 hover:text-red-400 transition"><X className="w-3 h-3" /></motion.button>
             </span>
           ))}
         </div>
@@ -657,9 +665,9 @@ function NetworkTab({ settings, onUpdate }) {
             placeholder="github.com"
             className="flex-1 bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-blue-500/50 font-mono"
           />
-          <button onClick={addDomain} disabled={!newDomain.trim()} className="text-xs bg-white/5 hover:bg-white/10 text-white/70 px-3 py-2 rounded-lg transition border border-white/10 disabled:opacity-40 flex items-center gap-1">
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={addDomain} disabled={!newDomain.trim()} className="text-xs bg-white/5 hover:bg-white/10 text-white/70 px-3 py-2 rounded-lg transition border border-white/10 disabled:opacity-40 flex items-center gap-1">
             <Plus className="w-3 h-3" /> Add
-          </button>
+          </motion.button>
         </div>
       </div>
     </div>
@@ -701,11 +709,13 @@ function WatchTab({ settings, onUpdate }) {
 
         <div className="border-t border-white/5 pt-4">
           <label className="flex items-center gap-3 cursor-pointer">
-            <div className={`w-10 h-6 rounded-full relative transition-colors duration-200 ${watch.autoFix ? 'bg-emerald-500' : 'bg-white/10'}`}
+            <motion.div
+              whileTap={{ scale: 0.9 }}
+              className={`w-10 h-6 rounded-full relative transition-colors duration-200 ${watch.autoFix ? 'bg-emerald-500' : 'bg-white/10'}`}
               onClick={() => updateWatch({ autoFix: !watch.autoFix })}
             >
               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${watch.autoFix ? 'left-5' : 'left-1'}`} />
-            </div>
+            </motion.div>
             <div>
               <span className="text-sm text-white font-medium">Auto-fix on detection</span>
               <p className="text-xs text-white/40">Automatically attempt to fix issues detected by the watch daemon.</p>
@@ -738,7 +748,7 @@ function GodModeTab({ settings, onUpdate }) {
           <label className="text-sm font-medium text-white block mb-2">Subagent Concurrency</label>
           <div className="flex items-center gap-3">
             {[1, 2, 3, 4, 5, 6, 8].map(n => (
-              <button
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                 key={n}
                 onClick={() => updateGod({ concurrency: n })}
                 className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
@@ -748,7 +758,7 @@ function GodModeTab({ settings, onUpdate }) {
                 }`}
               >
                 {n}
-              </button>
+              </motion.button>
             ))}
           </div>
           <p className="text-xs text-white/30 mt-2">Number of parallel subagents during god-mode builds.</p>
@@ -777,11 +787,13 @@ function GodModeTab({ settings, onUpdate }) {
         {/* Skip tests */}
         <div className="border-t border-white/5 pt-4">
           <label className="flex items-center gap-3 cursor-pointer">
-            <div className={`w-10 h-6 rounded-full relative transition-colors duration-200 ${god.skipTests ? 'bg-amber-500' : 'bg-white/10'}`}
+            <motion.div
+              whileTap={{ scale: 0.9 }}
+              className={`w-10 h-6 rounded-full relative transition-colors duration-200 ${god.skipTests ? 'bg-amber-500' : 'bg-white/10'}`}
               onClick={() => updateGod({ skipTests: !god.skipTests })}
             >
               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${god.skipTests ? 'left-5' : 'left-1'}`} />
-            </div>
+            </motion.div>
             <div>
               <span className="text-sm text-white font-medium">Skip tests by default</span>
               <p className="text-xs text-white/40">God-mode builds will skip the test phase unless explicitly requested.</p>
@@ -801,7 +813,9 @@ function GodModeTab({ settings, onUpdate }) {
 
 /* ─────────────────── MAIN SETTINGS PAGE ─────────────────── */
 export function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('permissions');
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'permissions');
   const [settings, setSettings] = useState({ allowShellAll: false, requireEditApproval: false, modelOverrides: {} });
   const [saving, setSaving] = useState(false);
 
@@ -856,45 +870,83 @@ export function SettingsPage() {
       {/* LEFT SIDEBAR */}
       <aside className="w-64 flex-shrink-0 bg-[#0e0e0e] border-r border-white/5 flex flex-col">
         {/* Header */}
-        <div className="p-5 border-b border-white/5">
-          <Link to="/ai/chat" className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm group">
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+        <motion.div
+          className="p-5 border-b border-white/5"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <MotionLink
+            to="/ai/chat"
+            className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm group"
+            whileHover={{ x: -3 }}
+          >
+            <motion.div whileHover={{ x: -3 }}>
+              <ArrowLeft className="w-4 h-4" />
+            </motion.div>
             Back to workspace
-          </Link>
-          <h1 className="text-lg font-semibold text-white mt-4 tracking-tight">Settings</h1>
-        </div>
+          </MotionLink>
+          <motion.h1
+            className="text-lg font-semibold text-white mt-4 tracking-tight"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            Settings
+          </motion.h1>
+        </motion.div>
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-1">
-          {TABS.map(tab => {
+          {TABS.map((tab, i) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
-              <button
+              <motion.button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive 
-                    ? 'bg-white/10 text-white shadow-sm' 
+                  isActive
+                    ? 'bg-white/10 text-white shadow-sm'
                     : 'text-white/40 hover:text-white/70 hover:bg-white/5'
                 }`}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.15 + i * 0.05 }}
+                whileHover={{ x: 2, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-blue-400' : ''}`} />
+                <motion.div
+                  animate={{ scale: isActive ? 1.1 : 1 }}
+                  transition={{ type: 'spring', stiffness: 300 }}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-400' : ''}`} />
+                </motion.div>
                 {tab.label}
-              </button>
+              </motion.button>
             );
           })}
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/5">
+        <motion.div
+          className="p-4 border-t border-white/5"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+        >
           <p className="text-[10px] text-white/20 text-center">mcode v1.0</p>
-        </div>
+        </motion.div>
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="max-w-2xl mx-auto px-8 py-10">
+      <motion.main
+        className="flex-1 overflow-y-auto custom-scrollbar"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15, duration: 0.3 }}
+      >
+        <div className={`mx-auto px-8 py-10 ${activeTab === 'keys' ? 'max-w-5xl' : 'max-w-2xl'}`}>
           {activeTab === 'permissions' && <PermissionsTab settings={settings} onUpdate={updatePermissions} saving={saving} />}
           {activeTab === 'keys' && <ApiKeysTab />}
           {activeTab === 'models' && <ModelsTab settings={settings} onUpdateModels={updateModels} />}
@@ -905,7 +957,7 @@ export function SettingsPage() {
           {activeTab === 'account' && <AccountTab />}
           {activeTab === 'connections' && <ConnectionsTab />}
         </div>
-      </main>
+      </motion.main>
     </div>
   );
 }
