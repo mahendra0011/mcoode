@@ -7,9 +7,47 @@
  * updateOne, deleteOne, countDocuments.
  */
 import mongoose from 'mongoose';
+import fs from 'node:fs';
+import path from 'node:path';
 
 let mode = 'memory';
 let connected = false;
+const collections = {};
+const DB_PATH = path.join(process.cwd(), 'mcode_local_db.json');
+
+let saveTimeout = null;
+function flushToDisk() {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try {
+      const data = {};
+      for (const [key, model] of Object.entries(collections)) {
+        data[key] = {
+          seq: model.seq,
+          rows: Array.from(model.rows.entries())
+        };
+      }
+      fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+    } catch (e) {
+      console.error('Failed to flush local db to disk', e);
+    }
+  }, 100);
+}
+
+function loadFromDisk() {
+  if (fs.existsSync(DB_PATH)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+      for (const [key, savedModel] of Object.entries(data)) {
+        if (!collections[key]) collections[key] = new MemoryModel(savedModel.name || key);
+        collections[key].seq = savedModel.seq || 1;
+        collections[key].rows = new Map(savedModel.rows || []);
+      }
+    } catch (e) {
+      console.error('Failed to load local db', e);
+    }
+  }
+}
 
 class MemoryModel {
   constructor(name) {
@@ -30,6 +68,7 @@ class MemoryModel {
   async create(data) {
     const doc = { _id: String(this.seq++), ...data, createdAt: data.createdAt || new Date() };
     this.rows.set(doc._id, structuredClone(doc));
+    flushToDisk();
     return structuredClone(doc);
   }
 
@@ -66,6 +105,7 @@ class MemoryModel {
     if (!doc) return null;
     const merged = { ...doc, ...patch };
     this.rows.set(doc._id, merged);
+    flushToDisk();
     return structuredClone(merged);
   }
 
@@ -74,6 +114,7 @@ class MemoryModel {
     if (!doc) return { matchedCount: 0 };
     const merged = { ...doc, ...patch };
     this.rows.set(doc._id, merged);
+    flushToDisk();
     return { matchedCount: 1 };
   }
 
@@ -81,6 +122,7 @@ class MemoryModel {
     const doc = await this.findOne(query);
     if (!doc) return { deletedCount: 0 };
     this.rows.delete(doc._id);
+    flushToDisk();
     return { deletedCount: 1 };
   }
 
@@ -105,8 +147,6 @@ function matches(doc, query) {
   });
 }
 
-const collections = {};
-
 export async function connectDb(uri) {
   if (uri) {
     try {
@@ -116,9 +156,11 @@ export async function connectDb(uri) {
       return { mode, connected };
     } catch {
       mode = 'memory';
+      loadFromDisk();
     }
   } else {
     mode = 'memory';
+    loadFromDisk();
   }
   connected = false;
   return { mode, connected };

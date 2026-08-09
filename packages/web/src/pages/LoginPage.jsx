@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, EyeOff, Mail, Clock } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Eye, EyeOff } from 'lucide-react';
 import robotBg from '../assets/robot-bg-new.png';
 
 const MotionLink = motion.create(Link);
@@ -11,63 +11,14 @@ const formVariants = {
   visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.3 } }
 };
 
-const fieldVariants = {
-  hidden: { opacity: 0, x: -20 },
-  visible: { opacity: 1, x: 0, transition: { duration: 0.4, ease: [0.4, 0, 0.2, 1] } }
-};
-
-const otpBoxVariants = {
-  hidden: { opacity: 0, scale: 0.95 },
-  visible: { opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 300, damping: 25 } }
-};
-
 export function LoginPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [useOtp, setUseOtp] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState('');
-  const [resendTimeout, setResendTimeout] = useState(0);
-  const [devOtp, setDevOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
 
-  const inputRefs = [useRef(null), useRef(null), useRef(null), useRef(null), useRef(null), useRef(null)];
 
-  // resend countdown
-  useEffect(() => {
-    if (resendTimeout <= 0) return;
-    const t = setTimeout(() => setResendTimeout(resendTimeout - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendTimeout]);
-
-  const focusBox = (idx) => {
-    inputRefs[idx]?.current?.focus();
-  };
-
-  const handleOtpChange = (idx, value) => {
-    const newOtp = otp.split('');
-    newOtp[idx] = value.slice(-1) || '';
-    setOtp(newOtp.join(''));
-    if (value && idx < 5) focusBox(idx + 1);
-  };
-
-  const handleOtpKeyDown = (idx, e) => {
-    if (e.key === 'Backspace' && !otp[idx] && idx > 0) focusBox(idx - 1);
-    if (e.key === 'ArrowLeft' && idx > 0) focusBox(idx - 1);
-    if (e.key === 'ArrowRight' && idx < 5) focusBox(idx + 1);
-  };
-
-  const handleOtpPaste = (e) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').slice(0, 6);
-    if (/^\d{6}$/.test(pasted)) {
-      setOtp(pasted);
-      inputRefs[5]?.current?.blur();
-    }
-  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -93,76 +44,7 @@ export function LoginPage() {
     }
   };
 
-  const sendOtp = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/v1/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, intent: 'login' })
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || 'Failed to send code');
-      }
-      const data = await res.json();
-      if (data.devOtp) setDevOtp(data.devOtp);
-      setOtpSent(true);
-      setResendTimeout(60);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const verifyOtp = async (e) => {
-    e.preventDefault();
-    if (otp.length !== 6) return;
-    setLoading(true);
-    setOtpError('');
-    try {
-      const res = await fetch('/api/v1/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, otp, intent: 'login' })
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || 'Invalid verification code');
-      }
-      const data = await res.json();
-      localStorage.setItem('mcode_tokens', JSON.stringify({ access: data.access, refresh: data.refresh }));
-      navigate('/ai/chat');
-    } catch (err) {
-      setOtpError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resendOtp = async () => {
-    setResendTimeout(60);
-    setOtp('');
-    setOtpError('');
-    try {
-      const res = await fetch('/api/v1/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, intent: 'login' })
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || 'Failed to resend code');
-      }
-      const data = await res.json();
-      if (data.devOtp) setDevOtp(data.devOtp);
-    } catch (err) {
-      setOtpError(err.message);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-white font-sans relative flex flex-col items-center lg:items-end justify-center p-4 lg:pr-[10%] xl:pr-[15%] overflow-hidden">
@@ -234,49 +116,19 @@ export function LoginPage() {
             </motion.p>
           </div>
 
-          {/* Toggle between password and OTP login */}
-          <motion.div
-            className="flex items-center justify-center gap-2 mb-6 p-1 bg-zinc-100 rounded-full"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.25 }}
-          >
-            <motion.button
-              type="button"
-              onClick={() => { setUseOtp(false); setError(''); setOtpError(''); setOtp(''); setOtpSent(false); }}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                useOtp ? 'text-zinc-500' : 'bg-white text-zinc-900 shadow-sm'
-              }}`}
-              whileTap={{ scale: 0.95 }}
-            >
-              Password
-            </motion.button>
-            <motion.button
-              type="button"
-              onClick={() => { setUseOtp(true); setError(''); setOtpError(''); setOtp(''); setOtpSent(false); }}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                useOtp ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
-              }`}
-              whileTap={{ scale: 0.95 }}
-            >
-              Send Code
-            </motion.button>
-          </motion.div>
-
           {/* Error Display */}
-          {(error || otpError) && (
+          {error && (
             <motion.div
               className="p-3 bg-red-100 border border-red-300 text-red-800 text-sm rounded-xl mb-4"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ type: 'spring', stiffness: 300 }}
             >
-              {error || otpError}
+              {error}
             </motion.div>
           )}
 
-          {/* Password Login Form */}
-          {!useOtp && (
+          {/* Login Form */}
             <motion.form
               className="space-y-4"
               onSubmit={submit}
@@ -341,135 +193,6 @@ export function LoginPage() {
                 {loading ? 'Logging in...' : 'Login'}
               </motion.button>
             </motion.form>
-          )}
-
-          {/* OTP Login Form */}
-          {useOtp && (
-            <AnimatePresence mode="wait">
-              {!otpSent ? (
-                <motion.form
-                  key="otp-login-form"
-                  className="space-y-4"
-                  onSubmit={sendOtp}
-                  variants={formVariants}
-                  initial="hidden"
-                  animate="visible"
-                  exit="hidden"
-                >
-                  <motion.div variants={fieldVariants}>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      className="w-full bg-[#eff4fb] border border-transparent rounded-xl py-3.5 px-4 text-zinc-900 placeholder:text-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                      placeholder="Email Address"
-                      required
-                    />
-                  </motion.div>
-                  <motion.button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-[#4ade80] hover:bg-[#22c55e] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
-                    variants={fieldVariants}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    {loading && <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}><Mail className="w-4 h-4" /></motion.div>}
-                    {loading ? 'Sending...' : 'Send Verification Code'}
-                  </motion.button>
-                </motion.form>
-              ) : (
-                <motion.form
-                  key="otp-verify-form"
-                  className="space-y-4"
-                  onSubmit={verifyOtp}
-                  variants={formVariants}
-                  initial="hidden"
-                  animate="visible"
-                  exit="hidden"
-                >
-                  <motion.div
-                    className="flex items-center justify-center gap-2 py-4"
-                    variants={otpBoxVariants}
-                  >
-                    {Array.from({ length: 6 }).map((_, idx) => (
-                      <motion.input
-                        key={idx}
-                        ref={inputRefs[idx]}
-                        type="text"
-                        inputMode="numeric"
-                        pattern="\d*"
-                        maxLength={1}
-                        value={otp[idx] || ''}
-                        onChange={(e) => handleOtpChange(idx, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                        onPaste={idx === 0 ? handleOtpPaste : undefined}
-                        className="w-12 h-12 text-center text-xl font-bold text-zinc-900 bg-[#eff4fb] border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 0.15 + idx * 0.05, type: 'spring', stiffness: 300 }}
-                      />
-                    ))}
-                  </motion.div>
-
-                  {devOtp && (
-                    <motion.div
-                      className="text-center text-xs text-zinc-400 font-mono bg-zinc-50 py-2 rounded-lg"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.3 }}
-                    >
-                      Dev code: {devOtp}
-                    </motion.div>
-                  )}
-
-                  <motion.div
-                    className="flex items-center justify-center gap-2 text-sm text-zinc-500"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                  >
-                    <Clock className="w-4 h-4" />
-                    {resendTimeout > 0 ? (
-                      <span>Resend in {resendTimeout}s</span>
-                    ) : (
-                      <motion.button
-                        type="button"
-                        onClick={resendOtp}
-                        className="text-[#22c55e] font-semibold hover:underline"
-                        whileHover={{ x: 3 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        Resend code
-                      </motion.button>
-                    )}
-                  </motion.div>
-
-                  <motion.button
-                    type="submit"
-                    disabled={loading || otp.length !== 6}
-                    className="w-full bg-[#4ade80] hover:bg-[#22c55e] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
-                    variants={fieldVariants}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    {loading && <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}><Mail className="w-4 h-4" /></motion.div>}
-                    {loading ? 'Verifying...' : 'Verify & Login'}
-                  </motion.button>
-
-                  <motion.button
-                    type="button"
-                    onClick={() => { setOtpSent(false); setOtp(''); setOtpError(''); }}
-                    className="w-full text-zinc-500 text-sm font-medium hover:text-zinc-800 transition-colors"
-                    variants={fieldVariants}
-                    whileHover={{ x: 3 }}
-                  >
-                    ← Back to email
-                  </motion.button>
-                </motion.form>
-              )}
-            </AnimatePresence>
-          )}
 
           {/* Divider */}
           <motion.div

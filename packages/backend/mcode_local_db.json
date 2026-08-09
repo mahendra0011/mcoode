@@ -1,0 +1,71 @@
+{
+  "user": {
+    "seq": 2,
+    "rows": [
+      [
+        "1",
+        {
+          "_id": "1",
+          "email": "mahendrapra0077@gmail.com",
+          "passwordHash": "$2a$10$lxGGJojUGy4N3F7HBvlcouNVMiHCPc6NySqXRFfUL4fxGg1FBFdzm",
+          "name": "mahiii",
+          "plan": "free",
+          "settings": {
+            "defaultConcurrency": 5,
+            "notifyOnBuildComplete": true,
+            "routingOverrides": {}
+          },
+          "createdAt": "2026-08-09T20:17:44.318Z"
+        }
+      ]
+    ]
+  },
+  "session": {
+    "seq": 1,
+    "rows": []
+  },
+  "agentTranscript": {
+    "seq": 1,
+    "rows": []
+  },
+  "watchProject": {
+    "seq": 1,
+    "rows": []
+  },
+  "watchActivity": {
+    "seq": 1,
+    "rows": []
+  },
+  "plugin": {
+    "seq": 1,
+    "rows": []
+  },
+  "otp": {
+    "seq": 2,
+    "rows": []
+  },
+  "apiKey": {
+    "seq": 1,
+    "rows": []
+  },
+  "workspace": {
+    "seq": 1,
+    "rows": []
+  },
+  "chatMessage": {
+    "seq": 1,
+    "rows": []
+  },
+  "githubAccount": {
+    "seq": 1,
+    "rows": []
+  },
+  "userSettings": {
+    "seq": 1,
+    "rows": []
+  },
+  "design": {
+    "seq": 1,
+    "rows": []
+  }
+}

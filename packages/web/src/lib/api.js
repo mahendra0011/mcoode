@@ -75,4 +75,7 @@ export async function fetchWithAuth(input, init = {}) {
     // a hard redirect that breaks test rendering and non-browser contexts.
     return response;
   }
+
+  // Non-401 response — return it so callers can read the body.
+  return response;
 }

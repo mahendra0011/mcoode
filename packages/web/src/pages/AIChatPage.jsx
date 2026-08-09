@@ -4,10 +4,10 @@ import {
   Folder, Puzzle, Github, Crown, Settings,
   ChevronDown, Plus, Sparkles, ArrowUp, Square,
   UploadCloud, Download, GitBranch, Share, Loader2, Slash, Zap,
-  AlertCircle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2
+  AlertCircle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useChatSocket } from '../hooks/useChatSocket';
 import { getAuthHeaders, fetchWithAuth } from '../lib/api';
 import { setMode, addMessage, clearChat, setGodMode } from '../store/chatSlice';
@@ -25,8 +25,10 @@ import { SparkleButton } from '../components/ide/SparkleButton';
 import { DesignTab } from '../components/ide/DesignTab';
 import { WaveProgress } from '../components/ide/WaveProgress';
 
+
 export function AIChatPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef(null);
 
@@ -97,6 +99,48 @@ export function AIChatPage() {
 	};
 	const { access: token } = getTokens();
 
+  const [userProfile, setUserProfile] = useState(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(!!token);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (token) {
+      setIsLoadingProfile(true);
+      fetchWithAuth('/api/v1/auth/me')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.email) {
+            setUserProfile(data);
+          } else {
+            setUserProfile(null);
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          setUserProfile(null);
+        })
+        .finally(() => setIsLoadingProfile(false));
+    } else {
+      setUserProfile(null);
+      setIsLoadingProfile(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('mcode_tokens');
+    window.location.href = '/login';
+  };
 	const [isModalsOpen, setIsModalsOpen] = useState(false);
 	const [githubAccount, setGithubAccount] = useState(null);
 	const [triggerRefresh, setTriggerRefresh] = useState(0);
@@ -129,11 +173,9 @@ export function AIChatPage() {
 			}, 3500);
 		}, []);
 
-	// Auth guard
+	// Auth guard removed for lazy auth flow
 	useEffect(() => {
-		if (!token) {
-			window.location.href = '/login';
-		}
+		// Lazy auth lets users browse without redirecting
 	}, [token]);
 
 	// Toggle Advanced Mode — stays in Chat tab, just flips the engine mode.
@@ -411,9 +453,16 @@ export function AIChatPage() {
     }
   };
 
+
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!prompt.trim() || isStreaming) return;
+
+    if (!token) {
+      navigate('/login');
+      return;
+    }
 
     // Handle slash commands client-side before sending to backend
     if (isSlashCommand(prompt)) {
@@ -447,7 +496,7 @@ export function AIChatPage() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden">
-      
+
       {/* TOPBAR */}
       <input 
         type="file" 
@@ -610,6 +659,98 @@ export function AIChatPage() {
               </div>
             </div>
 
+            {/* User Profile */}
+            <div className="px-4 py-3 flex-shrink-0 relative" ref={profileMenuRef}>
+              {isLoadingProfile ? (
+                <div className="flex items-center justify-center gap-2 w-full rounded-xl px-3 py-2 border border-transparent">
+                  <Loader2 className="w-4 h-4 animate-spin text-white/50" />
+                </div>
+              ) : userProfile ? (
+                <div 
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="flex items-center gap-3 w-full rounded-xl px-3 py-2 transition-all hover:bg-white/5 cursor-pointer select-none"
+                >
+                  <div className="w-8 h-8 rounded-full bg-[#8b5cf6] flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
+                    {userProfile.name ? userProfile.name.charAt(0).toUpperCase() : userProfile.email.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-white/90 text-[13px] font-medium truncate">
+                    {userProfile.name || userProfile.email}
+                  </span>
+                </div>
+              ) : (
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => navigate('/login')}
+                  className="flex items-center justify-center gap-2 w-full rounded-xl px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all font-semibold text-sm"
+                >
+                  Login
+                </motion.button>
+              )}
+
+              {/* Profile Dropdown Menu */}
+              <AnimatePresence>
+                {showProfileMenu && userProfile && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute bottom-full left-4 mb-2 w-[220px] bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden"
+                  >
+                    <div className="p-1.5 flex flex-col">
+                      <button className="flex items-center justify-between w-full px-3 py-2 text-[13px] text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors">
+                        <div className="flex items-center gap-2.5">
+                          <Globe className="w-4 h-4 text-white/50" />
+                          <span>Language</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+                      </button>
+                      <button className="flex items-center justify-between w-full px-3 py-2 text-[13px] text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors">
+                        <div className="flex items-center gap-2.5">
+                          <Palette className="w-4 h-4 text-white/50" />
+                          <span>App theme</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+                      </button>
+                      <button className="flex items-center justify-between w-full px-3 py-2 text-[13px] text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors">
+                        <div className="flex items-center gap-2.5">
+                          <ZoomIn className="w-4 h-4 text-white/50" />
+                          <span>Interface zoom</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+                      </button>
+                    </div>
+
+                    <div className="h-px bg-white/10 mx-2" />
+
+                    <div className="p-1.5 flex flex-col">
+                      <button className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors">
+                        <BarChart2 className="w-4 h-4 text-white/50" />
+                        <span>Usage stats</span>
+                      </button>
+                      <button className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors">
+                        <Rocket className="w-4 h-4 text-white/50" />
+                        <span>Upgrade</span>
+                      </button>
+                    </div>
+
+                    <div className="h-px bg-white/10 mx-2" />
+
+                    <div className="p-1.5">
+                      <button 
+                        onClick={handleLogout}
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-md transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Disconnect</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             {/* Footer */}
             <div className="h-14 flex items-center justify-between px-6 border-t border-white/5 bg-[#121212] flex-shrink-0">
               <button onClick={() => setIsHistoryOpen(true)} className="text-white/30 hover:text-white transition-colors">
@@ -743,7 +884,9 @@ export function AIChatPage() {
 
                         {/* Right Group: Model Selector and Send/Stop */}
                         <div className="flex items-center gap-2">
-                          <ModelSelector />
+                          <ModelSelector 
+                            onAuthRequired={() => navigate('/login')} 
+                          />
                           <AnimatePresence mode="wait">
                             {isStreaming ? (
                               <motion.button 

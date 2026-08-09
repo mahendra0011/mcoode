@@ -62,10 +62,6 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
       body: JSON.stringify({ content })
     })
       .then(async res => {
-        if (res.status === 401) {
-          window.location.href = '/login';
-          return;
-        }
         if (!res.ok) throw new Error('Save failed');
         setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
       })

@@ -17,7 +17,7 @@ const FALLBACK_PROVIDERS = [
   { id: 'mistral', displayName: 'Mistral', envVar: 'MISTRAL_API_KEY' }
 ];
 
-export function ModelSelector({ compact = false }) {
+export function ModelSelector({ compact = false, onAuthRequired, onManageModels }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -218,7 +218,17 @@ export function ModelSelector({ compact = false }) {
               
               <button
                 type="button"
-                onClick={() => { setOpen(false); navigate('/settings?tab=keys'); }}
+                onClick={() => { 
+                  setOpen(false); 
+                  const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
+                  if (!tokens.access && onAuthRequired) {
+                    onAuthRequired();
+                  } else if (onManageModels) {
+                    onManageModels();
+                  } else {
+                    navigate('/settings?tab=keys'); 
+                  }
+                }}
                 className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left hover:bg-white/10 text-emerald-400 transition"
               >
                 Manage models

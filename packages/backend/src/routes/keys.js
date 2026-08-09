@@ -21,6 +21,8 @@ export function keyRoutes({ secret }) {
           envVar: k.envVar || k.providerId,
           displayName: k.displayName || k.providerId,
           masked: m,
+          baseUrl: k.baseUrl,
+          apiFormat: k.apiFormat,
           createdAt: k.createdAt
         };
       });
@@ -33,7 +35,7 @@ export function keyRoutes({ secret }) {
   // POST /keys — save a provider API key
   router.post('/', async (req, res, next) => {
     try {
-      const { providerId, envVar, displayName, apiKey } = req.body;
+      const { providerId, envVar, displayName, apiKey, baseUrl, apiFormat } = req.body;
       if (!providerId || !apiKey) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'providerId and apiKey are required' } });
       }
@@ -45,6 +47,8 @@ export function keyRoutes({ secret }) {
         envVar: envVar || `${providerId.toUpperCase()}_API_KEY`,
         displayName: displayName || providerId,
         encryptedKey: encrypted,
+        baseUrl,
+        apiFormat
       });
       res.status(201).json({ ok: true });
     } catch (err) {
