@@ -174,8 +174,8 @@ export function useChatSocket(workspaceId = null) {
       dispatch(updateTodo(payload));
     };
 
-    const onChatDone = () => {
-      dispatch(chatDone());
+    const onChatDone = (payload) => {
+      dispatch(chatDone(payload || {}));
     };
 
     const onUndoResult = (payload) => {

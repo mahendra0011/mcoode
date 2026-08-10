@@ -93,7 +93,7 @@ const chatSlice = createSlice({
       const text = action.payload;
       const lastMessage = state.messages[state.messages.length - 1];
       if (lastMessage && lastMessage.role === 'assistant' && lastMessage.kind === 'stream') {
-        lastMessage.text = (lastMessage.text || '') + text;
+        lastMessage.text = text;
       } else {
         state.messages.push({
           id: Date.now().toString(),
@@ -171,8 +171,15 @@ const chatSlice = createSlice({
           }
        }
     },
-    chatDone: (state) => {
+    chatDone: (state, action) => {
       state.isStreaming = false;
+      // Finalize the last streaming message with the backend's final text
+      const lastMessage = state.messages[state.messages.length - 1];
+      if (lastMessage && lastMessage.kind === 'stream' && action.payload?.text) {
+        lastMessage.text = action.payload.text;
+        lastMessage.kind = 'assistant';
+        lastMessage.status = 'done';
+      }
     },
     clearChat: (state) => {
       state.messages = [];
