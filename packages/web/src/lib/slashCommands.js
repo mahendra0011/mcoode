@@ -32,10 +32,10 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
 
   switch (name) {
     case 'clear':
-      dispatch(addMessage({ kind: 'system', text: '🧹 Chat cleared' }));
-      // Signal to parent to clear messages if possible
+      // Clear first, then show confirmation so the message survives the clear
       if (state.clearMessages) state.clearMessages();
       else dispatch({ type: 'chat/clear' });
+      dispatch(addMessage({ kind: 'system', text: '🧹 Chat cleared' }));
       return true;
 
     case 'help': {

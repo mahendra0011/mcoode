@@ -384,7 +384,7 @@ const MotionLink = motion(Link);
 - **Web build:** `npx vite build` — succeeds (built in ~1.3s, 0 errors).
 - **CLI lint:** `npx eslint` — 0 errors, only pre-existing warnings.
 - **GSAP imports remaining:** 0 in `src/`.
-- **Files using Framer Motion:** 32 web files (excluding plain `<button>` elements now migrated to `<motion.button>` where appropriate).
+- **Files using Framer Motion:** 34 web files (excluding plain `<button>` elements now migrated to `<motion.button>` where appropriate).
 - **`setInterval` in CLI UI:** only `useTicker.js` (80ms shared clock), `App.jsx` (30s auto-save), `useAnimatedProgress.js` (160ms one-shot) — no stray animation loops.
 
 ## Additional Fixes Applied
@@ -414,3 +414,230 @@ const MotionLink = motion(Link);
 - **Empty state quick-action buttons** — Changed all 3 (`<button>`) to `<motion.button>` with `whileHover={{ scale: 1.03 }}` and `whileTap={{ scale: 0.97 }}`.
 - **Chat view action bar buttons (Upload/Export/Push/Branch/GitHub)** — Changed from `<button>` to `<motion.button>` with `whileHover={{ scale: 1.03 }}` and `whileTap={{ scale: 0.97 }}` (both empty-state and chat-view instances).
 - **IDE view action overlay buttons (Upload/Export/Push/Branch/GitHub)** — Changed from `<button>` to `<motion.button>` with `whileHover`/`whileTap` (5 buttons).
+
+---
+
+## Undocumented Animations (Previously Missing From This File)
+
+### `src/components/chat/TodoCard.jsx` — Todo Checkbox & Status Indicators
+
+**Container card** (entire plan card):
+- `motion.div` `initial={{ opacity: 0, y: 10 }}` → `animate={{ opacity: 1, y: 0 }}` — slide-up + fade-in on mount.
+
+**Completed todo checkbox** (the SVG checkmark):
+- Outer circle: `motion.div` with **spring** (`type: 'spring', stiffness: 300, damping: 20`), `initial={{ scale: 0.5, opacity: 0 }}` → `animate={{ scale: 1, opacity: 1 }}` — pops into view.
+- Checkmark path: `motion.path` with **`pathLength` draw-in**:
+  - `initial={{ pathLength: 0, opacity: 0 }}` → `animate={{ pathLength: 1, opacity: 1 }}`
+  - `transition={{ duration: 0.3, ease: 'easeOut' }}` — the stroke draws itself from start to end over 300ms.
+
+**In-progress todo indicator** (the pulsing blue dot):
+- `motion.div` with **infinite pulse**:
+  - `animate={{ scale: [1, 1.4, 1], opacity: [0.4, 1, 0.4] }}`
+  - `transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}`
+  - `className="w-4 h-4 rounded-full bg-blue-400"`
+
+**Pending todo** (static circle):
+- Plain `<Circle>` icon (Lucide) with `className="w-4 h-4 text-white/20"` — no animation.
+
+---
+
+### `src/components/ide/SparkleButton.jsx` — Quick Prompt Suggestions
+
+**Main button** (sparkle icon toggle):
+- `motion.button` with `whileHover={{ scale: 1.02 }}` and `whileTap={{ scale: 0.98 }}`.
+- Active state: gradient background `from-[#eab308]/10 to-[#f59e0b]/10` with `shadow-[0_0_15px_rgba(234,179,8,0.2)]`.
+- Inactive state: `bg-white/5 hover:bg-white/10` with amber text.
+
+**Dropdown container** (suggestions list):
+- `AnimatePresence` wrapping:
+  - `motion.div` `initial={{ opacity: 0, y: -8, scale: 0.95 }}` → `animate={{ opacity: 1, y: 0, scale: 1 }}` → `exit={{ opacity: 0, y: -8, scale: 0.95 }}`
+  - `transition={{ duration: 0.15 }}` — quick fade + scale from the button.
+  - `className="absolute bottom-full right-0 ..."` — anchors above the button.
+
+**Suggestion buttons** (6 quick prompts):
+- Each `<motion.button>` with `initial={{ opacity: 0, x: -4 }}` → `animate={{ opacity: 1, x: 0 }}`.
+- Staggered: `transition={{ delay: i * 0.03 }}` — 30ms between each button.
+
+**Watch toggle button** (only in advanced/agent mode):
+- Same staggered pattern as suggestions, with `delay: SUGGESTIONS.length * 0.03` (appears after all suggestions).
+- Green text (`text-emerald-400`) with `hover:bg-emerald-500/10` background.
+
+---
+
+### `src/components/ide/WaveProgress.jsx` — God-Mode Execution Dashboard
+
+**Container** (wave dashboard panel):
+- `motion.div` `initial={{ opacity: 0, y: -8 }}` → `animate={{ opacity: 1, y: 0 }}` → `exit={{ opacity: 0, y: -8 }}`
+- `transition={{ duration: 0.2 }}` — slides down from above the content.
+
+**Wave progress bars** (per-wave completion):
+- `motion.div` bar fill with `initial={{ width: 0 }}` → `animate={{ width: \`${pct}%\` }}`
+- `transition={{ duration: 0.5, ease: 'easeOut' }}` — smooth width growth proportional to completion.
+
+**Build summary card** (appears after all waves complete):
+- `motion.div` `initial={{ opacity: 0, height: 0 }}` → `animate={{ opacity: 1, height: 'auto' }}`
+- Expands down from the waves list.
+
+**Domain-colored subagent rows** (running subagents within a wave):
+- Status icons from `STATUS_ICON` map (`CheckCircle2`, `XCircle`, `Loader2 animate-spin`, `Clock`, `Zap`, `BarChart3`).
+- `Loader2` uses Tailwind `animate-spin` for running status.
+
+---
+
+### `src/components/ide/FileTree.jsx` — File Tree
+
+**File node** (clickable file item):
+- `motion.div` with `whileHover={{ scale: 1.02 }}` and `whileTap={{ scale: 0.98 }}`.
+- Active file gets `bg-white/10 text-white`; inactive gets `text-white/70`.
+
+**Folder node** (clickable directory header):
+- `motion.div` with `whileHover={{ scale: 1.02 }}` and `whileTap={{ scale: 0.98 }}`.
+- Chevron icon: `<ChevronDown>` when open, `<ChevronRight>` when collapsed — no rotation animation (icon swap only).
+
+**Folder contents** (expand/collapse):
+- `AnimatePresence` wrapping:
+- `motion.div` `initial={{ height: 0 }}` → `animate={{ height: 'auto' }}` → `exit={{ height: 0 }}`
+- `className="overflow-hidden"` — smooth height transition for tree expansion.
+
+---
+
+### `src/pages/SettingsPage.jsx` — UsageTab Animations
+
+**Bar chart bars** (tokens per day):
+- `motion.div` per bar with `initial={{ height: 0 }}` → `animate={{ height: \`${(d.tokens / maxTokens) * 100}%\` }}`
+- Grows from zero height to proportional height based on token usage.
+
+**Donut chart segments** (model usage):
+- `motion.circle` with SVG `strokeDasharray`/`strokeDashoffset` animation:
+  - `initial={{ strokeDashoffset: circumference }}` → `animate={{ strokeDashoffset: -seg.offset }}`
+  - `transition={{ duration: 0.8 }}` — each segment draws itself around the circle.
+  - Rotated `-90deg` via `transform -rotate-90` on the parent SVG.
+
+---
+
+### `src/pages/SettingsPage.jsx` — ApiKeysTab Model Selection
+
+**Model list entries** (staggered reveal):
+- `motion.div` per model with `initial={{ opacity: 0, x: -10 }}` → `animate={{ opacity: 1, x: 0 }}`
+- `transition={{ duration: 0.2 }}` — slides in from the left.
+
+**Selected model** (gradient border):
+- Inline `style` (not Framer Motion) on the selected `motion.div`:
+  - `borderImage: 'linear-gradient(90deg, #3b82f6, #a854f7, #ec4899, #f97316)'`
+  - `borderImageSlice: 1`, `borderWidth: '1px'`, `borderStyle: 'solid'`
+  - Unselected: `borderColor: '#2a2a2a'`.
+
+---
+
+### `src/pages/AIChatPage.jsx` — Slash Command Picker
+
+**Picker dropdown** (command palette that appears when typing `/`):
+- `AnimatePresence` wrapping (conditional render when `showCommandPicker && prompt.startsWith('/')`).
+- `motion.div` `initial={{ opacity: 0, y: -8, scale: 0.95 }}` → `animate={{ opacity: 1, y: 0, scale: 1 }}` → `exit={{ opacity: 0, y: -8, scale: 0.95 }}`
+- `transition={{ duration: 0.15 }}` — same pattern as SparkleButton dropdown.
+- Positioned `absolute bottom-full left-0 mb-2` with `z-50` (appears **above** the textarea, not below, since the input is at the bottom of the viewport).
+  - Animation: `initial={{ opacity: 0, y: 8, scale: 0.95 }}` → `animate={{ opacity: 1, y: 0, scale: 1 }}` → `exit={{ opacity: 0, y: 8, scale: 0.95 }}` (150ms).
+- Background: `bg-[#1a1a1a]`, border `border-white/10`, `rounded-xl`, `shadow-2xl`, `max-h-60` with `overflow-y-auto`.
+
+**Command picker buttons** (each slash command):
+- `motion.button` with `initial={{ opacity: 0, x: -4 }}` → `animate={{ opacity: 1, x: 0 }}`
+- Staggered: `transition={{ delay: i * 0.03 }}` — 30ms between each command.
+- Hover: `hover:text-white hover:bg-white/5`.
+- Shows icon, command name (`/{c.cmd}`), and description.
+
+**"No matching commands" fallback**:
+- Plain `<div>` (no motion) shown when filter yields empty results.
+
+---
+
+### `src/pages/AIChatPage.jsx` — Right Button Group (Chat-with-messages view)
+
+**Wrapper div** (right button group):
+- `<div className="flex items-center gap-2">` containing `<ModelSelector />` and the send/stop button group.
+
+**Send / Stop buttons** (`AnimatePresence mode="wait"`):
+- `<motion.button>` with:
+  - `initial={{ scale: 0.9, opacity: 0 }}` → `animate={{ scale: 1, opacity: 1 }}` → `exit={{ scale: 0.9, opacity: 0 }}`
+  - `transition={{ duration: 0.15 }}` — smooth swap between send (ArrowUp) and stop (Square) icons.
+- Send button: `disabled={!prompt.trim() || isStreaming}`, circular, gradient `from-blue-500 to-emerald-400`.
+- Stop button: red circular, `bg-red-500/20 hover:bg-red-500/40`.
+
+**ModelSelector** (in chat view):
+- Renders `<ModelSelector />` component (see `ModelSelector.jsx` documentation under IDE Components above).
+- Shows selected model or "Choose model" button with `title` attribute for API key status.
+
+---
+
+### `src/components/LoginModal.jsx` — Login Modal
+
+- **Modal container**: `AnimatePresence` + `motion.div` — enters/exits with opacity + scale.
+- **Expandable section**: `motion.div initial={{ opacity: 0, height: 0 }}` → `animate={{ opacity: 1, height: 'auto' }}` — reveals additional login options.
+
+---
+
+### `src/components/ide/WorkspaceModals.jsx` — Workspace Modals
+
+- **Modal backdrop**: `AnimatePresence` + `motion.div` for open/close.
+- **Modal panel**: `motion.div` — slides/fades in.
+- **Close button**: `motion.button` with `whileHover={{ scale: 1.02 }}` and `whileTap={{ scale: 0.98 }}`.
+- **Action buttons**: `motion.button` with `whileHover`/`whileTap`.
+
+---
+
+### `src/components/ide/PermissionModal.jsx` — Permission Modal
+
+- **Modal**: `AnimatePresence` + `motion.div` for enter/exit.
+- **Accept / Deny buttons**: `motion.button` with `whileHover={{ scale: 1.02 }}` and `whileTap={{ scale: 0.98 }}` (3 buttons: Allow, Allow All, Deny).
+
+---
+
+### `src/components/ide/ModelSettingsModal.jsx` — Model Settings Modal
+
+- **Modal**: `AnimatePresence` + `motion.div` for enter/exit animation.
+- Content slides in with opacity fade.
+
+---
+
+## Z-Code Specific Features (Web Client)
+
+### Slash Commands (`src/lib/slashCommands.js`)
+
+`WEB_SLASH_COMMANDS` array — 8 commands available in chat input:
+
+| Command | Icon | Description |
+|---------|------|-------------|
+| `/clear` | 🗑 | Clear chat history |
+| `/help` | ❓ | Show available commands |
+| `/undo` | ↶ | Undo last file change |
+| `/model` | 🤖 | Switch AI model |
+| `/god` | ⚡ | Enter god-mode parallel build |
+| `/watch` | 👁 | Toggle watch daemon |
+| `/debug` | 🐛 | Toggle debug mode |
+| `/export` | 📄 | Export session |
+
+- Picker appears when user types `/` in any chat textarea (empty state, chat-with-messages, AI Code Agent).
+- Commands are filtered live as the user types after `/`.
+- Clicking a command in the picker inserts `/{cmd}` into the textarea and closes the picker.
+
+### ModelSelector Component (`src/components/ide/ModelSelector.jsx`)
+
+- Used in both **SettingsPage** (model list) and **AIChatPage** (chat input right button group).
+- Provider grouping: models grouped by provider in hover submenus.
+- `hasKeys` check: if no API key is saved, shows "Add an API key" hint instead of model list.
+- Selected model: gradient border (`borderImage` with `linear-gradient`).
+- "Manage models" link navigates to `/settings` API Keys tab.
+
+### Model Persistence (`SettingsPage.jsx`)
+
+- **Selection cache**: `selectedModelByProvider` state object caches the selected model per provider.
+- **Priority order**: `cached || saved || null` — the user's local selection takes priority over the backend-saved model, so switching providers and back preserves the selection.
+- **Save payload**: `handleSave` sends `model: selectedModelId` in the POST `/api/v1/keys` body.
+
+### Usage Stats (`SettingsPage.jsx` — `UsageTab`)
+
+- Fetches real data from `GET /api/v1/usage/stats?from=...&to=...`.
+- Time range selector: "Last 7 days" / "Last 30 days" tabs.
+- Heatmap: 5×7 grid of 35 days, color-coded by session count (4 levels: empty → blue-500).
+- Bar chart: tokens per day, animated `height` from 0 on load.
+- Donut chart: model usage with `strokeDasharray`/`strokeDashoffset` SVG animation.
+- Metrics grid: Token usage, Sessions, Messages, Active days, Current streak, Favorite model.

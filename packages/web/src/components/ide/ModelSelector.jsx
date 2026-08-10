@@ -4,7 +4,7 @@ import { ChevronDown, Plus, Key, Check, X, Loader2, Circle, ChevronRight, Settin
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { setSelectedModel } from '../../store/chatSlice';
-import { getAuthHeaders } from '../../lib/api';
+import api from '../../lib/axios';
 
 /** All CLI providers are fetched from the backend — this just seeds the
  * initial dropdown while the API call is in flight. */
@@ -32,21 +32,18 @@ export function ModelSelector({ compact = false, onAuthRequired, onManageModels 
   const { models, selectedModel, keysError, isStreaming } = useSelector((state) => state.chat);
   const hasKeys = keys.length > 0;
 
-  // Fetch saved API keys (with auth token)
+  // Fetch saved API keys (auth token injected by axios interceptor)
   useEffect(() => {
-    const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
-    fetch('/api/v1/keys', {
-      headers: { Authorization: `Bearer ${tokens.access || ''}` }
-    })
-      .then((res) => res.ok ? res.json() : { keys: [] })
-      .then((data) => setKeys(data.keys || []))
+    api.get('/api/v1/keys', { timeout: 5000 })
+      .then((res) => ({ keys: res.data?.keys || [] }))
+      .then((data) => setKeys(data.keys))
       .catch(() => setKeys([]));
   }, []);
 
   // Fetch all available providers from the backend (same list as CLI)
   useEffect(() => {
-    fetch('/api/v1/settings/providers')
-      .then((res) => res.ok ? res.json() : null)
+    api.get('/api/v1/settings/providers', { timeout: 5000 })
+      .then((res) => res.data)
       .then((data) => {
         if (data?.providers?.length) setProviders(data.providers);
       })
@@ -73,17 +70,13 @@ export function ModelSelector({ compact = false, onAuthRequired, onManageModels 
     try {
       const provider = providers.find((p) => p.id === keyForm.providerId);
       const envVar = provider?.envVar || `${keyForm.providerId.toUpperCase()}_API_KEY`;
-      const res = await fetch('/api/v1/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({
-          providerId: keyForm.providerId,
-          envVar,
-          displayName: keyForm.displayName || provider?.displayName || keyForm.providerId,
-          apiKey: keyForm.apiKey
-        })
-      });
-      const data = await res.json();
+      const res = await api.post('/api/v1/keys', {
+        providerId: keyForm.providerId,
+        envVar,
+        displayName: keyForm.displayName || provider?.displayName || keyForm.providerId,
+        apiKey: keyForm.apiKey
+      }, { timeout: 5000 });
+      const data = res.data;
       if (data.ok) {
         const newKey = { providerId: keyForm.providerId, envVar, displayName: keyForm.displayName || provider?.displayName || keyForm.providerId };
         setKeys([...keys, newKey]);

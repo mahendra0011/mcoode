@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileType2, FileCode, FileJson, File as FileIcon } from 'lucide-react';
-import { getAuthHeaders } from '../../lib/api';
+import api from '../../lib/axios';
 
 const getFileIcon = (name) => {
   if (name.endsWith('.jsx') || name.endsWith('.tsx')) return <FileType2 className="w-4 h-4 text-cyan-400" />;
@@ -33,13 +33,10 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
     if (fileContents[activePath] !== undefined) return; // already loaded
 
     setLoading(true);
-    fetch(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, {
-      headers: getAuthHeaders()
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.content !== undefined) {
-          setFileContents(prev => ({ ...prev, [activePath]: data.content }));
+    api.get(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, { timeout: 5000 })
+      .then(res => {
+        if (res.data.content !== undefined) {
+          setFileContents(prev => ({ ...prev, [activePath]: res.data.content }));
         }
       })
       .finally(() => setLoading(false));
@@ -56,13 +53,9 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
     if (!workspaceId || !activePath) return;
     const content = fileContents[activePath];
 
-    fetch(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ content })
-    })
-      .then(async res => {
-        if (!res.ok) throw new Error('Save failed');
+    api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, { content })
+      .then(res => {
+        if (res.status >= 400) throw new Error('Save failed');
         setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
       })
       .catch(err => console.error(err));

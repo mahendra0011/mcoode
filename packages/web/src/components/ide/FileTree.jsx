@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, FileCode, FileJson, FileType2, FileText, Folder, File } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getAuthHeaders } from '../../lib/api';
+import api from '../../lib/axios';
 
 const getFileIcon = (name) => {
   if (name.endsWith('.jsx') || name.endsWith('.tsx') || name.endsWith('.js') || name.endsWith('.ts')) return <FileCode className="w-3.5 h-3.5 text-blue-400" />;
@@ -75,13 +75,9 @@ export function FileTree({ workspaceId, onFileSelect, activePath, triggerRefresh
     }
 
     setLoading(true);
-    fetch(`/api/v1/workspaces/${workspaceId}/files`, { headers: getAuthHeaders() })
+    api.get(`/api/v1/workspaces/${workspaceId}/files`, { timeout: 5000 })
       .then(res => {
-        if (!res.ok) throw new Error(`Failed to fetch files (${res.status})`);
-        return res.json();
-      })
-      .then(data => {
-        setFiles(data.files || []);
+        setFiles(res.data.files || []);
       })
       .catch(err => {
         console.error('Failed to load workspace files:', err);

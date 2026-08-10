@@ -68,6 +68,137 @@ export function usageRoutes({ secret }) {
     }
   });
 
+  // GET /api/v1/usage/stats — Aggregated usage statistics for the Settings usage tab
+  router.get('/stats', async (req, res, next) => {
+    try {
+      const { from, to } = req.query;
+      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 });
+      const range = sessions.filter((s) => {
+        const d = new Date(s.createdAt || 0);
+        if (from && d < new Date(from)) return false;
+        if (to && d > new Date(to)) return false;
+        return true;
+      });
+
+      // Token quotas
+      const user = await db().user.findById(req.userId);
+      const q = user?.quotas || {};
+      const quota = {
+        tokens: {
+          limit: q.tokens?.limit || 0,
+          used: q.tokens?.used || 0,
+          remaining: (q.tokens?.limit || 0) - (q.tokens?.used || 0)
+        },
+        builds: {
+          limit: q.builds?.limit || 0,
+          used: q.builds?.used || 0,
+          remaining: (q.builds?.limit || 0) - (q.builds?.used || 0)
+        }
+      };
+
+      // Sessions by mode
+      const sessionsByMode = {};
+      range.forEach((s) => {
+        const mode = s.mode || 'unknown';
+        sessionsByMode[mode] = (sessionsByMode[mode] || 0) + 1;
+      });
+
+      // Completed / failed sessions
+      const completedSessions = range.filter((s) => s.status === 'completed').length;
+      const failedSessions = range.filter((s) => s.status === 'failed').length;
+      const successRate = range.length > 0 ? Math.round((completedSessions / range.length) * 100) : 0;
+
+      // Active days (unique dates with sessions)
+      const activeDays = Array.from(new Set(
+        range.map((s) => new Date(s.createdAt || 0).toISOString().slice(0, 10))
+      ));
+
+      // Current streak — count consecutive days ending today with sessions
+      const today = new Date();
+      let streak = 0;
+      for (let i = 0; i < 365; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().slice(0, 10);
+        if (activeDays.includes(dateStr)) {
+          streak++;
+        } else {
+          break;
+        }
+      }
+
+      // Model usage breakdown — from session.plan.todos[].assignedModel
+      const modelUsage = {};
+      for (const s of range) {
+        const todos = s.plan?.todos || [];
+        for (const t of todos) {
+          const model = t.assignedModel || 'unknown';
+          modelUsage[model] = (modelUsage[model] || 0) + 1;
+        }
+      }
+
+      // Daily activity (last 30 days) for heatmap
+      const dailyActivity = {};
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().slice(0, 10);
+        dailyActivity[dateStr] = 0;
+      }
+      range.forEach((s) => {
+        const dateStr = new Date(s.createdAt || 0).toISOString().slice(0, 10);
+        if (dailyActivity[dateStr] !== undefined) {
+          dailyActivity[dateStr]++;
+        }
+      });
+
+      // Total messages from chatMessage collection
+      const totalMessages = await db().chatMessage.countDocuments
+        ? await db().chatMessage.countDocuments({ sessionId: { $in: range.map((s) => s._id) } }).catch(() => 0)
+        : 0;
+
+      // Tokens per day (estimate: sum of quotas used across sessions)
+      // Since we don't store per-session tokens, approximate from quota usage
+      const dailyTokens = {};
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().slice(0, 10);
+        dailyTokens[dateStr] = 0;
+      }
+      const totalTokensUsed = quota.tokens.used || 0;
+      const activeDayCount = activeDays.length || 1;
+      Object.keys(dailyTokens).forEach((dateStr) => {
+        if (activeDays.includes(dateStr)) {
+          dailyTokens[dateStr] = Math.round(totalTokensUsed / activeDayCount);
+        }
+      });
+
+      res.json({
+        ok: true,
+        stats: {
+          totalSessions: range.length,
+          completedSessions,
+          failedSessions,
+          successRate,
+          sessionsByMode,
+          activeDays: activeDays.length,
+          currentStreak: streak,
+          favoriteModel: Object.entries(modelUsage).sort(([, a], [, b]) => b - a)[0]?.[0] || 'none',
+          modelUsage,
+          dailyActivity,
+          dailyTokens,
+          totalMessages,
+          tokenQuota: quota.tokens,
+          buildQuota: quota.builds,
+          plan: user?.plan || 'free',
+        }
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/report.pdf', async (req, res, next) => {
     try {
       const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 });

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import robotBg from '../assets/robot-bg-new.png';
+import api from '../lib/axios';
 
 const MotionLink = motion.create(Link);
 
@@ -18,24 +19,64 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Passwordless / OTP login mode
+  const [otpMode, setOtpMode] = useState(false);
+  const [otpStep, setOtpStep] = useState(false); // false = enter email, true = enter code
+  const [otp, setOtp] = useState('');
+  const [otpError, setOtpError] = useState('');
+  const [devOtp, setDevOtp] = useState(null);
 
+  const sendOtp = async () => {
+    if (!form.email) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.post('/api/v1/auth/send-otp', { email: form.email });
+      if (res.status >= 400) {
+        throw new Error(res.data?.error?.message || 'Failed to send code');
+      }
+      setDevOtp(res.data.devOtp || null);
+      setOtpStep(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (otp.length !== 6) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.post('/api/v1/auth/verify-otp', { email: form.email, otp });
+      if (res.status >= 400) {
+        throw new Error(res.data?.error?.message || 'Invalid code');
+      }
+      localStorage.setItem('mcode_tokens', JSON.stringify({ access: res.data.access, refresh: res.data.refresh }));
+      navigate('/ai/chat');
+    } catch (err) {
+      setOtpError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const otpBoxVariants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0 }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, password: form.password })
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || 'Login failed');
+      const res = await api.post('/api/v1/auth/login', { email: form.email, password: form.password });
+      if (res.status >= 400) {
+        throw new Error(res.data?.error?.message || 'Login failed');
       }
-      const data = await res.json();
-      localStorage.setItem('mcode_tokens', JSON.stringify({ access: data.access, refresh: data.refresh }));
+      localStorage.setItem('mcode_tokens', JSON.stringify({ access: res.data.access, refresh: res.data.refresh }));
       navigate('/ai/chat');
     } catch (err) {
       setError(err.message);
@@ -128,32 +169,58 @@ export function LoginPage() {
             </motion.div>
           )}
 
-          {/* Login Form */}
-            <motion.form
-              className="space-y-4"
-              onSubmit={submit}
-              variants={formVariants}
-              initial="hidden"
-              animate="visible"
+          {/* Mode Toggle: Password vs Passwordless */}
+          <div className="flex items-center justify-center gap-2 p-1 bg-zinc-100 rounded-xl mb-6">
+            <motion.button
+              type="button"
+              onClick={() => { setOtpMode(false); setOtpStep(false); setOtp(''); setOtpError(''); setError(''); }}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${!otpMode ? 'bg-white text-green-600 shadow' : 'text-zinc-500 hover:text-zinc-800'}`}
+              whileTap={{ scale: 0.97 }}
             >
-              {/* Email Field */}
+              Password
+            </motion.button>
+            <motion.button
+              type="button"
+              onClick={() => { setOtpMode(true); setOtpStep(false); setOtp(''); setOtpError(''); setError(''); }}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${otpMode ? 'bg-white text-green-600 shadow' : 'text-zinc-500 hover:text-zinc-800'}`}
+              whileTap={{ scale: 0.97 }}
+            >
+              Send Code
+            </motion.button>
+          </div>
+
+          {/* Login Form */}
+          <motion.form
+            className="space-y-4"
+            onSubmit={async (e) => { e.preventDefault(); otpMode ? (otpStep ? verifyOtp() : sendOtp()) : submit(e); }}
+            variants={formVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            {/* Email Field */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full bg-[#eff4fb] border border-transparent rounded-xl py-3.5 px-4 text-zinc-900 placeholder:text-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                placeholder="Email Address"
+                required
+              />
+            </motion.div>
+
+            {/* Password Mode: Password Field */}
+            {!otpMode && (
               <motion.div
+                className="relative"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
+                transition={{ delay: 0.15 }}
               >
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full bg-[#eff4fb] border border-transparent rounded-xl py-3.5 px-4 text-zinc-900 placeholder:text-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                  placeholder="Email Address"
-                  required
-                />
-              </motion.div>
-
-              {/* Password Field */}
-              <motion.div className="relative" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
@@ -171,28 +238,81 @@ export function LoginPage() {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </motion.button>
               </motion.div>
+            )}
 
-              <motion.div className="text-right" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+            {/* Forgot Password (only in password mode) */}
+            {!otpMode && (
+              <motion.div
+                className="text-right"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
                 <Link to="/forgot-password" className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 transition-colors">
                   Forgot password?
                 </Link>
               </motion.div>
+            )}
 
-              {/* Submit Button */}
-              <motion.button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[#4ade80] hover:bg-[#22c55e] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {loading && <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}><Eye className="w-4 h-4" /></motion.div>}
-                {loading ? 'Logging in...' : 'Login'}
-              </motion.button>
-            </motion.form>
+            {/* OTP Mode: after sending code, show 6 input boxes */}
+            {otpMode && otpStep && (
+              <>
+                <motion.div
+                  className="flex items-center justify-center gap-2"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <input
+                      key={idx}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={otp[idx] || ''}
+                      onChange={(e) => {
+                        const newOtp = otp.split('');
+                        newOtp[idx] = e.target.value.slice(0, 1);
+                        setOtp(newOtp.join(''));
+                        if (e.target.value && idx < 5) {
+                          const inputs = document.querySelectorAll('input[maxlength="1"]');
+                          inputs[idx + 1]?.focus();
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Backspace' && !otp[idx] && idx > 0) {
+                          const inputs = document.querySelectorAll('input[maxlength="1"]');
+                          inputs[idx - 1]?.focus();
+                        }
+                      }}
+                      className="w-12 h-12 bg-[#eff4fb] border border-zinc-300 rounded-xl text-center text-xl font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                    />
+                  ))}
+                </motion.div>
+
+                {otpError && <p className="text-xs text-red-500 text-center">{otpError}</p>}
+
+                {devOtp && (
+                  <p className="text-center text-xs text-zinc-500">Dev code: <span className="font-mono font-bold">{devOtp}</span></p>
+                )}
+              </>
+            )}
+
+            {/* Submit Button */}
+            <motion.button
+              type="submit"
+              disabled={loading || (otpMode && !otpStep && !form.email) || (otpStep && !loading && otp.length !== 6)}
+              className="w-full bg-[#4ade80] hover:bg-[#22c55e] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {loading && <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}><Eye className="w-4 h-4" /></motion.div>}
+              {loading ? 'Loading...' : otpMode ? (otpStep ? 'Verify Code' : 'Send Verification Code') : 'Login'}
+            </motion.button>
+          </motion.form>
 
           {/* Divider */}
           <motion.div

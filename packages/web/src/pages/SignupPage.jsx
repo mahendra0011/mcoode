@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Mail, Clock } from 'lucide-react';
 import robotBg from '../assets/robot-bg-new.png';
+import api from '../lib/axios';
 
 const MotionLink = motion.create(Link);
 
@@ -73,17 +74,11 @@ export function SignupPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/v1/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, intent: 'signup' })
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || 'Failed to send code');
+      const res = await api.post('/api/v1/auth/send-otp', { email: form.email, intent: 'signup' });
+      if (res.status >= 400) {
+        throw new Error(res.data?.error?.message || 'Failed to send code');
       }
-      const data = await res.json();
-      if (data.devOtp) setDevOtp(data.devOtp);
+      if (res.data.devOtp) setDevOtp(res.data.devOtp);
       setOtpStep(true);
       setResendTimeout(60);
     } catch (err) {
@@ -99,23 +94,17 @@ export function SignupPage() {
     setLoading(true);
     setOtpError('');
     try {
-      const res = await fetch('/api/v1/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: form.email,
-          otp,
-          intent: 'signup',
-          name: form.name,
-          password: form.password
-        })
+      const res = await api.post('/api/v1/auth/verify-otp', {
+        email: form.email,
+        otp,
+        intent: 'signup',
+        name: form.name,
+        password: form.password
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || 'Invalid verification code');
+      if (res.status >= 400) {
+        throw new Error(res.data?.error?.message || 'Invalid verification code');
       }
-      const data = await res.json();
-      localStorage.setItem('mcode_tokens', JSON.stringify({ access: data.access, refresh: data.refresh }));
+      localStorage.setItem('mcode_tokens', JSON.stringify({ access: res.data.access, refresh: res.data.refresh }));
       navigate('/ai/chat');
     } catch (err) {
       setOtpError(err.message);
@@ -129,17 +118,11 @@ export function SignupPage() {
     setOtp('');
     setOtpError('');
     try {
-      const res = await fetch('/api/v1/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, intent: 'signup' })
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || 'Failed to resend code');
+      const res = await api.post('/api/v1/auth/send-otp', { email: form.email, intent: 'signup' });
+      if (res.status >= 400) {
+        throw new Error(res.data?.error?.message || 'Failed to resend code');
       }
-      const data = await res.json();
-      if (data.devOtp) setDevOtp(data.devOtp);
+      if (res.data.devOtp) setDevOtp(res.data.devOtp);
     } catch (err) {
       setOtpError(err.message);
     }

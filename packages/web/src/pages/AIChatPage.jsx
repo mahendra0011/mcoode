@@ -4,14 +4,14 @@ import {
   Folder, Puzzle, Github, Crown, Settings,
   ChevronDown, Plus, Sparkles, ArrowUp, Square,
   UploadCloud, Download, GitBranch, Share, Loader2, Slash, Zap,
-  AlertCircle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut
+  AlertCircle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut, Hash, Minimize2, ListFilter, Archive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useChatSocket } from '../hooks/useChatSocket';
-import { getAuthHeaders, fetchWithAuth } from '../lib/api';
+import api from '../lib/axios';
 import { setMode, addMessage, clearChat, setGodMode } from '../store/chatSlice';
-import { handleSlashCommand, isSlashCommand } from '../lib/slashCommands';
+import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../lib/slashCommands';
 
 import { FileTree } from '../components/ide/FileTree';
 import { EditorPane } from '../components/ide/EditorPane';
@@ -41,18 +41,27 @@ export function AIChatPage() {
   const { send, interrupt, answerPermission, undo, reloadModels } = useChatSocket(activeWorkspaceId);
   const [openFiles, setOpenFiles] = useState([]);
   const [activePath, setActivePath] = useState(null);
-	const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [showCommandPicker, setShowCommandPicker] = useState(false);
+  const commandPickerRef = useRef(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [chats, setChats] = useState([]);
 
   useEffect(() => {
-    fetchWithAuth('/api/v1/sessions')
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    const handler = (e) => {
+      if (commandPickerRef.current && !commandPickerRef.current.contains(e.target)) {
+        setShowCommandPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    api.get('/api/v1/sessions', { timeout: 5000 })
+      .then(res => res.data)
       .then(data => {
         if (data && data.items) {
           setChats(data.items.map(s => ({
@@ -70,8 +79,8 @@ export function AIChatPage() {
   const deleteChat = async (id, e) => {
     e.stopPropagation();
     try {
-      const res = await fetchWithAuth(`/api/v1/sessions/${id}`, { method: 'DELETE' });
-      if (res.ok) {
+      const res = await api.delete(`/api/v1/sessions/${id}`, { timeout: 5000 });
+      if (res.status === 200) {
         setChats(prev => prev.filter(c => c.id !== id));
       }
     } catch (err) {
@@ -107,8 +116,8 @@ export function AIChatPage() {
   useEffect(() => {
     if (token) {
       setIsLoadingProfile(true);
-      fetchWithAuth('/api/v1/auth/me')
-        .then(res => res.ok ? res.json() : null)
+      api.get('/api/v1/auth/me', { timeout: 5000 })
+        .then(res => res.data)
         .then(data => {
           if (data && data.email) {
             setUserProfile(data);
@@ -199,13 +208,8 @@ export function AIChatPage() {
         createForm.append('name', 'Untitled Project');
         createForm.append('source', 'blank');
         
-        const wsRes = await fetch('/api/v1/workspaces', {
-          method: 'POST',
-          headers: { Authorization: getAuthHeaders().Authorization },
-          body: createForm
-        });
-        
-        const wsData = await wsRes.json();
+        const wsRes = await api.post('/api/v1/workspaces', createForm, { timeout: 5000 });
+        const wsData = wsRes.data;
         if (wsData.workspace) {
           targetWorkspaceId = wsData.workspace._id;
           setWorkspaces(prev => [...prev, wsData.workspace]);
@@ -228,12 +232,8 @@ export function AIChatPage() {
     }
 
     try {
-      const res = await fetch(`/api/v1/workspaces/${targetWorkspaceId}/upload`, {
-        method: 'POST',
-        headers: { Authorization: getAuthHeaders().Authorization },
-        body: formData
-      });
-      const data = await res.json();
+      const res = await api.post(`/api/v1/workspaces/${targetWorkspaceId}/upload`, formData);
+      const data = res.data;
       if (data.ok && data.uploadedFiles) {
         const attachText = data.uploadedFiles.map(f => `[Attached File: ${f}]`).join('\n');
         setPrompt(prev => prev ? `${prev}\n${attachText}\n` : `${attachText}\n`);
@@ -252,8 +252,8 @@ export function AIChatPage() {
 
   // Fetch initial data
   useEffect(() => {
-    fetch('/api/v1/workspaces', { headers: getAuthHeaders() })
-      .then(res => res.json())
+    api.get('/api/v1/workspaces', { timeout: 5000 })
+      .then(res => res.data)
       .then(data => {
         if (data.workspaces) {
           setWorkspaces(data.workspaces);
@@ -262,8 +262,8 @@ export function AIChatPage() {
       })
       .catch(console.error);
 
-    fetch('/api/v1/github/status', { headers: getAuthHeaders() })
-      .then(res => res.json())
+    api.get('/api/v1/github/status', { timeout: 5000 })
+      .then(res => res.data)
       .then(data => {
         if (data.connected) setGithubAccount(data);
       })
@@ -287,13 +287,10 @@ export function AIChatPage() {
   const fetchBranches = useCallback(async () => {
     if (!activeWorkspaceId) return;
     try {
-      const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/branches`, {
-        headers: getAuthHeaders()
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setBranches(data.branches || []);
-        if (data.current) setActiveBranch(data.current);
+      const res = await api.get(`/api/v1/workspaces/${activeWorkspaceId}/branches`, { timeout: 5000 });
+      if (res.status === 200) {
+        setBranches(res.data.branches || []);
+        if (res.data.current) setActiveBranch(res.data.current);
       }
     } catch (err) {
       console.error('Failed to fetch branches:', err);
@@ -304,17 +301,12 @@ export function AIChatPage() {
   const switchBranch = useCallback(async (branch, create = false) => {
     if (!activeWorkspaceId) return;
     try {
-      const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/checkout`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ branch, create })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setActiveBranch(data.branch);
+      const res = await api.post(`/api/v1/workspaces/${activeWorkspaceId}/checkout`, { branch, create }, { timeout: 5000 });
+      if (res.status === 200) {
+        setActiveBranch(res.data.branch);
         setShowBranchDropdown(false);
-        if (!create && !branches.includes(data.branch)) {
-          setBranches(prev => [...prev, data.branch]);
+        if (!create && !branches.includes(res.data.branch)) {
+          setBranches(prev => [...prev, res.data.branch]);
         }
       }
     } catch (err) {
@@ -336,16 +328,11 @@ export function AIChatPage() {
     formData.append('zipfile', file);
 
     try {
-      const res = await fetch('/api/v1/workspaces', {
-        method: 'POST',
-        headers: { Authorization: getAuthHeaders().Authorization },
-        body: formData
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `Upload failed (${res.status})`);
+      const res = await api.post('/api/v1/workspaces', formData);
+      if (res.status >= 400) {
+        throw new Error(res.data?.error?.message || `Upload failed (${res.status})`);
       }
-      const data = await res.json();
+      const data = res.data;
       if (data.workspace) {
         setWorkspaces([...workspaces, data.workspace]);
         setActiveWorkspaceId(data.workspace._id);
@@ -363,16 +350,11 @@ export function AIChatPage() {
   const handleCloneGit = async (repoUrl) => {
     const name = repoUrl.split('/').pop().replace('.git', '');
     try {
-      const res = await fetch('/api/v1/workspaces', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ name, source: 'git', repoUrl })
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `Clone failed (${res.status})`);
+      const res = await api.post('/api/v1/workspaces', { name, source: 'git', repoUrl });
+      if (res.status >= 400) {
+        throw new Error(res.data?.error?.message || `Clone failed (${res.status})`);
       }
-      const data = await res.json();
+      const data = res.data;
       if (data.workspace) {
         setWorkspaces([...workspaces, data.workspace]);
         setActiveWorkspaceId(data.workspace._id);
@@ -390,11 +372,12 @@ export function AIChatPage() {
   const handleExport = async () => {
     if (!activeWorkspaceId) return showToast('No active workspace', 'error');
     try {
-      const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/export`, {
-        headers: getAuthHeaders()
+      const res = await api.get(`/api/v1/workspaces/${activeWorkspaceId}/export`, {
+        timeout: 10000,
+        responseType: 'blob'
       });
-      if (!res.ok) throw new Error('Export failed');
-      const blob = await res.blob();
+      if (res.status >= 400) throw new Error('Export failed');
+      const blob = res.data;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -412,12 +395,8 @@ export function AIChatPage() {
     if (!commitMessage.trim()) return;
 
     try {
-      const res = await fetch(`/api/v1/workspaces/${activeWorkspaceId}/push`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ message: commitMessage, branch: activeBranch })
-      });
-      const data = await res.json();
+      const res = await api.post(`/api/v1/workspaces/${activeWorkspaceId}/push`, { message: commitMessage, branch: activeBranch });
+      const data = res.data;
       if (data.ok) showToast('Pushed successfully!');
       else showToast('Failed to push: ' + (data.error?.message || 'Unknown error'), 'error');
     } catch (e) {
@@ -598,8 +577,33 @@ export function AIChatPage() {
 
               {/* Recent Chats Section */}
               <div className="flex flex-col mt-2">
-                <div className="flex items-center justify-between px-4 mb-3">
+                <div className="flex items-center justify-between px-4 mb-2">
                   <h3 className="text-white/30 text-[10px] font-bold tracking-[0.15em] uppercase">Recent Chats</h3>
+                </div>
+
+                {/* Group/Project Toolbar */}
+                <div className="flex items-center justify-between px-4 mb-3">
+                  <div className="flex bg-black/40 rounded-full p-[3px] border border-white/5">
+                    <button className="flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] font-medium transition-colors text-[#666] hover:text-white">
+                      <Hash className="w-3.5 h-3.5 opacity-60" />
+                      Group
+                    </button>
+                    <button className="flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] font-medium transition-colors bg-[#252525] text-white/90 border border-white/5 shadow-sm">
+                      <Folder className="w-3.5 h-3.5 opacity-80" />
+                      Project
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2.5 pr-1">
+                    <button className="text-[#666] hover:text-white transition-colors">
+                      <Minimize2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button className="text-[#666] hover:text-white transition-colors">
+                      <ListFilter className="w-3.5 h-3.5" />
+                    </button>
+                    <button className="text-[#666] hover:text-white transition-colors">
+                      <Archive className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -756,7 +760,7 @@ export function AIChatPage() {
               <button onClick={() => setIsHistoryOpen(true)} className="text-white/30 hover:text-white transition-colors">
                 <History className="w-5 h-5" />
               </button>
-              <Link to="/settings" className="text-white/30 hover:text-white transition-colors">
+              <Link to="/settings" className="text-white/30 hover:text-white transition-colors" title="Settings">
                 <Settings className="w-5 h-5" />
               </Link>
               <button className="text-white/30 hover:text-white transition-colors">
@@ -848,14 +852,59 @@ export function AIChatPage() {
                     </div>
 
                     {/* Textarea Container */}
-                    <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner">
+                    <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
                       <textarea 
                         value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPrompt(val);
+                          // Show picker when user types '/' (and nothing more, or a partial command)
+                          if (val.startsWith('/')) {
+                            setShowCommandPicker(true);
+                          } else if (!val.includes('/')) {
+                            setShowCommandPicker(false);
+                          }
+                        }}
                         placeholder="Ask a follow-up..." 
                         className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-1 py-1 min-h-[60px] text-[15px]"
-                        onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) handleSubmit(e); }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) handleSubmit(e);
+                          if (e.key === 'Escape') setShowCommandPicker(false);
+                        }}
                       />
+                      {/* Slash Command Picker */}
+                      <AnimatePresence>
+                        {showCommandPicker && prompt.startsWith('/') && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute top-full left-0 mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
+                          >
+                            {(() => {
+                              const cmd = prompt.slice(1).toLowerCase();
+                              const filtered = WEB_SLASH_COMMANDS.filter(c => c.cmd.includes(cmd));
+                              return filtered.length > 0 ? filtered.map((c, i) => (
+                                <motion.button
+                                  key={c.cmd}
+                                  onClick={() => { setPrompt('/' + c.cmd); setShowCommandPicker(false); }}
+                                  className="w-full text-left text-xs text-white/70 hover:text-white hover:bg-white/5 px-3 py-2 rounded-lg transition flex items-center gap-2"
+                                  initial={{ opacity: 0, x: -4 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: i * 0.03 }}
+                                >
+                                  <span className="text-[13px]">{c.icon}</span>
+                                  <span>/{c.cmd}</span>
+                                  <span className="text-[#666] ml-auto">{c.desc}</span>
+                                </motion.button>
+                              )) : (
+                                <div className="text-[11px] text-[#888] px-3 py-2">No matching commands</div>
+                              );
+                            })()}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       <div className="flex items-center justify-between mt-2">
                         {/* Left Group: Plus and Advanced Mode */}
                         <div className="flex items-center gap-2">
@@ -989,8 +1038,6 @@ export function AIChatPage() {
                     )
                   ))}
                 </div>
-                {/* Action Bar (Advanced Mode) */}
-
                 {/* Chat Input Bottom */}
                 <div className="p-6 md:pb-8 w-full max-w-4xl mx-auto flex flex-col items-center">
                   <form onSubmit={handleSubmit} className="w-full max-w-xl relative rounded-[24px] group mt-2">
@@ -1024,14 +1071,55 @@ export function AIChatPage() {
                       )}
 
                       {/* Textarea Container */}
-                      <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner">
-                        <textarea 
+                      <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
+                        <textarea
                           value={prompt}
-                          onChange={(e) => setPrompt(e.target.value)}
-                          placeholder="Ask a follow-up..." 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPrompt(val);
+                            if (val.startsWith('/')) { setShowCommandPicker(true); }
+                            else if (!val.includes('/')) { setShowCommandPicker(false); }
+                          }}
+                          placeholder="Ask a follow-up..."
                           className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-1 py-1 min-h-[60px] text-[15px]"
-                          onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) handleSubmit(e); }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) handleSubmit(e);
+                            if (e.key === 'Escape') setShowCommandPicker(false);
+                          }}
                         />
+                        {/* Slash Command Picker */}
+                        <AnimatePresence>
+                          {showCommandPicker && prompt.startsWith('/') && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute bottom-full left-0 mb-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
+                            >
+                              {(() => {
+                                const cmd = prompt.slice(1).toLowerCase();
+                                const filtered = WEB_SLASH_COMMANDS.filter(c => c.cmd.includes(cmd));
+                                return filtered.length > 0 ? filtered.map((c, i) => (
+                                  <motion.button
+                                    key={c.cmd}
+                                    onClick={() => { setPrompt('/' + c.cmd); setShowCommandPicker(false); }}
+                                    className="w-full text-left text-xs text-white/70 hover:text-white hover:bg-white/5 px-3 py-2 rounded-lg transition flex items-center gap-2"
+                                    initial={{ opacity: 0, x: -4 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: i * 0.03 }}
+                                  >
+                                    <span className="text-[13px]">{c.icon}</span>
+                                    <span>/{c.cmd}</span>
+                                    <span className="text-[#666] ml-auto">{c.desc}</span>
+                                  </motion.button>
+                                )) : (
+                                  <div className="text-[11px] text-[#888] px-3 py-2">No matching commands</div>
+                                );
+                              })()}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                         <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-2">
                           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
@@ -1047,12 +1135,14 @@ export function AIChatPage() {
                             </motion.button>
                           )}
                         </div>
-                        <AnimatePresence mode="wait">
+                        <div className="flex items-center gap-2">
+                          <ModelSelector />
+                          <AnimatePresence mode="wait">
                           {isStreaming ? (
-                            <motion.button 
+                            <motion.button
                               key="stop-btn"
-                              type="button" 
-                              onClick={interrupt} 
+                              type="button"
+                              onClick={interrupt}
                               initial={{ scale: 0.9, opacity: 0 }}
                               animate={{ scale: 1, opacity: 1 }}
                               exit={{ scale: 0.9, opacity: 0 }}
@@ -1062,7 +1152,7 @@ export function AIChatPage() {
                               <Square className="w-3 h-3 text-red-400 fill-current" />
                             </motion.button>
                           ) : (
-                            <motion.button 
+                            <motion.button
                               key="send-btn"
                               type="submit" 
                               initial={{ scale: 0.9, opacity: 0 }}
@@ -1075,8 +1165,9 @@ export function AIChatPage() {
                               <ArrowUp className="w-4 h-4 drop-shadow-md" />
                             </motion.button>
                           )}
-                        </AnimatePresence>
-                      </div>
+                          </AnimatePresence>
+                        </div>
+                        </div>
                     </div>
                   </div>
                 </form>
@@ -1141,27 +1232,48 @@ export function AIChatPage() {
                       </div>
                     )}
                     <PermissionModal request={permissionRequest} onAnswer={answerPermission} />
-                    {messages.map((msg, idx) => (
-                      <div key={idx} className={`w-full flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start gap-3'}`}>
-                        {msg.role === 'user' ? (
-                          <div className="bg-[#27272a] text-white/90 px-4 py-2.5 rounded-xl text-[13px] max-w-[90%] border border-white/5 shadow-sm">
-                            {msg.text}
-                          </div>
+                    <AnimatePresence>
+                      {messages.map((msg, idx) => (
+                        msg.role === 'user' ? (
+                          <motion.div
+                            key={msg.id || idx}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                            className="w-full flex justify-end"
+                          >
+                            <div className="bg-[#27272a] text-white/90 px-4 py-2.5 rounded-xl text-[13px] max-w-[90%] border border-white/5 shadow-sm">
+                              {msg.text}
+                            </div>
+                          </motion.div>
                         ) : (
-                          <>
+                          <motion.div
+                            key={msg.id || idx}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: idx * 0.02 }}
+                            className="flex flex-col gap-3"
+                          >
                             {msg.text && (
                               <div className="text-[13px] text-white/90 leading-relaxed whitespace-pre-wrap">
                                 {msg.text}
                                 {msg.kind === 'stream' && isStreaming && idx === messages.length - 1 && (
-                                  <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-400 animate-pulse align-middle"></span>
+                                  <motion.span
+                                    className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse align-middle"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: [0.3, 1, 0.3] }}
+                                    transition={{ duration: 1, repeat: Infinity }}
+                                  />
                                 )}
                               </div>
                             )}
                             {msg.kind === 'tool' && <StepCard msg={msg} undo={undo} />}
-                          </>
-                        )}
-                      </div>
-                    ))}
+                          </motion.div>
+                        )
+                      ))}
+                    </AnimatePresence>
                   </div>
 
                   {/* Inline Chat Input */}
@@ -1171,14 +1283,55 @@ export function AIChatPage() {
                         <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_70%,#10b981,#3b82f6)] opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
                       </div>
                       <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
-                      <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2">
-                        <textarea 
+                      <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2" ref={commandPickerRef}>
+                        <textarea
                           value={prompt}
-                          onChange={(e) => setPrompt(e.target.value)}
-                          placeholder="Ask AI code agent..." 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPrompt(val);
+                            if (val.startsWith('/')) { setShowCommandPicker(true); }
+                            else if (!val.includes('/')) { setShowCommandPicker(false); }
+                          }}
+                          placeholder="Ask AI code agent..."
                           className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-2 py-1 min-h-[40px] text-sm"
-                          onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) handleSubmit(e); }}
+                          onKeyDown={(e) => {
+                            if(e.key === 'Enter' && !e.shiftKey) handleSubmit(e);
+                            if(e.key === 'Escape') setShowCommandPicker(false);
+                          }}
                         />
+                        {/* Slash Command Picker */}
+                        <AnimatePresence>
+                          {showCommandPicker && prompt.startsWith('/') && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute bottom-full left-0 mb-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
+                            >
+                              {(() => {
+                                const cmd = prompt.slice(1).toLowerCase();
+                                const filtered = WEB_SLASH_COMMANDS.filter(c => c.cmd.includes(cmd));
+                                return filtered.length > 0 ? filtered.map((c, i) => (
+                                  <motion.button
+                                    key={c.cmd}
+                                    onClick={() => { setPrompt('/' + c.cmd); setShowCommandPicker(false); }}
+                                    className="w-full text-left text-xs text-white/70 hover:text-white hover:bg-white/5 px-3 py-2 rounded-lg transition flex items-center gap-2"
+                                    initial={{ opacity: 0, x: -4 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: i * 0.03 }}
+                                  >
+                                    <span className="text-[13px]">{c.icon}</span>
+                                    <span>/{c.cmd}</span>
+                                    <span className="text-[#666] ml-auto">{c.desc}</span>
+                                  </motion.button>
+                                )) : (
+                                  <div className="text-[11px] text-[#888] px-3 py-2">No matching commands</div>
+                                );
+                              })()}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">

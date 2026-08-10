@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RefreshCw, Box, Plus, Edit2, Trash2, Eye, EyeOff, Loader2, Plug, ChevronDown } from 'lucide-react';
-import { getAuthHeaders } from '../../lib/api';
+import api from '../../lib/axios';
 
 export function ModelSettingsModal({ isOpen, onClose }) {
   const [providers, setProviders] = useState([]);
@@ -18,8 +18,8 @@ export function ModelSettingsModal({ isOpen, onClose }) {
   const fetchData = useCallback(async () => {
     try {
       const [provRes, keyRes] = await Promise.all([
-        fetch('/api/v1/settings/providers').then(r => r.ok ? r.json() : { providers: [] }),
-        fetch('/api/v1/keys', { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : { keys: [] })
+        api.get('/api/v1/settings/providers', { timeout: 5000 }).then(r => r.data).catch(() => ({ providers: [] })),
+        api.get('/api/v1/keys', { timeout: 5000 }).then(r => r.data).catch(() => ({ keys: [] }))
       ]);
       const provList = provRes.providers || [];
       const savedKeys = keyRes.keys || [];
@@ -62,19 +62,15 @@ export function ModelSettingsModal({ isOpen, onClose }) {
     setSaving(true);
     try {
       const provider = providers.find(p => p.id === activeProviderId);
-      const res = await fetch('/api/v1/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({
-          providerId: activeProviderId,
-          envVar: provider?.envVar || `${activeProviderId.toUpperCase()}_API_KEY`,
-          displayName: provider?.displayName || activeProviderId,
-          apiKey: newKey || 'existing-key',
-          baseUrl,
-          apiFormat
-        })
-      });
-      const data = await res.json();
+      const res = await api.post('/api/v1/keys', {
+        providerId: activeProviderId,
+        envVar: provider?.envVar || `${activeProviderId.toUpperCase()}_API_KEY`,
+        displayName: provider?.displayName || activeProviderId,
+        apiKey: newKey || 'existing-key',
+        baseUrl,
+        apiFormat
+      }, { timeout: 5000 });
+      const data = res.data;
       if (data.ok) {
         setNewKey('');
         setShowApiKey(false);
@@ -89,10 +85,7 @@ export function ModelSettingsModal({ isOpen, onClose }) {
 
   const handleRemove = async (keyId) => {
     try {
-      await fetch(`/api/v1/keys/${keyId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
+      await api.delete(`/api/v1/keys/${keyId}`);
       await fetchData();
       window.dispatchEvent(new CustomEvent('mcode:reload-models'));
     } catch (e) {

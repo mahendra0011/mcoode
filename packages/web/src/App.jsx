@@ -8,6 +8,7 @@ import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { SettingsPage } from './pages/SettingsPage';
+import api from './lib/axios';
 
 const THEMES = {
   emerald: '#10b981',
@@ -23,11 +24,9 @@ function App() {
     // Load global UI preferences
     const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
     if (tokens.access) {
-      fetch('/api/v1/settings', {
-        headers: { 'Authorization': `Bearer ${tokens.access}` }
-      })
-      .then(r => r.json())
-      .then(d => {
+      api.get('/api/v1/settings', { timeout: 5000 })
+      .then(res => {
+        const d = res.data;
         if (d.settings?.accentColor && THEMES[d.settings.accentColor]) {
           document.documentElement.style.setProperty('--theme-accent', THEMES[d.settings.accentColor]);
         }

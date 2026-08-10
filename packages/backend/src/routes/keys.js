@@ -21,6 +21,7 @@ export function keyRoutes({ secret }) {
           envVar: k.envVar || k.providerId,
           displayName: k.displayName || k.providerId,
           masked: m,
+          model: k.model,
           baseUrl: k.baseUrl,
           apiFormat: k.apiFormat,
           createdAt: k.createdAt
@@ -35,21 +36,45 @@ export function keyRoutes({ secret }) {
   // POST /keys — save a provider API key
   router.post('/', async (req, res, next) => {
     try {
-      const { providerId, envVar, displayName, apiKey, baseUrl, apiFormat } = req.body;
+      const { providerId, envVar, displayName, apiKey, model, baseUrl, apiFormat } = req.body;
       if (!providerId || !apiKey) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'providerId and apiKey are required' } });
       }
       const masterKey = deriveMasterKey(secret, req.userId);
       const encrypted = encryptKey(apiKey, masterKey);
-      await db().apiKey.create({
+
+      // If a key already exists for this provider, update it instead of creating a duplicate
+      const existing = await db().apiKey.findOne({
         userId: req.userId,
-        providerId: providerId.toLowerCase(),
-        envVar: envVar || `${providerId.toUpperCase()}_API_KEY`,
-        displayName: displayName || providerId,
-        encryptedKey: encrypted,
-        baseUrl,
-        apiFormat
+        providerId: providerId.toLowerCase()
       });
+
+      if (existing) {
+        await db().apiKey.updateOne(
+          { _id: existing._id },
+          {
+            $set: {
+              envVar: envVar || existing.envVar,
+              displayName: displayName || existing.displayName,
+              encryptedKey: encrypted,
+              model: model || existing.model,
+              baseUrl: baseUrl || existing.baseUrl,
+              apiFormat: apiFormat || existing.apiFormat
+            }
+          }
+        );
+      } else {
+        await db().apiKey.create({
+          userId: req.userId,
+          providerId: providerId.toLowerCase(),
+          envVar: envVar || `${providerId.toUpperCase()}_API_KEY`,
+          displayName: displayName || providerId,
+          encryptedKey: encrypted,
+          model,
+          baseUrl,
+          apiFormat
+        });
+      }
       res.status(201).json({ ok: true });
     } catch (err) {
       next(err);
@@ -93,11 +118,19 @@ export function keyRoutes({ secret }) {
       for (const adapter of adapters) {
         try {
           if (adapter.kind === 'local') continue;
-          
-          const ok = await adapter.isAvailable();
-          if (!ok) continue;
+
+          // Always attempt to list models for providers that have a saved key.
+          // isAvailable() may return false for an invalid/expired key, but
+          // listModels() falls back to the provider's static model catalog
+          // (OpenAICompatible returns hardcoded models on API failure), so
+          // the user still sees what models are available for that provider.
+          const hasKey = adapter.apiKey && adapter.apiKey.length > 0;
+          const ok = hasKey ? await adapter.isAvailable().catch(() => false) : false;
+          if (!ok && !hasKey) continue; // skip providers with no key at all
+
           const models = await adapter.listModels();
-          providers.push({ id: adapter.id, displayName: adapter.displayName, kind: adapter.kind });
+          if (!models || models.length === 0) continue;
+          providers.push({ id: adapter.id, displayName: adapter.displayName, kind: adapter.kind, keyConfigured: hasKey, available: ok });
           for (const m of models) {
             result.push({ ref: `${adapter.id}:${m.id}`, provider: adapter.id, name: m.name, model: m.id, free: m.free, scores: m.scores });
           }

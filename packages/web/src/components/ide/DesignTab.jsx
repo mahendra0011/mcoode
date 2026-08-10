@@ -5,7 +5,7 @@ import {
   Search, Sparkles, Copy, Download, ExternalLink,
   Monitor, Tablet, Smartphone, Trash2, Edit3, History
 } from 'lucide-react';
-import { getAuthHeaders } from '../../lib/api';
+import api from '../../lib/axios';
 import {
   setDesignStreaming,
   setCurrentDesign,
@@ -50,9 +50,8 @@ export function DesignTab() {
 
   // Load saved designs on mount
   useEffect(() => {
-    fetch('/api/v1/design', { headers: getAuthHeaders() })
-      .then((r) => r.json())
-      .then((d) => dispatch(setDesigns(d.designs || [])))
+    api.get('/api/v1/design')
+      .then((res) => dispatch(setDesigns(res.data.designs || [])))
       .catch(console.error);
   }, [dispatch]);
 
@@ -79,12 +78,8 @@ export function DesignTab() {
     dispatch(setDesignStreaming());
 
     try {
-      const res = await fetch('/api/v1/design/generate', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ prompt, baseTemplate, designId, device })
-      });
-      const data = await res.json();
+      const res = await api.post('/api/v1/design/generate', { prompt, baseTemplate, designId, device });
+      const data = res.data;
       if (data.design) {
         dispatch(setCurrentDesign(data.design));
       } else {
@@ -101,12 +96,8 @@ export function DesignTab() {
 
 
     try {
-      const res = await fetch('/api/v1/design/generate', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ prompt, designId: currentDesign._id, device })
-      });
-      const data = await res.json();
+      const res = await api.post('/api/v1/design/generate', { prompt, designId: currentDesign._id, device });
+      const data = res.data;
       if (data.design) {
         dispatch(setCurrentDesign(data.design));
       }
@@ -134,19 +125,14 @@ export function DesignTab() {
 
   const handleOpenInAgent = () => {
     if (currentDesign?._id) {
-      fetch('/api/v1/workspaces', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          name: `from-design-${String(currentDesign._id).slice(-6)}`,
-          source: 'design',
-          designId: currentDesign._id
-        })
+      api.post('/api/v1/workspaces', {
+        name: `from-design-${String(currentDesign._id).slice(-6)}`,
+        source: 'design',
+        designId: currentDesign._id
       })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.workspace) {
-            window.location.href = `/ai/chat?workspace=${data.workspace._id}`;
+        .then((res) => {
+          if (res.data.workspace) {
+            window.location.href = `/ai/chat?workspace=${res.data.workspace._id}`;
           }
         })
         .catch(console.error);
@@ -155,7 +141,7 @@ export function DesignTab() {
 
   const handleDeleteDesign = (id) => {
     if (window.confirm('Delete this design and all its versions?')) {
-      fetch(`/api/v1/design/${id}`, { method: 'DELETE', headers: getAuthHeaders() })
+      api.delete(`/api/v1/design/${id}`)
         .then(() => dispatch(removeDesign(id)))
         .catch(console.error);
     }
@@ -296,10 +282,9 @@ export function DesignTab() {
                   <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                     key={d._id}
                     onClick={() => {
-                      fetch(`/api/v1/design/${d._id}`, { headers: getAuthHeaders() })
-                        .then((r) => r.json())
-                        .then((data) => {
-                          if (data.design) dispatch(setCurrentDesign({ ...data.design, versions: data.versions || [] }));
+                      api.get(`/api/v1/design/${d._id}`)
+                        .then((res) => {
+                          if (res.data.design) dispatch(setCurrentDesign({ ...res.data.design, versions: res.data.versions || [] }));
                           setVersionIndex(0);
                         })
                         .catch(console.error);

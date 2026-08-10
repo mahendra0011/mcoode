@@ -1,7 +1,8 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { io } from 'socket.io-client';
-import { getAuthHeaders, getToken } from '../lib/api';
+import { getToken } from '../lib/api';
+import api from '../lib/axios';
 import {
   setStatus,
   chatReady,
@@ -80,15 +81,12 @@ export function useChatSocket(workspaceId = null) {
   // ── Fetch available models from the backend (GET /api/v1/keys/models) ──
   const reloadModels = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/keys/models', { headers: getAuthHeaders() });
-      if (!res.ok) {
-        if (res.status === 401) {
-          dispatch(chatError({ kind: 'keys', message: 'please select your api keys to use mcode' }));
-        }
+      const res = await api.get('/api/v1/keys/models', { timeout: 10000 });
+      if (res.status === 401) {
+        dispatch(chatError({ kind: 'keys', message: 'please select your api keys to use mcode' }));
         return;
       }
-      const data = await res.json();
-      dispatch(setModels(data.models || []));
+      dispatch(setModels(res.data.models || []));
       // setModels reducer now auto-defaults selectedModel if it's invalid
       // (e.g. was set to a provider id by the socket chat:ready path).
     } catch (err) {
@@ -99,11 +97,8 @@ export function useChatSocket(workspaceId = null) {
   // ── Fetch saved API keys (for the ModelSelector dropdown) ──
   const fetchKeys = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/keys', { headers: getAuthHeaders() });
-      if (res.ok) {
-        const data = await res.json();
-        return data.keys || [];
-      }
+      const res = await api.get('/api/v1/keys', { timeout: 5000 });
+      return res.data.keys || [];
     } catch (err) {
       console.error('Failed to load keys:', err);
     }
@@ -113,10 +108,8 @@ export function useChatSocket(workspaceId = null) {
   // ── Fetch GitHub connection status (for IDE) ──
   const fetchGithubStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/github/status');
-      if (res.ok) {
-        return await res.json();
-      }
+      const res = await api.get('/api/v1/github/status', { timeout: 5000 });
+      return res.data;
     } catch (err) {
       console.error('Failed to load github status:', err);
     }
@@ -372,12 +365,8 @@ export function useChatSocket(workspaceId = null) {
   const generateDesign = useCallback(async (prompt, { baseTemplate = null, designId = null, device = 'desktop' } = {}) => {
     dispatch(setDesignStreaming());
     try {
-      const res = await fetch('/api/v1/design/generate', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ prompt, baseTemplate, designId, device })
-      });
-      const data = await res.json();
+      const res = await api.post('/api/v1/design/generate', { prompt, baseTemplate, designId, device });
+      const data = res.data;
       if (data.design) {
         dispatch(setCurrentDesign(data.design));
       } else {
@@ -391,9 +380,8 @@ export function useChatSocket(workspaceId = null) {
   // ── Design tab: load user's saved designs ──
   const loadDesigns = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/design', { headers: getAuthHeaders() });
-      const data = await res.json();
-      dispatch(setDesigns(data.designs || []));
+      const res = await api.get('/api/v1/design', { timeout: 5000 });
+      dispatch(setDesigns(res.data.designs || []));
     } catch (err) {
       console.error('Failed to load designs:', err);
     }
@@ -402,8 +390,8 @@ export function useChatSocket(workspaceId = null) {
   // ── Design tab: open an existing design ──
   const openDesign = useCallback(async (designId) => {
     try {
-      const res = await fetch(`/api/v1/design/${designId}`, { headers: getAuthHeaders() });
-      const data = await res.json();
+      const res = await api.get(`/api/v1/design/${designId}`, { timeout: 5000 });
+      const data = res.data;
       if (data.design) {
         dispatch(setCurrentDesign({ ...data.design, versions: data.versions || [] }));
       }
@@ -415,12 +403,8 @@ export function useChatSocket(workspaceId = null) {
   // ── Design tab: open a design in the AI Code Agent workspace ──
   const openInAgent = useCallback(async (designId) => {
     try {
-      const res = await fetch(`/api/v1/workspaces`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ name: `from-design-${designId.slice(-6)}`, source: 'design', designId })
-      });
-      const data = await res.json();
+      const res = await api.post('/api/v1/workspaces', { name: `from-design-${designId.slice(-6)}`, source: 'design', designId });
+      const data = res.data;
       if (data.workspace) {
         // Navigate to the AI Chat page with the new workspace pre-selected
         window.location.href = `/ai/chat?workspace=${data.workspace._id}`;
@@ -433,7 +417,7 @@ export function useChatSocket(workspaceId = null) {
   // ── Design tab: delete a design ──
   const deleteDesign = useCallback(async (designId) => {
     try {
-      await fetch(`/api/v1/design/${designId}`, { method: 'DELETE', headers: getAuthHeaders() });
+      await api.delete(`/api/v1/design/${designId}`);
       dispatch(removeDesign(designId));
     } catch (err) {
       console.error('Failed to delete design:', err);

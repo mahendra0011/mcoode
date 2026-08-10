@@ -12,7 +12,19 @@ export function settingsRoutes({ secret }) {
       const adapters = getAllAdapters({});
       const remoteProviders = adapters
         .filter((a) => a.kind !== 'local')
-        .map((a) => ({ id: a.id, displayName: a.displayName, envVar: a.envVar }));
+        .map((a) => ({
+          id: a.id,
+          displayName: a.displayName,
+          envVar: a.envVar,
+          // Include the static model catalog so the frontend can show available
+          // models before the user saves an API key. No secrets are exposed.
+          models: (a.models || []).map(m => ({
+            id: m.id,
+            name: m.name,
+            free: Boolean(m.free),
+            scores: m.scores
+          }))
+        }));
       res.json({ ok: true, providers: remoteProviders });
     } catch (e) {
       res.status(500).json({ error: { message: 'Failed to fetch providers' } });

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, X } from 'lucide-react';
+import api from '../lib/axios';
 
 export function LoginModal({ isOpen, onClose, onSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -22,15 +23,10 @@ export function LoginModal({ isOpen, onClose, onSuccess }) {
       : { email: form.email, password: form.password, name: form.name || 'User' };
 
     try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
+      const res = await api.post(endpoint, payload);
+      const data = res.data;
+
+      if (res.status >= 400) {
         throw new Error(data.error?.message || 'Authentication failed');
       }
       

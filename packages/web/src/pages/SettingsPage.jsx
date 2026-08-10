@@ -4,11 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const MotionLink = motion.create(Link);
 import {
-  Shield, Key, Bot, User, Github, ArrowLeft, Loader2,
+  Shield, Key, User, Github, ArrowLeft, Loader2,
   Plus, Trash2, Check, AlertTriangle, Eye, EyeOff, ChevronDown,
-  Palette, Globe, Radar, Zap, X, Box, Plug, RefreshCw, Edit2, BarChart2, Calendar, Clock, Flame, Activity, MessageSquare
+  Palette, Globe, Radar, Zap, X, Box, Plug, RefreshCw, Edit2, BarChart2, Calendar, Clock, Flame, Activity, MessageSquare, Search
 } from 'lucide-react';
-import { getAuthHeaders } from '../lib/api';
+import api from '../lib/axios';
 
 
 const ACCENT_COLORS = [
@@ -24,7 +24,6 @@ const TABS = [
   { id: 'permissions', label: 'Permissions', icon: Shield },
   { id: 'keys', label: 'API Keys', icon: Key },
   { id: 'usage', label: 'Usage stats', icon: BarChart2 },
-  { id: 'models', label: 'Models', icon: Bot },
   { id: 'theme', label: 'Theme', icon: Palette },
   { id: 'network', label: 'Network', icon: Globe },
   { id: 'watch', label: 'Watch Mode', icon: Radar },
@@ -103,22 +102,33 @@ function ApiKeysTab() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState(null);
+  const [selectedModelByProvider, setSelectedModelByProvider] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchData = async () => {
+    // Fetch providers independently so a failure in keys/models doesn't
+    // prevent the provider list from rendering (providers endpoint is public).
+    // Uses the shared axios instance — auth token injected via interceptor.
     try {
-      const [provRes, keysRes, modelsRes] = await Promise.all([
-        fetch('/api/v1/settings/providers', { headers: getAuthHeaders() }),
-        fetch('/api/v1/keys', { headers: getAuthHeaders() }),
-        fetch('/api/v1/keys/models', { headers: getAuthHeaders() })
-      ]);
-      const provData = await provRes.json();
-      const keysData = await keysRes.json();
-      const modelsData = await modelsRes.json();
-      if (provData.ok) setProviders(provData.providers || []);
-      if (keysData.keys) setKeys(keysData.keys || []);
-      if (modelsData.models) setAvailableModels(modelsData.models || []);
+      const provRes = await api.get('/api/v1/settings/providers', { timeout: 5000 });
+      if (provRes.data?.ok) setProviders(provRes.data.providers || []);
     } catch (e) {
-      console.error('Failed to fetch API keys data:', e);
+      console.error('Failed to fetch providers:', e);
+    }
+    try {
+      const keysRes = await api.get('/api/v1/keys', { timeout: 5000 });
+      if (keysRes.data?.keys) setKeys(keysRes.data.keys || []);
+    } catch (e) {
+      console.error('Failed to fetch keys:', e);
+    }
+    try {
+      // /keys/models makes external API calls to each configured provider —
+      // use a longer timeout (10s) but still bounded so the UI doesn't hang.
+      const modelsRes = await api.get('/api/v1/keys/models', { timeout: 10000 });
+      if (modelsRes.data?.models) setAvailableModels(modelsRes.data.models || []);
+    } catch (e) {
+      console.error('Failed to fetch models:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -138,17 +148,14 @@ function ApiKeysTab() {
     setSaving(true);
     try {
       const provider = providers.find(p => p.id === activeProviderId);
-      const res = await fetch('/api/v1/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({
-          providerId: activeProviderId,
-          envVar: provider?.envVar || `${activeProviderId.toUpperCase()}_API_KEY`,
-          displayName: provider?.displayName || activeProviderId,
-          apiKey: newKey || 'existing-key'
-        })
+      const res = await api.post('/api/v1/keys', {
+        providerId: activeProviderId,
+        envVar: provider?.envVar || `${activeProviderId.toUpperCase()}_API_KEY`,
+        displayName: provider?.displayName || activeProviderId,
+        apiKey: newKey || existingKey?.masked || 'existing-key',
+        model: selectedModelId || undefined
       });
-      const data = await res.json();
+      const data = res.data;
       if (data.ok) {
         setNewKey('');
         setShowApiKey(false);
@@ -163,10 +170,7 @@ function ApiKeysTab() {
 
   const handleRemove = async (keyId) => {
     try {
-      await fetch(`/api/v1/keys/${keyId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
+      await api.delete(`/api/v1/keys/${keyId}`);
       await fetchData();
       window.dispatchEvent(new CustomEvent('mcode:reload-models'));
     } catch (e) {
@@ -176,6 +180,23 @@ function ApiKeysTab() {
 
   const activeProvider = providers.find(p => p.id === activeProviderId);
   const existingKey = keys.find(k => k.providerId === activeProviderId);
+
+  useEffect(() => {
+    const saved = existingKey?.model;
+    const cached = selectedModelByProvider[activeProviderId];
+    setSelectedModelId(cached || saved || null);
+  }, [activeProviderId, existingKey?.model]);
+
+  const liveModels = availableModels.filter(m => m.provider === activeProviderId);
+  const staticModels = (activeProvider?.models || []).map(m => ({
+    ref: `${activeProviderId}:${m.id}`,
+    provider: activeProviderId,
+    name: m.name,
+    model: m.id,
+    free: m.free,
+    scores: m.scores
+  }));
+  const displayModels = liveModels.length > 0 ? liveModels : staticModels;
 
   return (
     <div className="flex flex-col h-[80vh] min-h-[600px] max-w-[1000px] mx-auto w-full">
@@ -189,15 +210,19 @@ function ApiKeysTab() {
       <div className="flex flex-1 overflow-hidden rounded-xl bg-[#181818] border border-[#222]">
         {/* Sidebar */}
         <div className="w-64 border-r border-[#222] flex flex-col py-4 overflow-y-auto custom-scrollbar flex-shrink-0">
-          <div className="px-4 text-[11px] text-[#888] mb-3">Providers</div>
-          
-          <button className="w-full flex items-center justify-between px-4 py-2 hover:bg-white/5 transition">
-            <div className="flex items-center gap-3">
-              <div className="w-5 h-5 bg-white text-black rounded-sm flex items-center justify-center font-bold text-[10px]">Z</div>
-              <span className="text-[13px] text-white font-medium">Z.ai</span>
+          <div className="px-4 mb-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-[#888] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search providers..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#222] border border-[#333] rounded-lg pl-9 pr-3 py-1.5 text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#444] transition-colors"
+              />
             </div>
-            <div className="w-1.5 h-1.5 rounded-full bg-[#444]" />
-          </button>
+          </div>
+          <div className="px-4 text-[11px] text-[#888] mb-3">Providers</div>
 
           {loading ? (
             <>
@@ -208,12 +233,21 @@ function ApiKeysTab() {
             </>
           ) : (
             (() => {
-              const configured = providers.filter(p => keys.some(k => k.providerId === p.id));
-              const unconfigured = providers.filter(p => !keys.some(k => k.providerId === p.id));
-              
+              const q = searchQuery.toLowerCase();
+              const configured = providers
+                .filter(p => keys.some(k => k.providerId === p.id))
+                .filter(p => (p.displayName || p.id).toLowerCase().includes(q))
+                .sort((a, b) => (a.displayName || a.id).localeCompare(b.displayName || b.id));
+
+              const unconfigured = providers
+                .filter(p => !keys.some(k => k.providerId === p.id))
+                .filter(p => (p.displayName || p.id).toLowerCase().includes(q))
+                .sort((a, b) => (a.displayName || a.id).localeCompare(b.displayName || b.id));
+
               const renderProvider = (provider) => {
                 const isActive = activeProviderId === provider.id;
                 const isConfigured = keys.some(k => k.providerId === provider.id);
+                const keyForProvider = keys.find(k => k.providerId === provider.id);
                 return (
                   <button
                     key={provider.id}
@@ -224,11 +258,18 @@ function ApiKeysTab() {
                     }}
                     className={`w-full flex items-center justify-between px-4 py-2 transition ${isActive ? 'bg-[#252525]' : 'hover:bg-[#1f1f1f]'}`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Box className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-white' : 'text-[#888]'}`} />
-                      <span className={`text-[13px] text-left truncate ${isActive ? 'text-white font-medium' : 'text-[#aaa]'}`}>
-                        {provider.displayName || provider.id}
-                      </span>
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Box className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-white' : 'text-[#888]'}`} />
+                        <span className={`text-[13px] text-left truncate ${isActive ? 'text-white font-medium' : 'text-[#aaa]'}`}>
+                          {provider.displayName || provider.id}
+                        </span>
+                      </div>
+                      {isConfigured && keyForProvider?.model && (
+                        <span className="text-[11px] text-[#888] font-mono ml-7 truncate">
+                          {keyForProvider.model.split(':').pop() || keyForProvider.model}
+                        </span>
+                      )}
                     </div>
                     <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ml-2 ${isConfigured ? 'bg-[#1b7145]' : 'bg-[#444]'}`} />
                   </button>
@@ -326,35 +367,61 @@ function ApiKeysTab() {
                 <div className="pt-2">
                   <div className="flex items-center justify-between mb-3">
                     <label className="block text-[13px] text-[#aaa] font-medium">Available models</label>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={fetchData}
-                      disabled={refreshing}
-                      className="text-[11px] text-[#666] hover:text-white transition flex items-center gap-1"
-                      title="Refresh models"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-                      Refresh
-                    </motion.button>
+                    <div className="flex items-center gap-2">
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={fetchData}
+                        disabled={refreshing}
+                        className="text-[11px] text-[#666] hover:text-white transition flex items-center gap-1"
+                        title="Refresh models"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </motion.button>
+                      {existingKey && selectedModelId && (
+                        <span className="text-[11px] text-[#666] font-mono truncate max-w-[180px]">
+                          {selectedModelId.split(':').pop() || selectedModelId}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-3">
-                    {availableModels.filter(m => m.provider === activeProviderId).length === 0 ? (
+                    {displayModels.length === 0 ? (
                       <div className="text-[13px] text-[#666] py-4 text-center">No models available for this provider. Add an API key to load models.</div>
                     ) : (
-                      availableModels
-                        .filter(m => m.provider === activeProviderId)
-                        .map(model => (
+                      displayModels.map(model => {
+                        const modelId = model.model || model.ref;
+                        const isSelected = selectedModelId === modelId;
+                        return (
                           <motion.div
-                            key={model.ref}
-                            className="flex items-center justify-between bg-[#1c1c1c] border border-[#2a2a2a] rounded-[8px] px-4 py-3 group hover:border-[#333] transition"
+                            key={model.ref || modelId}
+                            className={`flex items-center justify-between p-4 rounded-[8px] cursor-pointer transition-all duration-200 ${
+                              isSelected
+                                ? 'bg-[#1a1a1a]'
+                                : 'bg-[#1c1c1c] hover:border-[#333]'
+                            }`}
+                            style={isSelected ? {
+                              borderImage: 'linear-gradient(90deg, #3b82f6, #a854f7, #ec4899, #f97316)',
+                              borderImageSlice: 1,
+                              borderWidth: '1px',
+                              borderStyle: 'solid',
+                            } : {
+                              borderWidth: '1px',
+                              borderStyle: 'solid',
+                              borderColor: '#2a2a2a',
+                            }}
+                            onClick={() => {
+                              setSelectedModelId(modelId);
+                              setSelectedModelByProvider(prev => ({ ...prev, [activeProviderId]: modelId }));
+                            }}
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.2 }}
                           >
                             <div className="flex flex-col">
-                              <span className="text-[13px] text-white font-medium">{model.name}</span>
-                              <span className="text-[11px] text-[#888] font-mono">{model.ref}</span>
+                              <span className="text-[13px] text-white font-medium">{model.name || modelId}</span>
+                              <span className="text-[11px] text-[#888] font-mono">{modelId}</span>
                             </div>
                             <div className="flex items-center gap-3">
                               {model.free && (
@@ -363,9 +430,13 @@ function ApiKeysTab() {
                               {model.scores && model.scores.coding && (
                                 <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-medium">Coding</span>
                               )}
+                              {isSelected && (
+                                <Check className="w-4 h-4 text-emerald-400" />
+                              )}
                             </div>
                           </motion.div>
-                        ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -378,419 +449,6 @@ function ApiKeysTab() {
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/* ─────────────────── MODELS TAB ─────────────────── */
-const MODEL_MODES = [
-  { key: 'general', label: 'General Mode', desc: 'Default model for standard chat conversations.' },
-  { key: 'build', label: 'Build Mode', desc: 'Default model for code agent build tasks.' },
-  { key: 'planning', label: 'Planning Mode', desc: 'Default model for high-reasoning planning tasks.' },
-];
-
-const itemVariants = {
-  hidden: { opacity: 0, x: -10 },
-  visible: (i) => ({
-    opacity: 1,
-    x: 0,
-    transition: { duration: 0.2, delay: i * 0.05 }
-  })
-};
-
-function ModelsTab({ settings, onUpdateModels }) {
-  const [availableModels, setAvailableModels] = useState([]);
-  const [providers, setProviders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editingCustom, setEditingCustom] = useState(null);
-  const [customModelName, setCustomModelName] = useState('');
-
-  const overrides = settings.modelOverrides || {};
-  const [localOverrides, setLocalOverrides] = useState(overrides);
-
-  // Fetch available models + providers from the backend
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        const res = await fetch('/api/v1/keys/models', { headers: getAuthHeaders() });
-        if (res.ok) {
-          const data = await res.json();
-          setAvailableModels(data.models || []);
-          setProviders(data.providers || []);
-        }
-      } catch (e) {
-        console.error('Failed to fetch models:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchModels();
-
-    // Re-fetch when a key is added/removed from the ApiKeys tab
-    const reloadHandler = () => fetchModels();
-    window.addEventListener('mcode:reload-models', reloadHandler);
-    return () => window.removeEventListener('mcode:reload-models', reloadHandler);
-  }, []);
-
-  // Sync localOverrides when settings.modelOverrides changes externally
-  useEffect(() => {
-    setLocalOverrides(settings.modelOverrides || {});
-  }, [settings.modelOverrides]);
-
-  // Group models by provider for display
-  const modelsByProvider = availableModels.reduce((acc, m) => {
-    const p = m.provider || 'unknown';
-    if (!acc[p]) acc[p] = [];
-    acc[p].push(m);
-    return acc;
-  }, {});
-
-  // Build a combined list: fetched models + any custom model refs in overrides
-  const allModelOptions = [
-    ...availableModels,
-    // Include custom model refs from overrides that aren't in the fetched list
-    ...Object.values(localOverrides)
-      .filter(v => v && typeof v === 'string' && !availableModels.some(m => m.ref === v))
-      .map(ref => ({ ref, provider: 'custom', name: ref, model: ref, free: false }))
-  ].sort((a, b) => {
-    const pa = a.provider || 'z';
-    const pb = b.provider || 'z';
-    if (pa !== pb) return pa.localeCompare(pb);
-    return (a.name || a.ref).localeCompare(b.name || b.ref);
-  });
-
-  const handleSetDefault = async (mode, modelRef) => {
-    setLocalOverrides(prev => ({ ...prev, [mode]: modelRef }));
-    setSaving(true);
-    try {
-      await onUpdateModels({ [mode]: modelRef });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleClearDefault = async (mode) => {
-    setLocalOverrides(prev => {
-      const updated = { ...prev };
-      delete updated[mode];
-      return updated;
-    });
-    setSaving(true);
-    try {
-      await onUpdateModels({ [mode]: undefined });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAddCustomModel = () => {
-    const name = customModelName.trim();
-    if (!name) return;
-    // Add a custom model ref — stored directly in modelOverrides under a custom key
-    const ref = `custom:${name}`;
-    setLocalOverrides(prev => ({ ...prev, [`custom:${name}`]: ref }));
-    setSaving(true);
-    setTimeout(() => {
-      onUpdateModels({ [`custom:${name}`]: ref });
-      setSaving(false);
-    }, 0);
-    setCustomModelName('');
-    setEditingCustom(null);
-  };
-
-  const handleEditCustom = (key) => {
-    setEditingCustom(key);
-    setCustomModelName(localOverrides[key] || '');
-  };
-
-  const handleUpdateCustom = (key) => {
-    if (!customModelName.trim()) return;
-    setLocalOverrides(prev => ({ ...prev, [key]: customModelName.trim() }));
-    setSaving(true);
-    onUpdateModels({ [key]: customModelName.trim() }).finally(() => setSaving(false));
-    setEditingCustom(null);
-    setCustomModelName('');
-  };
-
-  const handleRemoveCustom = (key) => {
-    setLocalOverrides(prev => {
-      const updated = { ...prev };
-      delete updated[key];
-      return updated;
-    });
-    setSaving(true);
-    setTimeout(async () => {
-      await onUpdateModels({ [key]: undefined });
-      setSaving(false);
-    }, 0);
-  };
-
-  // Custom model keys (non-standard: general/build/planning)
-  const customKeys = Object.keys(localOverrides).filter(k => !MODEL_MODES.some(m => m.key === k));
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">Model Settings</h2>
-        <p className="text-sm text-white/40">Set default models for each AI mode and manage custom model entries.</p>
-      </div>
-
-      {/* Mode defaults */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-4">Default Models by Mode</h3>
-        <div className="space-y-5">
-          {MODEL_MODES.map((mode, i) => {
-            const currentValue = localOverrides[mode.key];
-            const providerObj = providers.find(p => p.id === (currentValue ? currentValue.split('/')[0] : ''));
-            return (
-              <motion.div
-                key={mode.key}
-                custom={i}
-                initial="hidden"
-                animate="visible"
-                variants={itemVariants}
-                className="space-y-2"
-              >
-                <label className="block text-[13px] text-[#aaa] font-medium">{mode.label}</label>
-                <p className="text-[11px] text-[#666]">{mode.desc}</p>
-
-                <div className="relative">
-                  <select
-                    value={currentValue || ''}
-                    onChange={(e) => handleSetDefault(mode.key, e.target.value)}
-                    disabled={saving}
-                    className="w-full bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2.5 text-[13px] text-white outline-none focus:border-blue-500/50 appearance-none cursor-pointer disabled:opacity-50 custom-scrollbar"
-                  >
-                    <option value="">Auto-select (provider default)</option>
-                    {Object.entries(modelsByProvider).map(([provider, models]) => (
-                      <optgroup key={provider} label={providers.find(p => p.id === provider)?.displayName || provider}>
-                        {models.map(m => (
-                          <option key={m.ref} value={m.ref}>
-                            {m.name} — {m.provider}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-white/30 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-
-                {currentValue && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-[#888] font-mono">Selected: {currentValue}</span>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleClearDefault(mode.key)}
-                      className="text-[11px] text-red-400/70 hover:text-red-400 transition"
-                    >
-                      Clear
-                    </motion.button>
-                  </div>
-                )}
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Custom model entries */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">Custom Models</h3>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => { setEditingCustom('new'); setCustomModelName(''); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[13px] text-white/70 transition border border-white/10"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add custom model
-          </motion.button>
-        </div>
-
-        {editingCustom === 'new' && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mb-4 p-4 bg-[#0e0e0e] border border-white/10 rounded-lg space-y-3"
-          >
-            <input
-              type="text"
-              value={customModelName}
-              onChange={(e) => setCustomModelName(e.target.value)}
-              placeholder="provider/model-name (e.g., openai/gpt-4o)"
-              className="w-full bg-[#151515] border border-white/10 rounded-lg px-3 py-2 text-[13px] text-white placeholder-white/20 outline-none focus:border-blue-500/50 font-mono"
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomModel(); }}
-            />
-            <div className="flex gap-2">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleAddCustomModel}
-                disabled={!customModelName.trim() || saving}
-                className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-[12px] font-medium transition disabled:opacity-50"
-              >
-                Add
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setEditingCustom(null)}
-                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[12px] font-medium transition"
-              >
-                Cancel
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
-
-        {customKeys.length === 0 ? (
-          <div className="text-[13px] text-[#666] py-6 text-center">No custom models configured.</div>
-        ) : (
-          <AnimatePresence>
-            {customKeys.map((key, i) => (
-              <motion.div
-                key={key}
-                custom={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.2, delay: i * 0.05 }}
-                className="flex items-center justify-between bg-[#0e0e0e] border border-white/5 rounded-lg px-4 py-3 mb-2"
-              >
-                {editingCustom === key ? (
-                  <input
-                    type="text"
-                    value={customModelName}
-                    onChange={(e) => setCustomModelName(e.target.value)}
-                    className="flex-1 bg-[#151515] border border-white/10 rounded-lg px-3 py-1.5 text-[13px] text-white font-mono outline-none focus:border-blue-500/50"
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateCustom(key); }}
-                    autoFocus
-                  />
-                ) : (
-                  <span className="text-[13px] text-[#ccc] font-mono">{key}</span>
-                )}
-                <div className="flex items-center gap-2 ml-3">
-                  {editingCustom === key ? (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleUpdateCustom(key)}
-                      disabled={saving}
-                      className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 text-[11px]"
-                    >
-                      Save
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => handleEditCustom(key)}
-                      className="text-[#666] hover:text-white transition"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </motion.button>
-                  )}
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => handleRemoveCustom(key)}
-                    className="text-[#666] hover:text-red-400 transition"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </motion.button>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        )}
-
-        {customKeys.length > 0 && editingCustom !== 'new' && (
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => { setEditingCustom('new'); setCustomModelName(''); }}
-            className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[13px] text-white/70 transition border border-white/10"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add another custom model
-          </motion.button>
-        )}
-      </div>
-
-      {/* Full model list */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-4">All Available Models</h3>
-        {availableModels.length === 0 ? (
-          <div className="text-[13px] text-[#666] py-6 text-center">No models available. Configure API keys in the API Keys tab.</div>
-        ) : (
-          <div className="space-y-4">
-            {Object.entries(modelsByProvider).map(([providerId, models]) => {
-              const provider = providers.find(p => p.id === providerId);
-              return (
-                <div key={providerId}>
-                  <h4 className="text-[13px] font-medium text-white/80 mb-2">{provider?.displayName || providerId}</h4>
-                  <div className="space-y-2">
-                    {models.map((model, i) => (
-                      <motion.div
-                        key={model.ref}
-                        custom={i}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        variants={itemVariants}
-                        className="flex items-center justify-between bg-[#0e0e0e] border border-white/5 rounded-lg px-4 py-2.5"
-                      >
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-[13px] text-white font-medium truncate">{model.name}</span>
-                          <span className="text-[11px] text-[#888] font-mono truncate">{model.ref}</span>
-                        </div>
-                        <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-                          {model.free && (
-                            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-medium">Free</span>
-                          )}
-                          {model.scores && (
-                            <div className="flex gap-3 text-[10px] text-[#666]">
-                              {model.scores.coding && <span>⚡ {model.scores.coding.toFixed(1)}</span>}
-                              {model.scores.general && <span>💬 {model.scores.general.toFixed(1)}</span>}
-                            </div>
-                          )}
-                          <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => handleSetDefault('general', model.ref)}
-                            className="text-[11px] text-[#666] hover:text-white transition"
-                            title="Use as default for General mode"
-                          >
-                            Set default
-                          </motion.button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {saving && (
-        <div className="flex items-center gap-2 text-xs text-white/40">
-          <Loader2 className="w-3 h-3 animate-spin" /> Saving model settings...
-        </div>
-      )}
     </div>
   );
 }
@@ -1049,9 +707,8 @@ function AccountTab() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/api/v1/auth/me', { headers: getAuthHeaders() })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { setProfile(data); setLoading(false); })
+    api.get('/api/v1/auth/me', { timeout: 5000 })
+      .then((res) => { setProfile(res.data); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
@@ -1118,9 +775,8 @@ function ConnectionsTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/v1/github/status', { headers: getAuthHeaders() })
-      .then((r) => r.ok ? r.json() : { connected: false })
-      .then((data) => { setGithubStatus(data); setLoading(false); })
+    api.get('/api/v1/github/status', { timeout: 5000 })
+      .then((res) => { setGithubStatus(res.data); setLoading(false); })
       .catch(() => { setGithubStatus({ connected: false }); setLoading(false); });
   }, []);
 
@@ -1183,9 +839,8 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/api/v1/settings', { headers: getAuthHeaders() })
-      .then(r => r.json())
-      .then(d => { if (d.settings) setSettings(d.settings); })
+    api.get('/api/v1/settings', { timeout: 5000 })
+      .then((res) => { if (res.data?.settings) setSettings(res.data.settings); })
       .catch(console.error);
   }, []);
 
@@ -1194,23 +849,9 @@ export function SettingsPage() {
     setSettings(updated);
     setSaving(true);
     try {
-      await fetch('/api/v1/settings/permissions', {
-        method: 'PUT', headers: getAuthHeaders(),
-        body: JSON.stringify({ allowShellAll: updated.allowShellAll, requireEditApproval: updated.requireEditApproval })
-      });
+      await api.put('/api/v1/settings/permissions', { allowShellAll: updated.allowShellAll, requireEditApproval: updated.requireEditApproval });
     } catch (e) { console.error(e); }
     setSaving(false);
-  };
-
-  const updateModels = async (patch) => {
-    const newOverrides = { ...(settings.modelOverrides || {}), ...patch };
-    setSettings({ ...settings, modelOverrides: newOverrides });
-    try {
-      await fetch('/api/v1/settings/models', {
-        method: 'PUT', headers: getAuthHeaders(),
-        body: JSON.stringify(patch)
-      });
-    } catch (e) { console.error(e); }
   };
 
   const updateGeneric = async (patch) => {
@@ -1220,10 +861,7 @@ export function SettingsPage() {
       if (c) document.documentElement.style.setProperty('--theme-accent', c.color);
     }
     try {
-      await fetch('/api/v1/settings', {
-        method: 'PUT', headers: getAuthHeaders(),
-        body: JSON.stringify(patch)
-      });
+      await api.put('/api/v1/settings', patch);
     } catch (e) { console.error(e); }
   };
 
@@ -1313,7 +951,6 @@ export function SettingsPage() {
           {activeTab === 'permissions' && <PermissionsTab settings={settings} onUpdate={updatePermissions} saving={saving} />}
           {activeTab === 'keys' && <ApiKeysTab />}
           {activeTab === 'usage' && <UsageTab />}
-          {activeTab === 'models' && <ModelsTab settings={settings} onUpdateModels={updateModels} />}
           {activeTab === 'theme' && <ThemeTab settings={settings} onUpdate={updateGeneric} />}
           {activeTab === 'network' && <NetworkTab settings={settings} onUpdate={updateGeneric} />}
           {activeTab === 'watch' && <WatchTab settings={settings} onUpdate={updateGeneric} />}
@@ -1326,12 +963,88 @@ export function SettingsPage() {
   );
 }
 
+function formatCount(n) {
+  if (!n) return '0';
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+  return n.toString();
+}
+
+const DONUT_COLORS = ['#3b82f6', '#10b981', '#a854f7', '#f97316', '#06b6d4', '#ef4444', '#eab308', '#8b5cf6'];
+
 /* ─────────────────── USAGE TAB ─────────────────── */
 function UsageTab() {
   const [timeRange, setTimeRange] = useState('Last 30 days');
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // MOCK DATA for Heatmap (simulate some activity across weeks)
-  const heatmapData = Array.from({ length: 45 }, () => Array.from({ length: 7 }, () => Math.random() > 0.6 ? Math.floor(Math.random() * 4) : 0));
+  const fetchStats = async () => {
+    try {
+      const days = timeRange === 'Last 7 days' ? 7 : 30;
+      const to = new Date();
+      const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+      const res = await api.get(`/api/v1/usage/stats?from=${from.toISOString()}&to=${to.toISOString()}`, { timeout: 10000 });
+      const data = res.data;
+      if (data.ok) setStats(data.stats);
+    } catch (e) {
+      console.error('Failed to fetch usage stats:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    fetchStats();
+  }, [timeRange]);
+
+  const dailyActivity = stats?.dailyActivity || {};
+  const dailyTokens = stats?.dailyTokens || {};
+
+  const today = new Date();
+  const heatmapDates = [];
+  for (let i = 34; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    heatmapDates.push(d.toISOString().slice(0, 10));
+  }
+  const heatmapData = heatmapDates.map(dateStr => {
+    const count = dailyActivity[dateStr] || 0;
+    if (count === 0) return 0;
+    if (count === 1) return 1;
+    if (count === 2) return 2;
+    return 3;
+  });
+
+  const barDates = heatmapDates.slice(-30);
+  const barData = barDates.map(dateStr => ({ date: dateStr, tokens: dailyTokens[dateStr] || 0 }));
+  const maxTokens = Math.max(...barData.map(d => d.tokens), 1);
+
+  const modelUsageEntries = stats?.modelUsage
+    ? Object.entries(stats.modelUsage).sort(([, a], [, b]) => b - a)
+    : [];
+  const totalModelSessions = modelUsageEntries.reduce((sum, [, count]) => sum + count, 0);
+
+  let offset = 0;
+  const circumference = Math.PI * 2 * 37;
+  const donutSegments = modelUsageEntries.map(([model, count], i) => {
+    const pct = totalModelSessions > 0 ? count / totalModelSessions : 0;
+    const dashArray = circumference * pct;
+    const color = DONUT_COLORS[i % DONUT_COLORS.length];
+    offset -= dashArray;
+    return { model, count, pct, color, dashArray, offset };
+  });
+
+  const tokenDisplay = stats?.tokenQuota
+    ? `${formatCount(stats.tokenQuota.used)} / ${formatCount(stats.tokenQuota.limit)}`
+    : '—';
+
+  const favoriteModel = stats?.favoriteModel || '—';
+  const favoriteModelCount = stats?.modelUsage[favoriteModel] || 0;
+  const favoriteModelPct = totalModelSessions > 0
+    ? Math.round((favoriteModelCount / totalModelSessions) * 100)
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -1353,60 +1066,51 @@ function UsageTab() {
         </div>
       </div>
 
-      {/* METRICS GRID */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* Token Usage */}
-        <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[#888]">
-            <Zap className="w-4 h-4 opacity-70" />
-            <span className="text-sm">Token usage</span>
-          </div>
-          <div className="text-3xl font-bold text-white">821.2M</div>
+      {loading ? (
+        <div className="flex items-center justify-center h-64 text-[#666]">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+          Loading usage stats...
         </div>
-        {/* Sessions */}
-        <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[#888]">
-            <MessageSquare className="w-4 h-4 opacity-70" />
-            <span className="text-sm">Sessions</span>
+      ) : (
+        <>
+          {/* METRICS GRID */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* Token Usage */}
+            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[#888]"><Zap className="w-4 h-4 opacity-70" /><span className="text-sm">Token usage</span></div>
+                <span className="text-xs text-[#666]">{tokenDisplay}</span>
+              </div>
+              <div className="text-3xl font-bold text-white">{stats?.tokenQuota ? formatCount(stats.tokenQuota.used) : '—'}</div>
+            </div>
+            {/* Sessions */}
+            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-[#888]"><Activity className="w-4 h-4 opacity-70" /><span className="text-sm">Sessions</span></div>
+              <div className="text-3xl font-bold text-white">{stats?.totalSessions || 0}</div>
+            </div>
+            {/* Messages */}
+            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-[#888]"><MessageSquare className="w-4 h-4 opacity-70" /><span className="text-sm">Messages</span></div>
+              <div className="text-3xl font-bold text-white">{stats?.totalMessages || 0}</div>
+            </div>
+            {/* Active Days */}
+            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-[#888]"><Calendar className="w-4 h-4 opacity-70" /><span className="text-sm">Active days</span></div>
+              <div className="text-3xl font-bold text-white">{stats?.activeDays || 0}</div>
+            </div>
+            {/* Current Streak */}
+            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-[#888]"><Flame className="w-4 h-4 opacity-70" /><span className="text-sm">Current streak</span></div>
+              <div className="text-3xl font-bold text-white">{stats?.currentStreak || 0}</div>
+            </div>
+            {/* Favorite Model */}
+            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-[#888]"><Zap className="w-4 h-4 opacity-70" /><span className="text-sm">Favorite model</span></div>
+              <div className="text-base font-bold text-white font-mono truncate">{favoriteModel}</div>
+              <div className="text-xs text-[#888]">{favoriteModelPct}% share</div>
+            </div>
           </div>
-          <div className="text-3xl font-bold text-white">56</div>
-        </div>
-        {/* Messages */}
-        <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[#888]">
-            <MessageSquare className="w-4 h-4 opacity-70" />
-            <span className="text-sm">Messages</span>
-          </div>
-          <div className="text-3xl font-bold text-white">393</div>
-        </div>
-        {/* Active Days */}
-        <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[#888]">
-            <Calendar className="w-4 h-4 opacity-70" />
-            <span className="text-sm">Active days</span>
-          </div>
-          <div className="text-3xl font-bold text-white">6</div>
-        </div>
-        {/* Current Streak */}
-        <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[#888]">
-            <Calendar className="w-4 h-4 opacity-70" />
-            <span className="text-sm">Current streak</span>
-          </div>
-          <div className="text-3xl font-bold text-white">5</div>
-        </div>
-        {/* Favorite Model */}
-        <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[#888]">
-            <Activity className="w-4 h-4 opacity-70" />
-            <span className="text-sm">Favorite model</span>
-          </div>
-          <div className="text-base font-bold text-white truncate">laguna-s-2.1</div>
-          <div className="text-xs text-[#888]">99% share</div>
-        </div>
-      </div>
-
-      {/* HEATMAP */}
+        {/* HEATMAP */}
       <div className="bg-[#151515] border border-white/5 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-white">Activity heatmap</h3>
@@ -1420,90 +1124,57 @@ function UsageTab() {
           </div>
         </div>
         <div className="flex gap-1.5 overflow-hidden">
-          {heatmapData.map((week, i) => (
-            <div key={i} className="flex flex-col gap-1.5">
-              {week.map((day, j) => (
-                <div
-                  key={j}
-                  className={`w-3.5 h-3.5 rounded-[3px] ${
-                    day === 0 ? 'bg-white/5' :
-                    day === 1 ? 'bg-blue-500/30' :
-                    day === 2 ? 'bg-blue-500/60' : 'bg-blue-500'
-                  }`}
-                />
-              ))}
-            </div>
-          ))}
+          {Array.from({ length: 5 }).map((_, weekIndex) => {
+            const weekSlice = heatmapData.slice(weekIndex * 7, weekIndex * 7 + 7);
+            return (
+              <div key={weekIndex} className="flex flex-col gap-1.5">
+                {weekSlice.map((day, j) => (
+                  <div key={j} className={`w-3.5 h-3.5 rounded-[3px] ${day === 0 ? 'bg-white/5' : day === 1 ? 'bg-blue-500/30' : day === 2 ? 'bg-blue-500/60' : 'bg-blue-500'}`}
+                    title={`${heatmapDates[weekIndex * 7 + j]}: ${dailyActivity[heatmapDates[weekIndex * 7 + j]] || 0} sessions`} />
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* TOKENS PER DAY BAR CHART */}
       <div className="bg-[#151515] border border-white/5 rounded-xl p-5 mt-4">
         <h3 className="text-sm font-semibold text-white mb-6">Tokens per day</h3>
-        
-        {/* Mock Chart Area */}
         <div className="relative h-48 border-b border-white/10 flex items-end justify-between px-2 pb-6">
-          {/* Y-axis lines mock */}
+          {/* Y-axis lines */}
           <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
             <div className="border-t border-white/5 w-full h-0"></div>
             <div className="border-t border-white/5 w-full h-0"></div>
             <div className="border-t border-white/5 w-full h-0"></div>
             <div className="border-t border-white/5 w-full h-0"></div>
           </div>
-          
           {/* X-axis labels */}
           <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-[#666] px-2 translate-y-full pt-2">
-            <span>Jul 11</span>
-            <span>Jul 16</span>
-            <span>Jul 21</span>
-            <span>Jul 26</span>
-            <span>Jul 31</span>
-            <span>Aug 5</span>
-            <span>Aug 10</span>
+            {barDates.map((d, i) => i % 5 === 0 && <span key={d}>{d.slice(5)}</span>)}
           </div>
-          
           {/* Bars */}
-          <div className="relative w-full h-full flex items-end justify-end gap-1 pb-1 z-10">
-            {/* Some mock empty bars */}
-            <div className="w-4 bg-transparent"></div>
-            <div className="w-5 bg-emerald-500 h-[1%] mr-20" title="Jul 31"></div>
-            
-            {/* The spike near Aug 5 */}
-            <div className="w-5 bg-blue-500 h-[10%]" title="Aug 5"></div>
-            <div className="w-5 bg-blue-500 h-[30%]" title="Aug 6"></div>
-            <div className="w-5 bg-blue-500 h-[90%]" title="Aug 7"></div>
-            <div className="w-5 bg-blue-500 h-[45%]" title="Aug 8"></div>
-            <div className="w-5 bg-blue-500 h-[60%]" title="Aug 9"></div>
-            <div className="w-5 bg-blue-500 h-[2%]" title="Aug 10"></div>
+          <div className="relative w-full h-full flex items-end justify-between gap-0.5 pb-1 z-10">
+            {barData.map((d) => (
+              <div key={d.date} className="flex-1 flex flex-col items-center">
+                <motion.div
+                  className="w-full bg-blue-500 rounded-t-sm"
+                  style={{ height: `${(d.tokens / maxTokens) * 100}%` }}
+                  initial={{ height: 0 }}
+                  animate={{ height: `${(d.tokens / maxTokens) * 100}%` }}
+                />
+              </div>
+            ))}
           </div>
         </div>
-
-        {/* Legend */}
+        {/* Legend: model usage */}
         <div className="grid grid-cols-3 gap-y-3 mt-10">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-            <span className="text-xs text-[#888]">poolside/laguna-s-2.1</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
-            <span className="text-xs text-[#888]">GLM-5.2</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div>
-            <span className="text-xs text-[#888]">nvidia/nemotron-3-nano...</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-            <span className="text-xs text-[#888]">GLM-5-Turbo</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-orange-400"></div>
-            <span className="text-xs text-[#888]">deepseek-v4-flash</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400"></div>
-            <span className="text-xs text-[#888]">deepseek-flash</span>
-          </div>
+          {modelUsageEntries.slice(0, 6).map(([model, count], i) => (
+            <div key={model} className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }}></div>
+              <span className="text-xs text-[#888] font-mono truncate">{model}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1515,88 +1186,50 @@ function UsageTab() {
           <div className="relative w-48 h-48 flex-shrink-0">
             <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
               <circle cx="50" cy="50" r="40" fill="transparent" stroke="#222" strokeWidth="20" />
-              <circle cx="50" cy="50" r="40" fill="transparent" stroke="#3b82f6" strokeWidth="20" strokeDasharray="250" strokeDashoffset="5" className="drop-shadow-md" />
-              {/* small slivers for other models */}
-              <circle cx="50" cy="50" r="40" fill="transparent" stroke="#10b981" strokeWidth="20" strokeDasharray="3 250" strokeDashoffset="-242" />
-              <circle cx="50" cy="50" r="40" fill="transparent" stroke="#a855f7" strokeWidth="20" strokeDasharray="3 250" strokeDashoffset="-245" />
-              <circle cx="50" cy="50" r="40" fill="transparent" stroke="#fb923c" strokeWidth="20" strokeDasharray="2 250" strokeDashoffset="-248" />
+              {donutSegments.map((seg, i) => (
+                <motion.circle
+                  key={i}
+                  cx="50" cy="50" r="40"
+                  fill="transparent"
+                  stroke={seg.color}
+                  strokeWidth="20"
+                  strokeDasharray={seg.dashArray}
+                  strokeDashoffset={-seg.offset}
+                  className="drop-shadow-md"
+                  initial={{ strokeDashoffset: circumference }}
+                  animate={{ strokeDashoffset: -seg.offset }}
+                  transition={{ duration: 0.8 }}
+                />
+              ))}
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-xl font-bold text-white">821.2M</span>
-              <span className="text-[11px] text-[#888]">tokens</span>
+              <span className="text-xl font-bold text-white">
+                {modelUsageEntries.length > 0 ? formatCount(modelUsageEntries[0][1]) : '0'}
+              </span>
+              <span className="text-[11px] text-[#888]">sessions</span>
             </div>
           </div>
-          
           {/* List */}
           <div className="flex flex-col justify-center flex-1 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500 mt-1"></div>
-                <div className="flex flex-col">
-                  <span className="text-sm text-white font-mono">poolside/laguna-s-2.1</span>
-                  <span className="text-xs text-[#888]">814M tokens</span>
+            {modelUsageEntries.map(([model, count], i) => (
+              <div key={model} className="flex items-center justify-between">
+                <div className="flex gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full mt-1" style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }}></div>
+                  <div className="flex flex-col">
+                    <span className="text-sm text-white font-mono truncate">{model}</span>
+                    <span className="text-xs text-[#888]">{count} sessions</span>
+                  </div>
                 </div>
+                <span className="text-xs text-white/50">
+                  {totalModelSessions > 0 ? Math.round((count / totalModelSessions) * 100) : 0}%
+                </span>
               </div>
-              <span className="text-xs text-white/50">99%</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 mt-1"></div>
-                <div className="flex flex-col">
-                  <span className="text-sm text-white font-mono">GLM-5.2</span>
-                  <span className="text-xs text-[#888]">2.9M tokens</span>
-                </div>
-              </div>
-              <span className="text-xs text-white/50">0.3%</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-purple-500 mt-1"></div>
-                <div className="flex flex-col">
-                  <span className="text-sm text-white font-mono">nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free</span>
-                  <span className="text-xs text-[#888]">2.1M tokens</span>
-                </div>
-              </div>
-              <span className="text-xs text-white/50">0.3%</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-400 mt-1"></div>
-                <div className="flex flex-col">
-                  <span className="text-sm text-white font-mono">GLM-5-Turbo</span>
-                  <span className="text-xs text-[#888]">1.9M tokens</span>
-                </div>
-              </div>
-              <span className="text-xs text-white/50">0.2%</span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-orange-400 mt-1"></div>
-                <div className="flex flex-col">
-                  <span className="text-sm text-white font-mono">deepseek-v4-flash</span>
-                  <span className="text-xs text-[#888]">216.1K tokens</span>
-                </div>
-              </div>
-              <span className="text-xs text-white/50">0%</span>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex gap-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 mt-1"></div>
-                <div className="flex flex-col">
-                  <span className="text-sm text-white font-mono">deepseek-flash</span>
-                  <span className="text-xs text-[#888]">195.4K tokens</span>
-                </div>
-              </div>
-              <span className="text-xs text-white/50">0%</span>
-            </div>
+            ))}
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
