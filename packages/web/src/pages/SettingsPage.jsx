@@ -125,7 +125,7 @@ function ApiKeysTab() {
     try {
       // /keys/models makes external API calls to each configured provider —
       // use a longer timeout (10s) but still bounded so the UI doesn't hang.
-      const modelsRes = await api.get('/api/v1/keys/models', { timeout: 10000 });
+      const modelsRes = await api.get('/api/v1/keys/models', { timeout: 5000 });
       if (modelsRes.data?.models) setAvailableModels(modelsRes.data.models || []);
     } catch (e) {
       console.error('Failed to fetch models:', e);

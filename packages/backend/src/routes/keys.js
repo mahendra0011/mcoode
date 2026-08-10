@@ -16,6 +16,14 @@ function invalidateModelsCache(userId) {
   cache().del(modelsCacheKey(userId));
 }
 
+/** Wrap a promise so it rejects after `ms` milliseconds. */
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ]);
+}
+
 export function keyRoutes({ secret }) {
   const router = Router();
   router.use(authMiddleware({ secret }));
@@ -137,33 +145,39 @@ export function keyRoutes({ secret }) {
       // Use CLI's provider factory to list models
       const { getAllAdapters } = await import('mcode-cli/providers');
       const adapters = getAllAdapters(secrets);
+
+      // Process providers IN PARALLEL — each provider gets its own timeout so
+      // a single slow/unreachable API can't block the entire response.
+      // We skip isAvailable() entirely (it makes a redundant API call via
+      // probe→listModels) since listModels() already falls back to the static
+      // catalog on failure.
+      const results = await Promise.allSettled(
+        adapters
+          .filter((a) => a.kind !== 'local' && a.apiKey && a.apiKey.length > 0)
+          .map(async (adapter) => {
+            // Each provider gets at most 8s — fast fail instead of 60s timeout
+            const models = await withTimeout(adapter.listModels(), 8000);
+            if (!models || models.length === 0) {
+              return { provider: null, models: [] };
+            }
+            return {
+              provider: { id: adapter.id, displayName: adapter.displayName, kind: adapter.kind, keyConfigured: true, available: true },
+              models: models.map((m) => ({
+                ref: `${adapter.id}:${m.id}`, provider: adapter.id, name: m.name, model: m.id, free: m.free, scores: m.scores
+              }))
+            };
+          })
+      );
+
       const result = [];
-      const providers = [];
-      for (const adapter of adapters) {
-        try {
-          if (adapter.kind === 'local') continue;
-
-          // Always attempt to list models for providers that have a saved key.
-          // isAvailable() may return false for an invalid/expired key, but
-          // listModels() falls back to the provider's static model catalog
-          // (OpenAICompatible returns hardcoded models on API failure), so
-          // the user still sees what models are available for that provider.
-          const hasKey = adapter.apiKey && adapter.apiKey.length > 0;
-          const ok = hasKey ? await adapter.isAvailable().catch(() => false) : false;
-          if (!ok && !hasKey) continue; // skip providers with no key at all
-
-          const models = await adapter.listModels();
-          if (!models || models.length === 0) continue;
-          providers.push({ id: adapter.id, displayName: adapter.displayName, kind: adapter.kind, keyConfigured: hasKey, available: ok });
-          for (const m of models) {
-            result.push({ ref: `${adapter.id}:${m.id}`, provider: adapter.id, name: m.name, model: m.id, free: m.free, scores: m.scores });
-          }
-        } catch {
-          /* skip unreachable provider */
-        }
+      const providerList = [];
+      for (const r of results) {
+        if (r.status !== 'fulfilled' || !r.value) continue;
+        if (r.value.provider) providerList.push(r.value.provider);
+        result.push(...r.value.models);
       }
-      const responseData = { models: result, providers, hasKeys: true };
-      // Cache the result so subsequent calls are near-instant
+      const responseData = { models: result, providers: providerList, hasKeys: true };
+      // Cache the result so subsequent calls are near-instant (60s TTL)
       await cache().set(cacheKey, responseData, MODELS_CACHE_TTL);
       res.json(responseData);
     } catch (err) {

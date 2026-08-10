@@ -81,7 +81,7 @@ export function useChatSocket(workspaceId = null) {
   // ── Fetch available models from the backend (GET /api/v1/keys/models) ──
   const reloadModels = useCallback(async () => {
     try {
-      const res = await api.get('/api/v1/keys/models', { timeout: 10000 });
+      const res = await api.get('/api/v1/keys/models', { timeout: 5000 });
       if (res.status === 401) {
         dispatch(chatError({ kind: 'keys', message: 'please select your api keys to use mcode' }));
         return;
