@@ -1,7 +1,20 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { db } from '../db.js';
+import { cache } from '../cache.js';
 import { deriveMasterKey, encryptKey, decryptKey, maskSecret } from '../secret-enc.js';
+
+// TTL for cached model listings (seconds). Models don't change frequently,
+// and refetching from every provider API on each call is the bottleneck.
+const MODELS_CACHE_TTL = 60;
+
+function modelsCacheKey(userId) {
+  return `models:${userId}`;
+}
+
+function invalidateModelsCache(userId) {
+  cache().del(modelsCacheKey(userId));
+}
 
 export function keyRoutes({ secret }) {
   const router = Router();
@@ -75,6 +88,8 @@ export function keyRoutes({ secret }) {
           apiFormat
         });
       }
+      // Invalidate model cache so the new key's models are fetched on next request
+      invalidateModelsCache(req.userId);
       res.status(201).json({ ok: true });
     } catch (err) {
       next(err);
@@ -86,6 +101,8 @@ export function keyRoutes({ secret }) {
     try {
       const result = await db().apiKey.deleteOne({ _id: req.params.id, userId: req.userId });
       if (!result.deletedCount) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'key not found' } });
+      // Invalidate model cache so the deleted provider's models are removed on next request
+      invalidateModelsCache(req.userId);
       res.json({ ok: true });
     } catch (err) {
       next(err);
@@ -98,6 +115,13 @@ export function keyRoutes({ secret }) {
       const keys = await db().apiKey.find({ userId: req.userId });
       if (keys.length === 0) {
         return res.json({ models: [], providers: [], hasKeys: false });
+      }
+
+      // Check cache first — avoids re-fetching from every provider API on each call
+      const cacheKey = modelsCacheKey(req.userId);
+      const cached = await cache().get(cacheKey);
+      if (cached) {
+        return res.json(cached);
       }
 
       const masterKey = deriveMasterKey(secret, req.userId);
@@ -138,7 +162,10 @@ export function keyRoutes({ secret }) {
           /* skip unreachable provider */
         }
       }
-      res.json({ models: result, providers, hasKeys: true });
+      const responseData = { models: result, providers, hasKeys: true };
+      // Cache the result so subsequent calls are near-instant
+      await cache().set(cacheKey, responseData, MODELS_CACHE_TTL);
+      res.json(responseData);
     } catch (err) {
       next(err);
     }
