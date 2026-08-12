@@ -506,7 +506,7 @@ export class ChatAgent {
         })) {
           if (this.aborted) break;
           text += chunk;
-          this.bus?.emit(EVENTS.MESSAGE, { kind: 'stream', text: stripActions(text) || '\u2026' });
+          this.bus?.emit(EVENTS.MESSAGE, { kind: 'stream', text: chunk });
         }
       } catch (err) {
         if (this.aborted) break;

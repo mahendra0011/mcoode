@@ -339,16 +339,16 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
     };
     const onToast = (t) => toast(t);
     const flushStream = () => {
-      if (streamBuffer.current === null) return;
-      const text = streamBuffer.current;
-      streamBuffer.current = null;
+      if (!streamBuffer.current) return;
+      const delta = streamBuffer.current;
+      streamBuffer.current = '';
       streamTimer.current = null;
-      setStreamingMessage(text);
+      setStreamingMessage((prev) => (prev || '') + delta);
     };
     const onMessage = (m) => {
       if (m.kind === 'stream') {
-        thoughtRef.current = m.text;
-        streamBuffer.current = m.text;
+        thoughtRef.current = (thoughtRef.current || '') + m.text;
+        streamBuffer.current = (streamBuffer.current || '') + m.text;
         if (!streamTimer.current) streamTimer.current = setTimeout(flushStream, 60);
       } else {
         if (streamTimer.current) {

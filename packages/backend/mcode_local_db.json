@@ -1,6 +1,6 @@
 {
   "user": {
-    "seq": 2,
+    "seq": 3,
     "rows": [
       [
         "1",
@@ -16,6 +16,22 @@
             "routingOverrides": {}
           },
           "createdAt": "2026-08-09T20:17:44.318Z"
+        }
+      ],
+      [
+        "2",
+        {
+          "_id": "2",
+          "email": "otp@user.dev",
+          "passwordHash": "$2a$10$tWoH37bU012KaCcgk8/XVumdrUQF42fs6zLLErCyzrF5acisoOTeO",
+          "name": "Otp User",
+          "plan": "free",
+          "settings": {
+            "defaultConcurrency": 5,
+            "notifyOnBuildComplete": true,
+            "routingOverrides": {}
+          },
+          "createdAt": "2026-08-09T20:41:21.592Z"
         }
       ]
     ]
@@ -41,12 +57,93 @@
     "rows": []
   },
   "otp": {
-    "seq": 2,
-    "rows": []
+    "seq": 8,
+    "rows": [
+      [
+        "4",
+        {
+          "_id": "4",
+          "email": "new@user.dev",
+          "codeHash": "$2a$10$FOfnO/VjCZlLFESmlRNTxu0EwQLyDmRbXAsHBcaVEY1POyyHkDyt.",
+          "intent": "signup",
+          "expiresAt": "2026-08-09T20:51:20.310Z",
+          "attempts": 0,
+          "createdAt": "2026-08-09T20:41:20.310Z"
+        }
+      ],
+      [
+        "6",
+        {
+          "_id": "6",
+          "email": "wrong@user.dev",
+          "codeHash": "$2a$10$4bhkHvUgyfXwYSrByxM0Nu/g8Chyc7Fu8gOyJ/aopKprmJOOMLN22",
+          "intent": "signup",
+          "expiresAt": "2026-08-09T20:51:21.704Z",
+          "attempts": 1,
+          "createdAt": "2026-08-09T20:41:21.704Z"
+        }
+      ],
+      [
+        "7",
+        {
+          "_id": "7",
+          "email": "otp@user.dev",
+          "codeHash": "$2a$10$LOscA6tND2sRCEoc8Hdy.OscGfPCOrDaq3nQmukXC8gNBsEd3jll.",
+          "intent": "login",
+          "expiresAt": "2026-08-09T20:51:22.386Z",
+          "attempts": 0,
+          "createdAt": "2026-08-09T20:41:22.386Z"
+        }
+      ]
+    ]
   },
   "apiKey": {
-    "seq": 1,
-    "rows": []
+    "seq": 5,
+    "rows": [
+      [
+        "2",
+        {
+          "_id": "2",
+          "userId": "1",
+          "providerId": "openrouter",
+          "envVar": "OPENROUTER_API_KEY",
+          "displayName": "OpenRouter",
+          "encryptedKey": "TUNDT0RFS0VZOjMa1BZueA/0XnUSnHioxZcQzqk6vjVrM6rPMh6mcIvqzcdY+J8kgtByajbQQmz042lYns+Q0ps0UL4=",
+          "createdAt": "2026-08-09T21:41:31.158Z"
+        }
+      ],
+      [
+        "3",
+        {
+          "_id": "3",
+          "userId": "1",
+          "providerId": "openai",
+          "envVar": "OPENAI_API_KEY",
+          "displayName": "OpenAI",
+          "encryptedKey": "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",
+          "createdAt": "2026-08-09T22:14:35.811Z"
+        }
+      ],
+      [
+        "4",
+        {
+          "_id": "4",
+          "userId": "1",
+          "providerId": "poolside",
+          "envVar": "POOLSIDE_API_KEY",
+          "displayName": "Poolside",
+          "encryptedKey": "TUNDT0RFS0VZOjKlwnJvSewSc8oitvGRB/Tk2jz8UL2GcoPOp/NMXtr//CHEaqk3GIz5d79A2yVhm9NYeieJgx0hzL/Vs2Ka+J9AdwVN6NJLtPj9RMwk5Sl7rFBDeA9hGJix",
+          "model": "poolside:laguna-s-2.1",
+          "createdAt": "2026-08-10T07:52:17.549Z",
+          "$set": {
+            "envVar": "POOLSIDE_API_KEY",
+            "displayName": "Poolside",
+            "encryptedKey": "TUNDT0RFS0VZOlDzpMUBxoNO31ex8LYyGWsoBTZ22ndzgfe8k1WYxDpJBfeenB3CL1p29outISBlAS9u3ljx8OR19tYDsQbGnq4zb5cE6AE=",
+            "model": "laguna-s-2.1"
+          }
+        }
+      ]
+    ]
   },
   "workspace": {
     "seq": 1,

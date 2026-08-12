@@ -93,7 +93,7 @@ const chatSlice = createSlice({
       const text = action.payload;
       const lastMessage = state.messages[state.messages.length - 1];
       if (lastMessage && lastMessage.role === 'assistant' && lastMessage.kind === 'stream') {
-        lastMessage.text = text;
+        lastMessage.text = (lastMessage.text || '') + text;
       } else {
         state.messages.push({
           id: Date.now().toString(),

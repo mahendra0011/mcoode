@@ -1,0 +1,52 @@
+/* Custom syntax highlighting styles for chat code blocks — VS Code Dark+ inspired */
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 16px;
+  border-radius: 10px;
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hljs-comment { color: #6e7681; font-style: italic; }
+.hljs-comment-delimiter { color: #6e7681; font-style: italic; }
+.hljs-keyword { color: #ff7b72; font-weight: 600; }
+.hljs-keyword.lang-, .hljs-keyword.type-, .hljs-keyword.attr- { color: #ff7b72; font-weight: 600; }
+.hljs-literal { color: #79c0ff; }
+.hljs-number { color: #79c0ff; }
+.hljs-title { color: #ffa657; font-weight: 600; }
+.hljs-title.class_ { color: #ffa657; font-weight: 600; }
+.hljs-title.meta-sep { color: #9e9e9e; }
+.hljs-title.meta-sep-after { color: #9e9e9e; }
+.hljs-section { color: #ffa657; font-weight: 600; }
+.hljs-string { color: #a5d2ca; }
+.hljs-attr { color: #ffd700; }
+.hljs-attribute { color: #ffd700; }
+.hljs-variable { color: #f0a500; }
+.hljs-variable.language_ { color: #ff7b72; }
+.hljs-template-tag { color: #f2cc60; }
+.hljs-template-variable { color: #f2cc60; }
+.hljs-addition { color: #aff5b4; }
+.hljs-deletion { color: #ffd7d7; }
+
+.hljs-name { color: #79c0ff; }
+.hljs-selector-tag { color: #79c0ff; font-weight: 600; }
+.hljs-selector-id { color: #f2cc60; }
+.hljs-selector-class { color: #f2cc60; }
+.hljs-selector-attr { color: #a5d2ca; }
+.hljs-selector-pseudo { color: #f2cc60; }
+.hljs-link { color: #79c0ff; text-decoration: underline; }
+.hljs-symbol { color: #f0a500; }
+
+.hljs-meta { color: #9e9e9e; }
+.hljs-deleted { color: #ffd7d7; }
+.hljs-inserted { color: #aff5b4; }
+
+/* Override react-markdown default container styles */
+.md\:prose {
+  color: #e4e4e7;
+  line-height: 1.6;
+}

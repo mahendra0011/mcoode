@@ -17,14 +17,14 @@ import { FileTree } from '../components/ide/FileTree';
 import { EditorPane } from '../components/ide/EditorPane';
 import { TerminalPane } from '../components/ide/TerminalPane';
 import { WorkspaceModals } from '../components/ide/WorkspaceModals';
-import { StepCard } from '../components/ide/StepCards';
 import { TodoCard } from '../components/ide/TodoCard';
 import { PermissionModal } from '../components/ide/PermissionModal';
 import { ModelSelector } from '../components/ide/ModelSelector';
 import { SparkleButton } from '../components/ide/SparkleButton';
 import { DesignTab } from '../components/ide/DesignTab';
 import { WaveProgress } from '../components/ide/WaveProgress';
-
+import { ChatMessage } from '../components/chat/ChatMessage';
+import { ThinkingIndicator } from '../components/chat/ThinkingIndicator';
 
 export function AIChatPage() {
   const dispatch = useDispatch();
@@ -999,44 +999,24 @@ export function AIChatPage() {
                       />
                     </div>
                   )}
-                  {messages.map((msg, idx) => (
-                    msg.role === 'user' ? (
-                      <motion.div
+                  <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+                    <AnimatePresence>
+                    {messages.map((msg, idx) => (
+                      <ChatMessage
                         key={msg.id || idx}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                        className="flex justify-end w-full max-w-4xl mx-auto"
-                      >
-                        <div className="bg-[#27272a] text-white/90 px-5 py-3 rounded-2xl text-sm max-w-[80%] border border-white/5 shadow-sm">
-                          {msg.text}
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        key={msg.id || idx}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: idx * 0.02 }}
-                        className="w-full max-w-4xl mx-auto flex flex-col gap-3"
-                      >
-                        {msg.text && (
-                          <div className="text-[15px] text-white/90 leading-relaxed whitespace-pre-wrap font-sans">
-                            {msg.text}
-                            {msg.kind === 'stream' && isStreaming && idx === messages.length - 1 && (
-                              <motion.span
-                                className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse align-middle"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: [0.3, 1, 0.3] }}
-                                transition={{ duration: 1, repeat: Infinity }}
-                              />
-                            )}
-                          </div>
-                        )}
-                        {msg.kind === 'tool' && <StepCard msg={msg} undo={undo} />}
-                      </motion.div>
-                    )
-                  ))}
+                        msg={msg}
+                        idx={idx}
+                        size="md"
+                        isStreaming={isStreaming && idx === messages.length - 1}
+                        undo={undo}
+                        isNormalChat={mode === 'chat'}
+                      />
+                    ))}
+                    {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
+                      <ThinkingIndicator size="md" showAvatar={mode === 'chat'} />
+                    )}
+                    </AnimatePresence>
+                  </div>
                 </div>
                 {/* Chat Input Bottom */}
                 <div className="p-6 md:pb-8 w-full max-w-4xl mx-auto flex flex-col items-center">
@@ -1232,48 +1212,22 @@ export function AIChatPage() {
                       </div>
                     )}
                     <PermissionModal request={permissionRequest} onAnswer={answerPermission} />
-                    <AnimatePresence>
+                      <AnimatePresence>
                       {messages.map((msg, idx) => (
-                        msg.role === 'user' ? (
-                          <motion.div
-                            key={msg.id || idx}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                            className="w-full flex justify-end"
-                          >
-                            <div className="bg-[#27272a] text-white/90 px-4 py-2.5 rounded-xl text-[13px] max-w-[90%] border border-white/5 shadow-sm">
-                              {msg.text}
-                            </div>
-                          </motion.div>
-                        ) : (
-                          <motion.div
-                            key={msg.id || idx}
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: idx * 0.02 }}
-                            className="flex flex-col gap-3"
-                          >
-                            {msg.text && (
-                              <div className="text-[13px] text-white/90 leading-relaxed whitespace-pre-wrap">
-                                {msg.text}
-                                {msg.kind === 'stream' && isStreaming && idx === messages.length - 1 && (
-                                  <motion.span
-                                    className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse align-middle"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: [0.3, 1, 0.3] }}
-                                    transition={{ duration: 1, repeat: Infinity }}
-                                  />
-                                )}
-                              </div>
-                            )}
-                            {msg.kind === 'tool' && <StepCard msg={msg} undo={undo} />}
-                          </motion.div>
-                        )
+                        <ChatMessage
+                          key={msg.id || idx}
+                          msg={msg}
+                          idx={idx}
+                          size="sm"
+                          isStreaming={isStreaming && idx === messages.length - 1}
+                          undo={undo}
+                          isNormalChat={false}
+                        />
                       ))}
                     </AnimatePresence>
+                    {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
+                      <ThinkingIndicator size="sm" showAvatar={false} />
+                    )}
                   </div>
 
                   {/* Inline Chat Input */}
@@ -1283,8 +1237,22 @@ export function AIChatPage() {
                         <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_70%,#10b981,#3b82f6)] opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
                       </div>
                       <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
-                      <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2" ref={commandPickerRef}>
-                        <textarea
+                        <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2" ref={commandPickerRef}>
+                          {/* Top Action Bar (matches Chat tab) */}
+                          {mode === 'agent' && (
+                            <div className="flex items-center gap-4 px-1 pb-1">
+                              <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white transition disabled:opacity-50" title={activeWorkspaceId ? "Project Options" : "Upload Folder"}>
+                                {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Folder className="w-4 h-4"/>}
+                                {activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}
+                                <ChevronDown className="w-3 h-3 opacity-50"/>
+                              </motion.button>
+                              <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white transition" title="Branch">
+                                <GitBranch className="w-4 h-4"/> {activeBranch} <ChevronDown className="w-3 h-3 opacity-50"/>
+                              </motion.button>
+                            </div>
+                          )}
+
+                          <textarea
                           value={prompt}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -1337,6 +1305,20 @@ export function AIChatPage() {
                             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
                               {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                             </motion.button>
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={toggleAdvancedMode} className={`px-3 h-7 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                              <Settings className="w-3.5 h-3.5" /> Advanced Mode
+                            </motion.button>
+                            <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
+                            {mode === 'agent' && (
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setPrompt('/')} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
+                                <Slash className="w-4 h-4" />
+                              </motion.button>
+                            )}
+                            {mode === 'agent' && (
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-7 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                                <Zap className="w-3.5 h-3.5" /> God
+                              </motion.button>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <ModelSelector />

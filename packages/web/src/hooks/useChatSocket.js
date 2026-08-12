@@ -78,6 +78,11 @@ export function useChatSocket(workspaceId = null) {
   const selectedModelRef = useRef(selectedModel);
   selectedModelRef.current = selectedModel;
 
+  // Stream chunk buffer — accumulates rapid-fire deltas and flushes as a
+  // single batched dispatch every 16ms to reduce React re-renders.
+  const streamBufferRef = useRef('');
+  const streamTimerRef = useRef(null);
+
   // ── Fetch available models from the backend (GET /api/v1/keys/models) ──
   const reloadModels = useCallback(async () => {
     try {
@@ -134,9 +139,19 @@ export function useChatSocket(workspaceId = null) {
       dispatch(chatError(payload));
     };
 
+    // Buffer rapid-fire stream chunks and flush as a single batch every 16ms
+    // (~60fps) to avoid a React re-render on every tiny delta. This dramatically
+    // reduces churn when the provider sends hundreds of small chunks.
     const onChatStream = (payload) => {
       if (payload && payload.text) {
-        dispatch(streamUpdate(payload.text));
+        streamBufferRef.current += payload.text;
+        if (!streamTimerRef.current) {
+          streamTimerRef.current = setTimeout(() => {
+            dispatch(streamUpdate(streamBufferRef.current));
+            streamBufferRef.current = '';
+            streamTimerRef.current = null;
+          }, 16);
+        }
       }
     };
 
@@ -175,6 +190,15 @@ export function useChatSocket(workspaceId = null) {
     };
 
     const onChatDone = (payload) => {
+      // Flush any remaining buffered deltas before finalizing so no chunks are lost
+      if (streamTimerRef.current) {
+        clearTimeout(streamTimerRef.current);
+        if (streamBufferRef.current) {
+          dispatch(streamUpdate(streamBufferRef.current));
+          streamBufferRef.current = '';
+        }
+        streamTimerRef.current = null;
+      }
       dispatch(chatDone(payload || {}));
     };
 
@@ -287,6 +311,12 @@ export function useChatSocket(workspaceId = null) {
     window.addEventListener('storage', storageHandler);
 
     return () => {
+      // Clear any pending stream flush timer
+      if (streamTimerRef.current) {
+        clearTimeout(streamTimerRef.current);
+        streamTimerRef.current = null;
+        streamBufferRef.current = '';
+      }
       socket.disconnect();
       socket.off('connect', onConnect);
       socket.off('chat:ready', onChatReady);
