@@ -5,11 +5,13 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
-export function TerminalPane({ messages }) {
+export function TerminalPane({ messages, onCommand }) {
   const terminalRef = useRef(null);
   const xtermRef = useRef(null);
   const processedRef = useRef(new Set());
+  const commandRef = useRef(null);
   const [hasContent, setHasContent] = useState(false);
+  const [command, setCommand] = useState('');
 
   useEffect(() => {
     const term = new Terminal({
@@ -172,6 +174,35 @@ export function TerminalPane({ messages }) {
         </AnimatePresence>
         <div className="w-full h-full" ref={terminalRef}></div>
       </div>
+
+      {/* Command input — lets the user run shell commands directly */}
+      <motion.div
+        className="flex items-center gap-2 px-3 py-2 border-t border-white/5 bg-[#121212]"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <span className="text-white/50 text-xs font-mono">$</span>
+        <input
+          ref={commandRef}
+          type="text"
+          value={command}
+          onChange={(e) => setCommand(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && onCommand) {
+              e.preventDefault();
+              const cmd = command.trim();
+              if (cmd) {
+                onCommand(cmd);
+                setCommand('');
+              }
+            }
+          }}
+          placeholder="Type a command (e.g. npm install lodash)..."
+          className="flex-1 bg-transparent text-white/90 outline-none text-sm font-mono placeholder-white/20"
+          spellCheck={false}
+        />
+      </motion.div>
     </motion.div>
   );
 }

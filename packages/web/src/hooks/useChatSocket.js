@@ -17,6 +17,7 @@ import {
   setModels,
   updateTodo,
   chatDone,
+  resetStreaming,
   setDesignStreaming,
   setDesignStream,
   setDesignDone,
@@ -207,6 +208,8 @@ export function useChatSocket(workspaceId = null) {
     };
 
     const onShellStream = (payload) => {
+      window.__socketDebug = window.__socketDebug || [];
+      window.__socketDebug.push({ type: 'chat:shell_stream', chunk: payload?.chunk?.substring(0, 50) });
       if (payload && payload.chunk) {
         document.dispatchEvent(new CustomEvent('terminal:write', { detail: payload.chunk }));
       }
@@ -227,6 +230,10 @@ export function useChatSocket(workspaceId = null) {
 
     const onDisconnect = () => {
       dispatch(setStatus('idle'));
+      // If the backend crashed or restarted mid-response, isStreaming can be
+      // stuck true (chat:done was never sent). Reset it so the ThinkingIndicator
+      // stops spinning and the user can send a new message.
+      dispatch(resetStreaming());
     };
 
     // ── God-mode socket event handlers ──
@@ -391,6 +398,15 @@ export function useChatSocket(workspaceId = null) {
     }
   }, []);
 
+  const sendTerminalCommand = useCallback((command) => {
+    console.log('[DEBUG] sendTerminalCommand called:', command, 'socketRef:', !!socketRef.current, 'disconnected:', socketRef.current?.disconnected);
+    if (socketRef.current && command && command.trim()) {
+      socketRef.current.emit('terminal:command', { command: command.trim() });
+    } else {
+      console.log('[DEBUG] sendTerminalCommand skipped — socket or command invalid');
+    }
+  }, []);
+
   // ── Design tab: generate HTML from a prompt ──
   const generateDesign = useCallback(async (prompt, { baseTemplate = null, designId = null, device = 'desktop' } = {}) => {
     dispatch(setDesignStreaming());
@@ -459,6 +475,7 @@ export function useChatSocket(workspaceId = null) {
     interrupt,
     answerPermission,
     undo,
+    sendTerminalCommand,
     reloadModels,
     fetchKeys,
     fetchGithubStatus,

@@ -24,16 +24,26 @@ const api = axios.create({
   // Vite dev server proxies /api → http://localhost:3100
   baseURL: '/', // rely on Vite proxy for /api paths
   timeout: 8000, // 8s default — slow external provider calls can override
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // NOTE: Do NOT set a default Content-Type here. When a FormData body is
+  // passed (e.g. zip uploads, file attachments), axios must be allowed to
+  // auto-set `multipart/form-data` with the correct boundary. A static
+  // `application/json` default causes axios to JSON.stringify(FormData)
+  // instead, silently breaking all multipart uploads.
+  headers: {},
 });
 
 // ── Request interceptor: inject Bearer token ──
+// For FormData bodies, let the browser set the multipart Content-Type with
+// the correct boundary automatically (don't override it).
 api.interceptors.request.use((config) => {
   const { access } = getTokens();
   if (access) {
     config.headers.Authorization = `Bearer ${access}`;
+  }
+  // Only set Content-Type for non-FormData requests so multipart uploads
+  // keep their auto-generated boundary
+  if (!(config.data instanceof FormData)) {
+    config.headers['Content-Type'] = config.headers['Content-Type'] || 'application/json';
   }
   return config;
 });

@@ -146,8 +146,59 @@
     ]
   },
   "workspace": {
-    "seq": 1,
-    "rows": []
+    "seq": 5,
+    "rows": [
+      [
+        "1",
+        {
+          "_id": "1",
+          "userId": "1",
+          "name": "Portfolio",
+          "diskPath": "C:\\Users\\mahen\\mcode-workspaces\\93acff17c856",
+          "gitUrl": "https://github.com/mahendra0011/Portfolio.git",
+          "status": "active",
+          "createdAt": "2026-08-11T06:59:13.397Z"
+        }
+      ],
+      [
+        "2",
+        {
+          "_id": "2",
+          "userId": "1",
+          "name": "streamify-video-calls-master",
+          "diskPath": "C:\\Users\\mahen\\mcode-workspaces\\efada9fd0cdf",
+          "gitUrl": null,
+          "branch": "main",
+          "status": "active",
+          "createdAt": "2026-08-11T17:09:43.880Z"
+        }
+      ],
+      [
+        "3",
+        {
+          "_id": "3",
+          "userId": "1",
+          "name": "test22",
+          "diskPath": "C:\\Users\\mahen\\mcode-workspaces\\974e6618e069",
+          "gitUrl": "https://github.com/mahendra0011/test22.git",
+          "status": "active",
+          "createdAt": "2026-08-11T22:32:26.093Z"
+        }
+      ],
+      [
+        "4",
+        {
+          "_id": "4",
+          "userId": "1",
+          "name": "mediCore-main",
+          "diskPath": "C:\\Users\\mahen\\mcode-workspaces\\183e96ffa272",
+          "gitUrl": null,
+          "branch": "main",
+          "status": "active",
+          "createdAt": "2026-08-11T22:38:11.015Z"
+        }
+      ]
+    ]
   },
   "chatMessage": {
     "seq": 1,
@@ -162,7 +213,34 @@
     "rows": []
   },
   "design": {
-    "seq": 1,
-    "rows": []
+    "seq": 3,
+    "rows": [
+      [
+        "1",
+        {
+          "_id": "1",
+          "userId": "1",
+          "prompt": "hii",
+          "html": "",
+          "version": 1,
+          "parentId": null,
+          "device": "desktop",
+          "createdAt": "2026-08-11T06:57:09.825Z"
+        }
+      ],
+      [
+        "2",
+        {
+          "_id": "2",
+          "userId": "1",
+          "prompt": "SaaS pricing page, dark theme, 3 pricing tiers (Basic, Pro, Enterprise), feature comparison table, FAQ section",
+          "html": "",
+          "version": 1,
+          "parentId": null,
+          "device": "desktop",
+          "createdAt": "2026-08-11T06:57:19.801Z"
+        }
+      ]
+    ]
   }
 }

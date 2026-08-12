@@ -58,6 +58,13 @@ const chatSlice = createSlice({
       }
       state.status = 'error';
       state.isStreaming = false;
+      // Finalize any in-progress streaming message so the ThinkingIndicator
+      // stops and the message isn't left in a 'stream' state.
+      const lastMessage = state.messages[state.messages.length - 1];
+      if (lastMessage && lastMessage.kind === 'stream') {
+        lastMessage.kind = 'assistant';
+        lastMessage.status = 'done';
+      }
     },
     setMode: (state, action) => {
       state.mode = action.payload;
@@ -104,6 +111,9 @@ const chatSlice = createSlice({
         });
       }
       state.isStreaming = true;
+    },
+    resetStreaming: (state) => {
+      state.isStreaming = false;
     },
     agentMessage: (state, action) => {
       const msg = action.payload;
@@ -173,10 +183,13 @@ const chatSlice = createSlice({
     },
     chatDone: (state, action) => {
       state.isStreaming = false;
-      // Finalize the last streaming message with the backend's final text
+      // Always finalize the last streaming message, even if the backend
+      // sent empty text (e.g. on an error that triggered the socket
+      // handler's finally block). This prevents the ThinkingIndicator
+      // from getting stuck and ensures the message isn't left as 'stream'.
       const lastMessage = state.messages[state.messages.length - 1];
-      if (lastMessage && lastMessage.kind === 'stream' && action.payload?.text) {
-        lastMessage.text = action.payload.text;
+      if (lastMessage && lastMessage.kind === 'stream') {
+        lastMessage.text = action.payload?.text || lastMessage.text || '';
         lastMessage.kind = 'assistant';
         lastMessage.status = 'done';
       }
@@ -377,6 +390,7 @@ export const {
   setPlan,
   updateTodo,
   chatDone,
+  resetStreaming,
   clearChat,
   setDesigns,
   removeDesign,

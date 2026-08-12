@@ -4,6 +4,20 @@ import { Github, UploadCloud, X, FolderUp, Loader2 } from 'lucide-react';
 
 export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
   const [gitUrl, setGitUrl] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  const handleClone = async () => {
+    if (!gitUrl || isCreating) return;
+    try {
+      setIsCreating(true);
+      await onCloneGit(gitUrl);
+      onClose();
+    } catch {
+      // Error already surfaced via toast in onCloneGit
+    } finally {
+      setIsCreating(false);
+    }
+  };
   
   if (!isOpen) return null;
 
@@ -26,14 +40,21 @@ export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
             <motion.div
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
-              onClick={() => {
+              onClick={async () => {
                 const input = document.createElement('input');
                 input.type = 'file';
                 input.accept = '.zip';
-                input.onchange = (e) => {
+                input.onchange = async (e) => {
                   if (e.target.files[0]) {
-                    onUploadZip(e.target.files[0]);
-                    onClose();
+                    try {
+                      setIsCreating(true);
+                      await onUploadZip(e.target.files[0]);
+                      onClose();
+                    } catch {
+                      // Error already surfaced via toast in onUploadZip
+                    } finally {
+                      setIsCreating(false);
+                    }
                   }
                 };
                 input.click();
@@ -62,17 +83,14 @@ export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
                   className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
                   onKeyDown={e => {
                     if (e.key === 'Enter' && gitUrl) {
-                      onCloneGit(gitUrl);
-                      onClose();
+                      e.preventDefault();
+                      handleClone();
                     }
                   }}
                 />
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} 
-                  disabled={!gitUrl}
-                  onClick={() => {
-                    onCloneGit(gitUrl);
-                    onClose();
-                  }}
+                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                  disabled={!gitUrl || isCreating}
+                  onClick={handleClone}
                   className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition"
                 >
                   Clone

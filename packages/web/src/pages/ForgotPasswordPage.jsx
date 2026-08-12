@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 
 const MotionLink = motion.create(Link);
-import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDownRight } from 'lucide-react';
 import robotBg from '../assets/robot-bg-new.png';
 

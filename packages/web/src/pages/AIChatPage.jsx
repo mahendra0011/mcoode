@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useChatSocket } from '../hooks/useChatSocket';
 import api from '../lib/axios';
-import { setMode, addMessage, clearChat, setGodMode } from '../store/chatSlice';
+import { setMode, addMessage, clearChat, setGodMode, resetStreaming } from '../store/chatSlice';
 import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../lib/slashCommands';
 
 import { FileTree } from '../components/ide/FileTree';
@@ -38,10 +38,50 @@ export function AIChatPage() {
   const [activeTab, setActiveTab] = useState('Chat');
 
   const { messages, keysError, isStreaming, mode, plan, permissionRequest, models, selectedModel, godMode, waves, subagents, buildSummary, toasts: serverToasts } = useSelector(state => state.chat);
-  const { send, interrupt, answerPermission, undo, reloadModels } = useChatSocket(activeWorkspaceId);
+  const { send, interrupt, answerPermission, undo, sendTerminalCommand, reloadModels } = useChatSocket(activeWorkspaceId);
   const [openFiles, setOpenFiles] = useState([]);
   const [activePath, setActivePath] = useState(null);
   const [prompt, setPrompt] = useState('');
+
+  // Auto-scroll refs — keep the chat scrolled to the bottom when new
+  // messages arrive or streaming updates come in
+  const chatEndRef = useRef(null);
+  const ideChatEndRef = useRef(null);
+  useEffect(() => {
+    // Scroll to bottom on new messages or streaming updates.
+    // We scroll the appropriate container depending on which tab is active.
+    const target = activeTab === 'Chat' ? chatEndRef.current : ideChatEndRef.current;
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isStreaming, keysError]);
+
+  // Safety net: if isStreaming is stuck true for 60s without any stream
+  // activity (e.g. backend crashed silently without socket disconnect),
+  // reset it so the ThinkingIndicator stops spinning and the user can
+  // type a new message.
+  const streamingSinceRef = useRef(null);
+  useEffect(() => {
+    if (isStreaming) {
+      if (!streamingSinceRef.current) {
+        streamingSinceRef.current = Date.now();
+      }
+      const elapsed = Date.now() - streamingSinceRef.current;
+      const remaining = 60000 - elapsed;
+      if (remaining <= 0) {
+        dispatch(resetStreaming());
+        streamingSinceRef.current = null;
+      } else {
+        const timer = setTimeout(() => {
+          dispatch(resetStreaming());
+          streamingSinceRef.current = null;
+        }, remaining);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      streamingSinceRef.current = null;
+    }
+  }, [isStreaming, dispatch]);
   const [showCommandPicker, setShowCommandPicker] = useState(false);
   const commandPickerRef = useRef(null);
 
@@ -163,8 +203,9 @@ export function AIChatPage() {
 		const [debugMode, setDebugMode] = useState(false);
 
 		// Modal for commit message (replaces window.prompt)
-		const [showCommitModal, setShowCommitModal] = useState(false);
-		const [commitMessage, setCommitMessage] = useState('Initial commit');
+			const [showCommitModal, setShowCommitModal] = useState(false);
+			const [commitMessage, setCommitMessage] = useState('Initial commit');
+			const [githubRepoForPush, setGithubRepoForPush] = useState('');
 		// Modal for new branch name (replaces window.prompt)
 		const [showBranchModal, setShowBranchModal] = useState(false);
 		const [branchName, setBranchName] = useState('');
@@ -327,45 +368,59 @@ export function AIChatPage() {
     formData.append('source', 'zip');
     formData.append('zipfile', file);
 
+    let res;
     try {
-      const res = await api.post('/api/v1/workspaces', formData);
-      if (res.status >= 400) {
-        throw new Error(res.data?.error?.message || `Upload failed (${res.status})`);
-      }
-      const data = res.data;
-      if (data.workspace) {
-        setWorkspaces([...workspaces, data.workspace]);
-        setActiveWorkspaceId(data.workspace._id);
-        setTriggerRefresh(r => r + 1);
-        showToast('Project uploaded successfully');
-      } else {
-        throw new Error(data.error?.message || 'Upload failed — no workspace returned');
-      }
+      res = await api.post('/api/v1/workspaces', formData);
     } catch (err) {
       console.error('Upload failed:', err);
-      showToast(err.message || 'Failed to upload project', 'error');
+      const msg = err.response?.data?.error?.message || err.message || 'Failed to upload project';
+      showToast(msg, 'error');
+      throw err;
+    }
+    if (res.status >= 400) {
+      const msg = res.data?.error?.message || `Upload failed (${res.status})`;
+      showToast(msg, 'error');
+      throw new Error(msg);
+    }
+    const data = res.data;
+    if (data.workspace) {
+      setWorkspaces([...workspaces, data.workspace]);
+      setActiveWorkspaceId(data.workspace._id);
+      setTriggerRefresh(r => r + 1);
+      showToast('Project uploaded successfully');
+    } else {
+      const msg = data.error?.message || 'Upload failed — no workspace returned';
+      showToast(msg, 'error');
+      throw new Error(msg);
     }
   };
 
   const handleCloneGit = async (repoUrl) => {
     const name = repoUrl.split('/').pop().replace('.git', '');
+    let res;
     try {
-      const res = await api.post('/api/v1/workspaces', { name, source: 'git', repoUrl });
-      if (res.status >= 400) {
-        throw new Error(res.data?.error?.message || `Clone failed (${res.status})`);
-      }
-      const data = res.data;
-      if (data.workspace) {
-        setWorkspaces([...workspaces, data.workspace]);
-        setActiveWorkspaceId(data.workspace._id);
-        setTriggerRefresh(r => r + 1);
-        showToast('Project cloned successfully');
-      } else {
-        throw new Error(data.error?.message || 'Clone failed — no workspace returned');
-      }
+      res = await api.post('/api/v1/workspaces', { name, source: 'git', repoUrl });
     } catch (err) {
       console.error('Clone failed:', err);
-      showToast(err.message || 'Failed to clone repository', 'error');
+      const msg = err.response?.data?.error?.message || err.message || 'Failed to clone repository';
+      showToast(msg, 'error');
+      throw err;
+    }
+    if (res.status >= 400) {
+      const msg = res.data?.error?.message || `Clone failed (${res.status})`;
+      showToast(msg, 'error');
+      throw new Error(msg);
+    }
+    const data = res.data;
+    if (data.workspace) {
+      setWorkspaces([...workspaces, data.workspace]);
+      setActiveWorkspaceId(data.workspace._id);
+      setTriggerRefresh(r => r + 1);
+      showToast('Project cloned successfully');
+    } else {
+      const msg = data.error?.message || 'Clone failed — no workspace returned';
+      showToast(msg, 'error');
+      throw new Error(msg);
     }
   };
 
@@ -395,14 +450,22 @@ export function AIChatPage() {
     if (!commitMessage.trim()) return;
 
     try {
-      const res = await api.post(`/api/v1/workspaces/${activeWorkspaceId}/push`, { message: commitMessage, branch: activeBranch });
+      const body = { message: commitMessage, branch: activeBranch };
+      // For zip-uploaded workspaces, include the GitHub repo URL if provided
+      if (githubRepoForPush) body.githubRepo = githubRepoForPush;
+
+      const res = await api.post(`/api/v1/workspaces/${activeWorkspaceId}/push`, body);
       const data = res.data;
-      if (data.ok) showToast('Pushed successfully!');
+      if (data.ok) {
+        showToast('Pushed successfully!');
+        fetchBranches();
+      }
       else showToast('Failed to push: ' + (data.error?.message || 'Unknown error'), 'error');
     } catch (e) {
-      showToast('Error pushing', 'error');
+      showToast(e.response?.data?.error?.message || 'Error pushing', 'error');
     } finally {
       setShowCommitModal(false);
+      setGithubRepoForPush('');
     }
   };
 
@@ -779,8 +842,8 @@ export function AIChatPage() {
             {activeTab === 'Design' ? (
               /* DESIGN TAB */
               <DesignTab />
-            ) : messages.length === 0 ? (
-              /* EMPTY STATE (For Chat) */
+            ) : activeTab === 'Chat' && messages.length === 0 ? (
+              /* EMPTY STATE (For Chat only — AI Code Agent shows IDE view immediately) */
               <div className="w-full h-full flex flex-col items-center justify-center px-4 relative z-10">
                 <div className="w-24 h-24 mb-10 relative animate-spin-slow">
                   <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
@@ -973,7 +1036,12 @@ export function AIChatPage() {
               </div>
             ) : activeTab === 'Chat' ? (
               /* FULL SCREEN CHAT VIEW */
-              <div className="flex flex-col w-full h-full animate-in fade-in duration-500 relative bg-[#0e0e0e] z-10">
+              <motion.div
+                className="flex flex-col w-full h-full relative bg-[#0e0e0e] z-10"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+              >
                 <div className="flex-1 overflow-y-auto p-6 md:p-12 flex flex-col gap-6 custom-scrollbar">
                   {keysError && (
                     <motion.div
@@ -1015,6 +1083,8 @@ export function AIChatPage() {
                     {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
                       <ThinkingIndicator size="md" showAvatar={mode === 'chat'} />
                     )}
+                    {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
+                    <div ref={chatEndRef} />
                     </AnimatePresence>
                   </div>
                 </div>
@@ -1152,10 +1222,15 @@ export function AIChatPage() {
                   </div>
                 </form>
                 </div>
-              </div>
+              </motion.div>
             ) : (
               /* IDE VIEW */
-              <div className="flex w-full h-full animate-in fade-in duration-500 z-10 relative">
+              <motion.div
+                className="flex w-full h-full z-10 relative"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+              >
                 
                 {/* Actions overlay for Workspace */}
                 <div className="absolute top-2 left-2 z-30 flex items-center gap-2 bg-[#121212]/80 backdrop-blur-md p-1.5 rounded-lg border border-white/5">
@@ -1190,7 +1265,7 @@ export function AIChatPage() {
                     setActivePath={setActivePath}
                     closeFile={closeFile}
                   />
-                  <TerminalPane messages={messages} />
+                  <TerminalPane messages={messages} onCommand={sendTerminalCommand} />
                 </div>
 
                 {/* AI Chat Right Pane */}
@@ -1225,9 +1300,11 @@ export function AIChatPage() {
                         />
                       ))}
                     </AnimatePresence>
-                    {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
-                      <ThinkingIndicator size="sm" showAvatar={false} />
-                    )}
+                      {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
+                        <ThinkingIndicator size="sm" showAvatar={false} />
+                      )}
+                      {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
+                      <div ref={ideChatEndRef} />
                   </div>
 
                   {/* Inline Chat Input */}
@@ -1358,7 +1435,7 @@ export function AIChatPage() {
                   </div>
                 </div>
 
-              </div>
+              </motion.div>
             )}
           </main>
         </div>
@@ -1486,17 +1563,26 @@ export function AIChatPage() {
               className="bg-[#18181b] border border-white/20 rounded-xl p-6 w-80 mx-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-sm font-medium text-white/80 mb-4">Commit Message</h3>
-              <input
-                type="text"
-                value={commitMessage}
-                onChange={(e) => setCommitMessage(e.target.value)}
-                placeholder="Enter commit message..."
-                className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition mb-4"
-                autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') handlePush(); if (e.key === 'Escape') setShowCommitModal(false); }}
-              />
-              <div className="flex gap-2 justify-end">
+                <h3 className="text-sm font-medium text-white/80 mb-4">Commit Message</h3>
+                <input
+                  type="text"
+                  value={commitMessage}
+                  onChange={(e) => setCommitMessage(e.target.value)}
+                  placeholder="Enter commit message..."
+                  className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition mb-4"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handlePush(); if (e.key === 'Escape') setShowCommitModal(false); }}
+                />
+                {/* GitHub repo URL — only needed for zip-uploaded workspaces that aren't linked to a repo yet */}
+                <input
+                  type="url"
+                  value={githubRepoForPush}
+                  onChange={(e) => setGithubRepoForPush(e.target.value)}
+                  placeholder="GitHub repo URL (e.g. https://github.com/user/repo.git) — for new repos"
+                  className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition mb-4"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handlePush(); if (e.key === 'Escape') setShowCommitModal(false); }}
+                />
+                <div className="flex gap-2 justify-end">
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
                   onClick={() => setShowCommitModal(false)}
                   className="px-3 py-1.5 text-xs text-white/50 hover:text-white hover:bg-white/5 rounded-lg transition"

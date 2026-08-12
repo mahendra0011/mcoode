@@ -50,3 +50,27 @@
   color: #e4e4e7;
   line-height: 1.6;
 }
+
+/* Streaming code block — visual pulse to indicate live output */
+.rehype-highlight-streaming {
+  position: relative;
+}
+
+.rehype-highlight-streaming::after {
+  content: '';
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 10px;
+  height: 1em;
+  background: #10b981;
+  border-radius: 2px;
+  animation: pulse-caret 1s step-end infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes pulse-caret {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.3; }
+}

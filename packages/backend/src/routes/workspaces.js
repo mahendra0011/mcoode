@@ -46,7 +46,10 @@ export function workspaceRoutes({ secret }) {
       let branchResult = branch || 'main';
 
       if (source === 'zip') {
-        const zipPath = req.file?.path || join(UPLOADS_DIR, zipFilename);
+        const zipPath = req.file?.path;
+        if (!zipPath) {
+          return res.status(400).json({ error: { code: 'NO_FILE', message: 'No ZIP file received — ensure Content-Type is multipart/form-data' } });
+        }
         await extractZipTo(zipPath, diskPath);
       } else if (source === 'git') {
         if (!repoUrl) {
@@ -185,14 +188,15 @@ export function workspaceRoutes({ secret }) {
   });
 
   // POST /workspaces/:id/push - commit and push
+  // For git-cloned workspaces: uses stored ws.gitUrl
+  // For zip-uploaded workspaces: accepts githubRepo in body, inits git if needed
   router.post('/:id/push', async (req, res, next) => {
     try {
-      const { message, branch } = req.body;
+      const { message, branch, githubRepo } = req.body;
       if (!message || !branch) return res.status(400).json({ error: { code: 'VALIDATION', message: 'message and branch required' }});
       
       const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
-      if (!ws.gitUrl) return res.status(400).json({ error: { code: 'VALIDATION', message: 'Not a git workspace' } });
 
       // Fetch the oauth token to construct authenticated url
       const githubAcc = await db().githubAccount.findOne({ userId: req.userId });
@@ -200,20 +204,33 @@ export function workspaceRoutes({ secret }) {
       
       const { decrypt } = await import('../secret-enc.js');
       const token = decrypt(githubAcc.accessToken, secret);
-      
-      // Convert https://github.com/owner/repo.git to https://<token>@github.com/owner/repo.git
-      const authUrl = ws.gitUrl.replace('https://', `https://${token}@`);
 
       const git = (await import('simple-git')).default(ws.diskPath);
       await git.addConfig('user.name', githubAcc.username);
       await git.addConfig('user.email', `${githubAcc.username}@users.noreply.github.com`);
-      
+
+      // Determine the target repo URL
+      let authUrl;
+      const repoUrl = ws.gitUrl || githubRepo;
+      if (!repoUrl) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'No repository URL — provide githubRepo or clone from git' }});
+      }
+      authUrl = repoUrl.replace('https://', `https://${token}@`);
+
+      // For zip-uploaded workspaces, initialize git repo and set remote
+      if (!ws.gitUrl) {
+        await git.init();
+        await git.addRemote('origin', authUrl);
+        // Update the workspace with the new git URL so future pushes work
+        await db().workspace.updateOne(
+          { _id: ws._id },
+          { $set: { gitUrl: repoUrl } }
+        );
+      }
+
       await git.add('.');
       await git.commit(message);
       
-      // Set remote and push
-      // Note: In real scenarios, you'd add this as a remote, e.g., 'origin'
-      // Or just push directly to the URL
       await git.push(authUrl, branch);
       
       res.json({ ok: true });

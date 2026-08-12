@@ -16,7 +16,17 @@ const chatSessions = new Map();
 export function attachSockets(httpServer, { secret, ioOptions = {} }) {
   const io = new Server(httpServer, {
     path: '/live',
-    cors: { origin: ['http://localhost:5173', 'http://localhost:4173'], credentials: true },
+    cors: {
+      origin: (origin, callback) => {
+        // Allow all localhost dev ports (Vite may use 5173-5177+)
+        if (!origin || origin.startsWith('http://localhost:')) {
+          callback(null, true);
+        } else {
+          callback(null, false);
+        }
+      },
+      credentials: true
+    },
     ...ioOptions
   });
 
@@ -38,6 +48,10 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
   });
 
   io.on('connection', (socket) => {
+    console.log('[SOCKET] connection:', socket.id, 'role:', socket.role, 'url:', socket.handshake.url);
+    socket.on('terminal:command', (payload) => {
+      console.log('[SOCKET] terminal:command received:', JSON.stringify(payload));
+    });
     socket.on('session:join', ({ sessionId }) => {
       socket.join(`session:${sessionId}`);
     });
@@ -173,6 +187,10 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         }
       } catch (err) {
         socket.emit('chat:error', { message: err.message });
+      } finally {
+        // Always emit chat:done so the frontend stops the thinking spinner,
+        // even if the agent threw an error or the session was interrupted.
+        socket.emit('chat:done', { text: '', mode, interrupted: false });
       }
     });
 
@@ -198,6 +216,55 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     socket.on('chat:interrupt', () => {
       const session = chatSessions.get(socket.id);
       if (session) session.interrupt();
+    });
+
+    // Direct terminal command execution — runs a shell command in the
+    // workspace and streams stdout/stderr chunks back as chat:shell_stream.
+    // This lets the user type commands directly into the IDE terminal
+    // (e.g. `npm install lodash`) without going through the AI agent.
+    socket.on('terminal:command', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      // Fall back to a default workspace so the terminal is usable
+      // even before a chat session has been started via chat:start.
+      if (!projectPath) {
+        const { join } = await import('node:path');
+        const { homedir } = await import('node:os');
+        const { mkdir } = await import('node:fs/promises');
+        projectPath = join(homedir(), '.mcode', 'workspaces', 'default');
+        await mkdir(projectPath, { recursive: true });
+      }
+      const { command } = payload;
+      if (!command || !command.trim()) return;
+
+      // Echo the command prompt so it appears in the terminal
+      const promptChunk = `\r\x1b[34m$ ${command}\x1b[0m\r\n`;
+      console.log('[SOCKET] emitting prompt chunk:', JSON.stringify(promptChunk));
+      socket.emit('chat:shell_stream', { chunk: promptChunk });
+
+      const { execa } = await import('execa');
+      const child = execa(command, {
+        cwd: projectPath,
+        shell: true,
+        timeout: 120_000,
+        env: { ...process.env, FORCE_COLOR: '1' },
+        reject: false,
+      });
+
+      child.stdout?.on('data', chunk => {
+        const s = chunk.toString();
+        console.log('[SOCKET] stdout chunk:', JSON.stringify(s));
+        socket.emit('chat:shell_stream', { chunk: s });
+      });
+      child.stderr?.on('data', chunk => {
+        const s = chunk.toString();
+        console.log('[SOCKET] stderr chunk:', JSON.stringify(s));
+        socket.emit('chat:shell_stream', { chunk: s });
+      });
+
+      await child;
+      console.log('[SOCKET] command done, emitting trailing newline');
+      socket.emit('chat:shell_stream', { chunk: '\r\n' });
     });
 
     socket.on('disconnect', () => {
