@@ -235,8 +235,13 @@ export function MessageContent({ msg, text, size = 'md', isStreaming = false, ch
     <div className={`prose prose-invert max-w-none ${textSize} font-sans`}>
       {parsedParts.map((part, index) => {
         if (part.type === 'tool') {
-          const isPartStreaming = isStreaming && index === parsedParts.length - 1;
-          return <ThinkingAccordion key={index} content={part.content} isStreaming={isPartStreaming} />;
+          // The model's raw <tool_call> declaration is an internal
+          // implementation detail — the actual tool-result message
+          // (rendered via StepCard/SearchResultBlock elsewhere in the
+          // chat) already shows the user what happened. Rendering both
+          // produced a duplicate "Tool Execution" box on top of the real
+          // card. Suppress the raw declaration entirely.
+          return null;
         }
         return (
           <ReactMarkdown
