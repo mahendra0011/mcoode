@@ -957,7 +957,7 @@ export function AIChatPage() {
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -8, scale: 0.95 }}
                             transition={{ duration: 0.15 }}
-                            className="absolute top-full left-0 mt-2 w-56 bg-transparent border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
+                            className="absolute top-full left-0 mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
                           >
                             {(() => {
                               const cmd = prompt.slice(1).toLowerCase();
@@ -1023,7 +1023,7 @@ export function AIChatPage() {
                                 animate={{ scale: 1, opacity: 1 }}
                                 exit={{ scale: 0.9, opacity: 0 }}
                                 transition={{ duration: 0.15 }}
-                                className="w-8 h-8 rounded-[10px] bg-transparent border border-white/10 hover:bg-white/5 flex items-center justify-center transition-all"
+                                className="w-8 h-8 rounded-[10px] bg-[#303030] hover:bg-[#404040] flex items-center justify-center transition-all"
                               >
                                 <Square className="w-4 h-4 text-[#d0d0d0] fill-current" />
                               </motion.button>
