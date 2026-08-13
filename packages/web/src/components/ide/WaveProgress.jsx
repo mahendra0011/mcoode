@@ -80,9 +80,12 @@ export function WaveProgress({ waves = [], subagents = {}, buildSummary = null, 
                     </span>
                     <span className="text-[10px] text-white/40">{pct}%</span>
                   </div>
-                  <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden"
+                    {...(isActive ? { 'data-slot': 'progress-indicator' } : {})}
+                  >
                     <motion.div
-                      className={`h-full rounded-full ${barColor}`}
+                      className={`h-full rounded-full ${barColor} relative`}
                       initial={{ width: 0 }}
                       animate={{ width: `${pct}%` }}
                       transition={{ duration: 0.5, ease: 'easeOut' }}

@@ -236,6 +236,13 @@ export class ToolExecutor {
     if (!prev.includes(oldText)) {
       return { ok: false, error: `old text not found in ${path}` };
     }
+    // Guard against ambiguous edits — replace() only touches the first match,
+    // so if oldText appears more than once we'd silently edit whichever
+    // occurrence happens to come first, which may not be the intended one.
+    const occurrences = prev.split(oldText).length - 1;
+    if (occurrences > 1) {
+      return { ok: false, error: `old text matches ${occurrences} locations in ${path} — include more surrounding context to make it unique` };
+    }
 
     // Prompt for approval when review-before-write is enabled
     if (this.requireEditApproval) {

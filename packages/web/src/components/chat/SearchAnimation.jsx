@@ -2,6 +2,18 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, Globe, Check, ExternalLink, Loader2 } from "lucide-react";
 
+// Safe hostname extraction — new URL() throws on malformed/relative URLs
+// (common with fallback/snippet-only search results), which used to crash
+// this whole component and silently unmount every tool-call card rendered
+// after it in the message list.
+function safeHostname(url) {
+  try {
+    return new URL(url).hostname.replace("www.", "");
+  } catch {
+    return String(url || "source").slice(0, 40);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 1. Top-level status line: "Searching the web..." -> "Read 5 sources"
 // ---------------------------------------------------------------------------
@@ -61,12 +73,12 @@ export function SearchStatusLine({ phase, query, sourceCount }) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Horizontal row of source "favicon pill" cards (Perplexity's signature look)
-//    Appears while sources are being fetched, each one pops in as it resolves.
+// 2. Inline row of source favicons + hostnames — no card/pill background,
+//    matches Claude/Perplexity's minimal icon+text citation row.
 // ---------------------------------------------------------------------------
 export function SourcePillRow({ sources }) {
   return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "6px 0" }}>
+    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "4px 0" }}>
       <AnimatePresence>
         {sources.map((s, i) => (
           <motion.a
@@ -74,33 +86,35 @@ export function SourcePillRow({ sources }) {
             href={s.url}
             target="_blank"
             rel="noreferrer"
-            initial={{ opacity: 0, scale: 0.85, y: 6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ delay: i * 0.06, type: "spring", stiffness: 400, damping: 22 }}
-            whileHover={{ y: -2 }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            whileHover={{ opacity: 0.75 }}
             style={{
               display: "flex",
               alignItems: "center",
               gap: 5,
-              padding: "4px 9px",
-              borderRadius: 999,
-              border: "1px solid var(--zc-border, #26272f)",
-              background: "transparent",
-              fontSize: 12,
+              fontSize: 12.5,
               color: "var(--zc-text-dim, #8b8d98)",
               textDecoration: "none",
               cursor: "pointer",
+              background: "none",
+              border: "none",
+              padding: "2px 4px",
+              borderRadius: 4,
             }}
+            className="task-search-result-highlight"
           >
             <img
-              src={`https://www.google.com/s2/favicons?domain=${new URL(s.url).hostname}&sz=32`}
+              src={`https://www.google.com/s2/favicons?domain=${safeHostname(s.url)}&sz=32`}
               alt=""
               width={13}
               height={13}
-              style={{ borderRadius: 2 }}
+              style={{ borderRadius: 2, flexShrink: 0 }}
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
-            <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {new URL(s.url).hostname.replace("www.", "")}
+            <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {safeHostname(s.url)}
             </span>
           </motion.a>
         ))}
@@ -148,7 +162,7 @@ export function SourcesPanel({ sources, defaultOpen = false }) {
             transition={{ duration: 0.2 }}
             style={{ overflow: "hidden" }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingTop: 6 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8 }}>
               {sources.map((s, i) => (
                 <motion.a
                   key={s.url}
@@ -158,26 +172,34 @@ export function SourcesPanel({ sources, defaultOpen = false }) {
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.04 }}
+                  whileHover={{ x: 2 }}
                   style={{
                     display: "flex",
                     gap: 8,
-                    padding: 8,
-                    borderRadius: 8,
-                    border: "1px solid var(--zc-border, #26272f)",
-                    background: "transparent",
                     textDecoration: "none",
                     color: "var(--zc-text, #e6e6ea)",
+                    background: "none",
+                    border: "none",
+                    padding: 0,
                   }}
                 >
                   <span
                     style={{
                       fontSize: 11,
                       color: "var(--zc-text-dim, #8b8d98)",
-                      minWidth: 16,
+                      minWidth: 14,
                     }}
                   >
                     {i + 1}
                   </span>
+                  <img
+                    src={`https://www.google.com/s2/favicons?domain=${safeHostname(s.url)}&sz=32`}
+                    alt=""
+                    width={13}
+                    height={13}
+                    style={{ borderRadius: 2, flexShrink: 0, marginTop: 2 }}
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
                       {s.title}
@@ -269,7 +291,7 @@ export function SearchResultBlock({ query, phase, sources, answer }) {
             {phase === "answering" ? (
               <StreamingAnswer text={answer} />
             ) : (
-              <p style={{ fontSize: 14.5, lineHeight: 1.6, color: "var(--zc-text, #e6e6ea)" }}>{answer}</p>
+              answer && <p style={{ fontSize: 14.5, lineHeight: 1.6, color: "var(--zc-text, #e6e6ea)" }}>{answer}</p>
             )}
             <div style={{ marginTop: 8 }}>
               <SourcesPanel sources={sources} />

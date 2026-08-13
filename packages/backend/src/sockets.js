@@ -187,10 +187,13 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         }
       } catch (err) {
         socket.emit('chat:error', { message: err.message });
-      } finally {
-        // Always emit chat:done so the frontend stops the thinking spinner,
-        // even if the agent threw an error or the session was interrupted.
-        socket.emit('chat:done', { text: '', mode, interrupted: false });
+        // Safety net: sendMessage()/runGod() normally emit their own chat:done
+        // with the real text on success. If they threw before reaching that
+        // point, the frontend's thinking spinner would spin forever without
+        // this — but we must NOT also send this after a successful run, since
+        // that overwrites the real response with an empty one and (worse)
+        // told the frontend a turn "completed" right after reporting an error.
+        socket.emit('chat:done', { text: '', mode, interrupted: false, error: true });
       }
     });
 

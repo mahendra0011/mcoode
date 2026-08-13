@@ -524,7 +524,11 @@ export class ModelRouter {
     return this._assignments?.[domain] || null;
   }
 
-  /** Resolve a `provider:model` ref to an assignment, or null if unusable. */
+  /** Resolve a `provider:model` ref to an assignment, or null if unusable.
+   *  Only falls back to the provider's first model when no modelId was given
+   *  at all (a bare provider id like "poolside") — an exact ref that doesn't
+   *  match any available model returns null instead of silently switching
+   *  the user to a different model with no warning. */
   async find(ref) {
     if (!ref || typeof ref !== 'string') return null;
     await this._init();
@@ -532,7 +536,9 @@ export class ModelRouter {
     for (const provider of await this.listAvailable()) {
       if (provider.id !== providerId) continue;
       const models = await provider.listModels();
-      const entry = models.find((m) => m.id === modelId) || models[0];
+      const entry = modelId
+        ? models.find((m) => m.id === modelId)
+        : models[0];
       if (!entry) continue;
       return { provider, model: entry, ref: `${providerId}:${entry.id}` };
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Search, Terminal, FileText, Pencil, FolderSearch, Check, Send, Paperclip, ShieldCheck, ChevronDown } from "lucide-react";
 
@@ -30,6 +30,16 @@ const ICONS = {
 export function ToolCallCard({ type = "explored", label, summary, children, defaultOpen = false, active = false }) {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = ICONS[type] ?? FolderSearch;
+  const contentRef = useRef(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.style.setProperty(
+        "--radix-collapsible-content-height",
+        `${contentRef.current.scrollHeight}px`
+      );
+    }
+  }, [open, children]);
 
   return (
     <div style={{ marginBottom: 8, fontFamily: "var(--zc-font)" }}>
@@ -57,18 +67,20 @@ export function ToolCallCard({ type = "explored", label, summary, children, defa
         </span>
       </button>
 
-      {open && (
-        <div
-          style={{
-            padding: "8px 0 8px 24px",
-            fontSize: 12.5,
-            color: "var(--zc-text-dim)",
-            fontFamily: "var(--zc-mono)",
-          }}
-        >
-          {children}
-        </div>
-      )}
+      <div
+        ref={contentRef}
+        data-state={open ? "open" : "closed"}
+        data-zcode-collapsible-animate-close="true"
+        style={{
+          display: open ? "block" : "none",
+          padding: "8px 0 8px 24px",
+          fontSize: 12.5,
+          color: "var(--zc-text-dim)",
+          fontFamily: "var(--zc-mono)",
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

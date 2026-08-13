@@ -59,7 +59,7 @@ export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormal
         )}
         <div className="flex-1 min-w-0">
           {msg.text && (
-            <>
+            <div data-zcode-tool-stream-animate={showCursor ? 'true' : undefined}>
               <MessageContent
                 msg={msg}
                 text={msg.text}
@@ -74,7 +74,7 @@ export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormal
                   />
                 )}
               </MessageContent>
-            </>
+            </div>
           )}
           {msg.kind === 'tool' && msg.block !== 'permission' && msg.searchResults ? (
             <MessageContent msg={msg} size={size} />

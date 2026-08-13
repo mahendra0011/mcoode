@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -11,6 +11,18 @@ import { SearchResultBlock } from './SearchAnimation';
  */
 function ThinkingAccordion({ content, isStreaming }) {
   const [isOpen, setIsOpen] = useState(false);
+  const contentRef = useRef(null);
+
+  // Set the CSS var the zcode-collapsible-up keyframe reads for its
+  // close animation (mirrors --radix-collapsible-content-height).
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.style.setProperty(
+        '--radix-collapsible-content-height',
+        `${contentRef.current.scrollHeight}px`
+      );
+    }
+  }, [isOpen, content]);
 
   const formattedContent = content
     .replace(/<arg_key>/g, '  ')
@@ -43,13 +55,17 @@ function ThinkingAccordion({ content, isStreaming }) {
         <ChevronDown className={`w-3 h-3 text-white/40 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="border-t border-white/5">
-          <div className="p-2.5 text-[11px] font-mono text-white/70 bg-transparent whitespace-pre-wrap break-all overflow-y-auto max-h-[200px]">
-            {formattedContent}
-          </div>
+      <div
+        ref={contentRef}
+        data-state={isOpen ? 'open' : 'closed'}
+        data-zcode-collapsible-animate-close="true"
+        className="border-t border-white/5"
+        style={{ display: isOpen ? 'block' : 'none' }}
+      >
+        <div className="p-2.5 text-[11px] font-mono text-white/70 bg-transparent whitespace-pre-wrap break-all overflow-y-auto max-h-[200px]">
+          {formattedContent}
         </div>
-      )}
+      </div>
     </div>
   );
 }
