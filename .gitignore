@@ -18,6 +18,13 @@ packages/dashboard/dist/
 tmp-watch-test/
 coverage/
 *.log
+playwright-report/
+test-results/
+screenshots/
+test-screenshots/
+
+# os files
+nul
 
 # editor / os
 .vscode/

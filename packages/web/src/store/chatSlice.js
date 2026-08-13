@@ -96,11 +96,16 @@ const chatSlice = createSlice({
       state.isStreaming = true;
       state.keysError = null;
     },
-    streamUpdate: (state, action) => {
+streamUpdate: (state, action) => {
       const text = action.payload;
       const lastMessage = state.messages[state.messages.length - 1];
       if (lastMessage && lastMessage.role === 'assistant' && lastMessage.kind === 'stream') {
-        lastMessage.text = (lastMessage.text || '') + text;
+        // Backend (chat-agent.js) emits incremental DELTAS per chunk, so we
+        // must APPEND. Some providers may instead emit cumulative text — we
+        // detect that with a prefix match and replace instead of duplicating.
+        lastMessage.text = text.startsWith(lastMessage.text)
+          ? text
+          : (lastMessage.text || '') + text;
       } else {
         state.messages.push({
           id: Date.now().toString(),
@@ -183,15 +188,28 @@ const chatSlice = createSlice({
     },
     chatDone: (state, action) => {
       state.isStreaming = false;
-      // Always finalize the last streaming message, even if the backend
-      // sent empty text (e.g. on an error that triggered the socket
-      // handler's finally block). This prevents the ThinkingIndicator
-      // from getting stuck and ensures the message isn't left as 'stream'.
-      const lastMessage = state.messages[state.messages.length - 1];
-      if (lastMessage && lastMessage.kind === 'stream') {
-        lastMessage.text = action.payload?.text || lastMessage.text || '';
-        lastMessage.kind = 'assistant';
-        lastMessage.status = 'done';
+      // Finalize EVERY lingering 'stream' message — a turn can span multiple
+      // stream blocks (narration → tool card → narration), and each must flip
+      // to a finished assistant message so cursors/thinking dots stop.
+      // The LAST stream block receives the backend's final full text
+      // (narration joined across turns) when one was sent.
+      const payloadText = action.payload?.text;
+      let lastStreamIdx = -1;
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        if (state.messages[i].kind === 'stream') {
+          lastStreamIdx = i;
+          break;
+        }
+      }
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.kind === 'stream') {
+          if (i === lastStreamIdx && payloadText && (!m.text || payloadText.startsWith(m.text))) {
+            m.text = payloadText;
+          }
+          m.kind = 'assistant';
+          m.status = 'done';
+        }
       }
     },
     clearChat: (state) => {

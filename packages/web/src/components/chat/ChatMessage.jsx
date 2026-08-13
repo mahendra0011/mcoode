@@ -4,22 +4,16 @@ import { MessageContent } from './MessageContent';
 import { StepCard } from '../ide/StepCards';
 
 /**
- * ChatMessage — Claude-style message bubble.
- *
- * Renders either a user message or an assistant/tool message with:
- *  - Markdown body via <MessageContent>
- *  - Assistant "avatar" (a subtle gradient circle with Sparkles icon)
- *  - Streaming cursor (blinking caret)
- *  - Tool call results via <StepCard>
+ * ChatMessage — simple Claude-style message.
+ * No fancy stagger, no pop, no spring — just opacity fade + slight y slide.
  *
  * Props:
- *   msg            — the message object from Redux store
- *   idx            — index for animation stagger delay
- *   size           — 'sm' | 'md' (font size; sm = IDE pane, md = full chat)
- *   isStreaming    — whether the assistant is currently streaming
- *   undo           — undo callback passed to StepCard
- *   isNormalChat   — when true, uses Claude-like clean styling; when false (advanced/agent),
- *                    keeps the Zai-style styling with full borders and glows
+ *   msg            — message object
+ *   idx            — index for stagger delay
+ *   size           — 'sm' | 'md'
+ *   isStreaming    — whether streaming is active
+ *   undo           — undo callback
+ *   isNormalChat   — when true, shows Claude-like clean style
  */
 export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormalChat = false }) {
   const showCursor = msg.kind === 'stream' && isStreaming;
@@ -27,17 +21,17 @@ export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormal
   if (msg.role === 'user') {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15, ease: 'easeOut' }}
         className={`flex justify-end ${size === 'sm' ? 'max-w-[90%]' : 'max-w-[80%]'}`}
       >
         <div
           className={
             size === 'sm'
-              ? 'bg-[#27272a] text-white/90 px-4 py-2.5 rounded-xl text-[13px] max-w-full border border-white/5 shadow-sm'
-              : 'bg-[#27272a] text-white/90 px-5 py-3 rounded-2xl text-sm max-w-full border border-white/5 shadow-sm'
+              ? 'bg-transparent border border-white/10 text-white/90 px-4 py-2.5 rounded-lg text-[13px] max-w-full'
+              : 'bg-transparent border border-white/10 text-white/90 px-5 py-3 rounded-xl text-sm max-w-full'
           }
         >
           {msg.text}
@@ -46,38 +40,35 @@ export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormal
     );
   }
 
-  // ── Assistant message ──
+  // Assistant message
+  const staggerDelay = idx != null ? idx * 0.02 : 0;
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -4 }}
-      transition={{
-        duration: 0.25,
-        ease: [0.4, 0, 0.2, 1],
-        delay: idx != null ? idx * 0.02 : 0,
-      }}
-      className={`flex flex-col gap-3`}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15, ease: 'easeOut', delay: staggerDelay }}
+      className="flex flex-col gap-2"
     >
-      <div className="flex items-start gap-3">
-        {/* Assistant avatar — only visible in normal chat mode for Claude-like feel */}
+      <div className="flex items-start gap-2.5">
         {isNormalChat && (
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex-shrink-0 flex items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.3)]">
-            <span className="text-xs">M</span>
+          <div className="w-5 h-5 rounded-full border border-white/10 flex-shrink-0 flex items-center justify-center text-xs">
+            M
           </div>
         )}
         <div className="flex-1 min-w-0">
           {msg.text && (
             <>
               <MessageContent
+                msg={msg}
                 text={msg.text}
                 size={size}
                 isStreaming={showCursor}
               >
                 {showCursor && (
                   <motion.span
-                    className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse align-middle"
-                    initial={{ opacity: 0 }}
+                    className="inline-block w-1.5 h-3.5 ml-0.5 bg-emerald-400 align-middle"
                     animate={{ opacity: [0.3, 1, 0.3] }}
                     transition={{ duration: 1, repeat: Infinity }}
                   />
@@ -85,7 +76,11 @@ export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormal
               </MessageContent>
             </>
           )}
-          {msg.kind === 'tool' && <StepCard msg={msg} undo={undo} />}
+          {msg.kind === 'tool' && msg.block !== 'permission' && msg.searchResults ? (
+            <MessageContent msg={msg} size={size} />
+          ) : (
+            msg.kind === 'tool' && msg.block !== 'permission' && <StepCard msg={msg} undo={undo} />
+          )}
         </div>
       </div>
     </motion.div>

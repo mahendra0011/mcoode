@@ -51,6 +51,21 @@
     --ring: 0 0% 83.1%;
     --frame: 0 0% 6%;
   }
+
+  :root {
+    --zc-bg: #0d0e12;
+    --zc-panel: #16171d;
+    --zc-border: #26272f;
+    --zc-text: #e6e6ea;
+    --zc-text-dim: #8b8d98;
+    --zc-accent: #6c8cff;
+    --zc-green: #3ecf8e;
+    --zc-red: #ff6b6b;
+    --zc-yellow: #f5c451;
+    --zc-radius: 10px;
+    --zc-font: 'Inter', -apple-system, sans-serif;
+    --zc-mono: 'JetBrains Mono', 'SF Mono', monospace;
+  }
 }
 
 @layer base {
@@ -95,4 +110,118 @@
 /* Slow spin for loading indicators */
 .animate-spin-slow {
   animation: spin 3s linear infinite;
+}
+
+/* ZCode UX Animations — extracted from ZCode's actual app.asar CSS
+   Reference: styles-BxSv8qTx.css in app-extracted/out/renderer/assets/ */
+
+/* Stream text fade-in animation */
+@keyframes zcode-stream-text-in {
+  0% { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Stream marker text color transition */
+@keyframes zcode-stream-marker-in {
+  0% { color: #0000; }
+  to { color: var(--foreground, #e6e6ea); }
+}
+
+/* Collapsible animation */
+@keyframes zcode-collapsible-up {
+  0% { height: var(--radix-collapsible-content-height); }
+  to { height: 0; }
+}
+
+@keyframes zcode-collapsible-fade-out {
+  0% { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Reaction burst animations */
+@keyframes zcode-reaction-pop {
+  0% { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+@keyframes zcode-reaction-particles {
+  0% {
+    opacity: 0;
+    box-shadow: 7.7px 2.1px, 2.1px 7.7px, -5.7px 5.7px,
+                -7.7px -2.1px, -2.1px -7.7px, 5.7px -5.7px;
+  }
+}
+
+/* Browser/operation breathe */
+@keyframes browser-use-operation-breathe {
+  0%, to {
+    opacity: .5;
+    transform: scale(.9);
+  }
+}
+
+/* Workspace connecting breathe */
+@keyframes workspace-remote-connecting-breathe {
+  0%, to {
+    background-color: color-mix(in oklab, var(--zc-accent, #6c8cff) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--zc-accent, #6c8cff) 10%, transparent);
+  }
+}
+
+/* Task search result highlight */
+@keyframes task-search-result-highlight {
+  0% {
+    background-color: color-mix(in oklab, var(--zc-accent, #6c8cff) 20%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--zc-accent, #6c8cff) 28%, transparent);
+  }
+}
+
+/* Update charge sweep */
+@keyframes zcode-update-charge-sweep {
+  0% {
+    opacity: .35;
+    transform: translate(-120%);
+  }
+}
+
+/* Fork highlight pulse */
+@keyframes fork-highlight-pulse {
+  0% {
+    background-color: #0000;
+    box-shadow: inset 0 0 0 1px #0000;
+  }
+}
+
+/* Data attribute-based animation triggers — matching ZCode exactly */
+[data-zcode-stream-animate="true"],
+[data-zcode-tool-stream-animate="true"],
+[data-zcode-chat-loading-animate="true"] {
+  will-change: opacity;
+  animation: .9s cubic-bezier(.16, 1, .3, 1) both zcode-stream-text-in;
+}
+
+[data-zcode-stream-marker-animate="true"]::marker {
+  animation: .9s cubic-bezier(.16, 1, .3, 1) var(--zcode-stream-animation-delay, 0s) both zcode-stream-marker-in;
+}
+
+[data-zcode-collapsible-animate-close="true"][data-state="closed"] {
+  animation: .3s ease-in-out forwards zcode-collapsible-up !important;
+}
+
+[data-zcode-collapsible-animate-close="true"][data-state="closed"] > * {
+  animation: .3s ease-in-out forwards zcode-collapsible-fade-out !important;
+}
+
+/* Disable animations for reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  [data-zcode-stream-animate="true"],
+  [data-zcode-tool-stream-animate="true"],
+  [data-zcode-chat-loading-animate="true"],
+  [data-zcode-collapsible-animate-close="true"][data-state="closed"],
+  [data-zcode-collapsible-animate-close="true"][data-state="closed"] > * {
+    animation: none;
+  }
+  [data-zcode-stream-marker-animate="true"]::marker {
+    animation: none;
+  }
 }

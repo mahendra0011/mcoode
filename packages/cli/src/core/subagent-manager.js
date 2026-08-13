@@ -19,11 +19,110 @@ const RATES = {
 };
 
 /**
+ * FileLockManager — runtime lock queue for shared files (configs, types, indexes).
+ * Exclusive files are resolved by resolveFileConflicts() at plan time (static).
+ * Shared files need runtime locks to prevent write contention between parallel
+ * subagents modifying the same file.
+ */
+class FileLockManager {
+  constructor() {
+    this.locks = new Map(); // filePath -> { ownerId, waiters: [{agentId, resolve, reject}] }
+    this.holderFiles = new Map(); // agentId -> Set<filePaths>
+  }
+
+  /**
+   * Acquire a lock on a file for an agent. Resolves immediately if available,
+   * or queues the caller as a waiter until the lock is released.
+   * @param {string} agentId — subagent identifier
+   * @param {string} filePath — absolute path to the file
+   * @param {number} [timeout=30000] — max wait time in ms
+   * @returns {Promise<() => void>} — release function
+   */
+  async acquireLock(agentId, filePath, timeout = 30000) {
+    const existing = this.locks.get(filePath);
+
+    if (!existing || !existing.ownerId) {
+      // No lock — grant immediately
+      this.locks.set(filePath, { ownerId: agentId, waiters: [] });
+      const holderFiles = this.holderFiles.get(agentId) || new Set();
+      holderFiles.add(filePath);
+      this.holderFiles.set(agentId, holderFiles);
+      return () => this.releaseLock(agentId, filePath);
+    }
+
+    // Lock is held — queue as waiter
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const entry = this.locks.get(filePath);
+        if (entry) {
+          entry.waiters = entry.waiters.filter((w) => w.agentId !== agentId);
+        }
+        reject(new Error(`lock timeout: could not acquire ${filePath} for ${agentId} after ${timeout}ms`));
+      }, timeout);
+
+      this.locks.get(filePath).waiters.push({
+        agentId,
+        resolve: () => {
+          clearTimeout(timer);
+          this.locks.set(filePath, { ownerId: agentId, waiters: [] });
+          const holderFiles = this.holderFiles.get(agentId) || new Set();
+          holderFiles.add(filePath);
+          this.holderFiles.set(agentId, holderFiles);
+          resolve(() => this.releaseLock(agentId, filePath));
+        },
+        reject
+      });
+    });
+  }
+
+  /** Release a file lock and wake up the next waiter (FIFO queue). */
+  releaseLock(agentId, filePath) {
+    const entry = this.locks.get(filePath);
+    if (!entry || entry.ownerId !== agentId) return false;
+
+    const holderFiles = this.holderFiles.get(agentId);
+    if (holderFiles) holderFiles.delete(filePath);
+
+    if (entry.waiters.length > 0) {
+      // Hand off to next waiter
+      const next = entry.waiters.shift();
+      entry.ownerId = next.agentId;
+      entry.waiters = [];
+      next.resolve();
+    } else {
+      this.locks.delete(filePath);
+    }
+    return true;
+  }
+
+  /** Release all locks held by an agent (e.g., on failure/interrupt). */
+  releaseAllFor(agentId) {
+    const files = this.holderFiles.get(agentId);
+    if (!files) return;
+    for (const filePath of files) {
+      this.releaseLock(agentId, filePath);
+    }
+    this.holderFiles.delete(agentId);
+  }
+
+  /** Check if a file is currently locked by any agent. */
+  isLocked(filePath) {
+    return this.locks.has(filePath) && this.locks.get(filePath).ownerId;
+  }
+
+  /** Get list of all currently locked files. */
+  lockedFiles() {
+    return [...this.locks.entries()]
+      .filter(([, v]) => v.ownerId)
+      .map(([path, v]) => ({ path, owner: v.ownerId }));
+  }
+}
+
+/**
  * Subagent Manager — owns the todo DAG, dispatches one subagent per todo,
  * runs ready todos concurrently up to a cap, merges results, and pushes
  * every event onto the shared bus (terminal UI + Socket.IO bridge subscribe).
  */
-export class SubagentManager {
   constructor({ plan, router, projectPath, config = {}, bus = null, options = {} }) {
     this.plan = resolveFileConflicts(plan);
     this.router = router;
@@ -46,6 +145,7 @@ export class SubagentManager {
     this._tokens = { in: 0, out: 0 };
     this._models = new Map(); // domain -> Map(model -> { provider, count })
     this.hooks = null; // loaded lazily in runAll()
+    this.fileLocks = new FileLockManager(); // runtime lock queue for shared files
   }
 
   get activeSubagents() {
@@ -68,6 +168,65 @@ export class SubagentManager {
     const map = new Map();
     for (const [id, sub] of this.subagents) map.set(id, sub.status);
     return map;
+  }
+
+  /**
+   * Identify shared files this todo will write to.
+   * Shared files are those declared in the plan's sharedFiles list
+   * or files whose domain matches known shared-file patterns
+   * (config files, type definitions, index/barrel files).
+   */
+  _getSharedFilesForTodo(todo) {
+    const sharedFiles = new Set();
+
+    // Check plan-level shared files declaration
+    if (this.plan.sharedFiles && Array.isArray(this.plan.sharedFiles)) {
+      for (const sf of this.plan.sharedFiles) {
+        if (typeof sf === 'string') {
+          sharedFiles.add(sf);
+        } else if (sf?.path) {
+          // Check if this todo modifies this shared file
+          if (todo.files?.includes(sf.path) || todo.filePath === sf.path) {
+            sharedFiles.add(sf.path);
+          }
+        }
+      }
+    }
+
+    // Check todo's declared files for known shared patterns
+    const todoFiles = todo.files || (todo.filePath ? [todo.filePath] : []);
+    for (const filePath of todoFiles) {
+      if (!filePath) continue;
+      const normalized = filePath.toLowerCase();
+
+      // Barrel/index files are shared by all modules
+      if (normalized.endsWith('index.ts') || normalized.endsWith('index.js') ||
+          normalized.endsWith('index.tsx') || normalized.endsWith('index.jsx') ||
+          normalized.endsWith('index.d.ts')) {
+        sharedFiles.add(filePath);
+      }
+
+      // Config files shared across todos
+      const configPatterns = ['.config.', 'tsconfig.json', 'jest.config', 'webpack.config',
+                              'vitest.config', 'tailwind.config', 'next.config'];
+      if (configPatterns.some((p) => normalized.includes(p))) {
+        sharedFiles.add(filePath);
+      }
+
+      // Type definition files
+      if (normalized.endsWith('.d.ts') && !normalized.includes('/node_modules/')) {
+        sharedFiles.add(filePath);
+      }
+
+      // Routes/types files (shared domain constants)
+      const sharedPatterns = ['routes', 'types.ts', 'types.js', 'constants.ts',
+                              'constants.js', 'api.ts', 'api.js'];
+      if (sharedPatterns.some((p) => normalized.includes(`/${p}.`) || normalized.endsWith(`/${p}`))) {
+        sharedFiles.add(filePath);
+      }
+    }
+
+    return [...sharedFiles];
   }
 
   _schedule() {
@@ -134,8 +293,36 @@ export class SubagentManager {
       });
       this.subagents.set(todo.id, sub);
       todo.assignedModel = assignment.ref;
-      const result = await sub.run();
+
+      // Determine shared file locks needed for this todo
+      const sharedFiles = this._getSharedFilesForTodo(todo);
+      const releaseFuncs = [];
+      for (const filePath of sharedFiles) {
+        try {
+          const release = await this.fileLocks.acquireLock(todo.id, filePath, 30000);
+          releaseFuncs.push(release);
+        } catch (lockErr) {
+          this.emit(EVENTS.TOAST, { kind: 'warn', text: `lock timeout for ${filePath} on ${todo.id}` });
+        }
+      }
+
+      let result;
+      try {
+        result = await sub.run();
+      } finally {
+        // Release all shared file locks
+        for (const release of releaseFuncs) {
+          try { release(); } catch { /* already released */ }
+        }
+      }
+
       this.results.set(todo.id, { todoId: todo.id, ...result });
+
+      // Record result for scoring system — updates historical success/failure rates
+      const success = result.status === SUBAGENT_STATUS.DONE;
+      if (this.router?.recordAssignment) {
+        try { await this.router.recordAssignment(assignment.ref, todo.domain, success); } catch { /* scoring is best-effort */ }
+      }
       this._tokens.in += sub.tokens?.in || 0;
       this._tokens.out += sub.tokens?.out || 0;
       const providerId = String(assignment.provider.id || 'default');
@@ -428,6 +615,12 @@ export class SubagentManager {
     this._fixers.add(sub);
     this._tokens.in += sub.tokens?.in || 0;
     this._tokens.out += sub.tokens?.out || 0;
+
+    // Record bugfix result for scoring — uses 'bugfix' domain
+    if (this.router?.recordAssignment) {
+      try { await this.router.recordAssignment(assignment.ref, 'bugfix', result.status === SUBAGENT_STATUS.DONE); } catch { /* best-effort */ }
+    }
+
     if (result.status === SUBAGENT_STATUS.DONE) {
       this.results.set(todo.id, { todoId: todo.id, status: 'done', summary: result.summary, model: assignment.ref });
     } else {
@@ -470,13 +663,20 @@ export class SubagentManager {
     this._stopped = true;
     for (const sub of this.subagents.values()) {
       sub.interrupt?.();
+      this.fileLocks.releaseAllFor(sub.id);
     }
     for (const sub of this._fixers) {
       sub.interrupt?.();
+      this.fileLocks.releaseAllFor(sub.id);
     }
     this.queue = [];
   }
 }
+
+/**
+ * Expose FileLockManager for external import/testing.
+ */
+export { FileLockManager };
 
 export async function persistSession({ mode, projectName, projectPath, plan, results }) {
   const projectId = await getProjectId(projectPath);

@@ -32,6 +32,7 @@ export function AIChatPage() {
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef(null);
 
+
   // IDE State — declare BEFORE useChatSocket so there's no TDZ
   const [workspaces, setWorkspaces] = useState([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
@@ -42,6 +43,19 @@ export function AIChatPage() {
   const [openFiles, setOpenFiles] = useState([]);
   const [activePath, setActivePath] = useState(null);
   const [prompt, setPrompt] = useState('');
+
+  // Auto-reset streaming if it gets stuck after a tool execution
+  useEffect(() => {
+    let timer;
+    if (isStreaming && messages.length > 0 && messages[messages.length - 1]?.kind !== 'stream') {
+      // If we are waiting for a stream to start after a tool completes, and it takes >15s,
+      // it's likely the backend crashed or the connection dropped without a chat:done event.
+      timer = setTimeout(() => {
+        dispatch(resetStreaming());
+      }, 15000);
+    }
+    return () => clearTimeout(timer);
+  }, [isStreaming, messages, dispatch]);
 
   // Auto-scroll refs — keep the chat scrolled to the bottom when new
   // messages arrive or streaming updates come in
@@ -836,8 +850,8 @@ export function AIChatPage() {
           <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#0e0e0e]">
             
             {/* Background Ambient Glows */}
-            <div className="absolute top-1/2 -left-64 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none z-0"></div>
-            <div className="absolute top-1/2 -right-64 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[140px] pointer-events-none z-0"></div>
+            <div className="absolute top-1/2 -left-64 -translate-y-1/2 w-[500px] h-[500px] bg-transparent rounded-full blur-[140px] pointer-events-none z-0"></div>
+            <div className="absolute top-1/2 -right-64 -translate-y-1/2 w-[500px] h-[500px] bg-transparent rounded-full blur-[140px] pointer-events-none z-0"></div>
 
             {activeTab === 'Design' ? (
               /* DESIGN TAB */
@@ -915,7 +929,7 @@ export function AIChatPage() {
                     </div>
 
                     {/* Textarea Container */}
-                    <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
+                    <div className="bg-transparent rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
                       <textarea 
                         value={prompt}
                         onChange={(e) => {
@@ -943,7 +957,7 @@ export function AIChatPage() {
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -8, scale: 0.95 }}
                             transition={{ duration: 0.15 }}
-                            className="absolute top-full left-0 mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
+                            className="absolute top-full left-0 mt-2 w-56 bg-transparent border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
                           >
                             {(() => {
                               const cmd = prompt.slice(1).toLowerCase();
@@ -1009,7 +1023,7 @@ export function AIChatPage() {
                                 animate={{ scale: 1, opacity: 1 }}
                                 exit={{ scale: 0.9, opacity: 0 }}
                                 transition={{ duration: 0.15 }}
-                                className="w-8 h-8 rounded-[10px] bg-[#303030] hover:bg-[#404040] flex items-center justify-center transition-all"
+                                className="w-8 h-8 rounded-[10px] bg-transparent border border-white/10 hover:bg-white/5 flex items-center justify-center transition-all"
                               >
                                 <Square className="w-4 h-4 text-[#d0d0d0] fill-current" />
                               </motion.button>
@@ -1081,7 +1095,14 @@ export function AIChatPage() {
                       />
                     ))}
                     {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
-                      <ThinkingIndicator size="md" showAvatar={mode === 'chat'} />
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-5 h-5 rounded-full border border-white/10 flex-shrink-0 flex items-center justify-center text-xs">
+                          M
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <ThinkingIndicator size="md" showAvatar={false} />
+                        </div>
+                      </div>
                     )}
                     {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
                     <div ref={chatEndRef} />
@@ -1102,7 +1123,7 @@ export function AIChatPage() {
                     </div>
                     
                     {/* Main background */}
-                    <div className="absolute inset-[0px] bg-[#121212] rounded-[24px] z-0"></div>
+                    <div className="absolute inset-[0px] bg-transparent rounded-[24px] z-0"></div>
                     
                     <div className="relative z-10 p-4 flex flex-col gap-2">
                       
@@ -1121,7 +1142,7 @@ export function AIChatPage() {
                       )}
 
                       {/* Textarea Container */}
-                      <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
+                      <div className="bg-transparent rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
                         <textarea
                           value={prompt}
                           onChange={(e) => {
@@ -1301,7 +1322,7 @@ export function AIChatPage() {
                       ))}
                     </AnimatePresence>
                       {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
-                        <ThinkingIndicator size="sm" showAvatar={false} />
+                        <AgentActionSequence key="agent-action-sequence-2" />
                       )}
                       {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
                       <div ref={ideChatEndRef} />

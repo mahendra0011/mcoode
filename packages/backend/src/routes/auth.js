@@ -56,6 +56,10 @@ export function authRoutes({ secret }) {
         devOtp: dev ? code : undefined
       });
     } catch (err) {
+      // DB hiccup — return 503 so client retries
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
       next(err);
     }
   });
@@ -98,6 +102,10 @@ export function authRoutes({ secret }) {
       const tokens = signTokens(user._id, { secret });
       res.json({ user: { id: user._id, email: user.email, name: user.name, plan: user.plan }, ...tokens });
     } catch (err) {
+      // DB hiccup during OTP verify — return 503 so client retries
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
       next(err);
     }
   });
@@ -119,6 +127,10 @@ export function authRoutes({ secret }) {
       const tokens = signTokens(user._id, { secret });
       res.status(201).json({ user: { id: user._id, email, name, plan: user.plan }, ...tokens });
     } catch (err) {
+      // DB hiccup is not a validation error — return 503 so client retries
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
       next(err);
     }
   });
@@ -134,6 +146,10 @@ export function authRoutes({ secret }) {
       const tokens = signTokens(user._id, { secret });
       res.json({ user: { id: user._id, email: user.email, name: user.name, plan: user.plan }, ...tokens });
     } catch (err) {
+      // DB hiccup is not an auth failure — return 503 so client retries
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
       next(err);
     }
   });
@@ -142,6 +158,8 @@ export function authRoutes({ secret }) {
     try {
       const payload = verifyToken(req.body.refresh, secret);
       if (payload.type !== 'refresh') throw new Error('wrong token type');
+      // Refresh token doesn't need DB lookup (stateless) — but if you add
+      // refresh token revocation, wrap DB calls in try/catch → 503 on DB hiccups.
       const tokens = signTokens(payload.sub, { secret });
       res.json(tokens);
     } catch {
@@ -155,6 +173,11 @@ export function authRoutes({ secret }) {
       if (!user) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'user not found' } });
       res.json({ id: user._id, email: user.email, name: user.name, plan: user.plan, settings: user.settings });
     } catch (err) {
+      // DB hiccup (reconnect/restart) is not an auth failure — return 503 so
+      // the client retries instead of logging the user out. (Follows mediCore pattern.)
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
       next(err);
     }
   });
@@ -168,6 +191,9 @@ export function authRoutes({ secret }) {
       if (db().githubAccount) await db().githubAccount.deleteOne({ userId: req.userId });
       res.json({ ok: true });
     } catch (err) {
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
       next(err);
     }
   });
@@ -181,6 +207,9 @@ export function authRoutes({ secret }) {
       const updated = await db().user.findByIdAndUpdate(user._id, merged);
       res.json({ id: updated._id, email: updated.email, name: updated.name, plan: updated.plan, settings: updated.settings });
     } catch (err) {
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
       next(err);
     }
   });
@@ -202,6 +231,9 @@ export function authRoutes({ secret }) {
       await db().user.findByIdAndUpdate(user._id, { passwordHash: hashPassword(newPassword) });
       res.json({ ok: true });
     } catch (err) {
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
       next(err);
     }
   });

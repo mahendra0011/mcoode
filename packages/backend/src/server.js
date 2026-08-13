@@ -22,8 +22,18 @@ import { workspaceRoutes } from './routes/workspaces.js';
 import { settingsRoutes } from './routes/settings.js';
 import { designRoutes } from './routes/design.js';
 import { githubAuthRoutes, githubApiRoutes } from './routes/github.js';
+import { searchRoutes } from './routes/search.js';
+import { validateEnv } from './config/envValidator.js';
 
 export async function startServer({ port = 3100, env = process.env } = {}) {
+  // ─── Environment validation (fail fast) ─────────────────────────────────────
+  const envResult = validateEnv(env);
+  if (!envResult.ok && env.NODE_ENV === 'production') {
+    console.error('[server] ❌ Environment validation failed — aborting startup.');
+    process.exit(1);
+  }
+
+  // ─── JWT secret ─────────────────────────────────────────────────────────────
   const secret = env.JWT_SECRET || 'mcode-dev-secret-change-me';
   if (secret === 'mcode-dev-secret-change-me' && env.NODE_ENV === 'production') {
     throw new Error('JWT_SECRET must be set in production — refusing to start with the dev fallback secret');
@@ -31,14 +41,17 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   if (secret === 'mcode-dev-secret-change-me') {
     console.warn('[auth] using the DEV JWT secret — set JWT_SECRET in production');
   }
+
+  // ─── MongoDB Atlas (REQUIRED — no fallback) ─────────────────────────────────
   const mongoUri = env.MONGODB_URI || null;
-  const redisUri = env.REDIS_URI || null;
-
+  // connectDb() calls process.exit(1) if connection fails — no memory fallback
   const storage = await connectDb(mongoUri);
-  await connectRedis(redisUri);
 
+  // ─── Redis (Optional — caching/job queuing) ─────────────────────────────────
+  const redisUri = env.REDIS_URI || null;
+  const cacheResult = await connectRedis(redisUri);
   let redisClient = null;
-  if (redisUri) {
+  if (cacheResult.mode === 'redis') {
     try {
       const { Redis } = await import('ioredis');
       const candidate = new Redis(redisUri, {
@@ -52,13 +65,17 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
       redisClient = null;
     }
   }
+
+  // ─── Job Queue (Optional — background jobs) ─────────────────────────────────
   await connectQueue(redisClient);
+
   configureMailer({
     apiKey: env.BREVO_API_KEY,
     from: env.MAIL_FROM,
     name: env.MAIL_FROM_NAME
   });
 
+  // ─── Express ────────────────────────────────────────────────────────────────
   const logger = pino({ level: env.LOG_LEVEL || 'info' });
   const app = express();
   app.disable('x-powered-by');
@@ -73,13 +90,16 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     legacyHeaders: false
   }));
 
+  // Health endpoint — reports true Atlas connection status
   app.get('/health', (_req, res) => res.json({
-    ok: true,
+    ok: storage.connected,
     storage: storage.mode,
     cache: cache().mode,
+    queue: jobQueue().mode,
     uptime: process.uptime()
   }));
 
+  // ─── Routes (all auth-protected routes use authMiddleware) ───────────────────
   app.use('/api/v1/auth', authRoutes({ secret }));
   app.use('/api/v1/sessions', sessionRoutes({ secret }));
   app.use('/api/v1/plugins', pluginRoutes({ secret }));
@@ -92,11 +112,15 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/auth/github', githubAuthRoutes({ secret }));
   app.use('/api/v1/github', githubApiRoutes({ secret }));
   app.use('/api/v1/design', designRoutes({ secret }));
+  app.use('/api/v1/search', searchRoutes({ secret }));
 
-  // error handler — consistent { error: { code, message } } shape
+  // ─── Error handler ──────────────────────────────────────────────────────────
+  // Consistent { error: { code, message } } shape
+  // DB hiccups during auth return 503 (not 401) so clients retry instead of logging out.
   app.use((err, _req, res, _next) => {
     logger.error(err);
-    res.status(err.status || 500).json({
+    const status = err.status || 500;
+    res.status(status).json({
       error: { code: err.code || 'INTERNAL', message: err.message || 'internal error' }
     });
   });
@@ -109,7 +133,7 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.get('/metrics', (_req, res) => res.json({
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-    cacheSize: cache() && cache().mode === 'redis' ? 'delegated' : 'in-memory',
+    cacheSize: cache() && cache().mode === 'redis' ? 'delegated' : 'pass-through',
     activeConnections: httpServer._connections != null ? httpServer._connections : null,
     pid: process.pid,
     nodeVersion: process.version,
@@ -129,7 +153,10 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   });
 
   httpServer.listen(port, () => {
-    logger.info({ port, storage: storage.mode, cache: cache().mode }, 'mcode backend listening');
+    logger.info(
+      { port, storage: storage.mode, cache: cache().mode, queue: queue.mode },
+      'mcode backend listening'
+    );
   });
 
   return { app, httpServer, io, queue, db: () => db() };

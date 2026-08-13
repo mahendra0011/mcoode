@@ -327,12 +327,14 @@ export class ChatSession {
 
     const { ChatAgent } = await import('mcode-cli/chat-agent');
 
-    // Create a strict read-only config for normal chat
+    // Claude-style chat: the model gets the FULL toolset (search, read,
+    // edit, write, explore, shell, tests, web) so the user sees the same
+    // animated step cards as agent mode — but every write/edit/shell still
+    // flows through the permission gate before it executes.
     const chatConfig = {
       ...this.config,
       allowShellAll: false,
-      requireEditApproval: true,
-      domain: 'chat' // This will be passed to ToolExecutor to restrict tools
+      requireEditApproval: true
     };
 
     const agent = new ChatAgent({
@@ -344,7 +346,19 @@ export class ChatSession {
       reasoning: this.router?.reasoning || null,
       history: this.history,
       onTool: ({ tool, args, replaceKey }) => {
-        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, replaceKey, status: 'running', timestamp: Date.now() });
+        const payload = { tool, args, replaceKey, status: 'running', timestamp: Date.now() };
+        // For search-type tools, include a searchResults stub so the frontend
+        // renders the ZCode-style animated SearchResultBlock with a spinner
+        // while the tool executes, then swaps to the done results.
+        if (tool === 'web_search' || tool === 'web_fetch') {
+          payload.searchResults = {
+            query: tool === 'web_search' ? args.query : args.url,
+            phase: 'searching',
+            results: [],
+            answer: ''
+          };
+        }
+        this.onEvent(S2C.CHAT_TOOL_CALL, payload);
       }
     });
 
@@ -397,7 +411,16 @@ export class ChatSession {
       reasoning: this.router?.reasoning || null,
       history: this.history,
       onTool: ({ tool, args, replaceKey }) => {
-        this.onEvent(S2C.CHAT_TOOL_CALL, { tool, args, replaceKey, status: 'running', timestamp: Date.now() });
+        const payload = { tool, args, replaceKey, status: 'running', timestamp: Date.now() };
+        if (tool === 'web_search' || tool === 'web_fetch') {
+          payload.searchResults = {
+            query: tool === 'web_search' ? args.query : args.url,
+            phase: 'searching',
+            results: [],
+            answer: ''
+          };
+        }
+        this.onEvent(S2C.CHAT_TOOL_CALL, payload);
       }
     });
 

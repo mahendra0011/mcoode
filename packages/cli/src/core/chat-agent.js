@@ -398,21 +398,40 @@ export class ChatAgent {
       const output = results.map((r, i) =>
         `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet || ''}`
       ).join('\n\n');
-      return {
+      const ret = {
         block: 'command', path: '', lines: [], command: '', relDir: '',
         title: `Web search: ${args.query || ''}`,
         output: output.slice(0, 3000)
       };
+      // Only include searchResults when the tool actually returned data
+      if (result?.ok !== false && results.length > 0) {
+        ret.searchResults = {
+          query: args.query || '',
+          phase: 'done',
+          results: results,
+          answer: ''
+        };
+      }
+      return ret;
     }
     if (name === 'web_fetch') {
       const content = String(result?.content || '').split('\n').slice(0, 60);
-      return {
+      const ret = {
         block: 'read', path: args.url || '',
         lines: content,
         diffLines: [], command: '', relDir: '',
         title: `Fetched: ${result?.title || args.url || ''}`,
         output: ''
       };
+      if (result?.ok !== false && result?.content) {
+        ret.searchResults = {
+          query: `Fetched: ${args.url || ''}`,
+          phase: 'done',
+          results: [{ title: result?.title || args.url, url: args.url, snippet: String(result?.content || '').slice(0, 200) }],
+          answer: ''
+        };
+      }
+      return ret;
     }
     if (name === 'git_status') {
       return {

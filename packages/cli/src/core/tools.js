@@ -273,6 +273,44 @@ export class ToolExecutor {
   }
 
   async web_search({ query }) {
+    // Prefer Tavily API when a key is configured (same as backend /api/v1/search).
+    // Falls back to DuckDuckGo Lite scraping when no key is available.
+    const tavilyKey = process.env.TAVILY_API_KEY;
+    if (tavilyKey) {
+      if (!isNetworkAllowed('https://api.tavily.com', this.networkWhitelist)) {
+        return { ok: false, error: 'network request blocked by whitelist' };
+      }
+      try {
+        const resp = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: this.cancelSignal || undefined,
+          body: JSON.stringify({
+            api_key: tavilyKey,
+            query,
+            search_depth: 'basic',
+            include_answer: false,
+            include_images: false,
+            include_raw_content: false,
+            max_results: 5
+          })
+        });
+        const data = await resp.json();
+        if (!data.results || data.results.length === 0) {
+          return { ok: false, error: 'No search results found' };
+        }
+        const results = data.results.slice(0, 5).map((r) => ({
+          title: r.title || '',
+          url: r.url || '',
+          snippet: r.content || r.snippet || ''
+        }));
+        return { ok: true, results };
+      } catch (err) {
+        return { ok: false, error: err.message };
+      }
+    }
+
+    // Fallback: DuckDuckGo Lite scraping
     const searchUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
     if (!isNetworkAllowed(searchUrl, this.networkWhitelist)) {
       return { ok: false, error: 'network request blocked by whitelist' };

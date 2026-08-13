@@ -353,7 +353,18 @@ export class Orchestrator extends EventEmitter {
     return file;
   }
 
-  /** God Mode — full one-prompt-to-delivery pipeline. */
+  /**
+   * God Mode — full one-prompt-to-delivery pipeline.
+   * Integrates planning → wave-based parallel subagents → integration tests →
+   * watch mode daemon (continuous monitoring).
+   *
+   * Flow:
+   *   1. Clear specialized agents (free context windows)
+   *   2. Plan generation
+   *   3. Run plan (parallel subagent waves)
+   *   4. Integration tests + bugfix rounds
+   *   5. Start watch mode daemon for continuous monitoring
+   */
   async runGod(prompt, { confirmFn = null, addMessage = null, fresh = false, deployTarget = null, noTests = false } = {}) {
     const t0 = Date.now();
     // Clear any existing specialized agents to free context windows
@@ -384,7 +395,7 @@ export class Orchestrator extends EventEmitter {
     };
     this.bus.emit(EVENTS.BUILD_COMPLETE, summary);
 
-    // handoff to watch mode
+    // handoff to watch mode — continuous monitoring after build
     if (this.options.watchAfter) {
       await this.startWatch();
     }
@@ -431,5 +442,41 @@ export class Orchestrator extends EventEmitter {
 
   get watchMaxPerHour() {
     return this.watchDaemon?.config?.maxFixesPerHour || 60;
+  }
+
+  /**
+   * God Mode watch integration — start the watch daemon with
+   * continuous monitoring enabled. Called after a god-mode build
+   * completes to keep the project under surveillance.
+   *
+   * The watch daemon runs as an in-process loop (chokidar + interval scan),
+   * emitting WATCH_SCAN, WATCH_CHANGE, and WATCH_FIX events that the UI
+   * picks up for the ProcessingScreen dashboard.
+   */
+  async startGodWatch(opts = {}) {
+    const daemon = await this.startWatch({
+      ...opts,
+      autoCommit: this.config?.watch?.autoCommit || false,
+      confirm: this.config?.watch?.confirm || false
+    });
+
+    // Emit initial watch status for dashboard
+    this.bus?.emit(EVENTS.WATCH_STATUS, 'active');
+    this.bus?.emit(EVENTS.MESSAGE, {
+      kind: 'system',
+      text: 'god watch: continuous monitoring active — file changes auto-analyzed'
+    });
+
+    return daemon;
+  }
+
+  /** Get the watch daemon summary for dashboard display. */
+  getWatchSummary() {
+    return this.watchDaemon?.summary() || null;
+  }
+
+  /** Check if watch daemon is running and monitoring. */
+  get godWatchActive() {
+    return this.watchDaemon?.running || false;
   }
 }
