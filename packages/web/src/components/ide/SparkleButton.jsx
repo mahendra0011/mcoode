@@ -46,7 +46,7 @@ export function SparkleButton({ setPrompt, advancedMode, watchMode, onToggleWatc
             initial={{ opacity: 0, y: -8, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             className="absolute bottom-full right-0 mb-2 w-52 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50"
           >
             {SUGGESTIONS.map((s, i) => (
@@ -56,7 +56,7 @@ export function SparkleButton({ setPrompt, advancedMode, watchMode, onToggleWatc
                 className="w-full text-left text-xs text-white/60 hover:text-white hover:bg-white/5 px-3 py-2 rounded-lg transition flex items-center gap-2"
                 initial={{ opacity: 0, x: -4 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.03 }}
+                transition={{ delay: i * 0.04, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               >
                 <Sparkles className="w-3 h-3 text-amber-400" />
                 {s}
@@ -69,7 +69,7 @@ export function SparkleButton({ setPrompt, advancedMode, watchMode, onToggleWatc
                 className="w-full text-left text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-3 py-2 rounded-lg transition flex items-center gap-2"
                 initial={{ opacity: 0, x: -4 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: SUGGESTIONS.length * 0.03 }}
+                transition={{ delay: SUGGESTIONS.length * 0.04, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               >
                 {watchMode ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                 {watchMode ? 'Stop watching' : 'Watch this project'}

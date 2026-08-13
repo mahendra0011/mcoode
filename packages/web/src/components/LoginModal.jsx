@@ -59,7 +59,7 @@ export function LoginModal({ isOpen, onClose, onSuccess }) {
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 20 }}
         >
           <button 
             onClick={onClose}

@@ -26,6 +26,7 @@ import { WaveProgress } from '../components/ide/WaveProgress';
 import { ChatMessage } from '../components/chat/ChatMessage';
 import { ThoughtBlock } from '../components/chat/ThoughtBlock';
 import { WorkingHeader } from '../components/chat/WorkingHeader';
+import { ChatFlowAnimation } from '../components/chat/ChatFlowAnimation';
 
 export function AIChatPage() {
   const dispatch = useDispatch();
@@ -551,6 +552,20 @@ export function AIChatPage() {
     setPrompt('');
   };
 
+  // ── Compute whether the thinking/flow indicator should show ──
+  // Bulletproof: for chat mode, only while the last message is from the user
+  // (the moment ANY assistant reply appears — stream, tool, or agentMessage — it hides).
+  // For agent mode, show whenever last message isn't an active stream.
+  const showThinkingIndicator = (() => {
+    if (!isStreaming) return false;
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg) return false;
+    if (mode === 'chat') {
+      return lastMsg.role === 'user';
+    }
+    return lastMsg.kind !== 'stream';
+  })();
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden">
 
@@ -569,7 +584,7 @@ export function AIChatPage() {
         {/* Segmented Control */}
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-[#121212] p-0.5 rounded-lg border border-white/5">
           <div 
-            className="absolute inset-y-0.5 bg-blue-500 rounded-md transition-all duration-300 ease-out shadow"
+            className="absolute inset-y-0.5 bg-blue-500 rounded-md transition-all duration-250 ease-out shadow"
             style={{
               width: activeTab === 'Design' ? '64px' : activeTab === 'Chat' ? '56px' : '116px',
               left: activeTab === 'Design' ? '2px' : activeTab === 'Chat' ? '66px' : '122px'
@@ -777,7 +792,7 @@ export function AIChatPage() {
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                     className="absolute bottom-full left-4 mb-2 w-[220px] bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden"
                   >
                     <div className="p-1.5 flex flex-col">
@@ -957,7 +972,7 @@ export function AIChatPage() {
                             initial={{ opacity: 0, y: -8, scale: 0.95 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                            transition={{ duration: 0.15 }}
+                            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                             className="absolute top-full left-0 mt-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
                           >
                             {(() => {
@@ -989,7 +1004,7 @@ export function AIChatPage() {
                           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
                             {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                           </motion.button>
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={toggleAdvancedMode} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={toggleAdvancedMode} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-250 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
                             <Settings className="w-3.5 h-3.5" /> Advanced Mode
                           </motion.button>
                         </div>
@@ -1003,7 +1018,7 @@ export function AIChatPage() {
                             </motion.button>
                           )}
                           {mode === 'agent' && (
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-250 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
                               <Zap className="w-3.5 h-3.5" /> God
                             </motion.button>
                           )}
@@ -1023,7 +1038,7 @@ export function AIChatPage() {
                                 initial={{ scale: 0.9, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
                                 exit={{ scale: 0.9, opacity: 0 }}
-                                transition={{ duration: 0.15 }}
+                                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                                 className="w-8 h-8 rounded-[10px] bg-[#303030] hover:bg-[#404040] flex items-center justify-center transition-all"
                               >
                                 <Square className="w-4 h-4 text-[#d0d0d0] fill-current" />
@@ -1035,7 +1050,7 @@ export function AIChatPage() {
                                 initial={{ scale: 0.9, opacity: 0 }}
                                 animate={{ scale: 1, opacity: 1 }}
                                 exit={{ scale: 0.9, opacity: 0 }}
-                                transition={{ duration: 0.15 }}
+                                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                                 className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
                                 disabled={!prompt.trim() || isStreaming}
                               >
@@ -1095,16 +1110,29 @@ export function AIChatPage() {
                         isNormalChat={mode === 'chat'}
                       />
                     ))}
-                    {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
-                      <div className="flex items-start gap-2.5">
+                    {showThinkingIndicator && (
+                      <motion.div
+                        key="thinking-indicator-chat"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                        className="flex items-start gap-2.5"
+                      >
                         <div className="w-5 h-5 rounded-full border border-white/10 flex-shrink-0 flex items-center justify-center text-xs">
                           M
                         </div>
                         <div className="flex-1 min-w-0">
-                          <WorkingHeader done={false} />
-                          <ThoughtBlock done={false} />
+                          {mode === 'chat' ? (
+                            <ChatFlowAnimation messages={messages} />
+                          ) : (
+                            <>
+                              <WorkingHeader done={false} />
+                              <ThoughtBlock done={false} />
+                            </>
+                          )}
                         </div>
-                      </div>
+                      </motion.div>
                     )}
                     {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
                     <div ref={chatEndRef} />
@@ -1167,7 +1195,7 @@ export function AIChatPage() {
                               initial={{ opacity: 0, y: 8, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                              transition={{ duration: 0.15 }}
+                              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                               className="absolute bottom-full left-0 mb-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
                             >
                               {(() => {
@@ -1198,7 +1226,7 @@ export function AIChatPage() {
                           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
                             {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                           </motion.button>
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={toggleAdvancedMode} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={toggleAdvancedMode} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-250 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
                             <Settings className="w-3.5 h-3.5" /> Advanced Mode
                           </motion.button>
                           <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
@@ -1219,7 +1247,7 @@ export function AIChatPage() {
                               initial={{ scale: 0.9, opacity: 0 }}
                               animate={{ scale: 1, opacity: 1 }}
                               exit={{ scale: 0.9, opacity: 0 }}
-                              transition={{ duration: 0.15 }}
+                              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                               className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center transition-all border border-red-500/50"
                             >
                               <Square className="w-3 h-3 text-red-400 fill-current" />
@@ -1231,7 +1259,7 @@ export function AIChatPage() {
                               initial={{ scale: 0.9, opacity: 0 }}
                               animate={{ scale: 1, opacity: 1 }}
                               exit={{ scale: 0.9, opacity: 0 }}
-                              transition={{ duration: 0.15 }}
+                              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                               className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
                               disabled={!prompt.trim() || isStreaming}
                             >
@@ -1323,7 +1351,7 @@ export function AIChatPage() {
                         />
                       ))}
                     </AnimatePresence>
-                      {isStreaming && messages[messages.length - 1]?.kind !== 'stream' && (
+                      {showThinkingIndicator && (
                         <AgentActionSequence key="agent-action-sequence-2" />
                       )}
                       {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
@@ -1374,7 +1402,7 @@ export function AIChatPage() {
                               initial={{ opacity: 0, y: 8, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                              transition={{ duration: 0.15 }}
+                              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                               className="absolute bottom-full left-0 mb-2 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl p-2 z-50 overflow-y-auto max-h-60"
                             >
                               {(() => {
@@ -1405,7 +1433,7 @@ export function AIChatPage() {
                             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
                               {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                             </motion.button>
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={toggleAdvancedMode} className={`px-3 h-7 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={toggleAdvancedMode} className={`px-3 h-7 rounded-lg flex items-center gap-2 transition-all duration-250 text-xs font-medium border backdrop-blur-md ${mode === 'agent' ? 'bg-gradient-to-r from-[#eab308]/10 to-[#f59e0b]/10 text-[#fcd34d] border-[#eab308]/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
                               <Settings className="w-3.5 h-3.5" /> Advanced Mode
                             </motion.button>
                             <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
@@ -1415,7 +1443,7 @@ export function AIChatPage() {
                               </motion.button>
                             )}
                             {mode === 'agent' && (
-                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-7 rounded-lg flex items-center gap-2 transition-all duration-300 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-7 rounded-lg flex items-center gap-2 transition-all duration-250 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
                                 <Zap className="w-3.5 h-3.5" /> God
                               </motion.button>
                             )}
@@ -1431,7 +1459,7 @@ export function AIChatPage() {
                                   initial={{ scale: 0.9, opacity: 0 }}
                                   animate={{ scale: 1, opacity: 1 }}
                                   exit={{ scale: 0.9, opacity: 0 }}
-                                  transition={{ duration: 0.15 }}
+                                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                                   className="w-7 h-7 rounded-[8px] bg-[#303030] hover:bg-[#404040] flex items-center justify-center transition-all"
                                 >
                                   <Square className="w-3.5 h-3.5 text-[#d0d0d0] fill-current" />
@@ -1443,7 +1471,7 @@ export function AIChatPage() {
                                   initial={{ scale: 0.9, opacity: 0 }}
                                   animate={{ scale: 1, opacity: 1 }}
                                   exit={{ scale: 0.9, opacity: 0 }}
-                                  transition={{ duration: 0.15 }}
+                                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                                   className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition disabled:opacity-50" 
                                   disabled={!prompt.trim() || isStreaming}
                                 >
@@ -1478,7 +1506,7 @@ export function AIChatPage() {
             initial={{ opacity: 0, scale: 0.95, y: -8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -8 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             className="branch-dropdown fixed top-16 right-6 z-[200] w-56 bg-[#151515] border border-white/10 rounded-xl shadow-xl overflow-hidden"
           >
             <div className="p-2 border-b border-white/5 text-xs font-semibold text-white/50 uppercase tracking-wider">
@@ -1523,7 +1551,7 @@ export function AIChatPage() {
               initial={{ opacity: 0, x: 100, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 100, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               className={`max-w-sm px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 border ${
                 toast.type === 'error'
                   ? 'bg-red-500/10 border-red-500/30 text-red-400'
@@ -1549,7 +1577,7 @@ export function AIChatPage() {
                 initial={{ opacity: 0, x: 100, scale: 0.95 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 100, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                 className={`max-w-sm px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 border ${
                   isError
                     ? 'bg-red-500/10 border-red-500/30 text-red-400'
@@ -1582,7 +1610,7 @@ export function AIChatPage() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               className="bg-[#18181b] border border-white/20 rounded-xl p-6 w-80 mx-4"
               onClick={(e) => e.stopPropagation()}
             >
@@ -1638,7 +1666,7 @@ export function AIChatPage() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               className="bg-[#18181b] border border-white/20 rounded-xl p-6 w-80 mx-4"
               onClick={(e) => e.stopPropagation()}
             >

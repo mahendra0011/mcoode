@@ -119,6 +119,9 @@ export class ChatSession {
     });
     await this.undoStack.load();
 
+    // Per-user long-term memory file (Claude-style durable facts — chat mode only)
+    this.memoryDir = join(userDir, 'memory.md');
+
     // Set up the audit log (mirrors the CLI orchestrator's pattern)
     const { AuditLog } = await import('mcode-cli/audit');
     this.auditLog = new AuditLog({ projectId: String(this.userId).slice(-12) });
@@ -334,7 +337,12 @@ export class ChatSession {
     const chatConfig = {
       ...this.config,
       allowShellAll: false,
-      requireEditApproval: true
+      requireEditApproval: true,
+      // Send the FULL conversation on every turn (Claude-style: no memory
+      // between messages — the whole history goes into context fresh).
+      historyLimit: 0,
+      // Chat-style behavior: no filler greetings, answer directly.
+      extraRules: `Never open with filler greetings like "Hello! I'm here to help you with your project" or "What would you like me to assist you with today?". Always respond directly to the user's message — start with the answer, keep it concise, no empty pleasantries.`
     };
 
     const agent = new ChatAgent({
@@ -345,6 +353,8 @@ export class ChatSession {
       config: chatConfig,
       reasoning: this.router?.reasoning || null,
       history: this.history,
+      memoryDir: this.memoryDir,
+      environment: 'mcode web chat interface (claude.ai-style assistant — plain chat mode, single model, no subagents)',
       onTool: ({ tool, args, replaceKey }) => {
         const payload = { tool, args, replaceKey, status: 'running', timestamp: Date.now() };
         // For search-type tools, include a searchResults stub so the frontend

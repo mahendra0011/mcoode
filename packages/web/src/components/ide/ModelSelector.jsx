@@ -153,7 +153,7 @@ export function ModelSelector({ compact = false, onAuthRequired, onManageModels 
               initial={{ opacity: 0, scale: 0.95, y: 5 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 5 }}
-              transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               className={`absolute ${compact ? 'bottom-full right-0' : 'bottom-full left-0'} mb-2 w-52 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 py-1.5`}
               onMouseLeave={() => setHoveredProvider(null)}
             >
@@ -184,7 +184,7 @@ export function ModelSelector({ compact = false, onAuthRequired, onManageModels 
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: -10 }}
-                          transition={{ duration: 0.15 }}
+                          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                           className="absolute bottom-0 left-full ml-1 w-64 max-h-80 overflow-y-auto bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 custom-scrollbar py-1.5"
                         >
                           {providerModels.map((m) => (

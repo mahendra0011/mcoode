@@ -17,7 +17,7 @@ export function ThinkingIndicator({ size = 'md', showAvatar = false }) {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       className={`flex items-center gap-1.5 ${size === 'sm' ? 'text-[13px]' : 'text-[15px]'}`}
     >
       {showAvatar && (

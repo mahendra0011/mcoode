@@ -12,7 +12,7 @@ import { BrowserTool } from './browser-tool.js';
  * diff-preview layer so `/undo` can revert any todo's changes.
  */
 export class ToolExecutor {
-  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, requireEditApproval = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null }) {
+  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, requireEditApproval = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null, memoryDir = null }) {
     this.projectPath = resolve(projectPath);
     this.bus = bus;
     this.undoStack = undoStack;
@@ -23,6 +23,7 @@ export class ToolExecutor {
     this.cancelSignal = cancelSignal;
     this.networkWhitelist = networkWhitelist;
     this.auditLog = auditLog;
+    this.memoryDir = memoryDir;
     this.browserTool = null; // lazily created
   }
 
@@ -35,6 +36,13 @@ export class ToolExecutor {
       web_fetch: { description: 'Fetch and extract text content from a URL', parameters: { url: 'string' } },
       git_status: { description: 'Show current git status / diff summary', parameters: {} }
     };
+    // Long-term user memory — only available when the session provides a
+    // per-user memory file (web chat sessions). Claude-style: the model saves
+    // durable facts (name, preferences, project details) — not per-turn notes.
+    if (this.memoryDir) {
+      t.memory_write = { description: 'Save a stable, lasting fact the user shared (their name, preferences, project details) to long-term memory — only for specific permanent facts, NOT random per-turn notes', parameters: { fact: 'string' } };
+      t.memory_read = { description: 'Read facts previously saved to long-term user memory (optionally filtered by a keyword)', parameters: { key: 'string?' } };
+    }
     if (this.domain !== 'chat' && this.domain !== 'docs') {
       t.write_file = { description: 'Write a file (creates parent dirs)', parameters: { path: 'string', content: 'string' } };
       t.edit_file = { description: 'Edit a file by replacing text', parameters: { path: 'string', old: 'string', new: 'string' } };
@@ -367,6 +375,45 @@ export class ToolExecutor {
       const title = titleMatch ? redactSecrets(this._stripHtml(titleMatch[1])) : url;
 
       return { ok: true, url, title, content: text.slice(0, 8000) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /** Save a durable user fact to the per-user memory file (append-only, deduped). */
+  async memory_write({ fact }) {
+    if (!this.memoryDir) return { ok: false, error: 'memory is not available in this session' };
+    const factStr = String(fact || '').trim();
+    if (!factStr) return { ok: false, error: 'no fact provided' };
+    try {
+      const { dirname } = await import('node:path');
+      await mkdir(dirname(this.memoryDir), { recursive: true });
+      let content = '';
+      try { content = await readFile(this.memoryDir, 'utf8'); } catch { /* first write */ }
+      const line = `- ${factStr.replace(/\n/g, ' ')}`;
+      if (content.split('\n').includes(line)) return { ok: true, saved: false, note: 'already in memory' };
+      const updated = content.trimEnd() + (content.trimEnd() ? '\n' : '') + line + '\n';
+      await writeFile(this.memoryDir, updated, 'utf8');
+      return { ok: true, saved: true };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /** Read facts from the per-user memory file (optionally filtered by keyword). */
+  async memory_read({ key = null } = {}) {
+    if (!this.memoryDir) return { ok: false, error: 'memory is not available in this session' };
+    try {
+      let content = '';
+      try { content = await readFile(this.memoryDir, 'utf8'); } catch { return { ok: true, entries: [] }; }
+      const entries = content
+        .split('\n')
+        .map((l) => l.replace(/^-\s*/, '').trim())
+        .filter(Boolean);
+      const filtered = key
+        ? entries.filter((l) => l.toLowerCase().includes(String(key).toLowerCase()))
+        : entries;
+      return { ok: true, entries: filtered };
     } catch (err) {
       return { ok: false, error: err.message };
     }

@@ -100,7 +100,7 @@ function parseToolCalls(text) {
 
 /**
  * MessageContent — renders messages as Markdown with syntax highlighting.
- * No framer-motion for internal elements, just simple rendering.
+ * Uses data-zcode-stream-animate for text fade-in when streaming.
  */
 export function MessageContent({ msg, text, size = 'md', isStreaming = false, children }) {
   const [copied, setCopied] = useState(false);
@@ -232,7 +232,10 @@ export function MessageContent({ msg, text, size = 'md', isStreaming = false, ch
   }
 
   return (
-    <div className={`prose prose-invert max-w-none ${textSize} font-sans`}>
+    <div
+      className={`prose prose-invert max-w-none ${textSize} font-sans`}
+      data-zcode-stream-animate={isStreaming ? 'true' : undefined}
+    >
       {parsedParts.map((part, index) => {
         if (part.type === 'tool') {
           // The model's raw <tool_call> declaration is an internal

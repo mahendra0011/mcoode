@@ -9,6 +9,7 @@ export function TodoCard({ plan }) {
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       className="w-full mb-6 bg-[#111] rounded-xl border border-white/10 overflow-hidden shadow-lg"
     >
       <div className="p-3 bg-gradient-to-r from-blue-500/10 to-emerald-500/10 border-b border-white/5 flex items-center gap-2">
@@ -27,7 +28,7 @@ export function TodoCard({ plan }) {
                   <motion.div
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 20 }}
                   >
                     <motion.svg
                       width="16"
@@ -43,7 +44,7 @@ export function TodoCard({ plan }) {
                       <motion.path
                         initial={{ pathLength: 0, opacity: 0 }}
                         animate={{ pathLength: 1, opacity: 1 }}
-                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
                         d="M5 12.5l5 5 9-9"
                       />
                     </motion.svg>

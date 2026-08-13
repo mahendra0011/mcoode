@@ -99,7 +99,7 @@ export function WroteFile({ filename, lang, lines }) {
     <motion.div
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.18 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       style={{
         display: "flex",
         alignItems: "center",
@@ -137,15 +137,15 @@ export function DiffBlock({ filename, added, removed }) {
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${(added / (added + removed)) * 100}%` }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          style={{ background: "var(--zc-green)" }}
-        />
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${(removed / (added + removed)) * 100}%` }}
-          transition={{ duration: 0.4, ease: "easeOut", delay: 0.05 }}
-          style={{ background: "var(--zc-red)" }}
-        />
+        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+        style={{ background: "var(--zc-green)" }}
+      />
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: `${(removed / (added + removed)) * 100}%` }}
+        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1], delay: 0.05 }}
+        style={{ background: "var(--zc-red)" }}
+      />
       </div>
     </div>
   );
@@ -173,6 +173,7 @@ export function TerminalOutput({ command, output }) {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       style={{
         background: "transparent",
         border: "1px solid var(--zc-border)",
@@ -222,9 +223,9 @@ export function GoalTracker({ title, steps, elapsed, tokens }) {
       <div style={{ height: 4, background: "var(--zc-border)", borderRadius: 2, overflow: "hidden", marginBottom: 10 }}>
         <motion.div
           animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          style={{ height: "100%", background: "var(--zc-green)" }}
-        />
+        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+        style={{ height: "100%", background: "var(--zc-green)" }}
+      />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

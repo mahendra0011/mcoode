@@ -49,7 +49,13 @@ const TreeNode = ({ node, level = 0, onFileSelect, activePath }) => {
       
       <AnimatePresence>
         {isOpen && (
-          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
+            <motion.div
+              initial={{ height: 0 }}
+              animate={{ height: 'auto' }}
+              exit={{ height: 0 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              className="overflow-hidden"
+            >
             {Object.values(node.children).sort((a, b) => {
               if (Boolean(a.children) === Boolean(b.children)) return a.name.localeCompare(b.name);
               return a.children ? -1 : 1; // folders first

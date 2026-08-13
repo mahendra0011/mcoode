@@ -22,6 +22,8 @@ const initialState = {
   currentDesign: null, // { _id, html, prompt, version, versions[], device }
   designStatus: 'idle', // 'idle' | 'generating' | 'ready' | 'error'
   designError: null,
+  // Internal guard: prevents stray stream events from re-activating isStreaming
+  _turnDone: false,
 };
 
 const chatSlice = createSlice({
@@ -58,6 +60,7 @@ const chatSlice = createSlice({
       }
       state.status = 'error';
       state.isStreaming = false;
+      state._turnDone = true;
       // Finalize any in-progress streaming message so the ThinkingIndicator
       // stops and the message isn't left in a 'stream' state.
       const lastMessage = state.messages[state.messages.length - 1];
@@ -94,9 +97,13 @@ const chatSlice = createSlice({
     addMessage: (state, action) => {
       state.messages.push(action.payload);
       state.isStreaming = true;
+      state._turnDone = false; // New turn — reset guard
       state.keysError = null;
     },
-streamUpdate: (state, action) => {
+    streamUpdate: (state, action) => {
+      // If the turn is already done, ignore stray late stream events
+      if (state._turnDone) return;
+
       const text = action.payload;
       const lastMessage = state.messages[state.messages.length - 1];
       if (lastMessage && lastMessage.role === 'assistant' && lastMessage.kind === 'stream') {
@@ -119,6 +126,7 @@ streamUpdate: (state, action) => {
     },
     resetStreaming: (state) => {
       state.isStreaming = false;
+      state._turnDone = true;
     },
     agentMessage: (state, action) => {
       const msg = action.payload;
@@ -188,6 +196,7 @@ streamUpdate: (state, action) => {
     },
     chatDone: (state, action) => {
       state.isStreaming = false;
+      state._turnDone = true;
       // Finalize EVERY lingering 'stream' message — a turn can span multiple
       // stream blocks (narration → tool card → narration), and each must flip
       // to a finished assistant message so cursors/thinking dots stop.
@@ -217,6 +226,7 @@ streamUpdate: (state, action) => {
       state.plan = null;
       state.permissionRequest = null;
       state.isStreaming = false;
+      state._turnDone = false;
       state.keysError = null;
     },
 

@@ -4,8 +4,9 @@ import { MessageContent } from './MessageContent';
 import { StepCard } from '../ide/StepCards';
 
 /**
- * ChatMessage — simple Claude-style message.
- * No fancy stagger, no pop, no spring — just opacity fade + slight y slide.
+ * ChatMessage — Claude-style message with ZCode animation patterns.
+ * Uses cubic-bezier(.16, 1, .3, 1) easing (ZCode standard) with stagger
+ * delays via idx * 0.02. Streaming cursor blinks at 1s intervals.
  *
  * Props:
  *   msg            — message object
@@ -24,7 +25,7 @@ export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormal
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.15, ease: 'easeOut' }}
+        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className={`flex justify-end ${size === 'sm' ? 'max-w-[90%]' : 'max-w-[80%]'}`}
       >
         <div
@@ -48,7 +49,7 @@ export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormal
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.15, ease: 'easeOut', delay: staggerDelay }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: staggerDelay }}
       className="flex flex-col gap-2"
     >
       <div className="flex items-start gap-2.5">
@@ -68,6 +69,8 @@ export function ChatMessage({ msg, idx, size = 'md', isStreaming, undo, isNormal
               >
                 {showCursor && (
                   <motion.span
+                    data-zcode-stream-marker-animate="true"
+                    style={{ ['--zcode-stream-animation-delay']: '0s' }}
                     className="inline-block w-1.5 h-3.5 ml-0.5 bg-emerald-400 align-middle"
                     animate={{ opacity: [0.3, 1, 0.3] }}
                     transition={{ duration: 1, repeat: Infinity }}

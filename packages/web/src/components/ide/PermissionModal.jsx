@@ -12,7 +12,7 @@ export function PermissionModal({ request, onAnswer }) {
           initial={{ opacity: 0, y: -12, height: 0 }}
           animate={{ opacity: 1, y: 0, height: 'auto' }}
           exit={{ opacity: 0, y: -12, height: 0 }}
-          transition={{ duration: 0.25, ease: [0.32, 0.4, 0.2, 1] }}
+          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
           className="w-full mb-4"
         >
           <div className="w-full bg-[#1e1a0a] border border-[#eab308]/30 rounded-xl p-4 shadow-lg">

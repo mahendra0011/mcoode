@@ -41,7 +41,7 @@ export function WaveProgress({ waves = [], subagents = {}, buildSummary = null, 
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       className="w-full max-w-4xl mx-auto mb-4"
     >
       <div className="bg-[#151515] border border-white/10 rounded-xl overflow-hidden">
@@ -88,7 +88,7 @@ export function WaveProgress({ waves = [], subagents = {}, buildSummary = null, 
                       className={`h-full rounded-full ${barColor} relative`}
                       initial={{ width: 0 }}
                       animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.5, ease: 'easeOut' }}
+                      transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
                     />
                   </div>
 

@@ -117,14 +117,14 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
       className="flex-1 flex flex-col min-w-0 bg-[#0e0e0e] h-full"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
       {/* Editor Tabs */}
       <motion.div
         className="flex items-center border-b border-white/5 bg-[#151515] overflow-x-auto custom-scrollbar flex-shrink-0"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+        transition={{ delay: 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       >
         {openFiles.map((path, i) => {
           const name = path.split('/').pop();
@@ -136,7 +136,7 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
               initial={{ opacity: 0, x: -5 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -5 }}
-              transition={{ delay: i * 0.02 + 0.1 }}
+              transition={{ delay: i * 0.04 + 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               onClick={() => setActivePath(path)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm cursor-pointer whitespace-nowrap ${
                 isActive
@@ -171,9 +171,10 @@ export function EditorPane({ workspaceId, openFiles, activePath, setActivePath, 
         <AnimatePresence>
           {loading && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               className="absolute inset-0 flex items-center justify-center bg-[#0e0e0e]/50 z-10 text-white/50 text-sm"
             >
               Loading...

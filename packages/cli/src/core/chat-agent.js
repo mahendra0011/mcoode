@@ -1,6 +1,7 @@
 import { ToolExecutor } from './tools.js';
 import { EVENTS } from '@mcode/shared';
 import { join, isAbsolute, relative } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 /* global AbortController */
 
@@ -12,11 +13,22 @@ import { join, isAbsolute, relative } from 'node:path';
  * optional, not required).
  */
 
-export function buildAgentSystem(projectPath, tools, maxTurns) {
+export function buildAgentSystem(projectPath, tools, maxTurns, opts = {}) {
+  const { memory = '', environment = '', date = new Date().toISOString().slice(0, 10), extraRules = '' } = opts;
+  const envBlock = environment
+    ? `Environment: ${environment}\nCurrent date: ${date}\n`
+    : '';
+  const memoryBlock = String(memory || '').trim()
+    ? `SAVED USER MEMORY (facts the user has shared before — use them where relevant; save new durable facts with memory_write):\n${String(memory).trim()}\n\n`
+    : '';
+  const styleBlock = String(extraRules || '').trim()
+    ? `\nSTYLE:\n${String(extraRules).trim()}\n`
+    : '';
   return `You are mcode, a terminal-first AI coding agent. You are working autonomously inside the project:
 ${projectPath}
 
-You can inspect code, edit files, run commands and tests, then give the user a final answer.
+${envBlock}
+${memoryBlock}You can inspect code, edit files, run commands and tests, then give the user a final answer.
 
 AVAILABLE TOOLS:
 ${Object.entries(tools)
@@ -47,7 +59,7 @@ RULES:
 - Read a file before overwriting it. Never invent files that already exist.
 - run_shell is allowed for npm scripts, builds, git commands — but never destructive commands (rm -rf etc).
 - Verify your work: run the relevant tests when you changed code.
-- Maximum ${maxTurns} actions for one user request. When you are done, stop.`;
+- Maximum ${maxTurns} actions for one user request. When you are done, stop.${styleBlock}`;
 }
 
 const ACTION_FENCE = /```mcode-action\s*([\s\S]*?)```/g;
@@ -136,7 +148,7 @@ export function extractActions(text) {
  */
 function canParallelize(toolName, args, changedFiles) {
   // Read-only tools can always run in parallel
-  const readOnly = ['read_file', 'list_files', 'search_code', 'web_search', 'web_fetch', 'git_status'];
+  const readOnly = ['read_file', 'list_files', 'search_code', 'web_search', 'web_fetch', 'git_status', 'memory_read'];
   if (readOnly.includes(toolName)) return true;
 
   // write_file/edit_file depend on file state — parallelize only if different files
@@ -172,15 +184,22 @@ async function* streamText(assignment, model, params) {
   }
 }
 export class ChatAgent {
-  constructor({ assignment, projectPath, bus, undoStack, config = {}, reasoning = null, history = [], onTool = null, domain = null }) {
+  constructor({ assignment, projectPath, bus, undoStack, config = {}, reasoning = null, history = [], onTool = null, domain = null, memoryDir = null, environment = null }) {
     this.assignment = assignment;
     this.projectPath = projectPath;
     this.config = config;
     this.domain = domain; // domain specialization for context isolation
+    this.memoryDir = memoryDir; // per-user long-term memory file (chat mode)
+    this.environment = environment; // env-specific system context (chat mode)
+    this.extraRules = config.extraRules || ''; // style/behavior rules (chat mode)
     this.bus = bus;
     this.undoStack = undoStack;
     this.reasoning = reasoning;
-    this.history = history ? history.slice(-20) : [];
+    // History cap: config.historyLimit === 0 → full conversation (Claude-style
+    // chat mode); unset/positive N → last N messages (agent mode, default 20).
+    const hl = Number(config.historyLimit);
+    this.historyLimit = hl === 0 ? null : (Number.isFinite(hl) && hl > 0 ? hl : 20);
+    this.history = history ? this._capHistory(history) : [];
     this.maxTurns = Math.max(1, Number(config.chatAgentTurns) || config.maxTurnsPerAgent || 12);
     this.allowShellAll = Boolean(config.allowShellAll);
     this.requireEditApproval = Boolean(config.requireEditApproval);
@@ -202,6 +221,11 @@ export class ChatAgent {
   /** Clear conversation history for this specialized agent (frees context window). */
   clearHistory() {
     this.history = [];
+  }
+
+  _capHistory(history) {
+    if (this.historyLimit === null) return [...history];
+    return history.slice(-this.historyLimit);
   }
 
   /** Cancel the current run (user pressed escape/Ctrl+C). */
@@ -512,11 +536,20 @@ export class ChatAgent {
       auditLog: this.auditLog,
       domain: this.config.domain || 'backend',
       todoId: null,
+      memoryDir: this.memoryDir,
       cancelSignal: signal
     });
 
+    // Load the user's saved memory (if provided) so it enters the system context.
+    let memoryContext = '';
+    if (this.memoryDir) {
+      try {
+        memoryContext = await readFile(this.memoryDir, 'utf8');
+      } catch { /* no memory file yet */ }
+    }
+
     const messages = [
-      { role: 'system', content: buildAgentSystem(this.projectPath, tools.tools(), this.maxTurns) },
+      { role: 'system', content: buildAgentSystem(this.projectPath, tools.tools(), this.maxTurns, { memory: memoryContext, environment: this.environment, extraRules: this.extraRules }) },
       ...this.history,
       { role: 'user', content: prompt }
     ];
@@ -654,6 +687,24 @@ export class ChatAgent {
       for (const { action, replaceKey, preview, result } of results.filter(r => r)) {
         if (!result) continue;
         const ok = !result || result.ok !== false;
+        const meta = this._blockMeta(action.tool, action.args || {}, result);
+
+        // Perplexity-style "Reading N sources" phase: once web results are in,
+        // first surface them as an intermediate reading step (spinner + pills),
+        // then flip the card to the done state — mimicking Claude/Perplexity's
+        // searching → reading → done sequence.
+        if (ok && meta.searchResults && (action.tool === 'web_search' || action.tool === 'web_fetch')) {
+          this.bus?.emit(EVENTS.MESSAGE, {
+            kind: 'tool',
+            replaceKey,
+            tool: action.tool,
+            args: preview,
+            status: 'running',
+            searchResults: { ...meta.searchResults, phase: 'reading' }
+          });
+          await new Promise((r) => setTimeout(r, 650));
+        }
+
         this.bus?.emit(EVENTS.MESSAGE, {
           kind: 'tool',
           replaceKey,
@@ -661,7 +712,7 @@ export class ChatAgent {
           args: preview,
           status: ok ? 'done' : 'failed',
           error: ok ? '' : String(result?.error || 'failed').slice(0, 300),
-          ...this._blockMeta(action.tool, action.args || {}, result)
+          ...meta
         });
 
         if (ok && action.tool === 'write_file') {
@@ -696,7 +747,7 @@ export class ChatAgent {
     try { await tools.cleanupBrowser(); } catch { /* ignore */ }
 
     const full = this.narration.join('\n\n') || '...';
-    this.history = this.history.slice(-20);
+    this.history = this._capHistory(this.history);
     return { text: full, turns: this.turn, history: this.history, interrupted: this.aborted };
   }
 }

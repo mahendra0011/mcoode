@@ -83,6 +83,9 @@ export function useChatSocket(workspaceId = null) {
   // single batched dispatch every 16ms to reduce React re-renders.
   const streamBufferRef = useRef('');
   const streamTimerRef = useRef(null);
+  // Guard: once chat:done fires, ignore any stray/late chat:stream events
+  // that arrive after (prevents isStreaming from flipping back to true).
+  const doneRef = useRef(false);
 
   // ── Fetch available models from the backend (GET /api/v1/keys/models) ──
   const reloadModels = useCallback(async () => {
@@ -144,6 +147,8 @@ export function useChatSocket(workspaceId = null) {
     // (~60fps) to avoid a React re-render on every tiny delta. This dramatically
     // reduces churn when the provider sends hundreds of small chunks.
     const onChatStream = (payload) => {
+      // Ignore stray stream chunks that arrive after chat:done
+      if (doneRef.current) return;
       if (payload && payload.text) {
         streamBufferRef.current += payload.text;
         if (!streamTimerRef.current) {
@@ -201,6 +206,7 @@ export function useChatSocket(workspaceId = null) {
         streamTimerRef.current = null;
       }
       dispatch(chatDone(payload || {}));
+      doneRef.current = true;
     };
 
     const onUndoResult = (payload) => {
@@ -277,12 +283,10 @@ export function useChatSocket(workspaceId = null) {
     socket.on('disconnect', onDisconnect);
 
     // God-mode events
-    socket.on('subagent:started', onSubagentStarted);
     socket.on('subagent:created', onSubagentCreated);
     socket.on('subagent:assigned', onSubagentAssigned);
     socket.on('subagent:started', onSubagentStarted);
     socket.on('subagent:step', onSubagentStep);
-    socket.on('subagent:done', onSubagentDone);
     socket.on('subagent:done', onSubagentDone);
     socket.on('subagent:failed', onSubagentFailed);
     socket.on('subagent:file', onSubagentFile);
@@ -373,6 +377,7 @@ export function useChatSocket(workspaceId = null) {
 
     const send = useCallback((prompt, overrideMode = null) => {
     if (socketRef.current) {
+      doneRef.current = false; // Reset guard for the new turn
       const effectiveMode = overrideMode || mode;
       socketRef.current.emit('chat:send', { prompt, mode: effectiveMode });
     }

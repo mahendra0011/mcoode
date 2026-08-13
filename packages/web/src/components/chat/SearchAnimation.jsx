@@ -63,7 +63,7 @@ export function SearchStatusLine({ phase, query, sourceCount }) {
           initial={{ opacity: 0, y: 3 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -3 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         >
           {label}
         </motion.span>
@@ -88,7 +88,7 @@ export function SourcePillRow({ sources }) {
             rel="noreferrer"
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
+            transition={{ delay: i * 0.04, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             whileHover={{ opacity: 0.75 }}
             style={{
               display: "flex",
@@ -148,7 +148,7 @@ export function SourcesPanel({ sources, defaultOpen = false }) {
       >
         <Globe size={13} />
         {sources.length} sources
-        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.15 }}>
+        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}>
           ▾
         </motion.span>
       </button>
@@ -159,7 +159,7 @@ export function SourcesPanel({ sources, defaultOpen = false }) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             style={{ overflow: "hidden" }}
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 8 }}>
@@ -171,7 +171,7 @@ export function SourcesPanel({ sources, defaultOpen = false }) {
                   rel="noreferrer"
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.04 }}
+                  transition={{ delay: i * 0.04, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                   whileHover={{ x: 2 }}
                   style={{
                     display: "flex",
@@ -285,7 +285,7 @@ export function SearchResultBlock({ query, phase, sources, answer }) {
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             style={{ marginTop: 6 }}
           >
             {phase === "answering" ? (

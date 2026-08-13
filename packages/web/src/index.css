@@ -230,6 +230,25 @@
   animation: 1.2s ease-out both fork-highlight-pulse;
 }
 
+/* Reaction burst: pop + particles (e.g. when a tool succeeds) */
+.zcode-reaction-pop {
+  animation: .25s cubic-bezier(.16, 1, .3, 1) both zcode-reaction-pop;
+}
+.zcode-reaction-particles {
+  animation: .5s cubic-bezier(.16, 1, .3, 1) both zcode-reaction-particles;
+}
+
+/* Pulse caret for syntax highlight cursor */
+.pulse-caret {
+  animation: pulse-caret 1s step-end infinite;
+}
+
+/* Tool/stream text fade-in (also applied via data attributes above) */
+.zcode-stream-text-in {
+  will-change: opacity;
+  animation: .9s cubic-bezier(.16, 1, .3, 1) both zcode-stream-text-in;
+}
+
 [data-slot="progress-indicator"] {
   position: relative;
   overflow: hidden;

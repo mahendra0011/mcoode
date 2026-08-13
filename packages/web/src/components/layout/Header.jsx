@@ -31,7 +31,7 @@ export function Header() {
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.1 }}
+            transition={{ duration: 0.4, delay: 0.1, ease: [0.4, 0, 0.2, 1] }}
           >
             <Link to="/" className="flex items-center gap-2 ml-4 max-[850px]:ml-0">
               <motion.div
@@ -68,7 +68,7 @@ export function Header() {
                   key={label}
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.15 + i * 0.05 }}
+                  transition={{ duration: 0.3, delay: 0.15 + i * 0.04, ease: [0.4, 0, 0.2, 1] }}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -96,7 +96,7 @@ export function Header() {
             className="flex items-center gap-4 max-[850px]:hidden"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.2, ease: [0.4, 0, 0.2, 1] }}
           >
             {isLoggedIn ? (
               <MotionLink
@@ -131,7 +131,7 @@ export function Header() {
                   <motion.span
                     className="relative z-10 w-10 h-10 flex items-center justify-center text-black"
                     whileHover={{ rotate: -45 }}
-                    transition={{ type: "spring", stiffness: 300 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 20 }}
                   >
                     <ArrowDownRight className="w-4 h-4" />
                   </motion.span>

@@ -60,7 +60,7 @@ export function ThoughtBlock({ content, done, startedAt }) {
         <span style={{ fontWeight: 600, color: 'var(--zc-text, #e6e6ea)' }}>Thought</span>
         <span>{`for ${durationLabel}`}</span>
         {content && (
-          <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.15 }} style={{ display: 'flex' }}>
+          <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }} style={{ display: 'flex' }}>
             <ChevronRight size={12} />
           </motion.span>
         )}
@@ -72,7 +72,7 @@ export function ThoughtBlock({ content, done, startedAt }) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             style={{ overflow: 'hidden' }}
           >
             <div style={{

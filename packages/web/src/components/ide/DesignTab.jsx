@@ -160,13 +160,13 @@ export function DesignTab() {
           className="p-3 border-b border-white/5"
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         >
           <div className="relative">
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.1, type: 'spring', stiffness: 300 }}
+              transition={{ delay: 0.1, type: 'spring', stiffness: 500, damping: 20 }}
             >
               <Search className="w-4 h-4 text-white/30 absolute left-2 top-1/2 -translate-y-1/2" />
             </motion.div>
@@ -184,7 +184,7 @@ export function DesignTab() {
           className="flex border-b border-white/5"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, staggerChildren: 0.05 }}
+          transition={{ delay: 0.15, staggerChildren: 0.04, ease: [0.4, 0, 0.2, 1] }}
         >
           <motion.button
             onClick={() => setShowHistory(false)}
@@ -212,7 +212,7 @@ export function DesignTab() {
           className="flex-1 overflow-y-auto custom-scrollbar"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.2, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         >
           {!showHistory ? (
             <motion.div
@@ -221,7 +221,7 @@ export function DesignTab() {
               animate="visible"
               variants={{
                 hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { staggerChildren: 0.03, delayChildren: 0.2 } }
+                visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.2, ease: [0.4, 0, 0.2, 1] } }
               }}
             >
               {filteredTemplates.map((t, i) => (
@@ -235,7 +235,7 @@ export function DesignTab() {
                   }`}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.2 + i * 0.03 }}
+                  transition={{ delay: 0.2 + i * 0.04, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                   whileHover={{ scale: 1.02, x: 3 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -243,7 +243,7 @@ export function DesignTab() {
                     className="font-medium"
                     initial={{ opacity: 0 }}
                     whileInView={{ opacity: 1 }}
-                    transition={{ delay: 0.05 }}
+                    transition={{ delay: 0.05, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                   >
                     {t.name}
                   </motion.div>
@@ -251,7 +251,7 @@ export function DesignTab() {
                     className="text-white/40 mt-0.5"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.08 }}
+                    transition={{ delay: 0.08, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                   >
                     {t.desc}
                   </motion.div>
@@ -265,7 +265,7 @@ export function DesignTab() {
               animate="visible"
               variants={{
                 hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { staggerChildren: 0.05, delayChildren: 0.1 } }
+                visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.1, ease: [0.4, 0, 0.2, 1] } }
               }}
             >
               {designs.length === 0 ? (
@@ -273,7 +273,7 @@ export function DesignTab() {
                   className="text-center py-8 text-white/30 text-xs"
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.1 }}
+                  transition={{ delay: 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                 >
                   No saved designs yet
                 </motion.div>
@@ -370,7 +370,7 @@ export function DesignTab() {
             <div className="text-center text-white/30">
               <motion.div
                 animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
               >
                 <Sparkles className="w-8 h-8 mx-auto mb-2" />
               </motion.div>
@@ -378,7 +378,7 @@ export function DesignTab() {
               <p className="text-[10px] text-white/30">The AI is crafting your UI</p>
             </div>
           ) : displayHtml ? (
-            <div className={`w-full transition-all duration-300 ${DEVICE_PRESETS.find((d) => d.id === device)?.width || 'w-full'}`}>
+            <div className={`w-full transition-all duration-250 ${DEVICE_PRESETS.find((d) => d.id === device)?.width || 'w-full'}`}>
               <iframe
                 srcDoc={displayHtml}
                 sandbox="allow-scripts"

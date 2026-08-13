@@ -25,10 +25,12 @@ export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
     <AnimatePresence>
       <motion.div 
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       >
-        <motion.div 
+        <motion.div
           initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
           className="bg-[#18181b] border border-white/10 rounded-2xl w-[400px] overflow-hidden shadow-2xl"
         >
           <div className="flex justify-between items-center p-4 border-b border-white/5 bg-white/5">
@@ -38,8 +40,8 @@ export function WorkspaceModals({ isOpen, onClose, onUploadZip, onCloneGit }) {
           
           <div className="p-4 flex flex-col gap-4">
             <motion.div
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={async () => {
                 const input = document.createElement('input');
                 input.type = 'file';
