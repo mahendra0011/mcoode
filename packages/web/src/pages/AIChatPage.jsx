@@ -25,6 +25,7 @@ import { DesignTab } from '../components/ide/DesignTab';
 import { WaveProgress } from '../components/ide/WaveProgress';
 import { ChatMessage } from '../components/chat/ChatMessage';
 import { ThoughtBlock } from '../components/chat/ThoughtBlock';
+import { WorkingHeader } from '../components/chat/WorkingHeader';
 
 export function AIChatPage() {
   const dispatch = useDispatch();
@@ -1100,6 +1101,7 @@ export function AIChatPage() {
                           M
                         </div>
                         <div className="flex-1 min-w-0">
+                          <WorkingHeader done={false} />
                           <ThoughtBlock done={false} />
                         </div>
                       </div>

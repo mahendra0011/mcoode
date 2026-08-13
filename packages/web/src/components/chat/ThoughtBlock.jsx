@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, CircleDashed } from 'lucide-react';
+import { ChevronRight, CircleDashed, BrainCircuit } from 'lucide-react';
 
 /**
- * ThoughtBlock — matches the reference "Thought for 9 seconds" pattern:
- * a single collapsed line while/after the model reasons, expandable to
- * show the actual reasoning text if present. Tracks real elapsed time
- * from mount until `done` flips true.
+ * ThoughtBlock — matches the reference ZCode pattern:
+ * while active: "Thinking..." with a brain-circuit icon (present tense,
+ * no duration shown here — the overall turn duration lives in
+ * WorkingHeader above).
+ * once done: collapses to "Thought for Xs" (past tense, with the real
+ * elapsed duration), expandable to show reasoning text if present.
  */
 export function ThoughtBlock({ content, done, startedAt }) {
   const [open, setOpen] = useState(false);
@@ -28,6 +30,15 @@ export function ThoughtBlock({ content, done, startedAt }) {
     ? `${seconds} second${seconds === 1 ? '' : 's'}`
     : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 
+  if (!done) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0', fontSize: 13 }}>
+        <BrainCircuit size={14} style={{ color: 'var(--zc-text-dim, #8b8d98)' }} />
+        <span style={{ fontWeight: 600, color: 'var(--zc-text, #e6e6ea)' }}>Thinking...</span>
+      </div>
+    );
+  }
+
   return (
     <div style={{ margin: '4px 0' }}>
       <button
@@ -45,19 +56,9 @@ export function ThoughtBlock({ content, done, startedAt }) {
           fontSize: 13,
         }}
       >
-        {!done ? (
-          <motion.span
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-            style={{ display: 'flex' }}
-          >
-            <CircleDashed size={13} />
-          </motion.span>
-        ) : (
-          <CircleDashed size={13} />
-        )}
+        <CircleDashed size={13} />
         <span style={{ fontWeight: 600, color: 'var(--zc-text, #e6e6ea)' }}>Thought</span>
-        <span>{done ? `for ${durationLabel}` : `for ${durationLabel}...`}</span>
+        <span>{`for ${durationLabel}`}</span>
         {content && (
           <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.15 }} style={{ display: 'flex' }}>
             <ChevronRight size={12} />
