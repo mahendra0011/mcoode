@@ -850,8 +850,8 @@ export function AIChatPage() {
           <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#0e0e0e]">
             
             {/* Background Ambient Glows */}
-            <div className="absolute top-1/2 -left-64 -translate-y-1/2 w-[500px] h-[500px] bg-transparent rounded-full blur-[140px] pointer-events-none z-0"></div>
-            <div className="absolute top-1/2 -right-64 -translate-y-1/2 w-[500px] h-[500px] bg-transparent rounded-full blur-[140px] pointer-events-none z-0"></div>
+            <div className="absolute top-1/2 -left-64 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none z-0"></div>
+            <div className="absolute top-1/2 -right-64 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[140px] pointer-events-none z-0"></div>
 
             {activeTab === 'Design' ? (
               /* DESIGN TAB */
@@ -929,7 +929,7 @@ export function AIChatPage() {
                     </div>
 
                     {/* Textarea Container */}
-                    <div className="bg-transparent rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
+                    <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
                       <textarea 
                         value={prompt}
                         onChange={(e) => {
@@ -1123,7 +1123,7 @@ export function AIChatPage() {
                     </div>
                     
                     {/* Main background */}
-                    <div className="absolute inset-[0px] bg-transparent rounded-[24px] z-0"></div>
+                    <div className="absolute inset-[0px] bg-[#121212] rounded-[24px] z-0"></div>
                     
                     <div className="relative z-10 p-4 flex flex-col gap-2">
                       
@@ -1142,7 +1142,7 @@ export function AIChatPage() {
                       )}
 
                       {/* Textarea Container */}
-                      <div className="bg-transparent rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
+                      <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
                         <textarea
                           value={prompt}
                           onChange={(e) => {
