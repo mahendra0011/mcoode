@@ -27,24 +27,29 @@ export function StepCard({ msg, undo }) {
       break;
     case 'edit_file':
       type = 'updated';
-      label = 'Updated';
+      label = 'Edited';
       summary = msg.path || msg.args || '';
       content = <DiffBlock filename={summary} added={msg.diffLines?.length || 1} removed={1} />;
       break;
     case 'run_shell':
     case 'run_tests':
       type = 'ran';
-      label = 'Ran command';
+      label = 'Ran';
       summary = msg.command || msg.args || '';
       content = <TerminalOutput command={summary} output={msg.output || (isDone ? 'Success' : '...')} />;
       break;
     case 'list_files':
-    case 'search_code':
+    case 'search_code': {
       type = 'searched';
-      label = 'Searched';
-      summary = msg.title || 'codebase';
-      content = msg.output ? <TerminalOutput command={`search ${summary}`} output={msg.output} /> : null;
+      label = 'Explore';
+      // Reference style shows a compact item count ("2 lists", "3 files")
+      // instead of a full path — derive it from the output line count.
+      const lineCount = msg.output ? msg.output.split('\n').filter(Boolean).length : 0;
+      const noun = msg.tool === 'list_files' ? 'list' : 'file';
+      summary = lineCount > 0 ? `${lineCount} ${noun}${lineCount === 1 ? '' : 's'}` : (msg.title || 'codebase');
+      content = msg.output ? <TerminalOutput command={`search ${msg.title || summary}`} output={msg.output} /> : null;
       break;
+    }
     case 'web_search':
     case 'web_fetch':
       type = 'searched';
