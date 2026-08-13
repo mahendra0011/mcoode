@@ -74,9 +74,15 @@ export function StepCard({ msg, undo }) {
         defaultOpen={isFailed || (!isDone && !!content) || msg.tool === 'write_file' || msg.tool === 'edit_file'}
       >
         {content || (
-          <div className="text-white/40 italic text-xs">
-            {isRunning ? 'Waiting for output...' : 'No output.'}
-          </div>
+          isFailed && msg.error ? (
+            <div className="text-red-400/80 text-xs whitespace-pre-wrap break-words">
+              {msg.error}
+            </div>
+          ) : (
+            <div className="text-white/40 italic text-xs">
+              {isRunning ? 'Waiting for output...' : 'No output.'}
+            </div>
+          )
         )}
       </ToolCallCard>
     </div>
