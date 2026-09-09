@@ -7,7 +7,7 @@ import {
   AlertCircle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut, Hash, Minimize2, ListFilter, Archive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Group as ResizablePanelGroup, Panel as ResizablePanel, Separator as ResizablePanelHandle } from 'react-resizable-panels';
+import { Group as ResizablePanelGroup, Panel as ResizablePanel, Separator as ResizablePanelHandle, usePanelRef } from 'react-resizable-panels';
 import Link from 'next/link'; import { useRouter, useSearchParams } from 'next/navigation';
 import { useChatSocket } from '../hooks/useChatSocket';
 import api from '../lib/axios';
@@ -25,7 +25,7 @@ import { RemoteExplorerPanel } from '../components/ide/RemoteExplorerPanel';
 import { AndroidEmulatorsPanel } from '../components/ide/AndroidEmulatorsPanel';
 import { ContainersPanel } from '../components/ide/ContainersPanel';
 import { EditorPane } from '../components/ide/EditorPane';
-import { TerminalPane } from '../components/ide/TerminalPane';
+import { BottomPanel } from '../components/ide/BottomPanel';
 import { WorkspaceModals } from '../components/ide/WorkspaceModals';
 import { TodoCard } from '../components/ide/TodoCard';
 import { PermissionModal } from '../components/ide/PermissionModal';
@@ -39,6 +39,7 @@ import { ShortcutsReferenceModal } from '../components/ide/menu/ShortcutsReferen
 import { AboutModal } from '../components/ide/menu/AboutModal';
 import { ReleaseNotesModal } from '../components/ide/menu/ReleaseNotesModal';
 import { TasksModal } from '../components/ide/menu/TasksModal';
+import { SettingsPage } from './SettingsPage';
 import { toast } from 'sonner';
 import ExtensionsMarketplace from '../components/ExtensionsMarketplace';
 import editorApi from '../lib/extensions/editorApi';
@@ -79,6 +80,34 @@ export function AIChatPage() {
   const zenMode = useIDEStore((s) => s.zenMode);
   const setZenMode = useIDEStore((s) => s.setZenMode);
   const secondarySideBarVisible = useIDEStore((s) => s.secondarySideBarVisible);
+  const isSettingsOpen = useIDEStore((s) => s.isSettingsOpen);
+  const settingsInitialTab = useIDEStore((s) => s.settingsInitialTab);
+  const leftPanelRef = usePanelRef();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+        e.preventDefault();
+        useIDEStore.getState().openSettings('permissions');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (isSidebarOpen && activeActivityBar !== 'extensions' && !zenMode) {
+      leftPanelRef.current?.expand();
+    } else {
+      leftPanelRef.current?.collapse();
+    }
+  }, [isSidebarOpen, activeActivityBar, zenMode, leftPanelRef]);
+
+  useEffect(() => {
+    if (activeTab === 'AI Code Editor') {
+      useIDEStore.getState().setSecondarySideBarVisible(true);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     setRunTerminalCommandFn(sendTerminalCommand);
@@ -305,12 +334,12 @@ export function AIChatPage() {
 		if (next !== 'agent') dispatch(setGodMode(false));
 
 		if (tab === 'AI Code Editor') {
+			useIDEStore.getState().setSecondarySideBarVisible(true);
 			if (startNewProcess) {
-				// Start fresh: Welcome screen visible, sidebars collapsed for full-screen experience
+				// Start fresh: Welcome screen visible, primary sidebar collapsed
 				useIDEStore.getState().setWelcomeOpen(true);
 				useIDEStore.getState().setActivePath(null);
 				useIDEStore.getState().setSidebarOpen(false);
-				useIDEStore.getState().setSecondarySideBarVisible(false);
 			} else {
 				// Continue existing project: keep open files, don't force welcome screen
 				if (useIDEStore.getState().openFiles.length > 0) {
@@ -758,6 +787,23 @@ export function AIChatPage() {
               <Share className="w-3.5 h-3.5"/> <span className="hidden sm:inline">Push</span>
             </motion.button>
           </div>
+          {activeTab === 'AI Code Editor' && (
+            <motion.button
+              type="button"
+              onClick={() => useIDEStore.getState().toggleSecondarySideBar()}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition cursor-pointer ${
+                secondarySideBarVisible
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
+                  : 'bg-[#121212] text-white/50 border-white/5 hover:text-white hover:bg-white/10'
+              }`}
+              title="Toggle AI Chat & Prompt Section"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline font-medium">AI Section</span>
+            </motion.button>
+          )}
           <motion.button type="button" onClick={handleGithubConnect} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 px-2.5 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
             {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
             <span className="hidden sm:inline">GitHub</span>
@@ -1005,9 +1051,9 @@ export function AIChatPage() {
               <button onClick={() => setIsHistoryOpen(true)} className="text-white/30 hover:text-white transition-colors">
                 <History className="w-5 h-5" />
               </button>
-              <Link href="/settings" className="text-white/30 hover:text-white transition-colors" title="Settings">
+              <button onClick={() => useIDEStore.getState().openSettings('permissions')} className="text-white/30 hover:text-white transition-colors cursor-pointer" title="Settings">
                 <Settings className="w-5 h-5" />
-              </Link>
+              </button>
               <button className="text-white/30 hover:text-white transition-colors">
                 <HelpCircle className="w-5 h-5" />
               </button>
@@ -1442,57 +1488,61 @@ export function AIChatPage() {
               >
                 <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0 h-full">
                 {/* Left Activity Panel (Explorer, Search, Source Control, Run & Debug, Testing, Languages) */}
-                {isSidebarOpen && activeActivityBar !== 'extensions' && !zenMode && (
                 <ResizablePanel
                   id="left-activity-panel"
-                  defaultSize={22}
-                  minSize={15}
-                  maxSize={40}
+                  panelRef={leftPanelRef}
+                  defaultSize="260px"
+                  minSize="180px"
+                  maxSize="480px"
+                  collapsible
+                  collapsedSize={0}
                   className="ide-left-panel"
                 >
-                <div className="h-full flex flex-col border-r border-white/5 bg-[#0e0e0e] overflow-hidden w-full">
-                  {activeActivityBar === 'explorer' && (
-                    <ExplorerPanel
-                      workspaceId={activeWorkspaceId}
-                      projectName={workspaces.find((w) => w._id === activeWorkspaceId)?.name || 'Folders'}
-                    />
-                  )}
-                  {activeActivityBar === 'search' && (
-                    <SearchPanel />
-                  )}
-                  {activeActivityBar === 'source-control' && (
-                    <SourceControlPanel />
-                  )}
-                  {activeActivityBar === 'run-debug' && (
-                    <RunDebugPanel workspaceId={activeWorkspaceId} />
-                  )}
-                  {activeActivityBar === 'languages' && (
-                    <LanguagesPanel />
-                  )}
-                  {activeActivityBar === 'testing' && (
-                    <TestingPanel />
-                  )}
-                  {activeActivityBar === 'remote' && (
-                    <RemoteExplorerPanel
-                      workspaceId={activeWorkspaceId}
-                      activeBranch={activeBranch}
-                    />
-                  )}
-                  {activeActivityBar === 'containers' && (
-                    <ContainersPanel />
-                  )}
-                  {activeActivityBar === 'android' && (
-                    <AndroidEmulatorsPanel />
-                  )}
-                </div>
+                  <div className="h-full flex flex-col border-r border-white/5 bg-[#0e0e0e] overflow-hidden w-full">
+                    {activeActivityBar === 'explorer' && (
+                      <ExplorerPanel
+                        workspaceId={activeWorkspaceId}
+                        projectName={workspaces.find((w) => w._id === activeWorkspaceId)?.name || 'Folders'}
+                      />
+                    )}
+                    {activeActivityBar === 'search' && (
+                      <SearchPanel />
+                    )}
+                    {activeActivityBar === 'source-control' && (
+                      <SourceControlPanel />
+                    )}
+                    {activeActivityBar === 'run-debug' && (
+                      <RunDebugPanel workspaceId={activeWorkspaceId} />
+                    )}
+                    {activeActivityBar === 'languages' && (
+                      <LanguagesPanel />
+                    )}
+                    {activeActivityBar === 'testing' && (
+                      <TestingPanel />
+                    )}
+                    {activeActivityBar === 'remote' && (
+                      <RemoteExplorerPanel
+                        workspaceId={activeWorkspaceId}
+                        activeBranch={activeBranch}
+                      />
+                    )}
+                    {activeActivityBar === 'containers' && (
+                      <ContainersPanel />
+                    )}
+                    {activeActivityBar === 'android' && (
+                      <AndroidEmulatorsPanel />
+                    )}
+                  </div>
                 </ResizablePanel>
-                )}
-                {isSidebarOpen && activeActivityBar !== 'extensions' && !zenMode && (
-                  <ResizablePanelHandle className="w-[3px] bg-[#222222] hover:bg-[#3b82f6] transition-colors" />
-                )}
+
+                <ResizablePanelHandle
+                  className={`w-[3px] bg-[#222222] hover:bg-[#3b82f6] transition-colors ${
+                    !isSidebarOpen || activeActivityBar === 'extensions' || zenMode ? 'hidden pointer-events-none' : ''
+                  }`}
+                />
 
                 {/* Editor & Terminal Center Pane */}
-                <ResizablePanel defaultSize={zenMode || !secondarySideBarVisible ? 100 : 53} minSize={30}>
+                <ResizablePanel minSize="30%">
                 {activeActivityBar === 'extensions' ? (
                   <div className="h-full flex-1 flex flex-col min-w-0 bg-[#0e0e0e] overflow-hidden">
                     <ExtensionsMarketplace editorApi={editorApi} />
@@ -1506,7 +1556,14 @@ export function AIChatPage() {
                       onOpenFolder={() => setIsModalsOpen(true)}
                       onCloneRepo={() => setIsModalsOpen(true)}
                     />
-                    {isTerminalOpen && !zenMode && <TerminalPane messages={messages} onCommand={sendTerminalCommand} />}
+                    {isTerminalOpen && !zenMode && (
+                      <BottomPanel
+                        messages={messages}
+                        onCommand={sendTerminalCommand}
+                        onInterrupt={interrupt}
+                        defaultTab="terminal"
+                      />
+                    )}
                   </div>
                 )}
                 </ResizablePanel>
@@ -1515,11 +1572,27 @@ export function AIChatPage() {
                 {!zenMode && secondarySideBarVisible && (
                   <>
                     <ResizablePanelHandle className="w-[3px] bg-[#222222] hover:bg-[#10b981] transition-colors" />
-                    <ResizablePanel defaultSize={25} minSize={18} maxSize={40}>
-                    <div className="h-full border-l border-white/5 bg-[#0e0e0e] flex flex-col relative z-20">
-                      <div className="p-4 flex items-center justify-between border-b border-white/5">
-                        <span className="text-sm font-semibold">AI Assistance</span>
+                    <ResizablePanel
+                      id="right-ai-panel"
+                      defaultSize="380px"
+                      minSize="280px"
+                      maxSize="650px"
+                    >
+                      <div className="h-full border-l border-white/5 bg-[#0e0e0e] flex flex-col relative z-20 w-full min-w-[280px] overflow-hidden">
+                    <div className="p-4 flex items-center justify-between border-b border-white/5">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        <span className="text-sm font-semibold text-white">AI Assistance</span>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => useIDEStore.getState().setSecondarySideBarVisible(false)}
+                        className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-white transition cursor-pointer"
+                        title="Close AI Panel"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 custom-scrollbar">
                     <TodoCard plan={plan as any} />
@@ -2054,6 +2127,18 @@ export function AIChatPage() {
                 </button>
               </div>
             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Settings Modal (Image 2) */}
+      <AnimatePresence>
+        {isSettingsOpen && (
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md overflow-hidden">
+            <SettingsPage
+              onClose={() => useIDEStore.getState().setSettingsOpen(false)}
+              initialTab={settingsInitialTab || 'permissions'}
+            />
           </div>
         )}
       </AnimatePresence>

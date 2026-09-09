@@ -304,7 +304,7 @@ export function EditorPane({
     return () => window.removeEventListener('keydown', onKeyDown as EventListener);
   }, [handleSave]);
 
-  const showWelcomeTab = isWelcomeOpen || openFiles.length === 0;
+  const showWelcomeTab = isWelcomeOpen;
   const isWelcomeActive = showWelcomeTab && (!activePath || !openFiles.includes(activePath));
 
   return (
@@ -340,12 +340,8 @@ export function EditorPane({
               onClick={(e) => {
                 e.stopPropagation();
                 setWelcomeOpen(false);
-                if (openFiles.length > 0) {
-                  if (!activePath || !openFiles.includes(activePath)) {
-                    setActivePath(openFiles[0]);
-                  }
-                } else {
-                  useIDEStore.getState().createUntitledFile();
+                if (openFiles.length > 0 && (!activePath || !openFiles.includes(activePath))) {
+                  setActivePath(openFiles[0]);
                 }
               }}
               className="text-white/40 hover:text-white cursor-pointer ml-1 text-sm leading-none px-1 py-0.5 rounded hover:bg-white/10 transition"
@@ -398,7 +394,7 @@ export function EditorPane({
         })}
       </motion.div>
 
-      {/* Editor Body: Welcome Tab or Monaco Editor */}
+      {/* Editor Body: Welcome Tab or Empty Canvas or Monaco Editor */}
       {isWelcomeActive ? (
         <WelcomeTab
           workspaces={workspaces}
@@ -424,6 +420,8 @@ export function EditorPane({
           onOpenFolder={onOpenFolder}
           onCloneRepo={onCloneRepo}
         />
+      ) : openFiles.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center bg-[#181818]" />
       ) : (
         <div className="flex-1 relative">
           <AnimatePresence>

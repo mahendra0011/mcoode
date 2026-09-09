@@ -382,6 +382,12 @@ export function IDEMenuBar({
         },
         { divider: true },
         {
+          label: "Preferences: Open Settings",
+          shortcut: "Ctrl+,",
+          action: () => store.openSettings("permissions"),
+        },
+        { divider: true },
+        {
           label: "Exit",
           action: () => {
             store.setActiveTab("Chat");

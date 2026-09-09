@@ -39,6 +39,7 @@ export function WelcomeTab({
   const recentFiles = useIDEStore((s) => s.recentFiles);
   const addOpenFile = useIDEStore((s) => s.addOpenFile);
   const setActivePath = useIDEStore((s) => s.setActivePath);
+  const activePath = useIDEStore((s) => s.activePath);
   const toggleCommandPalette = useIDEStore((s) => s.toggleCommandPalette);
   const setShortcutsOpen = useIDEStore((s) => s.setShortcutsOpen);
   const setReleaseNotesOpen = useIDEStore((s) => s.setReleaseNotesOpen);
@@ -106,10 +107,8 @@ export function WelcomeTab({
         onClick={() => {
           setWelcomeOpen(false);
           const cur = useIDEStore.getState().openFiles;
-          if (cur.length > 0) {
+          if (cur.length > 0 && (!activePath || !cur.includes(activePath))) {
             setActivePath(cur[0]);
-          } else {
-            createUntitledFile();
           }
         }}
         className="absolute top-4 right-6 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 hover:text-white text-white/50 flex items-center justify-center transition cursor-pointer border border-white/10 z-30 group"

@@ -839,11 +839,28 @@ function ConnectionsTab() {
 }
 
 /* ─────────────────── MAIN SETTINGS PAGE ─────────────────── */
-export function SettingsPage() {
+export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: string } = {}) {
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'permissions');
+  const [activeTab, setActiveTab] = useState(initialTab || searchParams?.get('tab') || 'permissions');
   const [settings, setSettings] = useState<Record<string, any>>({ allowShellAll: false, requireEditApproval: false, modelOverrides: {} });
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (!onClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     api.get('/api/v1/settings', { timeout: 5000 })
@@ -884,16 +901,27 @@ export function SettingsPage() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <MotionLink
-            href="/ai/chat"
-            className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm group"
-            whileHover={{ x: -3 }}
-          >
-            <motion.div whileHover={{ x: -3 }}>
-              <ArrowLeft className="w-4 h-4" />
-            </motion.div>
-            Back to workspace
-          </MotionLink>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm group cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+              Back to workspace
+            </button>
+          ) : (
+            <MotionLink
+              href="/ai/chat"
+              className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm group"
+              whileHover={{ x: -3 }}
+            >
+              <motion.div whileHover={{ x: -3 }}>
+                <ArrowLeft className="w-4 h-4" />
+              </motion.div>
+              Back to workspace
+            </MotionLink>
+          )}
           <motion.h1
             className="text-lg font-semibold text-white mt-4 tracking-tight"
             initial={{ opacity: 0, y: 10 }}
@@ -949,11 +977,22 @@ export function SettingsPage() {
 
       {/* MAIN CONTENT */}
       <motion.main
-        className="flex-1 overflow-y-auto custom-scrollbar"
+        className="flex-1 overflow-y-auto custom-scrollbar relative"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15, duration: 0.3 }}
       >
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-6 right-8 px-2.5 py-1 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition z-50 cursor-pointer flex items-center gap-1.5 text-xs border border-white/10 bg-[#141414] shadow-lg"
+            title="Close Settings (Esc)"
+          >
+            <span className="text-[10px] text-white/40 font-mono">Esc</span>
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
         <div className={`mx-auto px-8 py-10 ${activeTab === 'keys' ? 'max-w-5xl' : 'max-w-2xl'}`}>
           {activeTab === 'permissions' && <PermissionsTab settings={settings} onUpdate={updatePermissions} saving={saving} />}
           {activeTab === 'keys' && <ApiKeysTab />}

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { ALL_LANGUAGES } from "../lib/languagesData";
 
 export type ActiveTab = "Chat" | "AI Code Editor";
-export type PanelTab = "terminal" | "problems" | "output" | "debugConsole";
+export type PanelTab = "problems" | "output" | "debugConsole" | "terminal" | "ports";
 
 export interface NavPoint {
   path: string;
@@ -135,6 +135,11 @@ interface IDEState {
 
   isAboutOpen: boolean;
   setAboutOpen: (open: boolean) => void;
+
+  isSettingsOpen: boolean;
+  settingsInitialTab: string | null;
+  setSettingsOpen: (open: boolean) => void;
+  openSettings: (tab?: string) => void;
 
   isReleaseNotesOpen: boolean;
   setReleaseNotesOpen: (open: boolean) => void;
@@ -443,6 +448,11 @@ export const useIDEStore = create<IDEState>()((set, get) => ({
 
   isAboutOpen: false,
   setAboutOpen: (isAboutOpen) => set({ isAboutOpen }),
+
+  isSettingsOpen: false,
+  settingsInitialTab: null,
+  setSettingsOpen: (isSettingsOpen) => set({ isSettingsOpen }),
+  openSettings: (tab) => set({ isSettingsOpen: true, settingsInitialTab: tab || 'permissions' }),
 
   isReleaseNotesOpen: false,
   setReleaseNotesOpen: (isReleaseNotesOpen) => set({ isReleaseNotesOpen }),
