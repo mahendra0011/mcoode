@@ -9,6 +9,7 @@ import {
   FileText,
   Folder,
   File,
+  Upload,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -216,11 +217,45 @@ export function FileTree({ workspaceId }: FileTreeProps) {
     );
   }
 
+  const addOpenFile = useIDEStore((s) => s.addOpenFile);
+  const setFileContent = useIDEStore((s) => s.setFileContent);
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList) return;
+    Array.from(fileList).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = (reader.result as string) || "";
+        const path = file.name;
+        setFileContent(path, content);
+        addOpenFile(path);
+        toast.success(`Uploaded ${file.name}`);
+      };
+      reader.readAsText(file);
+    });
+  };
+
   return (
-    <div className="flex flex-col py-2 overflow-y-auto custom-scrollbar h-full">
-      {rootNodes.map((node) => (
-        <TreeNode key={node.path || node.name} node={node} />
-      ))}
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-white/[0.02]">
+        <span className="text-[10px] text-white/40 uppercase tracking-wider font-semibold">Workspace</span>
+        <label htmlFor="file-tree-upload" className="cursor-pointer text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition">
+          <Upload className="w-3 h-3" /> Upload
+          <input
+            id="file-tree-upload"
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleUpload}
+          />
+        </label>
+      </div>
+      <div className="flex-1 overflow-y-auto custom-scrollbar py-2">
+        {rootNodes.map((node) => (
+          <TreeNode key={node.path || node.name} node={node} />
+        ))}
+      </div>
     </div>
   );
 }

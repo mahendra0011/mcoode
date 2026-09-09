@@ -1,0 +1,381 @@
+"use client";
+
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  ChevronRight,
+  ChevronDown,
+  MoreHorizontal,
+  FileCode,
+  X,
+  Play,
+  History,
+  Check,
+  Code2,
+  FileText,
+  Boxes,
+} from "lucide-react";
+import { FileTree } from "./FileTree";
+import { useIDEStore } from "../../store/ideStore";
+import { toast } from "sonner";
+
+interface OutlineSymbol {
+  name: string;
+  kind: "function" | "class" | "variable" | "interface";
+  line: number;
+}
+
+function extractOutline(code: string): OutlineSymbol[] {
+  if (!code) return [];
+  const symbols: OutlineSymbol[] = [];
+  const lines = code.split("\n");
+
+  lines.forEach((line, idx) => {
+    const fn = line.match(/(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z0-9_$]+)/);
+    const cls = line.match(/(?:export\s+)?class\s+([a-zA-Z0-9_$]+)/);
+    const iface = line.match(/(?:export\s+)?interface\s+([a-zA-Z0-9_$]+)/);
+    const constFn = line.match(/(?:export\s+)?const\s+([a-zA-Z0-9_$]+)\s*=\s*(?:\([^)]*\)|[a-zA-Z0-9_$]+)\s*=>/);
+    const regularConst = line.match(/(?:export\s+)?const\s+([a-zA-Z0-9_$]+)\s*=/);
+
+    if (fn) symbols.push({ name: fn[1], kind: "function", line: idx + 1 });
+    else if (cls) symbols.push({ name: cls[1], kind: "class", line: idx + 1 });
+    else if (iface) symbols.push({ name: iface[1], kind: "interface", line: idx + 1 });
+    else if (constFn) symbols.push({ name: constFn[1], kind: "function", line: idx + 1 });
+    else if (regularConst) symbols.push({ name: regularConst[1], kind: "variable", line: idx + 1 });
+  });
+
+  return symbols;
+}
+
+function kindIcon(kind: OutlineSymbol["kind"]) {
+  switch (kind) {
+    case "function":
+      return <span className="text-purple-400 font-mono font-bold text-[11px] w-3 text-center">ƒ</span>;
+    case "class":
+      return <span className="text-yellow-400 font-mono font-bold text-[11px] w-3 text-center">C</span>;
+    case "interface":
+      return <span className="text-blue-400 font-mono font-bold text-[11px] w-3 text-center">I</span>;
+    case "variable":
+      return <span className="text-cyan-400 font-mono font-bold text-[11px] w-3 text-center">V</span>;
+    default:
+      return <span className="text-white/40 font-mono font-bold text-[11px] w-3 text-center">•</span>;
+  }
+}
+
+interface SectionProps {
+  title: string;
+  count?: number | string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}
+
+function Section({ title, count, defaultOpen = true, children }: SectionProps) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="border-b border-white/5 flex flex-col">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-white/5 text-left text-white/60 hover:text-white transition group select-none"
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {open ? (
+            <ChevronDown className="w-3.5 h-3.5 text-white/40 group-hover:text-white" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 text-white/40 group-hover:text-white" />
+          )}
+          <span className="font-semibold text-[11px] uppercase tracking-wider truncate">
+            {title}
+          </span>
+        </div>
+        {count !== undefined && (
+          <span className="text-[10px] text-white/40 bg-white/5 px-1.5 rounded">{count}</span>
+        )}
+      </button>
+      {open && <div className="pb-1">{children}</div>}
+    </div>
+  );
+}
+
+const VIEWS_STORAGE_KEY = "mcode_explorer_views";
+
+export interface ExplorerPanelProps {
+  workspaceId: string | null | undefined;
+  projectName?: string;
+}
+
+export function ExplorerPanel({ workspaceId, projectName = "Folders" }: ExplorerPanelProps) {
+  const openFiles = useIDEStore((s) => s.openFiles);
+  const activePath = useIDEStore((s) => s.activePath);
+  const setActivePath = useIDEStore((s) => s.setActivePath);
+  const closeFile = useIDEStore((s) => s.closeFile);
+  const fileContentsCache = useIDEStore((s) => s.fileContentsCache);
+  const setFileContent = useIDEStore((s) => s.setFileContent);
+  const setTargetJump = useIDEStore((s) => s.setTargetJump);
+  const timelines = useIDEStore((s) => s.timelines);
+  const runTerminalCommandFn = useIDEStore((s) => s.runTerminalCommandFn);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [visibleViews, setVisibleViews] = useState<Record<string, boolean>>({
+    "Open Editors": true,
+    "Folders": true,
+    "Outline": true,
+    "Timeline": true,
+    "NPM Scripts": true,
+  });
+
+  // Restore view preferences
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem(VIEWS_STORAGE_KEY);
+      if (saved) setVisibleViews(JSON.parse(saved));
+    } catch (e) {
+      console.warn("Failed to load explorer view preferences:", e);
+    }
+  }, []);
+
+  const toggleView = (view: string) => {
+    const next = { ...visibleViews, [view]: !visibleViews[view] };
+    setVisibleViews(next);
+    try {
+      localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(next));
+    } catch (e) {
+      console.warn("Failed to save explorer view preferences:", e);
+    }
+  };
+
+  // Active file code for Outline
+  const activeCode = activePath ? fileContentsCache[activePath] || "" : "";
+  const outlineSymbols = useMemo(() => extractOutline(activeCode), [activeCode]);
+
+  // Active file timeline
+  const activeTimeline = activePath ? timelines[activePath] || [] : [];
+
+  // Parse package.json scripts
+  const npmScripts = useMemo<Record<string, string>>(() => {
+    let pkgContent = "";
+    for (const [path, content] of Object.entries(fileContentsCache)) {
+      if (path.endsWith("package.json")) {
+        pkgContent = content;
+        break;
+      }
+    }
+    if (!pkgContent) return {};
+    try {
+      const parsed = JSON.parse(pkgContent);
+      const scripts = parsed?.scripts || {};
+      const res: Record<string, string> = {};
+      for (const [k, v] of Object.entries(scripts)) {
+        res[k] = String(v);
+      }
+      return res;
+    } catch {
+      return {};
+    }
+  }, [fileContentsCache]);
+
+  const handleRunScript = (scriptName: string, command: string) => {
+    if (runTerminalCommandFn) {
+      runTerminalCommandFn(`npm run ${scriptName}`);
+      toast.success(`Running npm script: ${scriptName}`);
+    } else {
+      toast.info(`Script: npm run ${scriptName} (${command})`);
+    }
+  };
+
+  const handleRestoreSnapshot = (snapshot: string, label: string) => {
+    if (!activePath) return;
+    setFileContent(activePath, snapshot);
+    toast.success(`Restored snapshot: ${label}`);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs min-w-[240px] overflow-hidden">
+      {/* Explorer Main Header with "..." menu */}
+      <div className="p-3 border-b border-white/5 flex items-center justify-between relative">
+        <span className="font-semibold uppercase tracking-wider text-white/50 text-[11px]">
+          Explorer
+        </span>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="p-1 rounded text-white/40 hover:text-white hover:bg-white/10 transition"
+            title="Views and More Actions..."
+          >
+            <MoreHorizontal className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Views Dropdown Menu */}
+          {menuOpen && (
+            <div
+              className="absolute right-0 top-full mt-1 w-44 bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl py-1 z-50 text-xs flex flex-col"
+              onMouseLeave={() => setMenuOpen(false)}
+            >
+              <div className="px-3 py-1 text-[10px] font-semibold text-white/40 uppercase tracking-wider border-b border-white/5">
+                Views
+              </div>
+              {["Open Editors", "Folders", "Outline", "Timeline", "NPM Scripts"].map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  onClick={() => toggleView(view)}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-white/80 hover:text-white transition"
+                >
+                  <span className="w-3.5 flex items-center justify-center">
+                    {visibleViews[view] && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                  </span>
+                  <span>{view}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Collapsible Sections Container */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col">
+        {/* 1. Open Editors Section */}
+        {visibleViews["Open Editors"] && (
+          <Section title="Open Editors" count={openFiles.length} defaultOpen={true}>
+            {openFiles.length === 0 ? (
+              <div className="px-5 py-2 text-[11px] text-white/30 italic">No open editors</div>
+            ) : (
+              <div className="flex flex-col gap-0.5">
+                {openFiles.map((path) => {
+                  const fileName = path.split("/").pop() || path;
+                  const isActive = activePath === path;
+                  return (
+                    <div
+                      key={path}
+                      onClick={() => setActivePath(path)}
+                      className={`flex items-center justify-between px-3 py-1 cursor-pointer group text-xs ${
+                        isActive ? "bg-white/10 text-white font-medium" : "text-white/60 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <FileCode className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                        <span className="truncate" title={path}>
+                          {fileName}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closeFile(path);
+                        }}
+                        className="p-0.5 text-white/20 hover:text-white rounded opacity-0 group-hover:opacity-100 transition"
+                        title="Close File"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {/* 2. Folders (File Tree + Upload) Section */}
+        {visibleViews["Folders"] && (
+          <Section title={projectName} defaultOpen={true}>
+            <div className="min-h-[160px]">
+              <FileTree workspaceId={workspaceId} />
+            </div>
+          </Section>
+        )}
+
+        {/* 3. Outline (Active File Symbols) Section */}
+        {visibleViews["Outline"] && (
+          <Section title="Outline" count={outlineSymbols.length} defaultOpen={false}>
+            {!activePath ? (
+              <div className="px-5 py-2 text-[11px] text-white/30 italic">No active file</div>
+            ) : outlineSymbols.length === 0 ? (
+              <div className="px-5 py-2 text-[11px] text-white/30 italic">No symbols found</div>
+            ) : (
+              <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto custom-scrollbar">
+                {outlineSymbols.map((sym, i) => (
+                  <button
+                    key={`${sym.name}-${sym.line}-${i}`}
+                    type="button"
+                    onClick={() => setTargetJump({ path: activePath, line: sym.line })}
+                    className="flex items-center gap-2 px-4 py-1 hover:bg-white/5 text-left text-white/70 hover:text-white transition group"
+                  >
+                    {kindIcon(sym.kind)}
+                    <span className="truncate flex-1 font-mono text-xs">{sym.name}</span>
+                    <span className="text-[10px] text-white/30 font-mono group-hover:text-white/50">
+                      :{sym.line}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {/* 4. Timeline (Edit & Save History) Section */}
+        {visibleViews["Timeline"] && (
+          <Section title="Timeline" count={activeTimeline.length} defaultOpen={false}>
+            {!activePath ? (
+              <div className="px-5 py-2 text-[11px] text-white/30 italic">No active file</div>
+            ) : activeTimeline.length === 0 ? (
+              <div className="px-5 py-2 text-[11px] text-white/30 italic">No timeline entries yet</div>
+            ) : (
+              <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto custom-scrollbar">
+                {activeTimeline.map((item, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleRestoreSnapshot(item.contentSnapshot, item.label)}
+                    className="flex items-center justify-between px-4 py-1 hover:bg-white/5 text-left text-white/70 hover:text-white transition group"
+                  >
+                    <div className="flex items-center gap-1.5 truncate">
+                      <History className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                    <span className="text-[10px] text-white/30 font-mono group-hover:text-white/50 flex-shrink-0">
+                      {new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
+
+        {/* 5. NPM Scripts Section */}
+        {visibleViews["NPM Scripts"] && (
+          <Section title="NPM Scripts" count={Object.keys(npmScripts).length} defaultOpen={false}>
+            {Object.keys(npmScripts).length === 0 ? (
+              <div className="px-5 py-2 text-[11px] text-white/30 italic">No scripts in package.json</div>
+            ) : (
+              <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto custom-scrollbar">
+                {Object.entries(npmScripts).map(([name, cmd]) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => handleRunScript(name, cmd)}
+                    className="flex items-center justify-between px-4 py-1 hover:bg-white/5 text-left text-white/70 hover:text-white transition group"
+                  >
+                    <div className="flex items-center gap-1.5 truncate">
+                      <Play className="w-3 h-3 text-emerald-400 fill-current flex-shrink-0" />
+                      <span className="font-mono text-xs text-white/90 truncate">{name}</span>
+                    </div>
+                    <span className="text-[10px] text-white/30 font-mono truncate max-w-[90px]" title={cmd}>
+                      {cmd}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ExplorerPanel;

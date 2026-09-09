@@ -15,6 +15,14 @@ import { setMode, addMessage, clearChat, setGodMode, resetStreaming } from '../s
 import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../lib/slashCommands';
 
 import { FileTree } from '../components/ide/FileTree';
+import { ExplorerPanel } from '../components/ide/ExplorerPanel';
+import { SearchPanel } from '../components/ide/SearchPanel';
+import { SourceControlPanel } from '../components/ide/SourceControlPanel';
+import { RunDebugPanel } from '../components/ide/RunDebugPanel';
+import { TestingPanel } from '../components/ide/TestingPanel';
+import { RemoteExplorerPanel } from '../components/ide/RemoteExplorerPanel';
+import { AndroidEmulatorsPanel } from '../components/ide/AndroidEmulatorsPanel';
+import { ContainersPanel } from '../components/ide/ContainersPanel';
 import { EditorPane } from '../components/ide/EditorPane';
 import { TerminalPane } from '../components/ide/TerminalPane';
 import { WorkspaceModals } from '../components/ide/WorkspaceModals';
@@ -22,6 +30,17 @@ import { TodoCard } from '../components/ide/TodoCard';
 import { PermissionModal } from '../components/ide/PermissionModal';
 import { IDEActivitySidebar } from '../components/ide/IDEActivitySidebar';
 import { useIDEStore } from '../store/ideStore';
+import { IDEMenuBar } from '../components/ide/menu/IDEMenuBar';
+import { QuickOpenPalette } from '../components/ide/menu/QuickOpenPalette';
+import { SymbolPalette } from '../components/ide/menu/SymbolPalette';
+import { GoToLineModal } from '../components/ide/menu/GoToLineModal';
+import { ShortcutsReferenceModal } from '../components/ide/menu/ShortcutsReferenceModal';
+import { AboutModal } from '../components/ide/menu/AboutModal';
+import { ReleaseNotesModal } from '../components/ide/menu/ReleaseNotesModal';
+import { TasksModal } from '../components/ide/menu/TasksModal';
+import { toast } from 'sonner';
+import ExtensionsMarketplace from '../components/ExtensionsMarketplace';
+import editorApi from '../lib/extensions/editorApi';
 import { ModelSelector } from '../components/ide/ModelSelector';
 import { SparkleButton } from '../components/ide/SparkleButton';
 import { WaveProgress } from '../components/ide/WaveProgress';
@@ -53,6 +72,16 @@ export function AIChatPage() {
   // `activeTab === 'AI Code Editor'` render branch below.
   const isSidebarOpen = useIDEStore((s) => s.isSidebarOpen);
   const isTerminalOpen = useIDEStore((s) => s.isTerminalOpen);
+  const activeActivityBar = useIDEStore((s) => s.activeActivityBar);
+  const setActiveActivityBar = useIDEStore((s) => s.setActiveActivityBar);
+  const setRunTerminalCommandFn = useIDEStore((s) => s.setRunTerminalCommandFn);
+  const zenMode = useIDEStore((s) => s.zenMode);
+  const setZenMode = useIDEStore((s) => s.setZenMode);
+  const secondarySideBarVisible = useIDEStore((s) => s.secondarySideBarVisible);
+
+  useEffect(() => {
+    setRunTerminalCommandFn(sendTerminalCommand);
+  }, [sendTerminalCommand, setRunTerminalCommandFn]);
 
   // Auto-reset streaming if it gets stuck after a tool execution
   useEffect(() => {
@@ -599,28 +628,69 @@ export function AIChatPage() {
         onChange={handleAttachFiles} 
         className="hidden" 
       />
-      <header className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-[#0a0a0a] relative min-h-[53px]">
-        {/* Left Spacer */}
-        <div className="w-32"></div>
+      <header className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-[#0a0a0a] relative min-h-[48px] z-50 flex-shrink-0">
+        {/* Left: Logo & VS Code Menu Bar (Sabse Upper Left Side) */}
+        <div className="flex items-center gap-2 z-20">
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white font-bold text-xs shadow-[0_0_10px_rgba(16,185,129,0.3)] flex-shrink-0">
+            M
+          </div>
+          {activeTab === 'AI Code Editor' ? (
+            <IDEMenuBar
+              className="bg-transparent border-0 h-auto"
+              onOpenFile={() => fileInputRef.current?.click()}
+              onOpenFolder={() => {
+                if ("showDirectoryPicker" in window) {
+                  (window as any).showDirectoryPicker().then((handle: any) => {
+                    toast.success(`Opened folder: ${handle.name}`);
+                  }).catch(() => {});
+                } else {
+                  fileInputRef.current?.click();
+                }
+              }}
+              onSave={() => {
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, metaKey: true }));
+              }}
+              onSaveAs={() => {
+                const ap = useIDEStore.getState().activePath;
+                if (ap) {
+                  const content = useIDEStore.getState().fileContentsCache[ap] || useIDEStore.getState().activeEditor?.getValue() || '';
+                  const blob = new Blob([content], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = ap.split('/').pop() || 'file.txt';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }
+              }}
+              onSaveAll={() => {
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, metaKey: true }));
+                toast.success("All files saved");
+              }}
+            />
+          ) : (
+            <span className="text-white font-bold tracking-wider text-xs ml-1">M CODE</span>
+          )}
+        </div>
         
-        {/* Segmented Control */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-[#121212] p-0.5 rounded-lg border border-white/5">
+        {/* Center: Segmented Control */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-[#121212] p-0.5 rounded-lg border border-white/5 z-20">
           <div 
             className="absolute inset-y-0.5 bg-blue-500 rounded-md transition-all duration-250 ease-out shadow"
-          style={{
-            width: TAB_WIDTH[activeTab] + 'px',
-            left: TAB_LEFT[activeTab] + 'px'
-          }}
-        />
-        {TABS.map((tab) => (
-          <motion.button 
-            key={tab}
-            whileHover={{ scale: activeTab === tab ? 1 : 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => handleTabSwitch(tab)}
-            className={`relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${activeTab === tab ? 'text-white' : 'text-white/50 hover:text-white'}`}
-            style={{ width: TAB_WIDTH[tab] + 'px' }}
-          >
+            style={{
+              width: TAB_WIDTH[activeTab] + 'px',
+              left: TAB_LEFT[activeTab] + 'px'
+            }}
+          />
+          {TABS.map((tab) => (
+            <motion.button 
+              key={tab}
+              whileHover={{ scale: activeTab === tab ? 1 : 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleTabSwitch(tab)}
+              className={`relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${activeTab === tab ? 'text-white' : 'text-white/50 hover:text-white'}`}
+              style={{ width: TAB_WIDTH[tab] + 'px' }}
+            >
               {tab === 'AI Code Assistant' && <Sparkles className="w-3 h-3"/>}
               {tab === 'AI Code Editor' && <FileText className="w-3 h-3"/>}
               {tab}
@@ -628,19 +698,43 @@ export function AIChatPage() {
           ))}
         </div>
 
-        {/* Right side */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-[#121212] px-1 py-1 rounded-lg border border-white/5 mr-2">
-            <motion.button type="button" onClick={handleExport} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition" title="Export ZIP" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+        {/* Right side: Upload, Branch, Export, Push, GitHub (Sabse Upper Right Side) */}
+        <div className="flex items-center gap-2 z-20">
+          {activeTab === 'AI Code Editor' && (
+            <div className="flex items-center gap-1.5 bg-[#121212] px-2 py-1 rounded-lg border border-white/5">
+              <motion.button
+                onClick={() => setIsModalsOpen(true)}
+                className="flex items-center gap-1 text-xs text-white/70 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                title="Upload files or folders"
+              >
+                <UploadCloud className="w-3.5 h-3.5" /> Upload
+              </motion.button>
+              <div className="w-px h-3.5 bg-white/10 mx-0.5" />
+              <motion.button
+                onClick={() => setShowBranchDropdown(true)}
+                className="branch-dropdown flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-0.5 rounded bg-blue-500/10 hover:bg-blue-500/20 transition"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                title="Git Branch"
+              >
+                <GitBranch className="w-3.5 h-3.5" /> {activeBranch} <ChevronDown className="w-3 h-3" />
+              </motion.button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1.5 bg-[#121212] px-1 py-1 rounded-lg border border-white/5">
+            <motion.button type="button" onClick={handleExport} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 transition" title="Export ZIP" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
               <Download className="w-3.5 h-3.5"/> <span className="hidden sm:inline">Export</span>
             </motion.button>
-            <motion.button type="button" onClick={() => setShowCommitModal(true)} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            <motion.button type="button" onClick={() => setShowCommitModal(true)} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
               <Share className="w-3.5 h-3.5"/> <span className="hidden sm:inline">Push</span>
             </motion.button>
           </div>
-          <motion.button type="button" onClick={handleGithubConnect} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <motion.button type="button" onClick={handleGithubConnect} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 px-2.5 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
             {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
-            GitHub
+            <span className="hidden sm:inline">GitHub</span>
           </motion.button>
         </div>
       </header>
@@ -650,9 +744,14 @@ export function AIChatPage() {
         <div className="flex h-full w-full bg-[#0e0e0e] rounded-[16px] border border-white/10 overflow-hidden shadow-2xl relative">
           
           {/* LEFT SIDEBAR */}
+          {(!zenMode || activeTab !== 'AI Code Editor') && (
           <aside className={`flex-shrink-0 bg-[#121212] border-r border-white/5 flex flex-col z-20 ${activeTab === 'AI Code Editor' ? 'w-14' : 'w-64'}`}>
             {activeTab === 'AI Code Editor' ? (
-              <IDEActivitySidebar onSourceControl={() => setShowBranchDropdown(true)} />
+              <IDEActivitySidebar
+                active={activeActivityBar}
+                onSelectTab={(tabId) => setActiveActivityBar(tabId)}
+                onSourceControl={() => setShowBranchDropdown(true)}
+              />
             ) : (
             <>
             {/* Header */}
@@ -890,6 +989,7 @@ export function AIChatPage() {
             </>
             )}
           </aside>
+          )}
 
           {/* MAIN CONTENT AREA */}
           <main className="flex-1 flex flex-col h-full overflow-hidden relative bg-[#0e0e0e]">
@@ -1309,53 +1409,83 @@ export function AIChatPage() {
             ) : (
               /* IDE VIEW */
               <motion.div
-                className="w-full h-full z-10 relative"
+                className="w-full h-full z-10 relative flex flex-col min-w-0"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
               >
-                
-                {/* Actions overlay for Workspace */}
-                <div className="absolute top-2 left-2 z-30 flex items-center gap-2 bg-[#121212]/80 backdrop-blur-md p-1.5 rounded-lg border border-white/5">
-                   <motion.button onClick={() => setIsModalsOpen(true)} className="flex items-center gap-1 text-xs text-white/70 hover:text-white px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                     <UploadCloud className="w-3.5 h-3.5"/> Upload
-                   </motion.button>
-                   <div className="w-px h-4 bg-white/10 mx-1"></div>
-                   <motion.button onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20 transition" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                     <GitBranch className="w-3.5 h-3.5"/> {activeBranch} <ChevronDown className="w-3 h-3"/>
-                   </motion.button>
-                </div>
-
-                <ResizablePanelGroup orientation="horizontal" className="h-full">
-                {/* Explorer Pane */}
-                {isSidebarOpen && (
-                <ResizablePanel defaultSize={18} minSize={12} maxSize={35}>
-                <div className="h-full flex flex-col mt-12 border-r border-white/5 bg-[#0e0e0e]/50">
-                  <div className="p-3 flex items-center justify-between border-b border-white/5">
-                    <span className="text-xs font-semibold tracking-wider uppercase text-white/50">Explorer</span>
-                  </div>
-                  <FileTree workspaceId={activeWorkspaceId as string} />
+                <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0 h-full">
+                {/* Left Activity Panel (Explorer, Search, Source Control, Run & Debug, Testing) */}
+                {isSidebarOpen && activeActivityBar !== 'extensions' && !zenMode && (
+                <ResizablePanel
+                  id="left-activity-panel"
+                  defaultSize={22}
+                  minSize={16}
+                  maxSize={40}
+                  className="ide-left-panel min-w-[240px] max-w-[460px] flex-shrink-0"
+                  style={{ minWidth: 240, maxWidth: 460 }}
+                >
+                <div className="h-full flex flex-col border-r border-white/5 bg-[#0e0e0e] overflow-hidden min-w-[240px] w-full">
+                  {activeActivityBar === 'explorer' && (
+                    <ExplorerPanel
+                      workspaceId={activeWorkspaceId}
+                      projectName={workspaces.find((w) => w._id === activeWorkspaceId)?.name || 'Folders'}
+                    />
+                  )}
+                  {activeActivityBar === 'search' && (
+                    <SearchPanel />
+                  )}
+                  {activeActivityBar === 'source-control' && (
+                    <SourceControlPanel />
+                  )}
+                  {activeActivityBar === 'run-debug' && (
+                    <RunDebugPanel workspaceId={activeWorkspaceId} />
+                  )}
+                  {activeActivityBar === 'testing' && (
+                    <TestingPanel />
+                  )}
+                  {activeActivityBar === 'remote' && (
+                    <RemoteExplorerPanel
+                      workspaceId={activeWorkspaceId}
+                      activeBranch={activeBranch}
+                    />
+                  )}
+                  {activeActivityBar === 'containers' && (
+                    <ContainersPanel />
+                  )}
+                  {activeActivityBar === 'android' && (
+                    <AndroidEmulatorsPanel />
+                  )}
                 </div>
                 </ResizablePanel>
                 )}
-                {isSidebarOpen && <ResizablePanelHandle className="bg-white/5 hover:bg-emerald-400/30 transition-colors" />}
-                {""}
+                {isSidebarOpen && activeActivityBar !== 'extensions' && !zenMode && (
+                  <ResizablePanelHandle className="w-[3px] bg-[#222222] hover:bg-[#3b82f6] transition-colors" />
+                )}
 
                 {/* Editor & Terminal Center Pane */}
-                <ResizablePanel defaultSize={52} minSize={30}>
-                <div className="h-full flex-1 flex flex-col min-w-0 bg-[#0e0e0e] pt-12">
-                  <EditorPane workspaceId={activeWorkspaceId as string} />
-                  {isTerminalOpen && <TerminalPane messages={messages} onCommand={sendTerminalCommand} />}
-                </div>
+                <ResizablePanel defaultSize={zenMode || !secondarySideBarVisible ? 100 : 50} minSize={30}>
+                {activeActivityBar === 'extensions' ? (
+                  <div className="h-full flex-1 flex flex-col min-w-0 bg-[#0e0e0e] overflow-hidden">
+                    <ExtensionsMarketplace editorApi={editorApi} />
+                  </div>
+                ) : (
+                  <div className="h-full flex-1 flex flex-col min-w-0 bg-[#0e0e0e]">
+                    <EditorPane workspaceId={activeWorkspaceId as string} />
+                    {isTerminalOpen && !zenMode && <TerminalPane messages={messages} onCommand={sendTerminalCommand} />}
+                  </div>
+                )}
                 </ResizablePanel>
-                <ResizablePanelHandle className="bg-white/5 hover:bg-emerald-400/30 transition-colors" />
 
                 {/* AI Chat Right Pane */}
-                <ResizablePanel defaultSize={30} minSize={20}>
-                <div className="h-full border-l border-white/5 bg-[#0e0e0e] flex flex-col relative z-20">
-                  <div className="p-4 flex items-center justify-between border-b border-white/5">
-                    <span className="text-sm font-semibold">AI Assistance</span>
-                  </div>
+                {!zenMode && secondarySideBarVisible && (
+                  <>
+                    <ResizablePanelHandle className="bg-white/5 hover:bg-emerald-400/30 transition-colors" />
+                    <ResizablePanel defaultSize={28} minSize={20}>
+                    <div className="h-full border-l border-white/5 bg-[#0e0e0e] flex flex-col relative z-20">
+                      <div className="p-4 flex items-center justify-between border-b border-white/5">
+                        <span className="text-sm font-semibold">AI Assistance</span>
+                      </div>
                   
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 custom-scrollbar">
                     <TodoCard plan={plan as any} />
@@ -1515,7 +1645,18 @@ export function AIChatPage() {
                   </div>
                 </div>
                 </ResizablePanel>
+                </>
+                )}
                 </ResizablePanelGroup>
+
+                {zenMode && (
+                  <button
+                    onClick={() => setZenMode(false)}
+                    className="absolute top-10 right-4 z-50 px-3 py-1.5 rounded-lg bg-[#18181b]/95 border border-white/20 text-white/80 hover:text-white text-xs flex items-center gap-1.5 shadow-2xl backdrop-blur-md transition hover:bg-[#252529]"
+                  >
+                    <Minimize2 className="w-3.5 h-3.5 text-blue-400" /> Exit Zen Mode (Esc)
+                  </button>
+                )}
 
               </motion.div>
             )}
@@ -1803,6 +1944,15 @@ export function AIChatPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* IDE Menu Palettes & Dialogs */}
+      <QuickOpenPalette workspaceId={activeWorkspaceId} />
+      <SymbolPalette />
+      <GoToLineModal />
+      <ShortcutsReferenceModal />
+      <AboutModal />
+      <ReleaseNotesModal />
+      <TasksModal />
 
     </div>
   );

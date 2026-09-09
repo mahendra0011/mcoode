@@ -118,6 +118,7 @@ export interface ChatMessageProps {
 
 export interface IDEActivitySidebarProps {
   active?: string;
+  onSelectTab?: (id: string) => void;
   onSourceControl?: () => void;
   branch?: string;
 }
