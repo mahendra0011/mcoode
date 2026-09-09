@@ -1,0 +1,122 @@
+import React from 'react';
+import { ToolCallCard, TerminalOutput, WroteFile, DiffBlock } from '../chat/ZCodeUX';
+import { WebSearchAnimation, WebFetchAnimation } from '../chat/SearchAnimation';
+import type { ChatMessage, ToolArgs } from '../../types/chat';
+
+export interface StepCardProps {
+  msg: ChatMessage;
+  undo?: (msg: ChatMessage) => void;
+}
+
+export function StepCard({ msg, undo }: StepCardProps) {
+  const isRunning = msg.status === 'running';
+  const isFailed = msg.status === 'failed';
+  const isDone = msg.status === 'done';
+
+  if (msg.tool === 'web_search') {
+    return (
+      <div className="w-full max-w-lg mt-2 relative before:absolute before:inset-0 before:-left-[24px] before:w-[2px] before:bg-border/40 before:h-[calc(100%+16px)] before:-top-2">
+        <WebSearchAnimation
+          query={msg.searchResults?.query || msg.args?.query || msg.title || ''}
+          status={isRunning ? 'searching' : 'done'}
+          sources={msg.searchResults?.results || []}
+        />
+      </div>
+    );
+  }
+
+  if (msg.tool === 'web_fetch') {
+    return (
+      <div className="w-full max-w-lg mt-2 relative before:absolute before:inset-0 before:-left-[24px] before:w-[2px] before:bg-border/40 before:h-[calc(100%+16px)] before:-top-2">
+        <WebFetchAnimation msg={msg} status={isRunning ? 'fetching' : 'done'} />
+      </div>
+    );
+  }
+
+  let type = 'explored';
+  let label = 'Working...';
+  let summary: string | ToolArgs = '';
+  let content = null;
+
+  switch (msg.tool) {
+    case 'read_file':
+      type = 'explored';
+      label = 'Read file';
+      summary = msg.path || msg.args || '';
+      content = msg.output ? <TerminalOutput command={`cat ${summary}`} output={msg.output} /> : null;
+      break;
+    case 'write_file':
+      type = 'wrote';
+      label = msg.created ? 'Created' : 'Wrote';
+      summary = msg.path || msg.args || '';
+      const lang = typeof summary === 'string' ? summary.split('.').pop() || 'js' : 'js';
+      content = <WroteFile filename={typeof summary === 'string' ? summary : JSON.stringify(summary)} lang={lang} lines={msg.output?.split('\\n')?.length || 0} />;
+      break;
+    case 'edit_file':
+      type = 'updated';
+      label = 'Edited';
+      summary = msg.path || msg.args || '';
+      content = <DiffBlock filename={typeof summary === 'string' ? summary : JSON.stringify(summary)} added={msg.diffLines?.length || 1} removed={1} />;
+      break;
+    case 'run_shell':
+    case 'run_tests':
+      type = 'ran';
+      label = 'Ran';
+      summary = msg.command || msg.args || '';
+      content = <TerminalOutput command={typeof summary === 'string' ? summary : JSON.stringify(summary)} output={msg.output || (isDone ? 'Success' : '...')} />;
+      break;
+    case 'list_files':
+    case 'search_code': {
+      type = 'searched';
+      label = 'Explore';
+      // Reference style shows a compact item count ("2 lists", "3 files")
+      // instead of a full path — derive it from the output line count.
+      const lineCount = msg.output ? msg.output.split('\n').filter(Boolean).length : 0;
+      const noun = msg.tool === 'list_files' ? 'list' : 'file';
+      summary = lineCount > 0 ? `${lineCount} ${noun}${lineCount === 1 ? '' : 's'}` : (msg.title || 'codebase');
+      content = msg.output ? <TerminalOutput command={`search ${msg.title || summary}`} output={msg.output} /> : null;
+      break;
+    }
+    case 'web_search':
+    case 'web_fetch':
+      type = 'searched';
+      label = msg.tool === 'web_search' ? 'Web Search' : 'Web Fetch';
+      summary = msg.title || msg.args || '';
+      content = msg.output ? <TerminalOutput command={`fetch ${summary}`} output={msg.output} /> : null;
+      break;
+    default:
+      type = 'explored';
+      label = `Tool: ${msg.tool}`;
+      summary = 'Executing...';
+      content = msg.output ? <TerminalOutput command={msg.tool} output={msg.output} /> : null;
+      break;
+  }
+
+  if (isFailed) {
+    summary += ' (Failed)';
+  }
+
+  return (
+    <div className="w-full max-w-lg mt-2 relative before:absolute before:inset-0 before:-left-[24px] before:w-[2px] before:bg-border/40 before:h-[calc(100%+16px)] before:-top-2">
+      <ToolCallCard 
+        type={type} 
+        label={label} 
+        summary={typeof summary === 'string' ? summary : JSON.stringify(summary)} 
+        active={isRunning}
+        defaultOpen={isFailed || (!isDone && !!content) || msg.tool === 'write_file' || msg.tool === 'edit_file'}
+      >
+        {content || (
+          isFailed && msg.error ? (
+            <div className="text-red-400/80 text-xs whitespace-pre-wrap break-words">
+              {msg.error}
+            </div>
+          ) : (
+            <div className="text-white/40 italic text-xs">
+              {isRunning ? 'Waiting for output...' : 'No output.'}
+            </div>
+          )
+        )}
+      </ToolCallCard>
+    </div>
+  );
+}

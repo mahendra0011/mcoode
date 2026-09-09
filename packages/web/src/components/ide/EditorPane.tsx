@@ -1,0 +1,217 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import Editor from '@monaco-editor/react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FileType2, FileCode, FileJson, File as FileIcon } from 'lucide-react';
+import api from '../../lib/axios';
+import { useIDEStore } from '../../store/ideStore';
+
+const getFileIcon = (name: string) => {
+  if (name.endsWith('.jsx') || name.endsWith('.tsx')) return <FileType2 className="w-4 h-4 text-cyan-400" />;
+  if (name.endsWith('.js') || name.endsWith('.ts')) return <FileCode className="w-4 h-4 text-blue-400" />;
+  if (name.endsWith('.json')) return <FileJson className="w-4 h-4 text-yellow-400" />;
+  if (name.endsWith('.html')) return <FileCode className="w-4 h-4 text-orange-400" />;
+  return <FileIcon className="w-4 h-4 text-white/50" />;
+};
+
+const getLanguage = (path: string) => {
+  if (path.endsWith('.js') || path.endsWith('.jsx')) return 'javascript';
+  if (path.endsWith('.ts') || path.endsWith('.tsx')) return 'typescript';
+  if (path.endsWith('.json')) return 'json';
+  if (path.endsWith('.html')) return 'html';
+  if (path.endsWith('.css')) return 'css';
+  if (path.endsWith('.md')) return 'markdown';
+  return 'plaintext';
+};
+
+// openFiles / activePath / closeFile now come from the Zustand IDE store
+// (shared with FileTree) instead of being threaded in as props from the page.
+export interface EditorPaneProps {
+  workspaceId: string;
+}
+
+export function EditorPane({ workspaceId }: EditorPaneProps) {
+  const openFiles = useIDEStore((s) => s.openFiles);
+  const activePath = useIDEStore((s) => s.activePath);
+  const setActivePath = useIDEStore((s) => s.setActivePath);
+  const closeFile = useIDEStore((s) => s.closeFile);
+
+  const [fileContents, setFileContents] = useState<Record<string, string | undefined>>({});
+  const [loading, setLoading] = useState(false);
+  const [dirty, setDirty] = useState(new Set<string>());  // paths with unsaved local edits
+
+  // Fetch content when a new file is opened
+  useEffect(() => {
+    if (!workspaceId || !activePath) return;
+    if (fileContents[activePath] !== undefined) return; // already loaded
+
+    setLoading(true);
+    api.get(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, { timeout: 5000 })
+      .then(res => {
+        if (res.data.content !== undefined) {
+          setFileContents(prev => ({ ...prev, [activePath]: res.data.content }));
+        }
+      })
+      .finally(() => setLoading(false));
+  }, [workspaceId, activePath, fileContents]);
+
+  const handleEditorChange = useCallback((value: string | undefined) => {
+    if (!activePath) return;
+    setFileContents(prev => ({ ...prev, [activePath]: value }));
+    setDirty(prev => new Set(prev).add(activePath));
+  }, [activePath]);
+
+  // Handle Save (Cmd+S)
+  const handleSave = useCallback(() => {
+    if (!workspaceId || !activePath) return;
+    const content = fileContents[activePath];
+
+    api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, content)
+      .then(res => {
+        if (res.status >= 400) throw new Error('Save failed');
+        setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
+      })
+      .catch(err => console.error(err));
+  }, [workspaceId, activePath, fileContents]);
+
+  // Listen for file:changed events from the agent (write/edit tool completions)
+  // so that open editors auto-refresh when the agent modifies a file they're viewing.
+  useEffect(() => {
+    const handleFileChanged = (e: Event) => {
+      const changedPath = (e as CustomEvent<{ path?: string }>).detail?.path;
+      if (!changedPath || !openFiles.includes(changedPath)) return;
+      // If the user has unsaved local edits, warn before overwriting
+      if (dirty.has(changedPath)) {
+        const reload = window.confirm(
+          'This file was changed by the AI agent while you have unsaved edits. ' +
+          'OK to reload the agent\'s version (your local changes will be lost), ' +
+          'Cancel to keep your current edits.'
+        );
+        if (!reload) return; // keep user's version
+      }
+      // Clear cached content so the fetch useEffect re-fetches from disk
+      setFileContents(prev => {
+        const next = { ...prev };
+        delete next[changedPath];
+        return next;
+      });
+      setDirty(prev => { const d = new Set(prev); d.delete(changedPath); return d; });
+    };
+    document.addEventListener('file:changed', handleFileChanged);
+    return () => document.removeEventListener('file:changed', handleFileChanged);
+  }, [openFiles, dirty]);
+
+  // Bind Cmd+S globally when Editor has focus
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown as EventListener);
+    return () => window.removeEventListener('keydown', onKeyDown as EventListener);
+  }, [handleSave]);
+
+  if (openFiles.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex-1 flex items-center justify-center bg-[#0e0e0e] text-white/30 text-sm"
+      >
+        Select a file from the explorer to open
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      className="flex-1 flex flex-col min-w-0 bg-[#0e0e0e] h-full"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+    >
+      {/* Editor Tabs */}
+      <motion.div
+        className="flex items-center border-b border-white/5 bg-[#151515] overflow-x-auto custom-scrollbar flex-shrink-0"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      >
+        {openFiles.map((path, i) => {
+          const name = path.split('/').pop() || '';
+          const isActive = activePath === path;
+          const isDirty = dirty.has(path);
+          return (
+            <motion.div
+              key={path}
+              initial={{ opacity: 0, x: -5 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -5 }}
+              transition={{ delay: i * 0.04 + 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              onClick={() => setActivePath(path)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm cursor-pointer whitespace-nowrap ${
+                isActive
+                  ? 'bg-[#0e0e0e] border-t-2 border-blue-500 font-medium text-white'
+                  : 'text-white/50 hover:bg-white/5 border-t-2 border-transparent'
+              }`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {getFileIcon(name)} {name}
+              {isDirty && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Unsaved changes" />
+              )}
+              <motion.span
+                className="text-white/30 ml-2 hover:text-white cursor-pointer px-1 rounded hover:bg-white/10"
+                whileHover={{ scale: 1.15, rotate: 90 }}
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  if (isDirty && !window.confirm('This file has unsaved changes. Close anyway?')) return;
+                  closeFile(path);
+                }}
+              >
+                ×
+              </motion.span>
+            </motion.div>
+          );
+        })}
+      </motion.div>
+
+      {/* Monaco Editor */}
+      <div className="flex-1 relative">
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              className="absolute inset-0 flex items-center justify-center bg-[#0e0e0e]/50 z-10 text-white/50 text-sm"
+            >
+              Loading...
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {activePath && (
+          <Editor
+            height="100%"
+            theme="vs-dark"
+            path={activePath}
+            language={getLanguage(activePath)}
+            value={fileContents[activePath] || ''}
+            onChange={handleEditorChange}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 13,
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+              padding: { top: 16 },
+              scrollBeyondLastLine: false,
+              renderLineHighlight: 'all'
+            }}
+          />
+        )}
+      </div>
+    </motion.div>
+  );
+}

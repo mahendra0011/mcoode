@@ -58,17 +58,6 @@ export function workspaceRoutes({ secret }) {
         gitUrl = repoUrl;
         branchResult = branch;
         await cloneRepo(repoUrl, diskPath, { branch: branchResult, branchName });
-      } else if (source === 'design') {
-        // Scaffold a React/Vite project from a design's generated HTML
-        const { designId } = req.body;
-        if (!designId) {
-          return res.status(400).json({ error: { code: 'VALIDATION', message: 'designId required for design source' } });
-        }
-        const design = await db().design.findOne({ _id: designId, userId: req.userId });
-        if (!design) {
-          return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'design not found' } });
-        }
-        await scaffoldFromDesign(design, diskPath);
       }
 
       const ws = await db().workspace.create({
@@ -153,12 +142,22 @@ export function workspaceRoutes({ secret }) {
   // GET /workspaces/:id/branches - list git branches
   router.get('/:id/branches', async (req, res, next) => {
     try {
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       
-      const git = (await import('simple-git')).default;
-      const branches = await git(ws.diskPath).branchLocal();
-      res.json({ branches: branches.all, current: branches.current });
+      try {
+        const git = (await import('simple-git')).default;
+        const branches = await git(ws.diskPath).branchLocal();
+        return res.json({ branches: branches.all || [], current: branches.current || ws.branch || 'main' });
+      } catch {
+        // Not a git repository or disk path missing — fallback to workspace default branch
+        return res.json({ branches: [ws.branch || 'main'], current: ws.branch || 'main' });
+      }
     } catch (err) {
       next(err);
     }
@@ -324,135 +323,4 @@ async function cloneRepo(repoUrl, destDir, opts = {}) {
     cloneOpts['--branch'] = opts.branchName || opts.branch;
   }
   await git().silent(true).clone(repoUrl, destDir, cloneOpts);
-}
-
-/** Scaffold a React/Vite project from a design's generated HTML.
- *  Splits the design HTML into index.html + src/App.jsx so the user lands
- *  in a real, editable project inside the AI Code Agent workspace. */
-async function scaffoldFromDesign(design, destDir) {
-  await mkdir(join(destDir, 'src'), { recursive: true });
-  await mkdir(join(destDir, 'public'), { recursive: true });
-
-  // Extract CSS and body content from the generated HTML
-  const html = design.html || '';
-  const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-  const css = styleMatch ? styleMatch[1] : '';
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-  const bodyContent = bodyMatch ? bodyMatch[1].trim() : '';
-
-  // index.html
-  await writeFile(
-    join(destDir, 'index.html'),
-    `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Design: ${design.prompt ? design.prompt.slice(0, 60) : 'mcode design'}</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>`,
-    'utf8'
-  );
-
-  // src/main.jsx
-  await writeFile(
-    join(destDir, 'src', 'main.jsx'),
-    `import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
-
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
-`,
-    'utf8'
-  );
-
-  // src/App.jsx — port the design's body HTML into JSX
-  const appContent = bodyContent
-    .replace(/<!--([\s\S]*?)-->/g, '') // strip HTML comments
-    .replace(/class=/g, 'className=')
-    .replace(/for=/g, 'htmlFor=')
-    .replace(/onclick/gi, 'onClick')
-    .replace(/onmouseenter/gi, 'onMouseEnter')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-
-  await writeFile(
-    join(destDir, 'src', 'App.jsx'),
-    `import React from 'react'
-import './index.css'
-
-export default function App() {
-  return (
-    <>
-${appContent
-      .split('\n')
-      .map((line) => '      ' + line)
-      .join('\n')}
-    </>
-  )
-}
-`,
-    'utf8'
-  );
-
-  // src/index.css — extracted styles + Tailwind import
-  await writeFile(
-    join(destDir, 'src', 'index.css'),
-    `@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-${css}
-`,
-    'utf8'
-  );
-
-  // package.json
-  await writeFile(
-    join(destDir, 'package.json'),
-    JSON.stringify(
-      {
-        name: `design-${String(design._id || 'app').slice(-8)}`,
-        version: '0.1.0',
-        private: true,
-        scripts: {
-          dev: 'vite',
-          build: 'vite build',
-          preview: 'vite preview',
-        },
-        dependencies: {
-          react: '^18.3.0',
-          'react-dom': '^18.3.0',
-        },
-        devDependencies: {
-          '@vitejs/plugin-react': '^4.3.0',
-          vite: '^5.3.0',
-        },
-      },
-      null,
-      2
-    ),
-    'utf8'
-  );
-
-  // vite.config.js
-  await writeFile(
-    join(destDir, 'vite.config.js'),
-    `import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-})
-`,
-    'utf8'
-  );
 }

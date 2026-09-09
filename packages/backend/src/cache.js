@@ -25,8 +25,8 @@ export async function connectRedis(uri) {
       lazyConnect: true,
       maxRetriesPerRequest: null,
       retryStrategy: (times) => {
-        if (times > 5) return null; // stop retrying after 5 attempts
-        return Math.min(times * 100, 3000);
+        if (times > 1) return null; // stop retrying immediately on failure
+        return 100;
       }
     });
 
@@ -49,6 +49,10 @@ export async function connectRedis(uri) {
   } catch (err) {
     console.error('[cache] ❌ Redis connection failed:', err.message);
     console.error('[cache]    Running in pass-through mode — caching disabled.');
+    try {
+      redis.removeAllListeners();
+      redis.disconnect(false);
+    } catch { /* ignore */ }
     mode = 'passthrough';
     return { mode, connected: false };
   }

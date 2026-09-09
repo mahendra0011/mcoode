@@ -16,14 +16,14 @@ test.describe('Terminal check', () => {
     await page.goto('/ai/chat');
     await page.waitForTimeout(2000);
 
-    // Go to AI Code Agent tab
-    const agentTab = page.locator('button').filter({ hasText: /AI code Agent/i });
+    // Go to AI Code Editor tab
+    const agentTab = page.locator('button').filter({ hasText: /AI Code Editor/i });
     if (await agentTab.count() > 0) await agentTab.click();
     await page.waitForTimeout(500);
 
-    // Toggle advanced mode
-    const advBtn = page.locator('button').filter({ hasText: /Advanced Mode/i });
-    if (await advBtn.count() > 0) await advBtn.click();
+    // Switch to AI Code Assistant tab for agent mode
+    const assistantTab = page.locator('button').filter({ hasText: /AI Code Assistant/i });
+    if (await assistantTab.count() > 0) await assistantTab.click();
     await page.waitForTimeout(300);
 
     // Send message to trigger IDE view

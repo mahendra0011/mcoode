@@ -18,50 +18,71 @@ export async function closeBrowser() {
 }
 
 /**
- * Fetches HTML content, falling back to Playwright if necessary.
+ * Fetches HTML or Markdown content, falling back to Playwright only for JS-heavy SPAs.
+ * Features from open-webSearch: markdown detection, realistic header bundle,
+ * resource aborts for speed.
+ *
  * @param {string} url
- * @returns {Promise<{html: string, method: 'fetch'|'playwright'|'error'}>}
+ * @returns {Promise<{html: string, isMarkdown?: boolean, method: 'fetch'|'playwright'|'error'}>}
  */
 export async function fetchPage(url) {
   try {
-    // 1. Try standard axios fetch with a realistic user agent
     const response = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+        'Accept': 'text/markdown,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
       },
-      timeout: 8000,
-      validateStatus: () => true, // resolve on all status codes to handle redirects/errors manually if needed
+      timeout: 10000,
+      maxRedirects: 5,
+      validateStatus: () => true,
     });
 
-    if (response.status >= 200 && response.status < 300) {
-      const html = response.data;
-      if (typeof html === 'string') {
-        // Heuristic: if very little visible text (stripped HTML tags) or heavily script-based
-        const strippedText = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').replace(/<[^>]+>/g, '').trim();
-        
-        // If we have decent content, use it. Otherwise, fall back.
-        if (strippedText.length > 500 && !html.toLowerCase().includes('enable javascript')) {
-          return { html, method: 'fetch' };
+    const contentType = String(response.headers['content-type'] || '').toLowerCase();
+    const isMarkdown =
+      contentType.includes('text/markdown') ||
+      contentType.includes('text/x-markdown') ||
+      url.endsWith('.md') ||
+      url.endsWith('.markdown');
+
+    if (response.status >= 200 && response.status < 400) {
+      const data = response.data;
+      if (typeof data === 'string') {
+        if (isMarkdown) {
+          return { html: data, isMarkdown: true, method: 'fetch' };
+        }
+
+        // Fast text content check (open-webSearch pattern)
+        const strippedText = data
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .trim();
+
+        // If we have >= 200 characters of real text and it's not a bot challenge, return it
+        const isBotChallenge =
+          /verify you are human|security check|enable javascript|ddos-guard|cf-browser-verification/i.test(data);
+
+        if (strippedText.length >= 200 && !isBotChallenge) {
+          return { html: data, isMarkdown: false, method: 'fetch' };
         }
       }
     }
   } catch (err) {
-    // Timeout or network error on standard fetch -> fall through to playwright
-    console.warn(`[fetchPage] Standard fetch failed for ${url}: ${err.message}, falling back to Playwright.`);
+    console.warn(`[fetchPage] Standard fetch failed for ${url}: ${err.message}, trying headless browser.`);
   }
 
-  // 2. Playwright fallback
+  // 2. Playwright fallback for SPA / bot-protected pages
   let page = null;
   try {
     const browser = await getBrowser();
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
     });
     page = await context.newPage();
-    
-    // Block images, css, fonts to speed up page load
+
+    // Abort heavy media, fonts, images to load in 1-2 seconds
     await page.route('**/*', (route) => {
       const type = route.request().resourceType();
       if (['image', 'stylesheet', 'font', 'media'].includes(type)) {
@@ -72,17 +93,15 @@ export async function fetchPage(url) {
     });
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    
-    // Wait briefly for hydration or dynamically loaded content
-    await page.waitForTimeout(1000);
-    
+    await page.waitForTimeout(800);
+
     const html = await page.content();
     await context.close();
-    
-    return { html, method: 'playwright' };
+
+    return { html, isMarkdown: false, method: 'playwright' };
   } catch (err) {
     if (page) await page.context().close().catch(() => {});
     console.error(`[fetchPage] Playwright fallback failed for ${url}: ${err.message}`);
-    return { html: '', method: 'error' };
+    return { html: '', isMarkdown: false, method: 'error' };
   }
 }

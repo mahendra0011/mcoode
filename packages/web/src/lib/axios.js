@@ -58,7 +58,7 @@ api.interceptors.response.use(
     const { config, response } = error;
 
     // Only handle 401s — other errors propagate to the caller
-    if (response?.status !== 401 || config.__isRetry) {
+    if (response?.status !== 401 || config?.__isRetry) {
       return Promise.reject(error);
     }
 
@@ -68,9 +68,10 @@ api.interceptors.response.use(
         pendingRequests.push({
           resolve: (token) => {
             config.headers.Authorization = `Bearer ${token}`;
+            config.__isRetry = true;
             resolve(api(config));
           },
-          reject,
+          reject: (err) => reject(err),
         });
       });
     }
@@ -81,7 +82,13 @@ api.interceptors.response.use(
     const { refresh } = getTokens();
     if (!refresh) {
       isRefreshing = false;
-      // No refresh token — reject so caller can redirect to /login
+      const rejectList = pendingRequests;
+      pendingRequests = [];
+      rejectList.forEach((req) => req.reject(error));
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('mcode_tokens');
+        window.location.href = '/login';
+      }
       return Promise.reject(error);
     }
 
@@ -89,28 +96,36 @@ api.interceptors.response.use(
       const refreshRes = await axios.post(
         '/api/v1/auth/refresh',
         { refresh },
-        { baseURL: '/', timeout: 5000, headers: { 'Content-Type': 'application/json' } }
+        { baseURL: '/', timeout: 15000, headers: { 'Content-Type': 'application/json' } }
       );
 
       if (refreshRes.data && refreshRes.data.access) {
-        setTokens({ access: refreshRes.data.access, refresh: refreshRes.data.refresh || refresh });
-        config.headers.Authorization = `Bearer ${refreshRes.data.access}`;
+        const newAccess = refreshRes.data.access;
+        const newRefresh = refreshRes.data.refresh || refresh;
+        setTokens({ access: newAccess, refresh: newRefresh });
+        config.headers.Authorization = `Bearer ${newAccess}`;
 
         // Retry all queued requests with the new token
-        pendingRequests.forEach((req) => req.resolve(refreshRes.data.access));
+        const resolveList = pendingRequests;
         pendingRequests = [];
+        resolveList.forEach((req) => req.resolve(newAccess));
 
         return api(config);
       }
+      throw new Error('Refresh response missing access token');
     } catch {
-      // Refresh failed — reject all queued requests
-      pendingRequests.forEach((req) => req.reject(error));
+      // Refresh failed — clear invalid tokens, reject all queued requests, and redirect to /login
+      const rejectList = pendingRequests;
       pendingRequests = [];
+      rejectList.forEach((req) => req.reject(error));
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('mcode_tokens');
+        window.location.href = '/login';
+      }
+      return Promise.reject(error);
     } finally {
       isRefreshing = false;
     }
-
-    return Promise.reject(error);
   }
 );
 

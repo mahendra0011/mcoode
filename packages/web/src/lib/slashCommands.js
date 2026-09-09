@@ -28,7 +28,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
   if (!trimmed.startsWith('/')) return false;
 
   const [name, ...rest] = trimmed.slice(1).split(' ');
-  const { setPrompt, toggleWatchMode, toggleAdvancedMode } = state;
+  const { setPrompt, toggleWatchMode, switchToAssistantTab } = state;
 
   switch (name) {
     case 'clear':
@@ -67,7 +67,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
         return true;
       }
       // Switch to agent mode + god sub-mode
-      if (toggleAdvancedMode) toggleAdvancedMode();
+      if (switchToAssistantTab) switchToAssistantTab();
       dispatch(addMessage({
         kind: 'system',
         text: `⚡ God-mode: Starting parallel build for: "${prompt}"`

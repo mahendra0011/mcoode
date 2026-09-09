@@ -6,6 +6,10 @@ dist/
 packages/cli/dist/
 packages/dashboard/dist/
 *.tgz
+.next/
+out/
+.turbo/
+*.tsbuildinfo
 
 # env & secrets
 .env

@@ -127,13 +127,70 @@ export function extractActions(text) {
 
   // Fallback: parse XML-style <tool_call> blocks
   if (actions.length === 0) {
-    const xml = [...source.matchAll(TOOL_CALL_XML)];
-    for (const block of xml) {
-      const tool = block[1];
+    const toolCallRegex = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
+    for (const match of source.matchAll(toolCallRegex)) {
+      const body = match[1].trim();
+
+      // Check if body is a JSON object
+      if (body.startsWith('{') && body.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(body);
+          const tool = parsed.tool || parsed.name || parsed.function;
+          const args = parsed.args || parsed.parameters || parsed.arguments || {};
+          if (tool) {
+            actions.push({ tool, args: typeof args === 'object' ? args : {} });
+            continue;
+          }
+        } catch { /* ignore */ }
+      }
+
+      // Extract tool name: first word/token
+      const toolMatch = body.match(/^([\w_-]+)/);
+      if (!toolMatch) continue;
+      const tool = toolMatch[1].toLowerCase();
+      const rest = body.slice(toolMatch[0].length).trim();
+
       const args = {};
-      for (const pair of block[2].matchAll(ARG_PAIR)) {
+
+      // Check for standard <arg_key>k</arg_key><arg_value>v</arg_value>
+      const keyValRegex = /<arg_key>\s*([^<]+?)\s*<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/gi;
+      let matchedPair = false;
+      for (const pair of rest.matchAll(keyValRegex)) {
+        matchedPair = true;
         args[pair[1].trim()] = pair[2].trim();
       }
+
+      // Check for standalone <arg_value>v</arg_value> with optional preceding key
+      if (!matchedPair) {
+        const valRegex = /(?:(\w+)[:\s\n]*)?<arg_value>([\s\S]*?)<\/arg_value>/gi;
+        for (const vMatch of rest.matchAll(valRegex)) {
+          const rawKey = (vMatch[1] || '').trim().toLowerCase();
+          const val = vMatch[2].trim();
+          let key = rawKey;
+          if (!key || key === 'execution' || key === 'tool') {
+            if (tool === 'web_search') key = 'query';
+            else if (tool === 'web_fetch') key = 'url';
+            else if (tool === 'run_shell') key = 'command';
+            else if (tool === 'read_file' || tool === 'write_file' || tool === 'edit_file') key = 'path';
+            else key = 'query';
+          }
+          args[key] = val;
+        }
+      }
+
+      // Check for key: value text lines
+      if (Object.keys(args).length === 0) {
+        const lines = rest.split('\n');
+        for (const line of lines) {
+          const colonIdx = line.indexOf(':');
+          if (colonIdx !== -1) {
+            const k = line.slice(0, colonIdx).trim().toLowerCase();
+            const v = line.slice(colonIdx + 1).trim();
+            if (k && v && !k.startsWith('<')) args[k] = v;
+          }
+        }
+      }
+
       actions.push({ tool, args });
     }
   }
@@ -168,7 +225,12 @@ function canParallelize(toolName, args, changedFiles) {
 export function stripActions(text) {
   const out = String(text || '')
     .replace(ACTION_FENCE, '')
-    .replace(TOOL_CALL_XML, '')
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+    .replace(/<tool_call>[\s\S]*$/gi, '')
+    .replace(/<\/?tool_call[^>]*>/gi, '')
+    .replace(/<arg_key>[\s\S]*?<\/arg_key>/gi, '')
+    .replace(/<arg_value>[\s\S]*?<\/arg_value>/gi, '')
+    .replace(/<\/?arg_[^>]*>/gi, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return out;
@@ -558,6 +620,7 @@ export class ChatAgent {
     for (this.turn = 0; this.turn < this.maxTurns; this.turn++) {
       let text = '';
       try {
+        let streamedLength = 0;
         for await (const chunk of streamText(this.assignment, this.assignment.model.id, {
           messages,
           temperature: 0.15,
@@ -566,7 +629,22 @@ export class ChatAgent {
         })) {
           if (this.aborted) break;
           text += chunk;
-          this.bus?.emit(EVENTS.MESSAGE, { kind: 'stream', text: chunk });
+
+          // Suppress raw tool call tags (<tool_call> or ```mcode-action) from leaking to the user stream
+          const toolCallIdx = text.search(/<tool_call|```mcode-action/i);
+          if (toolCallIdx !== -1) {
+            if (streamedLength < toolCallIdx) {
+              const safeChunk = text.slice(streamedLength, toolCallIdx);
+              streamedLength = toolCallIdx;
+              if (safeChunk.trim()) {
+                this.bus?.emit(EVENTS.MESSAGE, { kind: 'stream', text: safeChunk });
+              }
+            }
+          } else {
+            const newChunk = text.slice(streamedLength);
+            streamedLength = text.length;
+            this.bus?.emit(EVENTS.MESSAGE, { kind: 'stream', text: newChunk });
+          }
         }
       } catch (err) {
         if (this.aborted) break;

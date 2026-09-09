@@ -65,6 +65,10 @@
     --zc-radius: 10px;
     --zc-font: 'Inter', -apple-system, sans-serif;
     --zc-mono: 'JetBrains Mono', 'SF Mono', monospace;
+
+    /* ZCode gradient text variables — dark theme (matches ZCode theme-zai-dark) */
+    --animated-gradient-text-strong: #fff;
+    --animated-gradient-text-soft: #ffffff38;
   }
 }
 
@@ -124,8 +128,15 @@
 /* Stream marker text color transition */
 @keyframes zcode-stream-marker-in {
   0% { color: #0000; }
-  to { color: var(--foreground, #e6e6ea); }
+  to { color: var(--zc-text-dim, #8b8d98); }
 }
+
+/* Animated gradient text — ZCode's thinking label animation (4s linear infinite) */
+@keyframes gradient-flow {
+  0% { background-position: 100% 0; }
+  50% { background-position: 0 0; }
+  to { background-position: 0 0; }
+ }
 
 /* Collapsible animation */
 @keyframes zcode-collapsible-up {
@@ -239,8 +250,34 @@
 }
 
 /* Pulse caret for syntax highlight cursor */
+@keyframes pulse-caret {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0.3; }
+}
+
 .pulse-caret {
   animation: pulse-caret 1s step-end infinite;
+}
+
+/* ZCode animated gradient text — used for the "Thinking..." label */
+.animated-gradient-text {
+  background: linear-gradient(90deg,
+    var(--animated-gradient-text-strong) 0%,
+    var(--animated-gradient-text-strong) 34%,
+    var(--animated-gradient-text-soft) 50%,
+    var(--animated-gradient-text-strong) 66%,
+    var(--animated-gradient-text-strong) 100%
+  );
+  color: #0000;
+  -webkit-text-fill-color: transparent;
+  will-change: background-position;
+  backface-visibility: hidden;
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: 4s linear infinite gradient-flow;
+  display: inline-block;
+  transform: translateZ(0);
 }
 
 /* Tool/stream text fade-in (also applied via data attributes above) */

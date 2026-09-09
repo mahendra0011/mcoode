@@ -20,7 +20,6 @@ import { uploadRoutes } from './routes/uploads.js';
 import { keyRoutes } from './routes/keys.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { settingsRoutes } from './routes/settings.js';
-import { designRoutes } from './routes/design.js';
 import { githubAuthRoutes, githubApiRoutes } from './routes/github.js';
 import { searchRoutes } from './routes/search.js';
 import { validateEnv } from './config/envValidator.js';
@@ -79,8 +78,15 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   const logger = pino({ level: env.LOG_LEVEL || 'info' });
   const app = express();
   app.disable('x-powered-by');
+  app.use((req, _res, next) => {
+    // Socket.IO / Engine.IO handles all /live requests at the httpServer level
+    if (req.url === '/live' || req.url.startsWith('/live/') || req.url.startsWith('/live?')) {
+      return;
+    }
+    next();
+  });
   app.use(helmet());
-  app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173'], credentials: true }));
+  app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173', 'http://localhost:3000'], credentials: true }));
   app.use(express.json({ limit: '10mb' }));
   app.use(pinoHttp({ logger }));
   app.use('/api/v1', rateLimit({
@@ -111,7 +117,6 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/settings', settingsRoutes({ secret }));
   app.use('/api/v1/auth/github', githubAuthRoutes({ secret }));
   app.use('/api/v1/github', githubApiRoutes({ secret }));
-  app.use('/api/v1/design', designRoutes({ secret }));
   app.use('/api/v1/search', searchRoutes({ secret }));
 
   // ─── Error handler ──────────────────────────────────────────────────────────
@@ -125,9 +130,22 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     });
   });
 
-  const httpServer = createServer(app);
+  const httpServer = createServer();
   const io = attachSockets(httpServer, { secret });
   app.set('io', io);
+  httpServer.on('request', app);
+
+  // Normalize Socket.IO /live requests so trailing slash is always present for Engine.IO.
+  // Must be prepended AFTER attachSockets so it runs before Engine.IO's internal request handler.
+  const normalizeLiveUrl = (req) => {
+    if (req.url === '/live') {
+      req.url = '/live/';
+    } else if (req.url.startsWith('/live?')) {
+      req.url = '/live/' + req.url.slice(5);
+    }
+  };
+  httpServer.prependListener('request', normalizeLiveUrl);
+  httpServer.prependListener('upgrade', normalizeLiveUrl);
 
   // /metrics — reports runtime performance stats
   app.get('/metrics', (_req, res) => res.json({

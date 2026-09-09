@@ -59,18 +59,6 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       socket.join(`project:${projectId}`);
     });
 
-    // Authenticated users join their personal room for design generation streaming
-    if (socket.userId) {
-      socket.join(`user:${socket.userId}`);
-    }
-
-    // Design generation events (streaming)
-    socket.on('design:generate', (payload = {}) => {
-      // The actual generation is handled by the REST endpoint POST /api/v1/design/generate
-      // which emits 'design:stream' and 'design:done' to the user's room
-      // This socket event is kept for future use (e.g., canceling generation)
-    });
-
     // CLI → server events, broadcast to connected web clients.
     // (Room-based fan-out is optional; web clients don't always join rooms yet.)
     for (const event of ['session:start', 'plan:generated', 'agent:started', 'agent:step', 'agent:file', 'agent:done', 'agent:failed', 'agent:needs_review', 'integration:pass', 'build:complete', 'toast']) {

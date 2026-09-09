@@ -14,6 +14,9 @@ const S2C = SOCKET.SERVER_TO_CLIENT;
  */
 const SIMPLE_PROMPT_RE = /^(hi\b|hello\b|hey\b|thanks?\b|ok(ay)?\b|yes\b|no\b|yep\b|nope\b|lol\b|undo\b|clear\b|help\b|new chat\b|stop\b|cancel\b|exit\b|restart\b|run tests?\b|build\b)/i;
 
+/** Keywords that trigger automatic web search in chat mode (like Claude/Perplexity). */
+const AUTO_SEARCH_RE = /\b(search|web\s*search|google|browse|internet|find|best|top\s*\d*|price|prices?|cost|under|cheapest|latest|current|new|news|review|tutorial|how to|where to|deal|discount|vs\b|comparison|who is|who was|who are|list of|presidents?|ministers?|capital of|when was|when did|history of|tell me about|what happened|today|weather|stocks?|score|results?)\b/i;
+
 /**
  * Determine whether a prompt warrants the planning step.
  * Skip planning for short prompts (< 50 chars) or prompts matching
@@ -60,9 +63,19 @@ export class ChatSession {
     const secrets = {};
     for (const k of keys) {
       try {
-        secrets[k.envVar] = decryptKey(k.encryptedKey, masterKey);
+        const dec = decryptKey(k.encryptedKey, masterKey);
+        if (dec && !/[\u2022\u25cf\u2219]/.test(dec) && dec !== 'existing-key') {
+          secrets[k.envVar] = dec;
+        }
       } catch {
         /* skip undecryptable key */
+      }
+    }
+
+    // Merge environment variables from process.env as fallback
+    for (const [envK, envV] of Object.entries(process.env)) {
+      if (envV && !secrets[envK] && (envK.endsWith('_API_KEY') || envK.endsWith('_KEY') || envK.endsWith('_HOST') || envK.endsWith('_TOKEN'))) {
+        secrets[envK] = envV;
       }
     }
 
@@ -330,6 +343,70 @@ export class ChatSession {
 
     const { ChatAgent } = await import('mcode-cli/chat-agent');
 
+    // --- Auto-search: like Claude/Perplexity, automatically search the web
+    // when the query looks like it needs current information (products, prices,
+    // latest versions, recent releases, etc.). The search runs before the model
+    // sees the prompt, and the results are injected into the model's environment
+    // so it can answer directly without needing to emit a tool call.
+    let webContext = '';
+    if (AUTO_SEARCH_RE.test(prompt)) {
+      const { searchAndFetch, buildContextBlock } = await import('./web-search/index.js');
+      const searchReplaceKey = `search-auto-${Date.now()}`;
+
+      // Emit "searching" phase so the frontend shows the spinner animation
+      this.onEvent(S2C.CHAT_TOOL_CALL, {
+        tool: 'web_search',
+        args: { query: prompt },
+        replaceKey: searchReplaceKey,
+        status: 'running',
+        searchResults: { query: prompt, phase: 'searching', results: [], answer: '' }
+      });
+
+      try {
+        const results = await searchAndFetch(prompt, { maxResults: 5 });
+
+        // Emit "reading" phase — sources fetched, spinner + favicon pills
+        this.onEvent(S2C.CHAT_TOOL_CALL, {
+          tool: 'web_search',
+          args: { query: prompt },
+          replaceKey: searchReplaceKey,
+          status: 'running',
+          searchResults: {
+            query: prompt,
+            phase: 'reading',
+            results: results.slice(0, 5).map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+            answer: ''
+          }
+        });
+
+        webContext = buildContextBlock(results);
+
+        // Emit "done" phase — checkmark + source panel with links
+        this.onEvent(S2C.CHAT_TOOL_CALL, {
+          tool: 'web_search',
+          args: { query: prompt },
+          replaceKey: searchReplaceKey,
+          status: 'done',
+          searchResults: {
+            query: prompt,
+            phase: 'done',
+            results: results.slice(0, 5).map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
+            answer: ''
+          }
+        });
+      } catch (err) {
+        // Search failed — emit done with empty results
+        this.onEvent(S2C.CHAT_TOOL_CALL, {
+          tool: 'web_search',
+          args: { query: prompt },
+          replaceKey: searchReplaceKey,
+          status: 'done',
+          searchResults: { query: prompt, phase: 'done', results: [], answer: '' }
+        });
+        console.error('[Auto-search error]:', err.message);
+      }
+    }
+
     // Claude-style chat: the model gets the FULL toolset (search, read,
     // edit, write, explore, shell, tests, web) so the user sees the same
     // animated step cards as agent mode — but every write/edit/shell still
@@ -342,8 +419,15 @@ export class ChatSession {
       // between messages — the whole history goes into context fresh).
       historyLimit: 0,
       // Chat-style behavior: no filler greetings, answer directly.
-      extraRules: `Never open with filler greetings like "Hello! I'm here to help you with your project" or "What would you like me to assist you with today?". Always respond directly to the user's message — start with the answer, keep it concise, no empty pleasantries.`
+      extraRules: `Never open with filler greetings. Always respond directly — start with the answer, keep concise.`
     };
+
+    // Inject auto-searched web context into the environment so the model has
+    // the results to cite when answering (matches Claude/Perplexity behavior).
+    let environment = 'mcode web chat interface (claude.ai-style assistant — plain chat mode, single model, no subagents)';
+    if (webContext) {
+      environment += `\n\nAUTOMATIC WEB SEARCH RESULTS (already retrieved — use these facts to answer, do not call web_search again unless you need different information):\n${webContext}`;
+    }
 
     const agent = new ChatAgent({
       assignment,
@@ -354,7 +438,7 @@ export class ChatSession {
       reasoning: this.router?.reasoning || null,
       history: this.history,
       memoryDir: this.memoryDir,
-      environment: 'mcode web chat interface (claude.ai-style assistant — plain chat mode, single model, no subagents)',
+      environment,
       onTool: ({ tool, args, replaceKey }) => {
         const payload = { tool, args, replaceKey, status: 'running', timestamp: Date.now() };
         // For search-type tools, include a searchResults stub so the frontend

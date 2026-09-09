@@ -43,8 +43,8 @@ test.describe('ThinkingIndicator & ChatMessage', () => {
     }
   });
 
-  test('tab switcher renders (Design/Chat/AI Code Agent)', async ({ page }) => {
-    const tabs = page.locator('button').filter({ hasText: /Design|Chat|AI code Agent/i });
+  test('tab switcher renders (Chat/AI Code Assistant/AI Code Editor)', async ({ page }) => {
+    const tabs = page.locator('button').filter({ hasText: /Chat|AI code Assistant|AI code Editor/i });
     if (await tabs.count() > 0) {
       const chatTab = page.locator('button').filter({ hasText: /Chat/i });
       expect(await chatTab.count()).toBeGreaterThan(0);
@@ -111,10 +111,10 @@ test.describe('Three-View Consistency', () => {
     await page.waitForTimeout(800);
   });
 
-  test('tab navigation works between Chat and AI Code Agent', async ({ page }) => {
-    const agentTab = page.locator('button').filter({ hasText: /AI code Agent/i });
-    if (await agentTab.count() > 0) {
-      await agentTab.click();
+  test('tab navigation works between Chat and AI Code Editor', async ({ page }) => {
+    const editorTab = page.locator('button').filter({ hasText: /AI Code Editor/i });
+    if (await editorTab.count() > 0) {
+      await editorTab.click();
       await page.waitForTimeout(500);
       // After switching, page should still be visible
       await expect(page.locator('body')).toBeVisible();
@@ -158,9 +158,9 @@ test.describe('IDE View Animation Components', () => {
   });
 
   test('IDE view renders without JS errors', async ({ page }) => {
-    const agentTab = page.locator('button').filter({ hasText: /AI code Agent/i });
-    if (await agentTab.count() > 0) {
-      await agentTab.click();
+    const editorTab = page.locator('button').filter({ hasText: /AI Code Editor/i });
+    if (await editorTab.count() > 0) {
+      await editorTab.click();
       await page.waitForTimeout(500);
       await expect(page.locator('body')).toBeVisible();
     }

@@ -53,14 +53,42 @@ export function keyRoutes({ secret }) {
       if (!providerId || !apiKey) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'providerId and apiKey are required' } });
       }
-      const masterKey = deriveMasterKey(secret, req.userId);
-      const encrypted = encryptKey(apiKey, masterKey);
+
+      const isMaskedOrPlaceholder = apiKey === 'existing-key' || /[\u2022\u25cf\u2219]/.test(apiKey);
 
       // If a key already exists for this provider, update it instead of creating a duplicate
       const existing = await db().apiKey.findOne({
         userId: req.userId,
         providerId: providerId.toLowerCase()
       });
+
+      if (isMaskedOrPlaceholder) {
+        if (!existing) {
+          return res.status(400).json({ error: { code: 'VALIDATION', message: 'Cannot save masked or placeholder API key. Please enter the full key.' } });
+        }
+        // Metadata only update — preserve existing encryptedKey!
+        await db().apiKey.updateOne(
+          { _id: existing._id },
+          {
+            $set: {
+              envVar: envVar || existing.envVar,
+              displayName: displayName || existing.displayName,
+              model: model !== undefined ? model : existing.model,
+              baseUrl: baseUrl !== undefined ? baseUrl : existing.baseUrl,
+              apiFormat: apiFormat !== undefined ? apiFormat : existing.apiFormat
+            }
+          }
+        );
+        invalidateModelsCache(req.userId);
+        return res.status(200).json({ ok: true });
+      }
+
+      if (/[^\x20-\x7E]/.test(apiKey)) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'API key contains invalid characters.' } });
+      }
+
+      const masterKey = deriveMasterKey(secret, req.userId);
+      const encrypted = encryptKey(apiKey.trim(), masterKey);
 
       if (existing) {
         await db().apiKey.updateOne(
@@ -70,9 +98,9 @@ export function keyRoutes({ secret }) {
               envVar: envVar || existing.envVar,
               displayName: displayName || existing.displayName,
               encryptedKey: encrypted,
-              model: model || existing.model,
-              baseUrl: baseUrl || existing.baseUrl,
-              apiFormat: apiFormat || existing.apiFormat
+              model: model !== undefined ? model : existing.model,
+              baseUrl: baseUrl !== undefined ? baseUrl : existing.baseUrl,
+              apiFormat: apiFormat !== undefined ? apiFormat : existing.apiFormat
             }
           }
         );
@@ -113,9 +141,6 @@ export function keyRoutes({ secret }) {
   router.get('/models', async (req, res, next) => {
     try {
       const keys = await db().apiKey.find({ userId: req.userId });
-      if (keys.length === 0) {
-        return res.json({ models: [], providers: [], hasKeys: false });
-      }
 
       // Check cache first — avoids re-fetching from every provider API on each call
       const cacheKey = modelsCacheKey(req.userId);
@@ -128,10 +153,24 @@ export function keyRoutes({ secret }) {
       const secrets = {};
       for (const k of keys) {
         try {
-          secrets[k.envVar] = decryptKey(k.encryptedKey, masterKey);
+          const dec = decryptKey(k.encryptedKey, masterKey);
+          if (dec && !/[\u2022\u25cf\u2219]/.test(dec) && dec !== 'existing-key') {
+            secrets[k.envVar] = dec;
+          }
         } catch {
           /* skip undecryptable key */
         }
+      }
+
+      // Merge environment variables from process.env as fallback
+      for (const [envK, envV] of Object.entries(process.env)) {
+        if (envV && !secrets[envK] && (envK.endsWith('_API_KEY') || envK.endsWith('_KEY') || envK.endsWith('_HOST') || envK.endsWith('_TOKEN'))) {
+          secrets[envK] = envV;
+        }
+      }
+
+      if (Object.keys(secrets).length === 0) {
+        return res.json({ models: [], providers: [], hasKeys: false });
       }
 
       // Use CLI's provider factory — adapters already have the static model catalog

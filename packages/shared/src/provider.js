@@ -119,10 +119,14 @@ export class HttpProvider extends ModelProvider {
   }
 
   headers() {
-    return {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${this.apiKey}`
-    };
+    const h = { 'Content-Type': 'application/json' };
+    if (this.apiKey) {
+      if (/[\u2022\u25cf\u2219]/.test(this.apiKey) || this.apiKey === 'existing-key') {
+        throw new Error(`Invalid API key for ${this.displayName || this.id}: Key contains masked placeholder characters (••••). Please re-enter your actual API key in Settings.`);
+      }
+      h['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    return h;
   }
 
   /** fetch() with per-request timeout + retry on 429/5xx/network errors. */

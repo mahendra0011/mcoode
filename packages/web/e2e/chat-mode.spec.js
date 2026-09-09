@@ -90,12 +90,12 @@ test.describe('Chat Mode Verification', () => {
         return style.animation.includes('spin') && style.animation.includes('4s');
       });
 
-      // Advanced Mode button
-      const advancedBtn = page.locator('button').filter({ hasText: /advanced/i });
-      expect(await advancedBtn.count()).toBeGreaterThan(0);
+      // AI Code Assistant tab (agent mode)
+      const assistantTab = page.locator('button').filter({ hasText: /AI Code Assistant/i });
+      expect(await assistantTab.count()).toBeGreaterThan(0);
 
       // Check buttons have motion (whileHover: { scale: ... })
-      const advancedHasMotion = await advancedBtn.first().evaluate((btn) => {
+      const assistantHasMotion = await assistantTab.first().evaluate((btn) => {
         const style = window.getComputedStyle(btn);
         return style.transition !== 'none' || style.transition.includes('all');
       });
@@ -132,7 +132,7 @@ test.describe('Chat Mode Verification', () => {
 
   test('6. Tab buttons have motion hover/scale effects', async ({ page }) => {
     // Tab buttons: whileHover: { scale: activeTab === tab ? 1 : 1.05 }
-    const tabBtns = page.locator('button').filter({ hasText: /chat|design|code/i });
+    const tabBtns = page.locator('button').filter({ hasText: /chat|code/i });
 
     if (await tabBtns.count() > 0) {
       // Hover over a tab button and check it changes (scale animation)
@@ -154,7 +154,7 @@ test.describe('Chat Mode Verification', () => {
     }
   });
 
-  test('7. Chat mode (not agent/advanced) — verify default mode is chat', async ({ page }) => {
+  test('7. Chat mode (not agent/AI Code Assistant) — verify default mode is chat', async ({ page }) => {
     // In chat mode, user messages should be larger bubbles (size="md")
     // and ThinkingIndicator should show full avatar (showAvatar={mode === 'chat'})
     const textarea = page.locator('textarea').first();

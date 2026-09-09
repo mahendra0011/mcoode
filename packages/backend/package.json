@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/main.js",
+    "start": "node --watch src/main.js",
     "seed:plugins": "node scripts/seed-plugins.js",
     "test": "vitest run"
   },

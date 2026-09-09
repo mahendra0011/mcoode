@@ -288,74 +288,152 @@ export class ToolExecutor {
   }
 
   async web_search({ query }) {
-    // Prefer Tavily API when a key is configured (same as backend /api/v1/search).
-    // Falls back to DuckDuckGo Lite scraping when no key is available.
-    const tavilyKey = process.env.TAVILY_API_KEY;
-    if (tavilyKey) {
-      if (!isNetworkAllowed('https://api.tavily.com', this.networkWhitelist)) {
-        return { ok: false, error: 'network request blocked by whitelist' };
-      }
-      try {
-        const resp = await fetch('https://api.tavily.com/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: this.cancelSignal || undefined,
-          body: JSON.stringify({
-            api_key: tavilyKey,
-            query,
-            search_depth: 'basic',
-            include_answer: false,
-            include_images: false,
-            include_raw_content: false,
-            max_results: 5
-          })
-        });
-        const data = await resp.json();
-        if (!data.results || data.results.length === 0) {
-          return { ok: false, error: 'No search results found' };
-        }
-        const results = data.results.slice(0, 5).map((r) => ({
-          title: r.title || '',
-          url: r.url || '',
-          snippet: r.content || r.snippet || ''
-        }));
-        return { ok: true, results };
-      } catch (err) {
-        return { ok: false, error: err.message };
-      }
-    }
+    const cleanQuery = String(query || '').replace(/^["']|["']$/g, '').trim();
+    if (!cleanQuery) return { ok: false, error: 'empty search query' };
 
-    // Fallback: DuckDuckGo Lite scraping
-    const searchUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
-    if (!isNetworkAllowed(searchUrl, this.networkWhitelist)) {
-      return { ok: false, error: 'network request blocked by whitelist' };
-    }
+    // Helper to decode Bing redirect URLs (u=a1base64url)
+    const decodeBingUrl = (url) => {
+      if (!url || typeof url !== 'string') return '';
+      if (url.includes('bing.com/ck/a')) {
+        try {
+          const parsed = new URL(url, 'https://www.bing.com');
+          const uParam = parsed.searchParams.get('u');
+          if (uParam && uParam.length > 2) {
+            let b64 = (uParam.startsWith('a1') || uParam.startsWith('a0')) ? uParam.slice(2) : uParam;
+            b64 = b64.replace(/-/g, '+').replace(/_/g, '/');
+            while (b64.length % 4 !== 0) b64 += '=';
+            const decoded = Buffer.from(b64, 'base64').toString('utf-8');
+            if (decoded.startsWith('http://') || decoded.startsWith('https://')) return decoded;
+          }
+        } catch { /* ignore */ }
+      }
+      return url;
+    };
+
+    const results = [];
+
+    // Tier 1: DuckDuckGo Lite HTML (fast, direct URLs, no ads/redirects)
     try {
-      const html = await fetch(searchUrl, {
-        headers: { 'User-Agent': 'mcode-agent/2.4.6' },
+      const ddgRes = await fetch('https://lite.duckduckgo.com/lite/', {
+        method: 'POST',
+        body: 'q=' + encodeURIComponent(cleanQuery),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
         signal: this.cancelSignal || undefined,
-        timeout: 10_000
-      }).then((r) => r.text());
+        timeout: 7000
+      });
+      if (ddgRes.ok) {
+        const html = await ddgRes.text();
+        const linkRegex = /<a\s+[^>]*?href=['"]([^'"]+)['"][^>]*?class=['"]result-link['"][^>]*>([\s\S]*?)<\/a>|<a\s+[^>]*?class=['"]result-link['"][^>]*?href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>/gi;
+        const snippetRegex = /<td[^>]*class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/gi;
 
-      // Parse DuckDuckGo lite results: <a class="result-link" href="...">title</a>
-      const linkRegex = /<a[^]*?class="result-link"[^]*?href="([^"]+)"[^]*?>([^<]+)<\/a>/gi;
-      const results = [];
-      let match;
-      while ((match = linkRegex.exec(html)) !== null && results.length < 5) {
-        const href = decodeURIComponent(match[1]);
-        const title = this._stripHtml(match[2]);
-        const after = html.slice(match.index + match[0].length, match.index + match[0].length + 500);
-        const snippet = redactSecrets(this._stripHtml(after).slice(0, 200));
-        results.push({ title, url: href, snippet });
-      }
+        const links = [];
+        let m;
+        while ((m = linkRegex.exec(html)) !== null && links.length < 5) {
+          let href = m[1] || m[3];
+          let title = m[2] || m[4];
+          if (href && href.includes('uddg=')) {
+            try {
+              const u = new URL(href, 'https://duckduckgo.com');
+              href = decodeURIComponent(u.searchParams.get('uddg'));
+            } catch { /* ignore */ }
+          }
+          if (title && href && href.startsWith('http') && !href.includes('duckduckgo.com')) {
+            links.push({
+              title: redactSecrets(this._stripHtml(title).trim()),
+              url: href
+            });
+          }
+        }
 
-      if (results.length === 0) {
-        return { ok: false, error: 'No search results found' };
+        const snippets = [];
+        while ((m = snippetRegex.exec(html)) !== null && snippets.length < 5) {
+          snippets.push(redactSecrets(this._stripHtml(m[1]).replace(/\s+/g, ' ').trim()));
+        }
+
+        for (let i = 0; i < links.length; i++) {
+          results.push({
+            ...links[i],
+            snippet: snippets[i] || ''
+          });
+        }
       }
-      return { ok: true, results };
-    } catch (err) {
-      return { ok: false, error: err.message };
+    } catch { /* fallback to Bing */ }
+
+    // Tier 2: Bing HTML with redirect decoding and strict domain exclusion
+    if (results.length === 0) {
+      try {
+        const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(cleanQuery)}&count=10&setmkt=en-US&setlang=en-US`;
+        const res = await fetch(searchUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.bing.com/',
+          },
+          signal: this.cancelSignal || undefined,
+          timeout: 7000
+        });
+        if (res.ok) {
+          const html = await res.text();
+          const algoRegex = /<li[^]*?class=["']b_algo["'][^]*?<\/li>/gi;
+          let algoMatch;
+          while ((algoMatch = algoRegex.exec(html)) !== null && results.length < 5) {
+            const block = algoMatch[0];
+            const linkMatch = block.match(/<h2[^>]*><a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+            if (!linkMatch) continue;
+
+            const url = decodeBingUrl(linkMatch[1]);
+            if (!url || !url.startsWith('http') || url.includes('bing.com') || url.includes('microsoft.com')) {
+              continue;
+            }
+
+            const title = redactSecrets(this._stripHtml(linkMatch[2]).trim());
+            const snippetMatch = block.match(/<div[^]*?class=["']b_caption["'][^]*?<p[^>]*>([\s\S]*?)<\/p>/i);
+            const snippet = snippetMatch
+              ? redactSecrets(this._stripHtml(snippetMatch[1]).trim().replace(/\s+/g, ' '))
+              : '';
+
+            if (title && url) {
+              results.push({ title, url, snippet });
+            }
+          }
+        }
+      } catch { /* fallback to Wikipedia */ }
     }
+
+    // Tier 3: Wikipedia OpenSearch API
+    if (results.length === 0) {
+      try {
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(cleanQuery)}&limit=5&namespace=0&format=json`;
+        const wikiRes = await fetch(wikiUrl, { timeout: 4000 });
+        if (wikiRes.ok) {
+          const data = await wikiRes.json();
+          if (Array.isArray(data) && data.length >= 4) {
+            const titles = data[1] || [];
+            const snippets = data[2] || [];
+            const urls = data[3] || [];
+            for (let i = 0; i < titles.length && results.length < 5; i++) {
+              if (urls[i] && urls[i].startsWith('http')) {
+                results.push({
+                  title: redactSecrets(titles[i]),
+                  url: urls[i],
+                  snippet: redactSecrets(snippets[i] || '')
+                });
+              }
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (results.length === 0) {
+      return { ok: false, error: 'No search results found' };
+    }
+    return { ok: true, results };
   }
 
   async web_fetch({ url }) {
@@ -363,16 +441,37 @@ export class ToolExecutor {
       return { ok: false, error: 'network request blocked by whitelist' };
     }
     try {
-      const html = await fetch(url, {
-        headers: { 'User-Agent': 'mcode-agent/2.4.6' },
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+          'Accept': 'text/markdown,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
         signal: this.cancelSignal || undefined,
         timeout: 15_000
-      }).then((r) => r.text());
+      });
+      const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+      const raw = await res.text();
+      const isMarkdown = contentType.includes('markdown') || url.endsWith('.md') || url.endsWith('.markdown');
 
-      const text = redactSecrets(this._stripHtml(html));
-      // Extract title
-      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      const title = titleMatch ? redactSecrets(this._stripHtml(titleMatch[1])) : url;
+      let text = '';
+      let title = url;
+
+      if (isMarkdown) {
+        text = raw;
+      } else {
+        const titleMatch = raw.match(/<title[^>]*>([^<]+)<\/title>/i);
+        if (titleMatch) title = redactSecrets(this._stripHtml(titleMatch[1]));
+
+        // Extract main container if present (open-webSearch pattern)
+        const articleMatch = raw.match(/<(article|main)[^>]*>([\s\S]*?)<\/\1>/i);
+        const sourceHtml = articleMatch ? articleMatch[2] : raw;
+        text = redactSecrets(this._stripHtml(sourceHtml));
+
+        if (!text || text.length < 60) {
+          text = redactSecrets(this._stripHtml(raw));
+        }
+      }
 
       return { ok: true, url, title, content: text.slice(0, 8000) };
     } catch (err) {

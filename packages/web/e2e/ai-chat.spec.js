@@ -23,9 +23,9 @@ test.describe('AIChatPage (/ai/chat)', () => {
     }
   });
 
-  test('tab navigation renders (Chat, AI Code Agent, Design)', async ({ page }) => {
+  test('tab navigation renders (Chat, AI Code Assistant, AI Code Editor)', async ({ page }) => {
     // Look for tab buttons
-    const tabs = page.locator('button, a').filter({ hasText: /chat|design|agent|code/i });
+    const tabs = page.locator('button, a').filter({ hasText: /chat|code/i });
     const tabCount = await tabs.count();
     expect(tabCount).toBeGreaterThanOrEqual(2);
   });
@@ -72,9 +72,9 @@ test.describe('AIChatPage (/ai/chat)', () => {
   });
 
   test('switch mode toggles between chat and agent', async ({ page }) => {
-    const modeBtn = page.locator('button').filter({ hasText: /advanced/i });
-    if (await modeBtn.count() > 0) {
-      await modeBtn.click();
+    const assistantTab = page.locator('button').filter({ hasText: /AI Code Assistant/i });
+    if (await assistantTab.count() > 0) {
+      await assistantTab.click();
       // After clicking, the mode should change
       await page.waitForTimeout(500);
       await expect(page.locator('body')).toBeVisible();

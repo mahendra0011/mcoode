@@ -13,8 +13,12 @@
   "scripts": {
     "mcode": "node packages/cli/bin/mcode.js",
     "dev:cli": "node --watch packages/cli/bin/mcode.js",
+    "dev:web": "npm --workspace=web run dev",
+    "dev:dashboard": "npm --workspace=web run dev",
+    "dev:backend": "npm --workspace=@mcode/backend run start",
     "serve": "node packages/cli/bin/mcode.js serve",
     "build:cli": "node packages/cli/scripts/build.js",
+    "build:web": "npm --workspace=web run build",
     "test": "vitest run",
     "lint": "eslint packages --ext .js,.jsx",
     "publish:cli": "npm run build:cli && npm publish ./packages/cli",

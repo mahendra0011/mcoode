@@ -151,18 +151,6 @@ const userSettingsSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-/** Generated designs stored for history/versioning. */
-const designSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
-  prompt: String,
-  html: String,
-  version: { type: Number, default: 1 },
-  parentId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
-  device: { type: String, default: 'desktop' },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
-designSchema.index({ userId: 1, parentId: 1 });
 
 const workspaceSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
@@ -202,4 +190,3 @@ export const Workspace = mongoose.model('Workspace', workspaceSchema);
 export const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
 export const GithubAccount = mongoose.model('GithubAccount', githubAccountSchema);
 export const UserSettings = mongoose.model('UserSettings', userSettingsSchema);
-export const Design = mongoose.model('Design', designSchema);

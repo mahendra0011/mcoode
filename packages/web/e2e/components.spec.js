@@ -98,50 +98,6 @@ test.describe('AIChatPage IDE Components', () => {
   });
 });
 
-test.describe('DesignTab Component', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('mcode_tokens', JSON.stringify({ access: 'fake-token', refresh: 'fake' }));
-    });
-    await page.goto('/ai/chat');
-    await page.waitForTimeout(500);
-  });
-
-  test('can switch to Design tab', async ({ page }) => {
-    const designTab = page.locator('button').filter({ hasText: /^design$/i }).first();
-    if (await designTab.count() > 0) {
-      await designTab.click();
-      await page.waitForTimeout(300);
-      await expect(page.locator('body')).toBeVisible();
-    }
-  });
-
-  test('design device selector buttons are motion.button', async ({ page }) => {
-    const designTab = page.locator('button').filter({ hasText: /^design$/i }).first();
-    if (await designTab.count() > 0) {
-      await designTab.click();
-      await page.waitForTimeout(500);
-      // Device selector buttons (Desktop, Tablet, Mobile)
-      const deviceBtns = page.locator('button').filter({ hasText: /desktop|tablet|mobile/i });
-      if (await deviceBtns.count() > 0) {
-        await expect(deviceBtns.first()).toBeVisible();
-      }
-    }
-  });
-
-  test('design action buttons (Download, Copy, Open in Agent) are motion.button', async ({ page }) => {
-    const designTab = page.locator('button').filter({ hasText: /^design$/i }).first();
-    if (await designTab.count() > 0) {
-      await designTab.click();
-      await page.waitForTimeout(500);
-      const actionBtns = page.locator('button').filter({ hasText: /download|copy|open in/i });
-      if (await actionBtns.count() > 0) {
-        await expect(actionBtns.first()).toBeVisible();
-      }
-    }
-  });
-});
-
 test.describe('SparkleButton Component', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {

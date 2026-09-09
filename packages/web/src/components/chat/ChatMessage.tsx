@@ -1,0 +1,89 @@
+import React from "react";
+import { motion, type MotionStyle } from "framer-motion";
+import { MessageContent } from "./MessageContent";
+import { StepCard } from "../ide/StepCards";
+import type { ChatMessageProps } from "../../types/chat";
+
+/**
+ * ChatMessage — Claude-style message with ZCode animation patterns.
+ * Uses cubic-bezier(.16, 1, .3, 1) easing (ZCode standard) with stagger
+ * delays via idx * 0.02. Streaming cursor blinks at 1s intervals.
+ *
+ * Props (see ../../types/chat):
+ *   msg            — message object
+ *   idx            — index for stagger delay
+ *   size           — 'sm' | 'md'
+ *   isStreaming    — whether streaming is active
+ *   undo           — undo callback
+ *   isNormalChat   — when true, shows Claude-like clean style
+ */
+export function ChatMessage({ msg, idx, size = "md", isStreaming, undo, isNormalChat = false, showAvatar = true }: ChatMessageProps) {
+  const showCursor = msg.kind === "stream" && isStreaming;
+
+  if (msg.role === "user") {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+        className={`flex justify-end ${size === "sm" ? "max-w-[90%]" : "max-w-[80%]"}`}
+      >
+        <div
+          className={
+            size === "sm"
+              ? "bg-transparent border border-white/10 text-white/90 px-4 py-2.5 rounded-lg text-[13px] max-w-full"
+              : "bg-transparent border border-white/10 text-white/90 px-5 py-3 rounded-xl text-sm max-w-full"
+          }
+        >
+          {msg.text}
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Assistant message
+  const staggerDelay = idx != null ? idx * 0.02 : 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1], delay: staggerDelay }}
+      className="flex flex-col gap-2"
+    >
+      <div className="flex items-start gap-2.5">
+        {isNormalChat && showAvatar && msg.kind !== "tool" ? (
+          <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex-shrink-0 flex items-center justify-center text-xs font-semibold text-emerald-400 mt-0.5 shadow-sm">
+            M
+          </div>
+        ) : isNormalChat ? (
+          <div className="w-6 h-6 flex-shrink-0" />
+        ) : null}
+        <div className="flex-1 min-w-0">
+          {msg.text && (
+            <div data-zcode-tool-stream-animate={showCursor ? "true" : undefined}>
+              <MessageContent msg={msg} text={msg.text} size={size} isStreaming={showCursor}>
+                {showCursor && (
+                  <motion.span
+                    data-zcode-stream-marker-animate="true"
+                    style={{ ["--zcode-stream-animation-delay"]: "0s" } as MotionStyle}
+                    className="inline-block w-1.5 h-3.5 ml-0.5 bg-emerald-400 align-middle"
+                    animate={{ opacity: [0.3, 1, 0.3] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  />
+                )}
+              </MessageContent>
+            </div>
+          )}
+          {msg.kind === "tool" && msg.block !== "permission" && (msg.searchResults || msg.tool === "web_search" || msg.tool === "web_fetch") ? (
+            <MessageContent msg={msg} size={size} />
+          ) : (
+            msg.kind === "tool" && msg.block !== "permission" && <StepCard msg={msg} undo={undo} />
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}

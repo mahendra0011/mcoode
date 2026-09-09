@@ -87,8 +87,7 @@ export function db() {
     workspace: 'Workspace',
     chatMessage: 'ChatMessage',
     githubAccount: 'GithubAccount',
-    userSettings: 'UserSettings',
-    design: 'Design'
+    userSettings: 'UserSettings'
   };
 
   const out = {};
