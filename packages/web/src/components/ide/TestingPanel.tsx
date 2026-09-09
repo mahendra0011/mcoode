@@ -333,7 +333,7 @@ defineTest("handles failure gracefully", () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs min-w-[240px] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs w-full min-w-0 overflow-hidden">
       {/* Top Header */}
       <div className="p-2.5 border-b border-white/5 flex items-center justify-between gap-2 bg-[#181818]/90 flex-shrink-0">
         <span className="font-semibold uppercase tracking-wider text-white/60 text-[11px] truncate">

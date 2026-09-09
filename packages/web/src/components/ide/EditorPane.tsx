@@ -6,6 +6,7 @@ import api from '../../lib/axios';
 import { useIDEStore } from '../../store/ideStore';
 import editorApi from '../../lib/extensions/editorApi';
 import { WelcomeTab } from './menu/WelcomeTab';
+import { toast } from 'sonner';
 
 const getFileIcon = (name: string) => {
   if (name.endsWith('.jsx') || name.endsWith('.tsx')) return <FileType2 className="w-4 h-4 text-cyan-400" />;
@@ -27,9 +28,19 @@ const getLanguage = (path: string) => {
 
 export interface EditorPaneProps {
   workspaceId: string;
+  workspaces?: any[];
+  onSelectWorkspace?: (id: string) => void;
+  onOpenFolder?: () => void;
+  onCloneRepo?: () => void;
 }
 
-export function EditorPane({ workspaceId }: EditorPaneProps) {
+export function EditorPane({
+  workspaceId,
+  workspaces,
+  onSelectWorkspace,
+  onOpenFolder,
+  onCloneRepo,
+}: EditorPaneProps) {
   const openFiles = useIDEStore((s) => s.openFiles);
   const activePath = useIDEStore((s) => s.activePath);
   const setActivePath = useIDEStore((s) => s.setActivePath);
@@ -293,27 +304,61 @@ export function EditorPane({ workspaceId }: EditorPaneProps) {
     return () => window.removeEventListener('keydown', onKeyDown as EventListener);
   }, [handleSave]);
 
-  if (openFiles.length === 0 || isWelcomeOpen) {
-    return <WelcomeTab />;
-  }
+  const showWelcomeTab = isWelcomeOpen || openFiles.length === 0;
+  const isWelcomeActive = showWelcomeTab && (!activePath || !openFiles.includes(activePath));
 
   return (
     <motion.div
-      className="flex-1 flex flex-col min-w-0 bg-[#0e0e0e] h-full"
+      className="flex-1 flex flex-col min-w-0 bg-[#181818] h-full"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
-      {/* Editor Tabs */}
+      {/* Editor Tabs matching VS Code */}
       <motion.div
-        className="flex items-center border-b border-white/5 bg-[#151515] overflow-x-auto custom-scrollbar flex-shrink-0"
+        className="flex items-center border-b border-[#252525] bg-[#181818] overflow-x-auto custom-scrollbar flex-shrink-0 select-none h-9"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       >
+        {/* Welcome Tab (Persistent in Tab Bar like VS Code desktop) */}
+        {showWelcomeTab && (
+          <div
+            onClick={() => setActivePath(null)}
+            className={`flex items-center gap-2 px-3.5 h-full text-xs cursor-pointer whitespace-nowrap font-normal border-r border-[#252525] transition-colors group ${
+              isWelcomeActive
+                ? 'bg-[#1e1e1e] border-t-2 border-[#0078d4] text-white font-medium'
+                : 'text-white/60 hover:text-white hover:bg-white/5 border-t-2 border-transparent'
+            }`}
+          >
+            {/* Official VS Code Blue Ribbon Icon */}
+            <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.27a.998.998 0 0 0-.005 1.458L4.35 12 .322 15.272a.998.998 0 0 0 .005 1.458l1.322 1.212a1 1 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zM18 17.807l-7.07-5.807L18 6.193v11.614z" fill="#0078D4"/>
+            </svg>
+            <span>Welcome</span>
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setWelcomeOpen(false);
+                if (openFiles.length > 0) {
+                  if (!activePath || !openFiles.includes(activePath)) {
+                    setActivePath(openFiles[0]);
+                  }
+                } else {
+                  useIDEStore.getState().createUntitledFile();
+                }
+              }}
+              className="text-white/40 hover:text-white cursor-pointer ml-1 text-sm leading-none px-1 py-0.5 rounded hover:bg-white/10 transition"
+              title="Close Welcome"
+            >
+              ×
+            </span>
+          </div>
+        )}
+
         {openFiles.map((path, i) => {
           const name = path.split('/').pop() || '';
-          const isActive = activePath === path;
+          const isActive = !isWelcomeActive && activePath === path;
           const isDirty = dirty.has(path);
           return (
             <motion.div
@@ -323,12 +368,11 @@ export function EditorPane({ workspaceId }: EditorPaneProps) {
               exit={{ opacity: 0, x: -5 }}
               transition={{ delay: i * 0.04 + 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
               onClick={() => {
-                setWelcomeOpen(false);
                 setActivePath(path);
               }}
-              className={`flex items-center gap-2 px-4 py-2 text-xs cursor-pointer whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3.5 h-full text-xs cursor-pointer whitespace-nowrap border-r border-[#252525] transition-colors ${
                 isActive
-                  ? 'bg-[#0e0e0e] border-t-2 border-blue-500 font-medium text-white'
+                  ? 'bg-[#1e1e1e] border-t-2 border-[#0078d4] font-medium text-white'
                   : 'text-white/50 hover:bg-white/5 border-t-2 border-transparent'
               }`}
               whileHover={{ scale: 1.01 }}
@@ -354,44 +398,71 @@ export function EditorPane({ workspaceId }: EditorPaneProps) {
         })}
       </motion.div>
 
-      {/* Monaco Editor */}
-      <div className="flex-1 relative">
-        <AnimatePresence>
-          {loading && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-              className="absolute inset-0 flex items-center justify-center bg-[#0e0e0e]/50 z-10 text-white/50 text-xs"
-            >
-              Loading...
-            </motion.div>
+      {/* Editor Body: Welcome Tab or Monaco Editor */}
+      {isWelcomeActive ? (
+        <WelcomeTab
+          workspaces={workspaces}
+          onSelectWorkspace={onSelectWorkspace}
+          onOpenFile={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.onchange = (e: any) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = () => {
+                const content = (reader.result as string) || '';
+                useIDEStore.getState().setFileContent(file.name, content);
+                useIDEStore.getState().addOpenFile(file.name);
+                setActivePath(file.name);
+                toast.success(`Opened ${file.name}`);
+              };
+              reader.readAsText(file);
+            };
+            input.click();
+          }}
+          onOpenFolder={onOpenFolder}
+          onCloneRepo={onCloneRepo}
+        />
+      ) : (
+        <div className="flex-1 relative">
+          <AnimatePresence>
+            {loading && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                className="absolute inset-0 flex items-center justify-center bg-[#181818]/50 z-10 text-white/50 text-xs"
+              >
+                Loading...
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {activePath && (
+            <Editor
+              height="100%"
+              theme={editorTheme}
+              onMount={handleEditorDidMount}
+              path={activePath}
+              language={getLanguage(activePath)}
+              value={fileContents[activePath] || ''}
+              onChange={handleEditorChange}
+              options={{
+                glyphMargin: true,
+                minimap: { enabled: false },
+                fontSize: 13,
+                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                padding: { top: 16 },
+                scrollBeyondLastLine: false,
+                renderLineHighlight: 'all',
+                wordWrap: wordWrap ? 'on' : 'off',
+                columnSelection,
+              }}
+            />
           )}
-        </AnimatePresence>
-        {activePath && (
-          <Editor
-            height="100%"
-            theme={editorTheme}
-            onMount={handleEditorDidMount}
-            path={activePath}
-            language={getLanguage(activePath)}
-            value={fileContents[activePath] || ''}
-            onChange={handleEditorChange}
-            options={{
-              glyphMargin: true,
-              minimap: { enabled: false },
-              fontSize: 13,
-              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-              padding: { top: 16 },
-              scrollBeyondLastLine: false,
-              renderLineHighlight: 'all',
-              wordWrap: wordWrap ? 'on' : 'off',
-              columnSelection,
-            }}
-          />
-        )}
-      </div>
+        </div>
+      )}
     </motion.div>
   );
 }

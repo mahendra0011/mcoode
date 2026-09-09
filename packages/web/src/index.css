@@ -123,13 +123,6 @@
   background: transparent;
 }
 
-/* Force minimum width on left IDE panel so it can NEVER squish into a narrow strip */
-[data-panel-id="left-activity-panel"],
-.ide-left-panel {
-  min-width: 240px !important;
-  max-width: 460px !important;
-  width: auto !important;
-}
 
 /* Ensure no scrollbar arrow buttons ever render on Windows or Chromium */
 *::-webkit-scrollbar-button,

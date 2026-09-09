@@ -396,7 +396,7 @@ export function RunDebugPanel({
   const showEmptyState = !hasStarted && !hasLaunchConfig && !activePath;
 
   return (
-    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs min-w-[240px] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs w-full min-w-0 overflow-hidden">
       {/* Top Header: RUN AND DEBUG: {RUN | DEBUG CONSOLE} with "⋯" dropdown */}
       <div className="p-3 border-b border-white/5 flex items-center justify-between relative bg-[#181818]/80">
         <span className="font-semibold uppercase tracking-wider text-white/60 text-[11px] truncate">

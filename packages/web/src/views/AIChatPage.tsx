@@ -19,6 +19,7 @@ import { ExplorerPanel } from '../components/ide/ExplorerPanel';
 import { SearchPanel } from '../components/ide/SearchPanel';
 import { SourceControlPanel } from '../components/ide/SourceControlPanel';
 import { RunDebugPanel } from '../components/ide/RunDebugPanel';
+import { LanguagesPanel } from '../components/ide/LanguagesPanel';
 import { TestingPanel } from '../components/ide/TestingPanel';
 import { RemoteExplorerPanel } from '../components/ide/RemoteExplorerPanel';
 import { AndroidEmulatorsPanel } from '../components/ide/AndroidEmulatorsPanel';
@@ -141,6 +142,7 @@ export function AIChatPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [chats, setChats] = useState<any[]>([]);
+  const [showModeSwitchModal, setShowModeSwitchModal] = useState(false);
 
   // Auth guard — get token from localStorage (or URL params for dev)
   const getTokens = () => {
@@ -296,11 +298,35 @@ export function AIChatPage() {
 	const TAB_MODE: Record<string, string> = { Chat: 'chat', 'AI Code Assistant': 'agent', 'AI Code Editor': 'chat' };
 	const TAB_WIDTH: Record<string, number> = { Chat: 56, 'AI Code Assistant': 170, 'AI Code Editor': 170 };
 	const TAB_LEFT = (() => { const m: Record<string, number> = {}; let c = 2; for (const t of TABS) { m[t] = c; c += TAB_WIDTH[t]; } return m; })();
-	const handleTabSwitch = (tab: string) => {
+	const executeTabSwitch = (tab: string, startNewProcess = false) => {
 		setActiveTab(tab);
 		const next = TAB_MODE[tab];
 		dispatch(setMode(next));
 		if (next !== 'agent') dispatch(setGodMode(false));
+
+		if (tab === 'AI Code Editor') {
+			if (startNewProcess) {
+				// Start fresh: Welcome screen visible, sidebars collapsed for full-screen experience
+				useIDEStore.getState().setWelcomeOpen(true);
+				useIDEStore.getState().setActivePath(null);
+				useIDEStore.getState().setSidebarOpen(false);
+				useIDEStore.getState().setSecondarySideBarVisible(false);
+			} else {
+				// Continue existing project: keep open files, don't force welcome screen
+				if (useIDEStore.getState().openFiles.length > 0) {
+					useIDEStore.getState().setWelcomeOpen(false);
+				}
+				useIDEStore.getState().setSidebarOpen(true);
+			}
+		}
+	};
+
+	const handleTabSwitch = (tab: string) => {
+		if (tab === 'AI Code Editor' && activeTab === 'AI Code Assistant') {
+			setShowModeSwitchModal(true);
+			return;
+		}
+		executeTabSwitch(tab);
 	};
 	const switchToAssistantTab = () => handleTabSwitch('AI Code Assistant');
 
@@ -1415,17 +1441,16 @@ export function AIChatPage() {
                 transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
               >
                 <ResizablePanelGroup orientation="horizontal" className="flex-1 min-h-0 h-full">
-                {/* Left Activity Panel (Explorer, Search, Source Control, Run & Debug, Testing) */}
+                {/* Left Activity Panel (Explorer, Search, Source Control, Run & Debug, Testing, Languages) */}
                 {isSidebarOpen && activeActivityBar !== 'extensions' && !zenMode && (
                 <ResizablePanel
                   id="left-activity-panel"
                   defaultSize={22}
-                  minSize={16}
+                  minSize={15}
                   maxSize={40}
-                  className="ide-left-panel min-w-[240px] max-w-[460px] flex-shrink-0"
-                  style={{ minWidth: 240, maxWidth: 460 }}
+                  className="ide-left-panel"
                 >
-                <div className="h-full flex flex-col border-r border-white/5 bg-[#0e0e0e] overflow-hidden min-w-[240px] w-full">
+                <div className="h-full flex flex-col border-r border-white/5 bg-[#0e0e0e] overflow-hidden w-full">
                   {activeActivityBar === 'explorer' && (
                     <ExplorerPanel
                       workspaceId={activeWorkspaceId}
@@ -1440,6 +1465,9 @@ export function AIChatPage() {
                   )}
                   {activeActivityBar === 'run-debug' && (
                     <RunDebugPanel workspaceId={activeWorkspaceId} />
+                  )}
+                  {activeActivityBar === 'languages' && (
+                    <LanguagesPanel />
                   )}
                   {activeActivityBar === 'testing' && (
                     <TestingPanel />
@@ -1464,14 +1492,20 @@ export function AIChatPage() {
                 )}
 
                 {/* Editor & Terminal Center Pane */}
-                <ResizablePanel defaultSize={zenMode || !secondarySideBarVisible ? 100 : 50} minSize={30}>
+                <ResizablePanel defaultSize={zenMode || !secondarySideBarVisible ? 100 : 53} minSize={30}>
                 {activeActivityBar === 'extensions' ? (
                   <div className="h-full flex-1 flex flex-col min-w-0 bg-[#0e0e0e] overflow-hidden">
                     <ExtensionsMarketplace editorApi={editorApi} />
                   </div>
                 ) : (
                   <div className="h-full flex-1 flex flex-col min-w-0 bg-[#0e0e0e]">
-                    <EditorPane workspaceId={activeWorkspaceId as string} />
+                    <EditorPane
+                      workspaceId={activeWorkspaceId as string}
+                      workspaces={workspaces}
+                      onSelectWorkspace={(id) => setActiveWorkspaceId(id)}
+                      onOpenFolder={() => setIsModalsOpen(true)}
+                      onCloneRepo={() => setIsModalsOpen(true)}
+                    />
                     {isTerminalOpen && !zenMode && <TerminalPane messages={messages} onCommand={sendTerminalCommand} />}
                   </div>
                 )}
@@ -1480,8 +1514,8 @@ export function AIChatPage() {
                 {/* AI Chat Right Pane */}
                 {!zenMode && secondarySideBarVisible && (
                   <>
-                    <ResizablePanelHandle className="bg-white/5 hover:bg-emerald-400/30 transition-colors" />
-                    <ResizablePanel defaultSize={28} minSize={20}>
+                    <ResizablePanelHandle className="w-[3px] bg-[#222222] hover:bg-[#10b981] transition-colors" />
+                    <ResizablePanel defaultSize={25} minSize={18} maxSize={40}>
                     <div className="h-full border-l border-white/5 bg-[#0e0e0e] flex flex-col relative z-20">
                       <div className="p-4 flex items-center justify-between border-b border-white/5">
                         <span className="text-sm font-semibold">AI Assistance</span>
@@ -1939,6 +1973,85 @@ export function AIChatPage() {
                     <span className="text-sm font-medium text-white/40">No matching history found</span>
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mode Switch Modal (Agent -> Editor) */}
+      <AnimatePresence>
+        {showModeSwitchModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-lg bg-[#181818] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 text-white"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white font-bold text-lg shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                  M
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Switch to AI Code Editor</h3>
+                  <p className="text-xs text-white/50">Choose how you want to proceed into the editor</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-white/70 leading-relaxed">
+                You are switching from AI Code Assistant to the Editor. You can switch into your current project, start fresh with the Welcome Screen, or continue in Assistant mode.
+              </p>
+
+              <div className="flex flex-col gap-2.5 pt-2">
+                {/* 2nd Button: Switch to AI Code Editor mode (Current Project) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModeSwitchModal(false);
+                    executeTabSwitch('AI Code Editor', false);
+                  }}
+                  className="flex items-center justify-between px-4 py-3 rounded-xl bg-[#252526] hover:bg-[#2e2e30] border border-white/10 text-left transition group cursor-pointer"
+                >
+                  <div>
+                    <div className="text-xs font-semibold text-white group-hover:text-blue-400 transition">
+                      Switch in AI Code Editor mode (Current Project)
+                    </div>
+                    <div className="text-[11px] text-white/50">
+                      Open imported project files and media directly in the editor.
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-white" />
+                </button>
+
+                {/* 3rd Button: Start New Process in AI Code Editor mode (Welcome Screen) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowModeSwitchModal(false);
+                    executeTabSwitch('AI Code Editor', true);
+                  }}
+                  className="flex items-center justify-between px-4 py-3 rounded-xl bg-[#094771]/40 hover:bg-[#094771]/70 border border-[#0078d4]/40 text-left transition group cursor-pointer"
+                >
+                  <div>
+                    <div className="text-xs font-semibold text-[#4fc1ff]">
+                      Start New Process (mcode Welcome Screen)
+                    </div>
+                    <div className="text-[11px] text-white/60">
+                      Opens the full-screen Welcome page to select 54+ languages and start fresh.
+                    </div>
+                  </div>
+                  <Sparkles className="w-4 h-4 text-[#4fc1ff]" />
+                </button>
+
+                {/* 1st Button: Continue in AI Code Agent mode */}
+                <button
+                  type="button"
+                  onClick={() => setShowModeSwitchModal(false)}
+                  className="px-4 py-2 text-xs text-white/60 hover:text-white text-center rounded-xl hover:bg-white/5 transition cursor-pointer mt-1"
+                >
+                  Continue in AI Code Agent mode
+                </button>
               </div>
             </motion.div>
           </div>

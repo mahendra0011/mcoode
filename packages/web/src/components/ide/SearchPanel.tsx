@@ -221,7 +221,7 @@ export function SearchPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs min-w-[240px] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs w-full min-w-0 overflow-hidden">
       {/* Top Header Row with Exact Icons */}
       <div className="p-3 border-b border-white/5 flex items-center justify-between">
         <span className="font-semibold uppercase tracking-wider text-white/50 text-[11px]">

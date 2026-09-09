@@ -57,6 +57,7 @@ const ALL_SHORTCUTS: ShortcutEntry[] = [
   { command: "Search in Files", keys: "Ctrl+Shift+F", category: "View" },
   { command: "Source Control", keys: "Ctrl+Shift+G", category: "View" },
   { command: "Run & Debug", keys: "Ctrl+Shift+D", category: "View" },
+  { command: "Languages & Runtimes", keys: "Ctrl+Shift+L", category: "View" },
   { command: "Extensions", keys: "Ctrl+Shift+X", category: "View" },
   { command: "Problems", keys: "Ctrl+Shift+M", category: "View" },
   { command: "Output", keys: "Ctrl+Shift+U", category: "View" },

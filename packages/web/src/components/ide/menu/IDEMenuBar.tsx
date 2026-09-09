@@ -671,6 +671,14 @@ export function IDEMenuBar({
           },
         },
         {
+          label: "Languages & Runtimes",
+          shortcut: "Ctrl+Shift+L",
+          action: () => {
+            store.setActiveActivityBar("languages");
+            store.setSidebarOpen(true);
+          },
+        },
+        {
           label: "Extensions",
           shortcut: "Ctrl+Shift+X",
           action: () => {

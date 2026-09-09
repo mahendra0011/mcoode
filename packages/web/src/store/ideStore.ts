@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { ALL_LANGUAGES } from "../lib/languagesData";
 
 export type ActiveTab = "Chat" | "AI Code Editor";
 export type PanelTab = "terminal" | "problems" | "output" | "debugConsole";
@@ -171,6 +172,12 @@ interface IDEState {
   setActiveTerminalId: (id: string) => void;
   runTerminalCommandFn: ((cmd: string) => void) | null;
   setRunTerminalCommandFn: (fn: ((cmd: string) => void) | null) => void;
+
+  // Multi-select languages state (Welcome tab & Left sidebar)
+  selectedLanguages: string[];
+  toggleLanguage: (name: string) => void;
+  setSelectedLanguages: (languages: string[]) => void;
+  createLanguageFile: (langName: string) => void;
 }
 
 const getInitialRecentFiles = (): string[] => {
@@ -183,6 +190,16 @@ const getInitialRecentFiles = (): string[] => {
   }
 };
 
+const getInitialSelectedLanguages = (): string[] => {
+  if (typeof window === "undefined") return ["Python", "JavaScript", "TypeScript", "HTML", "CSS", "Rust", "Go"];
+  try {
+    const raw = localStorage.getItem("mcode_selected_languages");
+    return raw ? JSON.parse(raw) : ["Python", "JavaScript", "TypeScript", "HTML", "CSS", "Rust", "Go"];
+  } catch {
+    return ["Python", "JavaScript", "TypeScript", "HTML", "CSS", "Rust", "Go"];
+  }
+};
+
 /**
  * Central UI state for the VS Code-style IDE surfaces.
  */
@@ -191,7 +208,13 @@ export const useIDEStore = create<IDEState>()((set, get) => ({
   setActiveTab: (activeTab) => set({ activeTab }),
 
   activeActivityBar: "explorer",
-  setActiveActivityBar: (activeActivityBar) => set({ activeActivityBar }),
+  setActiveActivityBar: (activeActivityBar) =>
+    set((s) => {
+      if (s.activeActivityBar === activeActivityBar && s.isSidebarOpen) {
+        return { isSidebarOpen: false };
+      }
+      return { activeActivityBar, isSidebarOpen: true };
+    }),
 
   isSidebarOpen: true,
   toggleSidebar: () => set((s) => ({ isSidebarOpen: !s.isSidebarOpen })),
@@ -287,6 +310,52 @@ export const useIDEStore = create<IDEState>()((set, get) => ({
     return name;
   },
 
+  selectedLanguages: getInitialSelectedLanguages(),
+  toggleLanguage: (name) => {
+    const cur = get().selectedLanguages;
+    const next = cur.includes(name) ? cur.filter((l) => l !== name) : [...cur, name];
+    set({ selectedLanguages: next });
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("mcode_selected_languages", JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+    }
+  },
+  setSelectedLanguages: (selectedLanguages) => {
+    set({ selectedLanguages });
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("mcode_selected_languages", JSON.stringify(selectedLanguages));
+      } catch {
+        // ignore
+      }
+    }
+  },
+  createLanguageFile: (langName) => {
+    const lang = ALL_LANGUAGES.find((l) => l.name.toLowerCase() === langName.toLowerCase());
+    const ext = lang ? lang.extension : ".txt";
+    const baseName = ext.startsWith(".") ? `main${ext}` : ext;
+    let path = baseName;
+    let counter = 1;
+    while (get().openFiles.includes(path)) {
+      path = ext.startsWith(".") ? `main_${counter}${ext}` : `${ext}_${counter}`;
+      counter++;
+    }
+    const boilerplate = lang?.defaultBoilerplate || "";
+    set((s) => ({
+      openFiles: [...s.openFiles, path],
+      activePath: path,
+      fileContentsCache: { ...s.fileContentsCache, [path]: boilerplate },
+      savedContents: { ...s.savedContents, [path]: boilerplate },
+      isWelcomeOpen: false,
+      selectedLanguages: lang && !s.selectedLanguages.includes(lang.name)
+        ? [...s.selectedLanguages, lang.name]
+        : s.selectedLanguages,
+    }));
+  },
+
   activeEditor: null,
   activeMonaco: null,
   setActiveEditor: (activeEditor, activeMonaco) => set({ activeEditor, activeMonaco }),
@@ -378,7 +447,7 @@ export const useIDEStore = create<IDEState>()((set, get) => ({
   isReleaseNotesOpen: false,
   setReleaseNotesOpen: (isReleaseNotesOpen) => set({ isReleaseNotesOpen }),
 
-  isWelcomeOpen: false,
+  isWelcomeOpen: true,
   setWelcomeOpen: (isWelcomeOpen) => set({ isWelcomeOpen }),
 
   isTasksOpen: false,

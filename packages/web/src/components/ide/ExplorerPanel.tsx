@@ -13,9 +13,12 @@ import {
   Code2,
   FileText,
   Boxes,
+  Plus,
 } from "lucide-react";
 import { FileTree } from "./FileTree";
 import { useIDEStore } from "../../store/ideStore";
+import { ALL_LANGUAGES } from "../../lib/languagesData";
+import { LanguageIcon } from "./LanguageIcon";
 import { toast } from "sonner";
 
 interface OutlineSymbol {
@@ -114,11 +117,17 @@ export function ExplorerPanel({ workspaceId, projectName = "Folders" }: Explorer
   const setTargetJump = useIDEStore((s) => s.setTargetJump);
   const timelines = useIDEStore((s) => s.timelines);
   const runTerminalCommandFn = useIDEStore((s) => s.runTerminalCommandFn);
+  const selectedLanguages = useIDEStore((s) => s.selectedLanguages);
+  const toggleLanguage = useIDEStore((s) => s.toggleLanguage);
+  const createLanguageFile = useIDEStore((s) => s.createLanguageFile);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showAddLanguages, setShowAddLanguages] = useState(false);
+  const [searchLanguage, setSearchLanguage] = useState("");
   const [visibleViews, setVisibleViews] = useState<Record<string, boolean>>({
     "Open Editors": true,
     "Folders": true,
+    "Languages": true,
     "Outline": true,
     "Timeline": true,
     "NPM Scripts": true,
@@ -191,7 +200,7 @@ export function ExplorerPanel({ workspaceId, projectName = "Folders" }: Explorer
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs min-w-[240px] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs w-full min-w-0 overflow-hidden">
       {/* Explorer Main Header with "..." menu */}
       <div className="p-3 border-b border-white/5 flex items-center justify-between relative">
         <span className="font-semibold uppercase tracking-wider text-white/50 text-[11px]">
@@ -284,6 +293,123 @@ export function ExplorerPanel({ workspaceId, projectName = "Folders" }: Explorer
           <Section title={projectName} defaultOpen={true}>
             <div className="min-h-[160px]">
               <FileTree workspaceId={workspaceId} />
+            </div>
+          </Section>
+        )}
+
+        {/* 2.5 Languages Section */}
+        {visibleViews["Languages"] && (
+          <Section title="Languages" count={selectedLanguages.length} defaultOpen={true}>
+            <div className="flex flex-col gap-1 px-2 py-1.5">
+              {selectedLanguages.length === 0 ? (
+                <div className="px-2 py-1 text-[11px] text-white/40 italic">
+                  No languages selected.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto custom-scrollbar">
+                  {selectedLanguages.map((langName) => {
+                    const lang = ALL_LANGUAGES.find((l) => l.name === langName);
+                    const color = lang ? lang.color : "#3b82f6";
+                    const ext = lang ? lang.extension : "";
+                    return (
+                      <div
+                        key={langName}
+                        className="flex items-center justify-between px-2 py-1 hover:bg-white/5 rounded-md group text-xs text-white/80"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <LanguageIcon
+                            id={langName}
+                            name={langName}
+                            color={color}
+                            className="w-4 h-4 flex-shrink-0 rounded shadow-sm"
+                          />
+                          <span className="truncate font-medium">{langName}</span>
+                          <span className="text-[10px] text-white/30 font-mono">{ext}</span>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              createLanguageFile(langName);
+                              toast.success(`Created new ${langName} file`);
+                            }}
+                            className="p-1 hover:bg-white/10 rounded text-blue-400 hover:text-blue-300"
+                            title={`New ${langName} file`}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleLanguage(langName)}
+                            className="p-1 hover:bg-white/10 rounded text-white/30 hover:text-white"
+                            title="Remove language"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add / Manage languages expandable row */}
+              <div className="pt-1 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddLanguages(!showAddLanguages)}
+                  className="w-full flex items-center justify-between px-2 py-1 text-[11px] text-blue-400 hover:text-blue-300 hover:bg-white/5 rounded transition"
+                >
+                  <span className="flex items-center gap-1">
+                    <Plus className="w-3 h-3" /> {showAddLanguages ? "Close Languages List" : "Add / Manage Languages..."}
+                  </span>
+                  <span className="text-[10px] text-white/30">54 available</span>
+                </button>
+
+                {showAddLanguages && (
+                  <div className="mt-1.5 p-2 bg-[#141416] border border-white/10 rounded-lg space-y-2">
+                    <input
+                      type="text"
+                      value={searchLanguage}
+                      onChange={(e) => setSearchLanguage(e.target.value)}
+                      placeholder="Filter 50+ languages..."
+                      className="w-full px-2 py-1 text-[11px] bg-white/5 border border-white/10 rounded text-white placeholder-white/30 outline-none focus:border-blue-500/50"
+                    />
+                    <div className="max-h-36 overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
+                      {ALL_LANGUAGES.filter((l) =>
+                        l.name.toLowerCase().includes(searchLanguage.toLowerCase()) ||
+                        l.category.toLowerCase().includes(searchLanguage.toLowerCase())
+                      ).map((lang) => {
+                        const isSelected = selectedLanguages.includes(lang.name);
+                        return (
+                          <button
+                            key={lang.id}
+                            type="button"
+                            onClick={() => toggleLanguage(lang.name)}
+                            className={`w-full flex items-center justify-between px-2 py-1 rounded text-[11px] transition text-left ${
+                              isSelected
+                                ? "bg-blue-500/20 text-white font-medium"
+                                : "text-white/60 hover:text-white hover:bg-white/5"
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <LanguageIcon
+                                id={lang.id}
+                                name={lang.name}
+                                color={lang.color}
+                                className="w-3.5 h-3.5 flex-shrink-0 rounded shadow-sm"
+                              />
+                              <span className="truncate">{lang.name}</span>
+                              <span className="text-[9px] text-white/30 font-mono">{lang.extension}</span>
+                            </div>
+                            {isSelected && <Check className="w-3 h-3 text-blue-400" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </Section>
         )}
