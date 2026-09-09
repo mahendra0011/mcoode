@@ -173,6 +173,9 @@ const TreeNode = ({ node, level = 0 }: TreeNodeProps) => {
  */
 export function FileTree({ workspaceId }: FileTreeProps) {
   const triggerRefresh = useIDEStore((s) => s.triggerRefresh);
+  const addOpenFile = useIDEStore((s) => s.addOpenFile);
+  const setFileContent = useIDEStore((s) => s.setFileContent);
+
   const { data: files = [], isLoading: loading } = useQuery<FlatFile[]>({
     queryKey: ["workspaceFiles", workspaceId, triggerRefresh],
     queryFn: () =>
@@ -182,6 +185,22 @@ export function FileTree({ workspaceId }: FileTreeProps) {
     enabled: !!workspaceId,
     staleTime: 15_000,
   });
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList) return;
+    Array.from(fileList).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = (reader.result as string) || "";
+        const path = file.name;
+        setFileContent(path, content);
+        addOpenFile(path);
+        toast.success(`Uploaded ${file.name}`);
+      };
+      reader.readAsText(file);
+    });
+  };
 
   // Convert flat array [{path, name}] to a nested tree (folders first).
   const tree: TreeNodeData = { name: "root", path: "", children: [] };
@@ -216,25 +235,6 @@ export function FileTree({ workspaceId }: FileTreeProps) {
       </div>
     );
   }
-
-  const addOpenFile = useIDEStore((s) => s.addOpenFile);
-  const setFileContent = useIDEStore((s) => s.setFileContent);
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList) return;
-    Array.from(fileList).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const content = (reader.result as string) || "";
-        const path = file.name;
-        setFileContent(path, content);
-        addOpenFile(path);
-        toast.success(`Uploaded ${file.name}`);
-      };
-      reader.readAsText(file);
-    });
-  };
 
   return (
     <div className="flex flex-col h-full">
