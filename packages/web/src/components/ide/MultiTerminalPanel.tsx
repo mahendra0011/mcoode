@@ -20,6 +20,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import type { ChatMessage } from '../../types/chat';
+import { getSocket } from '../../hooks/useChatSocket';
 
 export interface TerminalSessionMeta {
   id: string;
@@ -420,29 +421,20 @@ function TerminalInstance({
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
-  const processedRef = useRef(new Set<string>());
-
-  // Readline state
-  const bufferRef = useRef<string>('');
-  const cursorPosRef = useRef<number>(0);
-  const historyIdxRef = useRef<number>(-1);
-  const streamTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  // Helper to redraw line from cursor position
-  const redrawLine = useCallback((term: Terminal, buffer: string, cursorPos: number) => {
-    term.write('\r' + PROMPT + '\x1b[K' + buffer);
-    const diff = buffer.length - cursorPos;
-    if (diff > 0) {
-      term.write(`\x1b[${diff}D`);
-    }
-  }, []);
-
-  // Mount xterm
+  // Mount xterm & attach backend PTY session
   useEffect(() => {
+    // Read terminal settings from localStorage or fallback defaults
+    const fontSize = parseInt(localStorage.getItem('mcode.terminal.fontSize') || '13', 10);
+    const fontFamily = localStorage.getItem('mcode.terminal.fontFamily') || 'monospace';
+    const cursorStyle = (localStorage.getItem('mcode.terminal.cursorStyle') as any) || 'block';
+    const cursorBlink = localStorage.getItem('mcode.terminal.cursorBlink') !== 'false';
+    const scrollback = parseInt(localStorage.getItem('mcode.terminal.scrollback') || '5000', 10);
+
     const term = new Terminal({
       theme: {
         background: '#0a0a0a',
@@ -466,13 +458,13 @@ function TerminalInstance({
         brightCyan: '#4feda8',
         brightWhite: '#f4f4f5',
       },
-      fontSize: 13,
-      fontFamily: 'monospace',
+      fontSize,
+      fontFamily,
       convertEol: true,
-      cursorBlink: true,
-      cursorStyle: 'block',
+      cursorBlink,
+      cursorStyle,
       disableStdin: false,
-      scrollback: 5000,
+      scrollback,
     });
 
     const fitAddon = new FitAddon();
@@ -484,19 +476,48 @@ function TerminalInstance({
     term.loadAddon(webLinksAddon);
 
     if (terminalRef.current) term.open(terminalRef.current);
-    setTimeout(() => {
-      try {
-        fitAddon.fit();
-      } catch {}
-    }, 50);
-
-    term.writeln('\x1b[90mWelcome to mcode Terminal. Type commands directly here.\x1b[0m');
-    term.write(PROMPT);
+    try {
+      fitAddon.fit();
+    } catch {}
 
     xtermRef.current = term;
     searchAddonRef.current = searchAddon;
 
-    // Do NOT capture keys if the user is typing in another input (like AI chat prompt, Monaco, etc.)
+    const socket = getSocket();
+
+    // Spawn PTY session on backend
+    socket.emit('terminal:spawn', {
+      id: session.id,
+      shellType: session.shellType,
+      cols: term.cols || 80,
+      rows: term.rows || 24,
+    });
+
+    // Stream output from backend PTY process directly to xterm
+    const handleOutput = (payload: { id: string; data: string }) => {
+      if (payload.id === session.id) {
+        term.write(payload.data);
+      }
+    };
+    socket.on('terminal:output', handleOutput);
+
+    // Forward user keystrokes straight to PTY stdin
+    const dataDisposable = term.onData((data) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        activeEl !== terminalRef.current &&
+        !terminalRef.current?.contains(activeEl) &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          (activeEl as HTMLElement).isContentEditable)
+      ) {
+        return;
+      }
+      socket.emit('terminal:input', { id: session.id, data });
+    });
+
+    // Custom key event handler
     term.attachCustomKeyEventHandler((e) => {
       const activeEl = document.activeElement;
       if (
@@ -515,6 +536,9 @@ function TerminalInstance({
     const resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit();
+        if (term.cols && term.rows) {
+          socket.emit('terminal:resize', { id: session.id, cols: term.cols, rows: term.rows });
+        }
       } catch {}
     });
     if (terminalRef.current) resizeObserver.observe(terminalRef.current);
@@ -522,286 +546,66 @@ function TerminalInstance({
     const handleResize = () => {
       try {
         fitAddon.fit();
+        if (term.cols && term.rows) {
+          socket.emit('terminal:resize', { id: session.id, cols: term.cols, rows: term.rows });
+        }
       } catch {}
     };
     window.addEventListener('resize', handleResize);
 
     term.onSelectionChange(() => {
       const sel = term.getSelection();
-      if (sel) navigator.clipboard.writeText(sel).catch(() => {});
-    });
-
-    // In-terminal interactive keyboard handling
-    const dataDisposable = term.onData((data) => {
-      // Safety check: if user is typing in AI textarea or other input, do NOT capture
-      const activeEl = document.activeElement;
-      if (
-        activeEl &&
-        activeEl !== terminalRef.current &&
-        !terminalRef.current?.contains(activeEl) &&
-        (activeEl.tagName === 'INPUT' ||
-          activeEl.tagName === 'TEXTAREA' ||
-          (activeEl as HTMLElement).isContentEditable)
-      ) {
-        return;
-      }
-      // Enter
-      if (data === '\r') {
-        const cmd = bufferRef.current.trim();
-        term.write('\r\n');
-        if (cmd) {
-          onPushHistory(cmd);
-          onCommand(cmd);
-        } else {
-          term.write(PROMPT);
+      if (sel) {
+        const copyOnSelect = localStorage.getItem('mcode.terminal.copyOnSelection') === 'true';
+        if (copyOnSelect) {
+          navigator.clipboard.writeText(sel).catch(() => {});
         }
-        bufferRef.current = '';
-        cursorPosRef.current = 0;
-        historyIdxRef.current = -1;
-        return;
-      }
-
-      // Backspace (\x7f or \b)
-      if (data === '\x7f' || data === '\b') {
-        if (cursorPosRef.current > 0) {
-          bufferRef.current =
-            bufferRef.current.slice(0, cursorPosRef.current - 1) +
-            bufferRef.current.slice(cursorPosRef.current);
-          cursorPosRef.current--;
-          redrawLine(term, bufferRef.current, cursorPosRef.current);
-        }
-        return;
-      }
-
-      // Left arrow (\x1b[D)
-      if (data === '\x1b[D') {
-        if (cursorPosRef.current > 0) {
-          cursorPosRef.current--;
-          term.write('\x1b[D');
-        }
-        return;
-      }
-
-      // Right arrow (\x1b[C)
-      if (data === '\x1b[C') {
-        if (cursorPosRef.current < bufferRef.current.length) {
-          cursorPosRef.current++;
-          term.write('\x1b[C');
-        }
-        return;
-      }
-
-      // Home (\x1b[H or \x1b[1~ or Ctrl+A)
-      if (data === '\x1b[H' || data === '\x1b[1~' || data === '\x01') {
-        cursorPosRef.current = 0;
-        redrawLine(term, bufferRef.current, cursorPosRef.current);
-        return;
-      }
-
-      // End (\x1b[F or \x1b[4~ or Ctrl+E)
-      if (data === '\x1b[F' || data === '\x1b[4~' || data === '\x05') {
-        cursorPosRef.current = bufferRef.current.length;
-        redrawLine(term, bufferRef.current, cursorPosRef.current);
-        return;
-      }
-
-      // Delete key (\x1b[3~)
-      if (data === '\x1b[3~') {
-        if (cursorPosRef.current < bufferRef.current.length) {
-          bufferRef.current =
-            bufferRef.current.slice(0, cursorPosRef.current) +
-            bufferRef.current.slice(cursorPosRef.current + 1);
-          redrawLine(term, bufferRef.current, cursorPosRef.current);
-        }
-        return;
-      }
-
-      // Ctrl+U (delete before cursor)
-      if (data === '\x15') {
-        bufferRef.current = bufferRef.current.slice(cursorPosRef.current);
-        cursorPosRef.current = 0;
-        redrawLine(term, bufferRef.current, cursorPosRef.current);
-        return;
-      }
-
-      // Ctrl+K (delete after cursor)
-      if (data === '\x0b') {
-        bufferRef.current = bufferRef.current.slice(0, cursorPosRef.current);
-        redrawLine(term, bufferRef.current, cursorPosRef.current);
-        return;
-      }
-
-      // Ctrl+C (Interrupt)
-      if (data === '\x03') {
-        term.write('^C\r\n');
-        bufferRef.current = '';
-        cursorPosRef.current = 0;
-        historyIdxRef.current = -1;
-        onInterrupt?.();
-        term.write(PROMPT);
-        return;
-      }
-
-      // Ctrl+L (Clear screen)
-      if (data === '\x0c') {
-        term.clear();
-        term.write(PROMPT + bufferRef.current);
-        return;
-      }
-
-      // Tab completion
-      if (data === '\t') {
-        const current = bufferRef.current.slice(0, cursorPosRef.current);
-        const match = COMMON_COMMANDS.find((c) => c.startsWith(current) && c !== current);
-        if (match) {
-          bufferRef.current = match + bufferRef.current.slice(cursorPosRef.current);
-          cursorPosRef.current = match.length;
-          redrawLine(term, bufferRef.current, cursorPosRef.current);
-        }
-        return;
-      }
-
-      // Arrow Up (history back)
-      if (data === '\x1b[A') {
-        const hist = session.history;
-        if (hist.length > 0) {
-          const nextIdx =
-            historyIdxRef.current === -1
-              ? hist.length - 1
-              : Math.max(0, historyIdxRef.current - 1);
-          historyIdxRef.current = nextIdx;
-          bufferRef.current = hist[nextIdx];
-          cursorPosRef.current = bufferRef.current.length;
-          redrawLine(term, bufferRef.current, cursorPosRef.current);
-        }
-        return;
-      }
-
-      // Arrow Down (history forward)
-      if (data === '\x1b[B') {
-        const hist = session.history;
-        if (hist.length > 0) {
-          const nextIdx =
-            historyIdxRef.current === -1
-              ? -1
-              : Math.min(hist.length - 1, historyIdxRef.current + 1);
-          historyIdxRef.current = nextIdx;
-          bufferRef.current = nextIdx === -1 ? '' : hist[nextIdx];
-          cursorPosRef.current = bufferRef.current.length;
-          redrawLine(term, bufferRef.current, cursorPosRef.current);
-        }
-        return;
-      }
-
-      // Ignore unhandled escape sequences
-      if (data.startsWith('\x1b')) return;
-
-      // Normal characters
-      if (data.charCodeAt(0) >= 32) {
-        bufferRef.current =
-          bufferRef.current.slice(0, cursorPosRef.current) +
-          data +
-          bufferRef.current.slice(cursorPosRef.current);
-        cursorPosRef.current += data.length;
-        redrawLine(term, bufferRef.current, cursorPosRef.current);
       }
     });
-
-    // Stream chunks from backend
-    const handleLiveStream = (e: CustomEvent<string>) => {
-      term.write(e.detail.replace(/\n/g, '\r\n'));
-
-      if (streamTimerRef.current) clearTimeout(streamTimerRef.current);
-      streamTimerRef.current = setTimeout(() => {
-        term.write(PROMPT);
-      }, 150);
-    };
-    document.addEventListener('terminal:write', handleLiveStream as EventListener);
 
     const handleClear = (e: CustomEvent<string>) => {
       if (e.detail === session.id) {
         term.clear();
-        bufferRef.current = '';
-        cursorPosRef.current = 0;
-        term.write(PROMPT);
       }
     };
     document.addEventListener('terminal:clear', handleClear as EventListener);
 
-    const handleScrollCommand = (
-      e: CustomEvent<{ sessionId: string; direction: 'prev' | 'next' }>
-    ) => {
-      if (e.detail.sessionId !== session.id) return;
-      term.scrollLines(e.detail.direction === 'prev' ? -10 : 10);
-    };
-    document.addEventListener('terminal:scroll-command', handleScrollCommand as EventListener);
-
     return () => {
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
-      document.removeEventListener('terminal:write', handleLiveStream as EventListener);
       document.removeEventListener('terminal:clear', handleClear as EventListener);
-      document.removeEventListener('terminal:scroll-command', handleScrollCommand as EventListener);
+      socket.off('terminal:output', handleOutput);
+      socket.emit('terminal:kill', { id: session.id });
       dataDisposable.dispose();
       term.dispose();
     };
-  }, [session.id, onCommand, onInterrupt, onPushHistory, redrawLine]);
-
-  // Messages listener (agent run_shell/run_tests)
-  useEffect(() => {
-    const term = xtermRef.current;
-    if (!term) return;
-    messages.forEach((msg) => {
-      const key = msg.replaceKey || msg.id || 'unknown';
-      if ((msg.tool === 'run_shell' || msg.tool === 'run_tests') && msg.status === 'running') {
-        const cmdKey = `start-${key}`;
-        if (!processedRef.current.has(cmdKey)) {
-          const cmd = msg.command || String(msg.args?.command) || String(msg.args?.file) || '...';
-          term.write(`\r\n\x1b[34m$ ${cmd}\x1b[0m\r\n`);
-          processedRef.current.add(cmdKey);
-        }
-      }
-      if ((msg.tool === 'run_shell' || msg.tool === 'run_tests') && msg.status === 'done') {
-        const endKey = `end-${key}`;
-        if (!processedRef.current.has(endKey)) {
-          term.write('\r\n' + PROMPT);
-          processedRef.current.add(endKey);
-        }
-      }
-    });
-  }, [messages]);
+  }, [session.id, session.shellType]);
 
   // Keyboard Shortcuts (Ctrl+F search, Ctrl+V paste)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!isActive) return;
 
-      // Ctrl+F
+      // Ctrl+F search
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         setSearchOpen(true);
       }
       if (e.key === 'Escape') setSearchOpen(false);
 
-      // Ctrl+V paste into terminal
+      // Ctrl+V paste into PTY
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
         e.preventDefault();
         navigator.clipboard.readText().then((clip) => {
-          if (clip && xtermRef.current) {
-            const cleaned = clip.replace(/[\r\n]+/g, ' ');
-            bufferRef.current =
-              bufferRef.current.slice(0, cursorPosRef.current) +
-              cleaned +
-              bufferRef.current.slice(cursorPosRef.current);
-            cursorPosRef.current += cleaned.length;
-            redrawLine(xtermRef.current, bufferRef.current, cursorPosRef.current);
+          if (clip) {
+            getSocket().emit('terminal:input', { id: session.id, data: clip });
           }
         });
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isActive, redrawLine]);
+  }, [isActive, session.id]);
 
   useEffect(() => {
     if (searchQuery) searchAddonRef.current?.findNext(searchQuery);
@@ -816,14 +620,8 @@ function TerminalInstance({
 
   const handlePasteClipboard = () => {
     navigator.clipboard.readText().then((clip) => {
-      if (clip && xtermRef.current) {
-        const cleaned = clip.replace(/[\r\n]+/g, ' ');
-        bufferRef.current =
-          bufferRef.current.slice(0, cursorPosRef.current) +
-          cleaned +
-          bufferRef.current.slice(cursorPosRef.current);
-        cursorPosRef.current += cleaned.length;
-        redrawLine(xtermRef.current, bufferRef.current, cursorPosRef.current);
+      if (clip) {
+        getSocket().emit('terminal:input', { id: session.id, data: clip });
       }
     });
     setContextMenu(null);
@@ -836,9 +634,6 @@ function TerminalInstance({
 
   const handleClearContext = () => {
     xtermRef.current?.clear();
-    bufferRef.current = '';
-    cursorPosRef.current = 0;
-    xtermRef.current?.write(PROMPT);
     setContextMenu(null);
   };
 
@@ -854,6 +649,24 @@ function TerminalInstance({
       onContextMenu={(e) => {
         e.preventDefault();
         setContextMenu({ x: e.clientX, y: e.clientY });
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+          const filePaths = files.map((f) => (f as any).path || f.name).join(' ');
+          getSocket().emit('terminal:input', { id: session.id, data: filePaths });
+        } else {
+          const text = e.dataTransfer.getData('text/plain');
+          if (text) {
+            getSocket().emit('terminal:input', { id: session.id, data: text });
+          }
+        }
       }}
     >
       {/* In-terminal search bar (Ctrl+F) */}

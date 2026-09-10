@@ -1,4 +1,4 @@
 "use client";
-import { AILandingPage } from "../../views/AILandingPage";
+import { AILandingPage } from "../../components/pages/AILandingPage";
 export const dynamic = "force-dynamic";
 export default function Page() { return <AILandingPage />; }

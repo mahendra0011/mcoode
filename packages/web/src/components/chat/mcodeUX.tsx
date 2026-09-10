@@ -66,7 +66,7 @@ export function StepPulse({ active }: StepPulseProps) {
         width: 6,
         height: 6,
         borderRadius: "50%",
-        background: "var(--zc-green, #3ecf8e)",
+        background: "var(--mcode-green, #3ecf8e)",
         flexShrink: 0,
       }}
     />
@@ -78,7 +78,7 @@ export function ToolCallCard({ type = "explored", label, summary, children, defa
   const Icon = (ICONS[type as IconKey] ?? FolderSearch);
 
   return (
-    <div style={{ marginBottom: 8, fontFamily: "var(--zc-font)" }}>
+    <div style={{ marginBottom: 8, fontFamily: "var(--mcode-font)" }}>
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
@@ -90,15 +90,15 @@ export function ToolCallCard({ type = "explored", label, summary, children, defa
           background: "transparent",
           border: "none",
           cursor: "pointer",
-          color: "var(--zc-text)",
+          color: "var(--mcode-text)",
           textAlign: "left",
         }}
       >
-        <Icon size={15} style={{ color: "var(--zc-accent)", flexShrink: 0 }} />
+        <Icon size={15} style={{ color: "var(--mcode-accent)", flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
           {label}
         </span>
-        <span style={{ fontSize: 13, color: "var(--zc-text-dim)", marginLeft: 4 }}>
+        <span style={{ fontSize: 13, color: "var(--mcode-text-dim)", marginLeft: 4 }}>
           {summary}
         </span>
       </button>
@@ -112,12 +112,12 @@ export function ToolCallCard({ type = "explored", label, summary, children, defa
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
             data-state="open"
-            data-zcode-collapsible-animate-close="true"
+            data-mcode-collapsible-animate-close="true"
             style={{
               padding: "8px 0 8px 24px",
               fontSize: 12.5,
-              color: "var(--zc-text-dim)",
-              fontFamily: "var(--zc-mono)",
+              color: "var(--mcode-text-dim)",
+              fontFamily: "var(--mcode-mono)",
               overflow: "hidden",
             }}
           >
@@ -140,7 +140,7 @@ export function WroteFile({ filename, lang, lines }: WroteFileProps) {
         alignItems: "center",
         gap: 8,
         padding: "6px 0",
-        fontFamily: "var(--zc-mono)",
+        fontFamily: "var(--mcode-mono)",
         fontSize: 12.5,
       }}
     >
@@ -152,8 +152,8 @@ export function WroteFile({ filename, lang, lines }: WroteFileProps) {
           background: LANG_COLOR[lang ?? ""] ?? "#888",
         }}
       />
-      <span style={{ color: "var(--zc-text)" }}>{filename}</span>
-      <span style={{ color: "var(--zc-green)" }}>+{lines}</span>
+      <span style={{ color: "var(--mcode-text)" }}>{filename}</span>
+      <span style={{ color: "var(--mcode-green)" }}>+{lines}</span>
     </motion.div>
   );
 }
@@ -161,26 +161,26 @@ export function WroteFile({ filename, lang, lines }: WroteFileProps) {
 export function DiffBlock({ filename, added, removed }: DiffBlockProps) {
   const total = added + removed || 1;
   return (
-    <div style={{ fontFamily: "var(--zc-mono)", fontSize: 12.5 }}>
+    <div style={{ fontFamily: "var(--mcode-mono)", fontSize: 12.5 }}>
       <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-        <span style={{ color: "var(--zc-text)" }}>{filename}</span>
+        <span style={{ color: "var(--mcode-text)" }}>{filename}</span>
         <span>
-          <span style={{ color: "var(--zc-green)" }}>+{added}</span>{" "}
-          <span style={{ color: "var(--zc-red)" }}>-{removed}</span>
+          <span style={{ color: "var(--mcode-green)" }}>+{added}</span>{" "}
+          <span style={{ color: "var(--mcode-red)" }}>-{removed}</span>
         </span>
       </div>
-      <div style={{ display: "flex", height: 4, borderRadius: 2, overflow: "hidden", background: "var(--zc-border)" }}>
+      <div style={{ display: "flex", height: 4, borderRadius: 2, overflow: "hidden", background: "var(--mcode-border)" }}>
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${(added / total) * 100}%` }}
           transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-          style={{ background: "var(--zc-green)" }}
+          style={{ background: "var(--mcode-green)" }}
         />
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${(removed / total) * 100}%` }}
           transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1], delay: 0.05 }}
-          style={{ background: "var(--zc-red)" }}
+          style={{ background: "var(--mcode-red)" }}
         />
       </div>
     </div>
@@ -212,15 +212,15 @@ export function TerminalOutput({ command, output }: TerminalOutputProps) {
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       style={{
         background: "transparent",
-        border: "1px solid var(--zc-border)",
+        border: "1px solid var(--mcode-border)",
         borderRadius: 6,
         padding: "8px 10px",
-        fontFamily: "var(--zc-mono)",
+        fontFamily: "var(--mcode-mono)",
         fontSize: 12,
       }}
     >
-      <div style={{ color: "var(--zc-accent)" }}>$ {command}</div>
-      <pre style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", color: "var(--zc-text-dim)" }}>
+      <div style={{ color: "var(--mcode-accent)" }}>$ {command}</div>
+      <pre style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", color: "var(--mcode-text-dim)" }}>
         {output ? output.slice(0, visibleChars) : ""}
         {output && visibleChars < output.length && (
           <motion.span
@@ -242,10 +242,10 @@ export function AgentInputBar({ model = "GLM-5.2", onSend }: AgentInputBarProps)
     <div
       style={{
         background: "transparent",
-        border: "1px solid var(--zc-border)",
+        border: "1px solid var(--mcode-border)",
         borderRadius: 12,
         padding: 10,
-        fontFamily: "var(--zc-font)",
+        fontFamily: "var(--mcode-font)",
       }}
     >
       <textarea
@@ -259,7 +259,7 @@ export function AgentInputBar({ model = "GLM-5.2", onSend }: AgentInputBarProps)
           border: "none",
           outline: "none",
           resize: "none",
-          color: "var(--zc-text)",
+          color: "var(--mcode-text)",
           fontSize: 13,
           fontFamily: "inherit",
         }}
@@ -272,7 +272,7 @@ export function AgentInputBar({ model = "GLM-5.2", onSend }: AgentInputBarProps)
         }}
       />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
-        <div style={{ display: "flex", gap: 10, color: "var(--zc-text-dim)", fontSize: 12 }}>
+        <div style={{ display: "flex", gap: 10, color: "var(--mcode-text-dim)", fontSize: 12 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
             <Paperclip size={13} /> Add context
           </span>
@@ -287,7 +287,7 @@ export function AgentInputBar({ model = "GLM-5.2", onSend }: AgentInputBarProps)
               alignItems: "center",
               gap: 4,
               fontSize: 12,
-              color: "var(--zc-text-dim)",
+              color: "var(--mcode-text-dim)",
               cursor: "pointer",
             }}
           >
@@ -303,7 +303,7 @@ export function AgentInputBar({ model = "GLM-5.2", onSend }: AgentInputBarProps)
               width: 28,
               height: 28,
               borderRadius: "50%",
-              background: "var(--zc-accent)",
+              background: "var(--mcode-accent)",
               border: "none",
               display: "flex",
               alignItems: "center",

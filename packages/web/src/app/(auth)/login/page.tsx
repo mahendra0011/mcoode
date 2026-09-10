@@ -1,4 +1,4 @@
 "use client";
-import { LoginPage } from "../../views/LoginPage";
+import { LoginPage } from "../../../components/pages/LoginPage";
 export const dynamic = "force-dynamic";
 export default function Page() { return <LoginPage />; }

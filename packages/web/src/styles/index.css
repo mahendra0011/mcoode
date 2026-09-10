@@ -1,0 +1,746 @@
+@import './syntax-highlight.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 78 65% 56%; /* Vibrant Green #a8d946 equivalent */
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --radius: 0.5rem;
+    --frame: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 78 65% 56%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --frame: 0 0% 6%;
+  }
+
+  /* mcode color variables — defined at top level so they work without .dark class */
+  :root {
+    --mcode-bg: #0d0e12;
+    --mcode-panel: #16171d;
+    --mcode-border: #26272f;
+    --mcode-text: #e6e6ea;
+    --mcode-text-dim: #8b8d98;
+    --mcode-accent: #6c8cff;
+    --mcode-green: #3ecf8e;
+    --mcode-red: #ff6b6b;
+    --mcode-yellow: #f5c451;
+    --mcode-radius: 10px;
+    --mcode-font: 'Inter', -apple-system, sans-serif;
+    --mcode-mono: 'JetBrains Mono', 'SF Mono', monospace;
+    --animated-gradient-text-strong: #fff;
+    --animated-gradient-text-soft: #ffffff38;
+  }
+
+  :root {
+    --color-brand: #3b82f6;
+    --mcode-interaction-progress: 1;
+    --mcode-interaction-remaining-ms: 240000;
+    --mcode-stream-animation-delay: 0s;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased min-h-screen;
+    overscroll-behavior: none;
+  }
+}
+
+.bg-phone-screen {
+  background-color: #f3f4f6;
+}
+
+.dark .bg-phone-screen {
+  background-color: #111827;
+}
+
+.mask-linear-gradient {
+  mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+}
+
+/* Universal IDE scrollbar styling (prevents white Windows default scrollbars) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+
+/* Ensure no scrollbar arrow buttons ever render on Windows or Chromium */
+*::-webkit-scrollbar-button,
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+/* Custom scrollbar classes */
+.custom-scrollbar {
+  overflow-x: hidden !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px !important;
+  height: 5px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-radius: 9999px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Hide scrollbars completely where needed (e.g. Activity Sidebar) */
+.no-scrollbar::-webkit-scrollbar,
+.customScrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar,
+.customScrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* Resizable panel divider / handle constraint (eliminates thick white bar) */
+.resizer,
+.panel-divider,
+.split-handle {
+  width: 1px;
+  min-width: 1px;
+  max-width: 4px;
+  background-color: #2d2d2d;
+  cursor: col-resize;
+  z-index: 1;
+}
+
+[data-panel-resize-handle-id] {
+  width: 3px !important;
+  min-width: 3px !important;
+  max-width: 3px !important;
+  background: #222222 !important;
+  position: relative;
+  transition: background-color 0.15s ease;
+}
+
+[data-panel-resize-handle-id]:hover,
+[data-panel-resize-handle-id][data-resize-handle-active] {
+  background: #3b82f6 !important;
+}
+
+/* Custom scrollbar thumb bounds */
+.custom-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  height: auto;
+  width: 6px;
+  right: 2px;
+  z-index: 0;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Slow spin for loading indicators */
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+/* mcode UX Animations — extracted from mcode's actual app.asar CSS
+   Reference: styles-BxSv8qTx.css in app-extracted/out/renderer/assets/ */
+
+/* Stream text fade-in animation */
+@keyframes mcode-stream-text-in {
+  0% { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Stream marker text color transition */
+@keyframes mcode-stream-marker-in {
+  0% { color: #0000; }
+  to { color: var(--mcode-text-dim, #8b8d98); }
+}
+
+/* Animated gradient text — mcode's thinking label animation (4s linear infinite) */
+@keyframes gradient-flow {
+  0% { background-position: 100% 0; }
+  50% { background-position: 0 0; }
+  to { background-position: 0 0; }
+ }
+
+/* Collapsible animation */
+@keyframes mcode-collapsible-up {
+  0% { height: var(--radix-collapsible-content-height); }
+  to { height: 0; }
+}
+
+@keyframes mcode-collapsible-fade-out {
+  0% { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* Reaction burst animations */
+@keyframes mcode-reaction-pop {
+  0% { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+@keyframes mcode-reaction-particles {
+  0% {
+    opacity: 0;
+    box-shadow: 7.7px 2.1px, 2.1px 7.7px, -5.7px 5.7px,
+                -7.7px -2.1px, -2.1px -7.7px, 5.7px -5.7px;
+  }
+}
+
+/* Browser/operation breathe */
+@keyframes browser-use-operation-breathe {
+  0%, to {
+    opacity: .5;
+    transform: scale(.9);
+  }
+}
+
+/* Workspace connecting breathe */
+@keyframes workspace-remote-connecting-breathe {
+  0%, to {
+    background-color: color-mix(in oklab, var(--mcode-accent, #6c8cff) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--mcode-accent, #6c8cff) 10%, transparent);
+  }
+}
+
+/* Task search result highlight */
+@keyframes task-search-result-highlight {
+  0% {
+    background-color: color-mix(in oklab, var(--mcode-accent, #6c8cff) 20%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--mcode-accent, #6c8cff) 28%, transparent);
+  }
+}
+
+/* Update charge sweep */
+@keyframes mcode-update-charge-sweep {
+  0% {
+    opacity: .35;
+    transform: translate(-120%);
+  }
+}
+
+/* Fork highlight pulse */
+@keyframes fork-highlight-pulse {
+  0% {
+    background-color: #0000;
+    box-shadow: inset 0 0 0 1px #0000;
+  }
+}
+
+/* Data attribute-based animation triggers — matching mcode exactly */
+[data-mcode-stream-animate="true"],
+[data-mcode-tool-stream-animate="true"],
+[data-mcode-chat-loading-animate="true"] {
+  will-change: opacity;
+  animation: .9s cubic-bezier(.16, 1, .3, 1) both mcode-stream-text-in;
+}
+
+[data-mcode-stream-marker-animate="true"]::marker {
+  animation: .9s cubic-bezier(.16, 1, .3, 1) var(--mcode-stream-animation-delay, 0s) both mcode-stream-marker-in;
+}
+
+[data-mcode-collapsible-animate-close="true"][data-state="closed"] {
+  animation: .3s ease-in-out forwards mcode-collapsible-up !important;
+}
+
+[data-mcode-collapsible-animate-close="true"][data-state="closed"] > * {
+  animation: .3s ease-in-out forwards mcode-collapsible-fade-out !important;
+}
+
+/* These previously only existed as bare @keyframes with nothing applying
+   them — a className with no matching `animation:` rule is a no-op. */
+.browser-use-operation-breathe {
+  animation: .9s cubic-bezier(.16, 1, .3, 1) both browser-use-operation-breathe;
+}
+
+.workspace-remote-connecting-breathe {
+  animation: 2s ease-in-out infinite workspace-remote-connecting-breathe;
+}
+
+.task-search-result-highlight {
+  animation: 1.2s ease-out both task-search-result-highlight;
+}
+
+.fork-highlight-pulse {
+  animation: 1.2s ease-out both fork-highlight-pulse;
+}
+
+/* Reaction burst: pop + particles (e.g. when a tool succeeds) */
+.mcode-reaction-burst {
+  display: inline-flex;
+  position: relative;
+}
+
+.mcode-reaction-pop {
+  animation: .25s cubic-bezier(.16, 1, .3, 1) both mcode-reaction-pop;
+}
+.mcode-reaction-particles {
+  animation: .5s cubic-bezier(.16, 1, .3, 1) both mcode-reaction-particles;
+}
+
+/* Task interaction countdown — progress bar for task timeouts */
+.mcode-task-interaction-countdown-fill {
+  animation: mcode-task-interaction-countdown var(--mcode-interaction-remaining-ms, 240000ms) linear forwards;
+  transform: scaleX(var(--mcode-interaction-progress, 1));
+}
+
+@keyframes mcode-task-interaction-countdown {
+  0% { transform: scaleX(var(--mcode-interaction-progress, 1)); }
+  to { transform: scaleX(0); }
+}
+
+/* CSS variable defaults for interaction countdown — also defined in top-level :root above */
+:root {
+  --color-brand: #3b82f6;
+}
+
+/* Pulse caret for syntax highlight cursor */
+@keyframes pulse-caret {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0.3; }
+}
+
+.pulse-caret {
+  animation: pulse-caret 1s step-end infinite;
+}
+
+/* mcode animated gradient text — used for the "Thinking..." label */
+.animated-gradient-text {
+  background: linear-gradient(90deg,
+    var(--animated-gradient-text-strong) 0%,
+    var(--animated-gradient-text-strong) 34%,
+    var(--animated-gradient-text-soft) 50%,
+    var(--animated-gradient-text-strong) 66%,
+    var(--animated-gradient-text-strong) 100%
+  );
+  color: #0000;
+  -webkit-text-fill-color: transparent;
+  will-change: background-position;
+  backface-visibility: hidden;
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: 4s linear infinite gradient-flow;
+  display: inline-block;
+  transform: translateZ(0);
+}
+
+/* Tool/stream text fade-in (also applied via data attributes above) */
+.mcode-stream-text-in {
+  will-change: opacity;
+  animation: .9s cubic-bezier(.16, 1, .3, 1) both mcode-stream-text-in;
+}
+
+[data-slot="progress-indicator"] {
+  position: relative;
+  overflow: hidden;
+}
+
+[data-slot="progress-indicator"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  animation: 1.15s cubic-bezier(.65, 0, .35, 1) infinite mcode-update-charge-sweep;
+  transform: translate(-120%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--mcode-accent, #6c8cff) 35%, transparent), transparent);
+}
+
+/* Disable animations for reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  [data-mcode-stream-animate="true"],
+  [data-mcode-tool-stream-animate="true"],
+  [data-mcode-chat-loading-animate="true"],
+  [data-mcode-collapsible-animate-close="true"][data-state="closed"],
+  [data-mcode-collapsible-animate-close="true"][data-state="closed"] > * {
+    animation: none;
+  }
+  [data-mcode-stream-marker-animate="true"]::marker {
+    animation: none;
+  }
+}
+
+/* ─────────────────── Startup Animation ─────────────────── */
+/* mcode-style startup logo pop (720ms, cubic-bezier(0.22, 1, 0.36, 1)) */
+@keyframes startup-logo-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes startup-fade-out {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+.startup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0c0c0c;
+}
+
+.startup-logo {
+  animation: 0.72s cubic-bezier(0.22, 1, 0.36, 1) both startup-logo-pop;
+  filter: drop-shadow(0 0 30px rgba(16, 185, 129, 0.4));
+}
+
+.startup-title {
+  margin-top: 1.5rem;
+  animation: 0.72s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both startup-logo-pop;
+  background: linear-gradient(90deg, #10b981, #3b82f6, #a854f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.startup-overlay.fade-out {
+  animation: 0.5s ease-out both startup-fade-out;
+}
+
+/* Monaco IDE Breakpoint Gutter Glyphs */
+.monaco-breakpoint-glyph {
+  background-color: #e51400 !important;
+  border-radius: 50% !important;
+  width: 10px !important;
+  height: 10px !important;
+  margin-left: 5px !important;
+  margin-top: 4px !important;
+  box-shadow: 0 0 8px rgba(229, 20, 0, 0.8) !important;
+  cursor: pointer;
+}
+.monaco-breakpoint-glyph-disabled {
+  background-color: #666666 !important;
+  border-radius: 50% !important;
+  width: 10px !important;
+  height: 10px !important;
+  margin-left: 5px !important;
+  margin-top: 4px !important;
+  opacity: 0.6 !important;
+  cursor: pointer;
+}
+
+/* ─────────────────── Platform-Specific Classes ─────────────────── */
+/* Applied to document.documentElement based on navigator.userAgent */
+.platform-mac-desktop {
+  /* macOS specific styling — traffic light window buttons, blur, etc. */
+}
+
+.platform-windows-desktop {
+  /* Windows specific styling — caption buttons, window chrome */
+}
+
+.platform-linux-desktop {
+  /* Linux specific styling — window manager hints */
+}
+
+/* ─────────────────── Theme System ─────────────────── */
+.theme-zai-light {
+  --color-bg: #f8f8f9;
+  --color-panel: #ffffff;
+  --color-border: #e1e1e6;
+  --color-text: #1e1e1e;
+  --color-text-dim: #6b6b76;
+  --color-brand: #3b82f6;
+  --color-green: #10b981;
+  --color-red: #ef4444;
+  --color-yellow: #eab308;
+  --color-accent: #6c8cff;
+}
+
+.theme-zai-dark {
+  --color-bg: #0d0e12;
+  --color-panel: #16171d;
+  --color-border: #26272f;
+  --color-text: #e6e6ea;
+  --color-text-dim: #8b8d98;
+  --color-brand: #3b82f6;
+  --color-green: #3ecf8e;
+  --color-red: #ff6b6b;
+  --color-yellow: #f5c451;
+  --color-accent: #6c8cff;
+}
+
+/* ─────────────────── UI Element Color Variables ─────────────────── */
+:root {
+  --color-brand: #3b82f6;        /* Primary brand color (blue-500) */
+  --color-bg: #0d0e12;           /* Main background */
+  --color-panel: #16171d;        /* Panel/surface background */
+  --color-border: #26272f;       /* Border color */
+  --color-text: #e6e6ea;         /* Primary text */
+  --color-text-dim: #8b8d98;     /* Dimmed text */
+  --color-green: #3ecf8e;        /* Success/green */
+  --color-red: #ff6b6b;          /* Error/red */
+  --color-yellow: #f5c451;       /* Warning/yellow */
+  --color-accent: #6c8cff;       /* Accent (purple-blue) */
+}
+
+/* ─────────────────── Core UI Element Classes ─────────────────── */
+.accent-body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.browser-use-viewport {
+  /* Container for web preview/browser interactions */
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.browser-use-operation-breathe {
+  animation: 0.9s cubic-bezier(.16, 1, .3, 1) both browser-use-operation-breathe;
+}
+
+@keyframes browser-use-operation-breathe {
+  0%, to {
+    opacity: .5;
+    transform: scale(.9);
+  }
+}
+
+.task-search-result-highlight {
+  animation: 1.2s ease-out both task-search-result-highlight;
+}
+
+@keyframes task-search-result-highlight {
+  0% {
+    background-color: color-mix(in oklab, var(--color-brand) 20%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-brand) 28%, transparent);
+  }
+}
+
+.task-title-marquee-track {
+  will-change: transform;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.workspace-remote-connecting-breathe {
+  animation: 2s ease-in-out infinite workspace-remote-connecting-breathe;
+}
+
+@keyframes workspace-remote-connecting-breathe {
+  0%, to {
+    background-color: color-mix(in oklab, var(--color-accent, #6c8cff) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent, #6c8cff) 10%, transparent);
+  }
+}
+
+.mcode-update-charge-progress {
+  position: relative;
+  overflow: hidden;
+}
+
+[data-slot="progress-indicator"]:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  animation: 1.15s cubic-bezier(.65, 0, .35, 1) infinite mcode-update-charge-sweep;
+  transform: translate(-120%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-accent, #6c8cff) 35%, transparent), transparent);
+}
+
+/* ─────────────────── Terminal Shell ─────────────────── */
+.terminal-xterm-shell {
+  background: var(--xterm-bg, var(--color-bg, #0a0a0a));
+  color: var(--xterm-fg, var(--color-text, #f4f4f5));
+  font-family: var(--mcode-mono, 'JetBrains Mono', 'SF Mono', monospace);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* ─────────────────── Scrollbar ─────────────────── */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─────────────────── PPTX Render Surface ─────────────────── */
+[data-mcode-pptx-render-surface] {
+  scrollbar-width: none;
+}
+
+[data-mcode-pptx-render-surface] ::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* ─────────────────── Markdown & Math ─────────────────── */
+.prose, .prose-sm {
+  /* Tailwind Typography for markdown content */
+  color: var(--color-text);
+}
+
+.prose pre {
+  background: #050505;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.katex, .katex-display {
+  /* LaTeX/Math rendering */
+  font-size: 1em;
+  line-height: 1.2;
+}
+
+/* ─────────────────── Startup Loading Animation ─────────────────── */
+#root {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+body.mcode-startup-ready #root {
+  opacity: 1;
+}
+
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.16s ease;
+  background: var(--color-bg, #0c0c0c);
+}
+
+body.mcode-startup-ready #loading {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.startup-logo-shell {
+  position: relative;
+  display: flex;
+  width: 96px;
+  height: 96px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #000000 0%, #151718 100%);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.2);
+}
+
+/* ─────────────────── Animation Duration & Timing Reference ─────────────────── */
+/* 900ms — mcode-stream-text-in (cubic-bezier 0.16,1,.3,1) — data-mcode-stream-animate */
+/* 900ms — mcode-stream-marker-in (cubic-bezier 0.16,1,.3,1) — data-mcode-stream-marker-animate */
+/* 300ms — mcode-collapsible-up (ease-in-out) — data-mcode-collapsible-animate-close */
+/* 300ms — mcode-collapsible-fade-out (ease-in-out) — child of collapsible */
+/* 1.15s — mcode-update-charge-sweep (cubic-bezier 0.65,0,.35,1) — infinite */
+/* 1.2s — task-search-result-highlight (ease-out) — search results */
+/* 0.9s — browser-use-operation-breathe (cubic-bezier .16,1,.3,1) — browser ops */
+/* Infinite — workspace-remote-connecting-breathe — remote workspace */
+/* 160ms — #root opacity transition (ease) — app startup */
+/* 720ms — startup-logo-pop (cubic-bezier 0.22,1,0.36,1) — logo shell */
+

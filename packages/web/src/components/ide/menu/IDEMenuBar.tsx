@@ -218,7 +218,15 @@ export function IDEMenuBar({
         {
           label: "New Window",
           shortcut: "Ctrl+Shift+N",
-          action: () => window.open(window.location.href, "_blank"),
+          action: () => {
+            if (window.mcodeElectron?.openExternal) {
+              window.mcodeElectron.openExternal(window.location.href).catch(() => {
+                window.open(window.location.href, "_blank");
+              });
+            } else {
+              window.open(window.location.href, "_blank");
+            }
+          },
         },
         { divider: true },
         {

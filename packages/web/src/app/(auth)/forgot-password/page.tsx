@@ -1,4 +1,4 @@
 "use client";
-import { ForgotPasswordPage } from "../../views/ForgotPasswordPage";
+import { ForgotPasswordPage } from "../../../components/pages/ForgotPasswordPage";
 export const dynamic = "force-dynamic";
 export default function Page() { return <ForgotPasswordPage />; }

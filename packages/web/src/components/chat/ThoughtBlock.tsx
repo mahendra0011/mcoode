@@ -9,7 +9,7 @@ export interface ThoughtBlockProps {
 }
 
 /**
- * ThoughtBlock — matches the reference ZCode pattern:
+ * ThoughtBlock — matches the reference mcode pattern:
  * while active: "Thinking..." with a brain-circuit icon (present tense,
  * no duration shown here — the overall turn duration lives in
  * WorkingHeader above).
@@ -39,8 +39,8 @@ export function ThoughtBlock({ content, done = false, startedAt }: ThoughtBlockP
   if (!done) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0', fontSize: 13 }}>
-        <BrainCircuit size={14} style={{ color: 'var(--zc-text-dim, #8b8d98)' }} />
-        <span style={{ fontWeight: 600, color: 'var(--zc-text, #e6e6ea)' }}>Thinking...</span>
+        <BrainCircuit size={14} style={{ color: 'var(--mcode-text-dim, #8b8d98)' }} />
+        <span style={{ fontWeight: 600, color: 'var(--mcode-text, #e6e6ea)' }}>Thinking...</span>
       </div>
     );
   }
@@ -58,12 +58,12 @@ export function ThoughtBlock({ content, done = false, startedAt }: ThoughtBlockP
           border: 'none',
           padding: 0,
           cursor: content ? 'pointer' : 'default',
-          color: 'var(--zc-text-dim, #8b8d98)',
+          color: 'var(--mcode-text-dim, #8b8d98)',
           fontSize: 13,
         }}
       >
         <CircleDashed size={13} />
-        <span style={{ fontWeight: 600, color: 'var(--zc-text, #e6e6ea)' }}>Thought</span>
+        <span style={{ fontWeight: 600, color: 'var(--mcode-text, #e6e6ea)' }}>Thought</span>
         <span>{`for ${durationLabel}`}</span>
         {content && (
           <motion.span animate={{ rotate: open ? 90 : 0 }} transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }} style={{ display: 'flex' }}>
@@ -86,7 +86,7 @@ export function ThoughtBlock({ content, done = false, startedAt }: ThoughtBlockP
               paddingLeft: 19,
               fontSize: 12.5,
               lineHeight: 1.6,
-              color: 'var(--zc-text-dim, #8b8d98)',
+              color: 'var(--mcode-text-dim, #8b8d98)',
               whiteSpace: 'pre-wrap',
             }}>
               {content}

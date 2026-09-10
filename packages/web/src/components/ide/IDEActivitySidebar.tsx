@@ -34,6 +34,7 @@ import type { IDEActivitySidebarProps } from "../../types/chat";
 import { useIDEStore } from "../../store/ideStore";
 import api from "../../lib/axios";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 /** Lucide icon is a React component accepting SVG props. */
 type LucideIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -170,9 +171,14 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
     } catch {}
   }, []);
 
+  const router = useRouter();
+
   const handleLogout = () => {
     localStorage.removeItem("mcode_tokens");
-    window.location.href = "/login";
+    window.dispatchEvent(new CustomEvent("mcode:auth:logout"));
+    if (!window.mcodeElectron) {
+      router.push("/login");
+    }
   };
 
   const setZoom = (z: number) => {
@@ -500,18 +506,125 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
             open={settingsMenuOpen}
             onClose={closeSettingsMenu}
             triggerRef={settingsBtnRef}
-            width={224}
+            width={260}
           >
-            <div className="px-3 py-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-wider border-b border-white/5">
-              Preferences
+            {/* User profile row */}
+            <div className="px-3 py-2 text-[13px] text-white/80 border-b border-white/5">
+              {userProfile?.name || userProfile?.email || "User"}{" "}
+              <span className="text-white/40">(Google Auth)</span>
             </div>
+
+            {/* Quick Settings Panel — highlighted */}
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsMenu();
+                useIDEStore.getState().setQuickSettingsOpen(true);
+              }}
+              className="w-full flex items-center px-3 py-1.5 text-left text-[13px] text-white bg-[#0078d4] hover:bg-[#106ebe] transition font-medium cursor-pointer"
+            >
+              Quick Settings Panel
+            </button>
+
+            {/* Advanced Settings (Mcode Settings) */}
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsMenu();
+                useIDEStore.getState().setAdvancedSettingsOpen(true);
+              }}
+              className="w-full flex items-center px-3 py-1.5 text-left text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            >
+              Advanced Settings
+            </button>
+
+            {/* Mcode General Settings */}
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsMenu();
+                useIDEStore.getState().setGeneralSettingsOpen(true);
+              }}
+              className="w-full flex items-center px-3 py-1.5 text-left text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            >
+              Mcode Settings
+            </button>
+
+            <div className="h-px bg-white/5 my-0.5" />
+
+            {/* Check for Updates */}
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsMenu();
+                toast.info("You're on the latest version!");
+              }}
+              className="w-full px-3 py-1.5 text-left text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            >
+              Check for Updates...
+            </button>
+
+            {/* Docs */}
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsMenu();
+                window.open("https://docs.mcode.dev", "_blank");
+              }}
+              className="w-full px-3 py-1.5 text-left text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            >
+              Docs
+            </button>
+
+            {/* Report Issue */}
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsMenu();
+                toast.info("Report Issue feature coming soon!");
+              }}
+              className="w-full px-3 py-1.5 text-left text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            >
+              Report Issue
+            </button>
+
+            {/* Changelog */}
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsMenu();
+                useIDEStore.getState().setReleaseNotesOpen(true);
+              }}
+              className="w-full px-3 py-1.5 text-left text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            >
+              Changelog
+            </button>
+
+            <div className="h-px bg-white/5 my-0.5" />
+
+            {/* Themes — with chevron */}
+            <button
+              type="button"
+              onClick={() => {
+                closeSettingsMenu();
+                openSettings("theme");
+              }}
+              className="w-full flex items-center justify-between px-3 py-1.5 text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+            >
+              <span>Themes</span>
+              <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+            </button>
+
+            <div className="h-px bg-white/5 my-0.5" />
+
+            {/* Settings */}
             <button
               type="button"
               onClick={() => {
                 closeSettingsMenu();
                 openSettings("permissions");
               }}
-              className="flex items-center justify-between px-3 py-1.5 text-left text-white hover:bg-white/10 transition font-medium cursor-pointer"
+              className="flex items-center justify-between w-full px-3 py-1.5 text-left text-white hover:bg-white/10 transition font-medium cursor-pointer"
             >
               <span className="flex items-center gap-2 text-emerald-400">
                 <Settings className="w-3.5 h-3.5" />
@@ -519,29 +632,36 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
               </span>
               <kbd className="text-[10px] text-white/40 font-mono">Ctrl+,</kbd>
             </button>
-            <div className="h-px bg-white/5 my-1" />
+
+            {/* Command Palette */}
             <button
               type="button"
               onClick={() => {
                 closeSettingsMenu();
                 toggleCommandPalette();
               }}
-              className="flex items-center justify-between px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className="flex items-center justify-between w-full px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >
               <span>Command Palette...</span>
               <kbd className="text-[10px] text-white/40 font-mono">Ctrl+Shift+P</kbd>
             </button>
+
+            {/* Keyboard Shortcuts */}
             <button
               type="button"
               onClick={() => {
                 closeSettingsMenu();
                 setShortcutsOpen(true);
               }}
-              className="flex items-center justify-between px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className="flex items-center justify-between w-full px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >
               <span>Keyboard Shortcuts</span>
               <kbd className="text-[10px] text-white/40 font-mono">Ctrl+K Ctrl+S</kbd>
             </button>
+
+            <div className="h-px bg-white/5 my-0.5" />
+
+            {/* Welcome Page */}
             <button
               type="button"
               onClick={() => {
@@ -549,18 +669,19 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
                 setWelcomeOpen(true);
                 setActivePath(null);
               }}
-              className="px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className="w-full px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >
               Welcome Page
             </button>
-            <div className="h-px bg-white/5 my-1" />
+
+            {/* About mcode */}
             <button
               type="button"
               onClick={() => {
                 closeSettingsMenu();
                 setAboutOpen(true);
               }}
-              className="px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className="w-full px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >
               About mcode
             </button>

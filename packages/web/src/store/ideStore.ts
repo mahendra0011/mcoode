@@ -150,6 +150,15 @@ interface IDEState {
   isTasksOpen: boolean;
   setTasksOpen: (open: boolean) => void;
 
+  isQuickSettingsOpen: boolean;
+  setQuickSettingsOpen: (open: boolean) => void;
+
+  isAdvancedSettingsOpen: boolean;
+  setAdvancedSettingsOpen: (open: boolean) => void;
+
+  isGeneralSettingsOpen: boolean;
+  setGeneralSettingsOpen: (open: boolean) => void;
+
   // Source control in-browser snapshots & commit history
   lastCommitSnapshots: Record<string, string>;
   commitHistory: Array<{ message: string; timestamp: number }>;
@@ -462,6 +471,15 @@ export const useIDEStore = create<IDEState>()((set, get) => ({
 
   isTasksOpen: false,
   setTasksOpen: (isTasksOpen) => set({ isTasksOpen }),
+
+  isQuickSettingsOpen: false,
+  setQuickSettingsOpen: (isQuickSettingsOpen) => set({ isQuickSettingsOpen }),
+
+  isAdvancedSettingsOpen: false,
+  setAdvancedSettingsOpen: (isAdvancedSettingsOpen) => set({ isAdvancedSettingsOpen }),
+
+  isGeneralSettingsOpen: false,
+  setGeneralSettingsOpen: (isGeneralSettingsOpen) => set({ isGeneralSettingsOpen }),
 
   lastCommitSnapshots: {},
   commitHistory: [],

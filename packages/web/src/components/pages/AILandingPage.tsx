@@ -1,14 +1,14 @@
 import React from 'react';
-import { Layout } from '../components/layout/Layout';
-import { AIHero } from '../components/sections/AIHero';
-import { AIChatPreview } from '../components/sections/AIChatPreview';
-import { AgentFeature } from '../components/sections/AgentFeature';
-import { LogoTicker } from '../components/sections/LogoTicker';
-import { FeaturesGrid } from '../components/sections/FeaturesGrid';
-import { Testimonials } from '../components/sections/Testimonials';
-import { HowItWorks } from '../components/sections/HowItWorks';
-import { Pricing } from '../components/sections/Pricing';
-import robotBg from '../assets/ai-bg.png';
+import { Layout } from '../../components/layout/Layout';
+import { AIHero } from '../../components/sections/AIHero';
+import { AIChatPreview } from '../../components/sections/AIChatPreview';
+import { AgentFeature } from '../../components/sections/AgentFeature';
+import { LogoTicker } from '../../components/sections/LogoTicker';
+import { FeaturesGrid } from '../../components/sections/FeaturesGrid';
+import { Testimonials } from '../../components/sections/Testimonials';
+import { HowItWorks } from '../../components/sections/HowItWorks';
+import { Pricing } from '../../components/sections/Pricing';
+import robotBg from '../../assets/ai-bg.png';
 
 export function AILandingPage() {
   return (

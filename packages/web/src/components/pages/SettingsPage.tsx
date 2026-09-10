@@ -6,9 +6,25 @@ const MotionLink = motion.create(Link);
 import {
   Shield, Key, User, Github, ArrowLeft, Loader2,
   Plus, Trash2, Check, AlertTriangle, Eye, EyeOff, ChevronDown,
-  Palette, Globe, Radar, Zap, X, Box, Plug, RefreshCw, Edit2, BarChart2, Calendar, Clock, Flame, Activity, MessageSquare, Search
+  Palette, Globe, Radar, Zap, X, Box, Plug, RefreshCw, Edit2, BarChart2, Calendar, Clock, Flame, Activity, MessageSquare, Search,
+  Server, Settings, Settings2, Rocket, Workflow, Package, Terminal, BookOpen, Sparkles, TestTube, GitBranch
 } from 'lucide-react';
-import api from '../lib/axios';
+import api from '../../lib/axios';
+import { connectOAuth } from '../../lib/electron-nav';
+// mcode reference tabs — expose the full mcode knowledge base in Settings
+import { McodeArchitectureTab } from '../../components/mcode/McodeArchitectureTab';
+import { McodeConfigTab } from '../../components/mcode/McodeConfigTab';
+import { McodeSettingsTab } from '../../components/mcode/McodeSettingsTab';
+import { McodeStartupTab } from '../../components/mcode/McodeStartupTab';
+import { McodeTurnMachineTab } from '../../components/mcode/McodeTurnMachineTab';
+import { McodeHooksTab } from '../../components/mcode/McodeHooksTab';
+import { McodePluginsTab } from '../../components/mcode/McodePluginsTab';
+import { McodeMcpTab } from '../../components/mcode/McodeMcpTab';
+import { McodeSkillsTab } from '../../components/mcode/McodeSkillsTab';
+import { McodeAnimationsTab } from '../../components/mcode/McodeAnimationsTab';
+import { McodeTestsTab } from '../../components/mcode/McodeTestsTab';
+import { McodeDependenciesTab } from '../../components/mcode/McodeDependenciesTab';
+import { McodeGitToolsTab } from '../../components/mcode/McodeGitToolsTab';
 
 
 const ACCENT_COLORS = [
@@ -30,6 +46,21 @@ const TABS = [
   { id: 'godmode', label: 'God-Mode', icon: Zap },
   { id: 'account', label: 'Account', icon: User },
   { id: 'connections', label: 'Connections', icon: Github },
+  // ── mcode knowledge base tabs ──────────────────────────────
+  { id: 'mcode-architecture', label: 'Architecture', icon: Server },
+  { id: 'mcode-config', label: 'Configuration', icon: Settings },
+  { id: 'mcode-settings', label: 'Settings Reference', icon: Settings2 },
+  { id: 'mcode-startup', label: 'Startup Flow', icon: Rocket },
+  { id: 'mcode-turn-machine', label: 'Turn Machine', icon: Workflow },
+  { id: 'mcode-hooks', label: 'Hooks', icon: Shield },
+  { id: 'mcode-plugins', label: 'Plugins', icon: Package },
+  { id: 'mcode-mcp', label: 'MCP Servers', icon: Terminal },
+  { id: 'mcode-skills', label: 'Skills', icon: BookOpen },
+  { id: 'mcode-animations', label: 'Animations', icon: Sparkles },
+  { id: 'mcode-tests', label: 'Tests', icon: TestTube },
+  // ── mcode tools & dependencies reference ─────────────────────
+  { id: 'mcode-deps', label: 'Dependencies', icon: Package },
+  { id: 'mcode-git', label: 'Git Tools', icon: GitBranch },
 ];
 
 /* ─────────────────── PERMISSIONS TAB ─────────────────── */
@@ -789,7 +820,8 @@ function ConnectionsTab() {
 
   const handleConnectGithub = () => {
     const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
-    window.location.href = `/api/v1/auth/github?token=${tokens.access || ''}`;
+    const url = `/api/v1/auth/github?token=${tokens.access || ''}`;
+    connectOAuth(url);
   };
 
   if (loading) {
@@ -890,10 +922,10 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden">
+    <div className="flex h-screen w-screen bg-[var(--mcode-bg,#0d0e12)] text-[var(--mcode-text,#e6e6ea)] font-sans overflow-hidden">
 
       {/* LEFT SIDEBAR */}
-      <aside className="w-64 flex-shrink-0 bg-[#0e0e0e] border-r border-white/5 flex flex-col">
+      <aside className="w-64 flex-shrink-0 bg-[var(--mcode-panel,#16171d)] border-r border-[var(--mcode-border,#26272f)] flex flex-col">
         {/* Header */}
         <motion.div
           className="p-5 border-b border-white/5"
@@ -943,7 +975,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? 'bg-white/10 text-white shadow-sm'
+                    ? 'bg-[color-mix(in_oklab,var(--mcode-green,#3ecf8e)_15%,transparent)] text-white border border-[color-mix(in_oklab,var(--mcode-green,#3ecf8e)_30%,transparent)]'
                     : 'text-white/40 hover:text-white/70 hover:bg-white/5'
                 }`}
                 initial={{ opacity: 0, x: -10 }}
@@ -956,7 +988,7 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
                   animate={{ scale: isActive ? 1.1 : 1 }}
                   transition={{ type: 'spring', stiffness: 300 }}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-400' : ''}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-[var(--mcode-green,#3ecf8e)]' : 'text-white/40'}`} />
                 </motion.div>
                 {tab.label}
               </motion.button>
@@ -1003,6 +1035,20 @@ export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; in
           {activeTab === 'godmode' && <GodModeTab settings={settings} onUpdate={updateGeneric} />}
           {activeTab === 'account' && <AccountTab />}
           {activeTab === 'connections' && <ConnectionsTab />}
+          {/* mcode knowledge base tabs */}
+          {activeTab === 'mcode-architecture' && <McodeArchitectureTab />}
+          {activeTab === 'mcode-config' && <McodeConfigTab />}
+          {activeTab === 'mcode-settings' && <McodeSettingsTab />}
+          {activeTab === 'mcode-startup' && <McodeStartupTab />}
+          {activeTab === 'mcode-turn-machine' && <McodeTurnMachineTab />}
+          {activeTab === 'mcode-hooks' && <McodeHooksTab />}
+          {activeTab === 'mcode-plugins' && <McodePluginsTab />}
+          {activeTab === 'mcode-mcp' && <McodeMcpTab />}
+          {activeTab === 'mcode-skills' && <McodeSkillsTab />}
+          {activeTab === 'mcode-animations' && <McodeAnimationsTab />}
+          {activeTab === 'mcode-tests' && <McodeTestsTab />}
+          {activeTab === 'mcode-deps' && <McodeDependenciesTab />}
+          {activeTab === 'mcode-git' && <McodeGitToolsTab />}
         </div>
       </motion.main>
     </div>

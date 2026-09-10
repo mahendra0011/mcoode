@@ -1,11 +1,11 @@
 import React from 'react';
-import { Layout } from '../components/layout/Layout';
-import { CLIHero } from '../components/sections/CLIHero';
-import { CLIDemoPreview } from '../components/sections/CLIDemoPreview';
-import { FeaturesGrid } from '../components/sections/FeaturesGrid';
-import { HowItWorks } from '../components/sections/HowItWorks';
-import { Pricing } from '../components/sections/Pricing';
-import cliBg from '../assets/cli-bg.png';
+import { Layout } from '../../components/layout/Layout';
+import { CLIHero } from '../../components/sections/CLIHero';
+import { CLIDemoPreview } from '../../components/sections/CLIDemoPreview';
+import { FeaturesGrid } from '../../components/sections/FeaturesGrid';
+import { HowItWorks } from '../../components/sections/HowItWorks';
+import { Pricing } from '../../components/sections/Pricing';
+import cliBg from '../../assets/cli-bg.png';
 
 export function CLIPage() {
   return (

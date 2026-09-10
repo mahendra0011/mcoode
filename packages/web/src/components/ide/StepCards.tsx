@@ -1,6 +1,8 @@
-import React from 'react';
-import { ToolCallCard, TerminalOutput, WroteFile, DiffBlock } from '../chat/ZCodeUX';
+import React, { useState } from 'react';
+import { ToolCallCard, TerminalOutput, WroteFile, DiffBlock } from '../chat/mcodeUX';
 import { WebSearchAnimation, WebFetchAnimation } from '../chat/SearchAnimation';
+import { SpinnerBlock } from '../chat/SpinnerBlock';
+import { ReactionBurst } from '../chat/ReactionBurst';
 import type { ChatMessage, ToolArgs } from '../../types/chat';
 
 export interface StepCardProps {
@@ -105,17 +107,32 @@ export function StepCard({ msg, undo }: StepCardProps) {
         active={isRunning}
         defaultOpen={isFailed || (!isDone && !!content) || msg.tool === 'write_file' || msg.tool === 'edit_file'}
       >
-        {content || (
-          isFailed && msg.error ? (
-            <div className="text-red-400/80 text-xs whitespace-pre-wrap break-words">
-              {msg.error}
+          {content || (
+            isFailed && msg.error ? (
+              <div className="text-red-400/80 text-xs whitespace-pre-wrap break-words">
+                {msg.error}
+              </div>
+            ) : isRunning ? (
+              <div className="flex items-center gap-2 text-white/40 text-xs">
+                <SpinnerBlock active={true} label="Running…" />
+                <span>Waiting for output…</span>
+              </div>
+            ) : (
+              <div className="text-white/40 italic text-xs">No output.</div>
+            )
+          )}
+
+          {/* Reaction burst on successful tool completion */}
+          {isDone && !isFailed && (
+            <div className="mt-1">
+              <ReactionBurst emoji="✓" show={true} />
             </div>
-          ) : (
-            <div className="text-white/40 italic text-xs">
-              {isRunning ? 'Waiting for output...' : 'No output.'}
+          )}
+          {isFailed && (
+            <div className="mt-1">
+              <ReactionBurst emoji="✗" show={true} />
             </div>
-          )
-        )}
+          )}
       </ToolCallCard>
     </div>
   );

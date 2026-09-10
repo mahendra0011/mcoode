@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { BrainCircuit } from "lucide-react";
-import { ToolCallCard, StepPulse } from "./ZCodeUX";
+import { ToolCallCard, StepPulse } from "./mcodeUX";
 
 /**
  * AgentActionSequence — compact agent "working" indicator for the IDE chat pane.
  *
- * Combines three ZCode patterns into one cohesive block:
+ * Combines three mcode patterns into one cohesive block:
  * 1. StepPulse — emerald pulsing indicator for active work
  * 2. Elapsed timer — "Working for Xs" (mirrors WorkingHeader)
  * 3. ToolCallCard — "Exploring context" with collapsible animation
@@ -35,8 +35,8 @@ export const AgentActionSequence = () => {
       {/* Header row: pulse dot + "Working for Xs" */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
         <StepPulse active={true} />
-        <BrainCircuit size={14} style={{ color: "var(--zc-text-dim, #8b8d98)" }} />
-        <span style={{ fontWeight: 500, color: "var(--zc-text-dim, #8b8d98)" }}>
+        <BrainCircuit size={14} style={{ color: "var(--mcode-text-dim, #8b8d98)" }} />
+        <span style={{ fontWeight: 500, color: "var(--mcode-text-dim, #8b8d98)" }}>
           Working for {seconds}s
         </span>
       </div>
@@ -49,7 +49,7 @@ export const AgentActionSequence = () => {
         active={true}
         defaultOpen={true}
       >
-        <div style={{ color: "var(--zc-text-dim, #8b8d98)", fontSize: 12.5, fontFamily: "var(--zc-mono)" }}>
+        <div style={{ color: "var(--mcode-text-dim, #8b8d98)", fontSize: 12.5, fontFamily: "var(--mcode-mono)" }}>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

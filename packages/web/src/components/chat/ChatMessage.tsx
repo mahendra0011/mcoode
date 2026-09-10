@@ -5,8 +5,8 @@ import { StepCard } from "../ide/StepCards";
 import type { ChatMessageProps } from "../../types/chat";
 
 /**
- * ChatMessage — Claude-style message with ZCode animation patterns.
- * Uses cubic-bezier(.16, 1, .3, 1) easing (ZCode standard) with stagger
+ * ChatMessage — Claude-style message with mcode animation patterns.
+ * Uses cubic-bezier(.16, 1, .3, 1) easing (mcode standard) with stagger
  * delays via idx * 0.02. Streaming cursor blinks at 1s intervals.
  *
  * Props (see ../../types/chat):
@@ -63,12 +63,12 @@ export function ChatMessage({ msg, idx, size = "md", isStreaming, undo, isNormal
         ) : null}
         <div className="flex-1 min-w-0">
           {msg.text && (
-            <div data-zcode-tool-stream-animate={showCursor ? "true" : undefined}>
+            <div data-mcode-tool-stream-animate={showCursor ? "true" : undefined}>
               <MessageContent msg={msg} text={msg.text} size={size} isStreaming={showCursor}>
                 {showCursor && (
                   <motion.span
-                    data-zcode-stream-marker-animate="true"
-                    style={{ ["--zcode-stream-animation-delay"]: "0s" } as MotionStyle}
+                    data-mcode-stream-marker-animate="true"
+                    style={{ ["--mcode-stream-animation-delay"]: "0s" } as MotionStyle}
                     className="inline-block w-1.5 h-3.5 ml-0.5 bg-emerald-400 align-middle"
                     animate={{ opacity: [0.3, 1, 0.3] }}
                     transition={{ duration: 1, repeat: Infinity }}

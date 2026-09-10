@@ -19,10 +19,14 @@
  */
 import axios from 'axios';
 import { getTokens, setTokens } from './api';
+import { getBackendUrl } from './electron-nav';
 
 const api = axios.create({
-  // Vite dev server proxies /api → http://localhost:3100
-  baseURL: '/', // rely on Vite proxy for /api paths
+  // In Electron, point directly at the child-process backend.
+  // In the browser, Vite dev server proxies /api → http://localhost:3100.
+  baseURL: typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
+    ? window.mcodeElectron.backendUrl
+    : (process.env.NEXT_PUBLIC_API_URL || '/'),
   timeout: 8000, // 8s default — slow external provider calls can override
   // NOTE: Do NOT set a default Content-Type here. When a FormData body is
   // passed (e.g. zip uploads, file attachments), axios must be allowed to
@@ -87,7 +91,12 @@ api.interceptors.response.use(
       rejectList.forEach((req) => req.reject(error));
       if (typeof window !== 'undefined') {
         localStorage.removeItem('mcode_tokens');
-        window.location.href = '/login';
+        // Dispatch event so the React app can handle SPA navigation;
+        // fall back to hard redirect for non-React contexts or browser.
+        window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
+        if (!window.mcodeElectron) {
+          window.location.href = '/login';
+        }
       }
       return Promise.reject(error);
     }
@@ -96,7 +105,13 @@ api.interceptors.response.use(
       const refreshRes = await axios.post(
         '/api/v1/auth/refresh',
         { refresh },
-        { baseURL: '/', timeout: 15000, headers: { 'Content-Type': 'application/json' } }
+        {
+          baseURL: typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
+            ? window.mcodeElectron.backendUrl
+            : (process.env.NEXT_PUBLIC_API_URL || '/'),
+          timeout: 15000,
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
 
       if (refreshRes.data && refreshRes.data.access) {
@@ -120,7 +135,10 @@ api.interceptors.response.use(
       rejectList.forEach((req) => req.reject(error));
       if (typeof window !== 'undefined') {
         localStorage.removeItem('mcode_tokens');
-        window.location.href = '/login';
+        window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
+        if (!window.mcodeElectron) {
+          window.location.href = '/login';
+        }
       }
       return Promise.reject(error);
     } finally {

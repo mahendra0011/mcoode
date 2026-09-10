@@ -1,56 +1,62 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useAppDispatch, useAppSelector } from '../store';
+import { useAppDispatch, useAppSelector } from '../../store';
 import {
   Folder, Puzzle, Github, Crown, Settings,
   ChevronDown, Plus, Sparkles, ArrowUp, Square,
   UploadCloud, Download, GitBranch, Share, Loader2, Slash, Zap,
-  AlertCircle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut, Hash, Minimize2, ListFilter, Archive
+  AlertCircle, AlertTriangle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut, Hash, Minimize2, ListFilter, Archive,
+  PanelLeft, PanelBottom, PanelRight, LayoutGrid, Bell, BellDot,
+  Workflow
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { McodeTurnMachineVisualization } from '../../components/mcode/McodeTurnMachineVisualization';
 import { Group as ResizablePanelGroup, Panel as ResizablePanel, Separator as ResizablePanelHandle, usePanelRef } from 'react-resizable-panels';
 import Link from 'next/link'; import { useRouter, useSearchParams } from 'next/navigation';
-import { useChatSocket } from '../hooks/useChatSocket';
-import api from '../lib/axios';
-import { setMode, addMessage, clearChat, setGodMode, resetStreaming } from '../store/chatSlice';
-import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../lib/slashCommands';
+import { useChatSocket } from '../../hooks/useChatSocket';
+import api from '../../lib/axios';
+import { setMode, addMessage, clearChat, setGodMode, resetStreaming } from '../../store/chatSlice';
+import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../../lib/slashCommands';
 
-import { FileTree } from '../components/ide/FileTree';
-import { ExplorerPanel } from '../components/ide/ExplorerPanel';
-import { SearchPanel } from '../components/ide/SearchPanel';
-import { SourceControlPanel } from '../components/ide/SourceControlPanel';
-import { RunDebugPanel } from '../components/ide/RunDebugPanel';
-import { LanguagesPanel } from '../components/ide/LanguagesPanel';
-import { TestingPanel } from '../components/ide/TestingPanel';
-import { RemoteExplorerPanel } from '../components/ide/RemoteExplorerPanel';
-import { AndroidEmulatorsPanel } from '../components/ide/AndroidEmulatorsPanel';
-import { ContainersPanel } from '../components/ide/ContainersPanel';
-import { EditorPane } from '../components/ide/EditorPane';
-import { BottomPanel } from '../components/ide/BottomPanel';
-import { WorkspaceModals } from '../components/ide/WorkspaceModals';
-import { TodoCard } from '../components/ide/TodoCard';
-import { PermissionModal } from '../components/ide/PermissionModal';
-import { IDEActivitySidebar } from '../components/ide/IDEActivitySidebar';
-import { useIDEStore } from '../store/ideStore';
-import { IDEMenuBar } from '../components/ide/menu/IDEMenuBar';
-import { QuickOpenPalette } from '../components/ide/menu/QuickOpenPalette';
-import { SymbolPalette } from '../components/ide/menu/SymbolPalette';
-import { GoToLineModal } from '../components/ide/menu/GoToLineModal';
-import { ShortcutsReferenceModal } from '../components/ide/menu/ShortcutsReferenceModal';
-import { AboutModal } from '../components/ide/menu/AboutModal';
-import { ReleaseNotesModal } from '../components/ide/menu/ReleaseNotesModal';
-import { TasksModal } from '../components/ide/menu/TasksModal';
+import { FileTree } from '../../components/ide/FileTree';
+import { ExplorerPanel } from '../../components/ide/ExplorerPanel';
+import { SearchPanel } from '../../components/ide/SearchPanel';
+import { SourceControlPanel } from '../../components/ide/SourceControlPanel';
+import { RunDebugPanel } from '../../components/ide/RunDebugPanel';
+import { LanguagesPanel } from '../../components/ide/LanguagesPanel';
+import { TestingPanel } from '../../components/ide/TestingPanel';
+import { RemoteExplorerPanel } from '../../components/ide/RemoteExplorerPanel';
+import { AndroidEmulatorsPanel } from '../../components/ide/AndroidEmulatorsPanel';
+import { ContainersPanel } from '../../components/ide/ContainersPanel';
+import { EditorPane } from '../../components/ide/EditorPane';
+import { BottomPanel } from '../../components/ide/BottomPanel';
+import { WorkspaceModals } from '../../components/ide/WorkspaceModals';
+import { TodoCard } from '../../components/ide/TodoCard';
+import { PermissionModal } from '../../components/ide/PermissionModal';
+import { IDEActivitySidebar } from '../../components/ide/IDEActivitySidebar';
+import { useIDEStore } from '../../store/ideStore';
+import { IDEMenuBar } from '../../components/ide/menu/IDEMenuBar';
+import { QuickOpenPalette } from '../../components/ide/menu/QuickOpenPalette';
+import { SymbolPalette } from '../../components/ide/menu/SymbolPalette';
+import { GoToLineModal } from '../../components/ide/menu/GoToLineModal';
+import { ShortcutsReferenceModal } from '../../components/ide/menu/ShortcutsReferenceModal';
+import { AboutModal } from '../../components/ide/menu/AboutModal';
+import { ReleaseNotesModal } from '../../components/ide/menu/ReleaseNotesModal';
+import { TasksModal } from '../../components/ide/menu/TasksModal';
+import { QuickSettingsPanel } from '../../components/ide/QuickSettingsPanel';
+import { AdvancedSettingsModal } from '../../components/ide/AdvancedSettingsModal';
+import { GeneralSettingsModal } from '../../components/ide/GeneralSettingsModal';
 import { SettingsPage } from './SettingsPage';
 import { toast } from 'sonner';
-import ExtensionsMarketplace from '../components/ExtensionsMarketplace';
-import editorApi from '../lib/extensions/editorApi';
-import { ModelSelector } from '../components/ide/ModelSelector';
-import { SparkleButton } from '../components/ide/SparkleButton';
-import { WaveProgress } from '../components/ide/WaveProgress';
-import { ChatMessage } from '../components/chat/ChatMessage';
-import { ThoughtBlock } from '../components/chat/ThoughtBlock';
-import { WorkingHeader } from '../components/chat/WorkingHeader';
-import { ThinkingIndicator } from '../components/chat/ThinkingIndicator';
-import { AgentActionSequence } from '../components/chat/AgentActionSequence';
+import ExtensionsMarketplace from '../../components/ExtensionsMarketplace';
+import editorApi from '../../lib/extensions/editorApi';
+import { ModelSelector } from '../../components/ide/ModelSelector';
+import { SparkleButton } from '../../components/ide/SparkleButton';
+import { WaveProgress } from '../../components/ide/WaveProgress';
+import { ChatMessage } from '../../components/chat/ChatMessage';
+import { ThoughtBlock } from '../../components/chat/ThoughtBlock';
+import { WorkingHeader } from '../../components/chat/WorkingHeader';
+import { ThinkingIndicator } from '../../components/chat/ThinkingIndicator';
+import { AgentActionSequence } from '../../components/chat/AgentActionSequence';
 
 export function AIChatPage() {
   const dispatch = useAppDispatch();
@@ -67,6 +73,7 @@ export function AIChatPage() {
   const { messages, keysError, isStreaming, mode, plan, permissionRequest, models, selectedModel, godMode, waves, subagents, buildSummary, toasts: serverToasts } = useAppSelector(state => state.chat);
   const { send, interrupt, answerPermission, undo, sendTerminalCommand, reloadModels } = useChatSocket(activeWorkspaceId);
   const [prompt, setPrompt] = useState('');
+  const [showTurnMachine, setShowTurnMachine] = useState(false);
 
   // IDE layout toggles live in the Zustand store so the global keyboard
   // shortcuts (Ctrl+B / Ctrl+`) can drive them from anywhere. Read
@@ -279,7 +286,10 @@ export function AIChatPage() {
 
   const handleLogout = () => {
     localStorage.removeItem('mcode_tokens');
-    window.location.href = '/login';
+    window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
+    if (!window.mcodeElectron) {
+      router.push('/login');
+    }
   };
 	const [isModalsOpen, setIsModalsOpen] = useState(false);
 	const [githubAccount, setGithubAccount] = useState<any>(null);
@@ -612,7 +622,14 @@ export function AIChatPage() {
 
   const handleGithubConnect = () => {
     const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
-    window.location.href = `/api/v1/auth/github?token=${encodeURIComponent(tokens.access || '')}`;
+    const url = `/api/v1/auth/github?token=${encodeURIComponent(tokens.access || '')}`;
+    if (window.mcodeElectron?.openOAuthPopup) {
+      window.mcodeElectron.openOAuthPopup(url).catch(() => {
+        window.location.href = url;
+      });
+    } else {
+      window.location.href = url;
+    }
   };
 
   // open-files state + tree-refresh now live in useIDEStore (FileTree/EditorPane read them directly).
@@ -808,6 +825,24 @@ export function AIChatPage() {
             {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
             <span className="hidden sm:inline">GitHub</span>
           </motion.button>
+          {/* Turn Machine — only in AI Code Agent (Chat) section, not Editor */}
+          {(activeTab === 'Chat' || activeTab === 'AI Code Assistant') && (
+            <motion.button
+              type="button"
+              onClick={() => setShowTurnMachine(!showTurnMachine)}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition cursor-pointer ${
+                showTurnMachine
+                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
+                  : 'bg-[#121212] text-white/50 border-white/5 hover:text-white hover:bg-white/10'
+              }`}
+              title="Show mcode Turn Machine"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <Workflow className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Turn Machine</span>
+            </motion.button>
+          )}
         </div>
       </header>
 
@@ -1756,6 +1791,83 @@ export function AIChatPage() {
                 )}
                 </ResizablePanelGroup>
 
+                {/* VS Code-style Status Bar */}
+                {!zenMode && (
+                  <div className="h-[22px] flex items-center justify-between bg-[#007acc] text-white text-[11px] px-2 select-none flex-shrink-0 z-30">
+                    {/* Left side */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => useIDEStore.getState().setActiveActivityBar('source-control')}
+                        className="flex items-center gap-1 px-1 hover:bg-white/20 rounded transition cursor-pointer h-full"
+                        title={`Branch: ${activeBranch}`}
+                      >
+                        <GitBranch className="w-3 h-3" />
+                        <span>{activeBranch || 'main'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 px-1 hover:bg-white/20 rounded transition cursor-pointer h-full"
+                        title="0 Errors, 0 Warnings"
+                      >
+                        <AlertCircle className="w-3 h-3" />
+                        <span>0</span>
+                        <AlertTriangle className="w-3 h-3 ml-0.5" />
+                        <span>0</span>
+                      </button>
+                    </div>
+                    {/* Right side — Layout Controls */}
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => useIDEStore.getState().setActivePanelTab('terminal')}
+                        className="flex items-center gap-1 px-1 hover:bg-white/20 rounded transition cursor-pointer h-full"
+                        title="Layout"
+                      >
+                        <LayoutGrid className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const s = useIDEStore.getState();
+                          if (s.isSidebarOpen) {
+                            s.setSidebarOpen(false);
+                          } else {
+                            s.setSidebarOpen(true);
+                          }
+                        }}
+                        className={`flex items-center px-1 hover:bg-white/20 rounded transition cursor-pointer h-full ${isSidebarOpen ? 'bg-white/15' : ''}`}
+                        title="Toggle Primary Side Bar"
+                      >
+                        <PanelLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => useIDEStore.getState().toggleTerminal()}
+                        className={`flex items-center px-1 hover:bg-white/20 rounded transition cursor-pointer h-full ${isTerminalOpen ? 'bg-white/15' : ''}`}
+                        title="Toggle Panel"
+                      >
+                        <PanelBottom className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => useIDEStore.getState().toggleSecondarySideBar()}
+                        className={`flex items-center px-1 hover:bg-white/20 rounded transition cursor-pointer h-full ${secondarySideBarVisible ? 'bg-white/15' : ''}`}
+                        title="Toggle Secondary Side Bar"
+                      >
+                        <PanelRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center px-1 hover:bg-white/20 rounded transition cursor-pointer h-full ml-1"
+                        title="No Notifications"
+                      >
+                        <Bell className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {zenMode && (
                   <button
                     onClick={() => setZenMode(false)}
@@ -2151,6 +2263,44 @@ export function AIChatPage() {
       <AboutModal />
       <ReleaseNotesModal />
       <TasksModal />
+      <QuickSettingsPanel />
+      <AdvancedSettingsModal />
+      <GeneralSettingsModal />
+
+      {/* mcode Turn Machine — live overlay for AI Code Assistant (UI side) */}
+      <AnimatePresence>
+        {showTurnMachine && (
+          <motion.div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] overflow-y-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowTurnMachine(false)}
+          >
+            <motion.div
+              className="absolute inset-0 flex items-center justify-center p-4"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="max-h-[90vh] overflow-y-auto">
+                <McodeTurnMachineVisualization
+                  state={{
+                    currentPhase: isStreaming ? 'streaming' : (mode === 'agent' ? 'executing_tools' : 'idle'),
+                    transitions: [],
+                    waves: godMode ? waves : undefined,
+                    subagents: godMode ? subagents : undefined,
+                  }}
+                  showOverlay={true}
+                  onClose={() => setShowTurnMachine(false)}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

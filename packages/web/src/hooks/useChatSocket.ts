@@ -40,13 +40,13 @@ import {
 
 let socketSingleton: Socket | null = null;
 
-function getSocket(): Socket {
+export function getSocket(): Socket {
   const token = getToken() || '';
   if (!socketSingleton || socketSingleton.disconnected) {
     const backendUrl =
-      typeof window !== 'undefined'
-        ? (process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:3100`)
-        : 'http://localhost:3100';
+      typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
+        ? window.mcodeElectron.backendUrl
+        : (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:3100` : 'http://localhost:3100'));
 
     socketSingleton = io(backendUrl, {
       path: '/live',

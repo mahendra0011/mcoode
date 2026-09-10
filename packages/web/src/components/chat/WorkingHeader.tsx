@@ -29,11 +29,11 @@ export function WorkingHeader({ done = false }: WorkingHeaderProps) {
     <div
       style={{
         fontSize: 13,
-        color: 'var(--zc-accent, #6c8cff)',
+        color: 'var(--mcode-accent, #6c8cff)',
         fontWeight: 500,
         paddingBottom: 8,
         marginBottom: 8,
-        borderBottom: '1px solid var(--zc-border, #26272f)',
+        borderBottom: '1px solid var(--mcode-border, #26272f)',
       }}
     >
       Working for {label}

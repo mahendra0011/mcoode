@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link'; import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Mail, Clock } from 'lucide-react';
-import robotBg from '../assets/robot-bg-new.png';
-import api from '../lib/axios';
+import robotBg from '../../assets/robot-bg-new.png';
+import api from '../../lib/axios';
 
 const MotionLink = motion.create(Link);
 

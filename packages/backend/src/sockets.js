@@ -3,9 +3,78 @@ import { verifyToken } from './auth.js';
 import { db } from './db.js';
 import { SOCKET } from '@mcode/shared';
 import { ChatSession } from './chat-session.js';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+import { mkdir } from 'node:fs/promises';
+import pty from 'node-pty';
 
 // Per-socket chat sessions (web clients only)
 const chatSessions = new Map();
+
+// Per-socket PTY terminal sessions: Map<socketId, Map<terminalId, ptyProcess>>
+const ptySessionsMap = new Map();
+
+/**
+ * Detect available shells on the current OS.
+ * Returns an array of { id, label, path } objects.
+ */
+function detectShells() {
+  const isWin = process.platform === 'win32';
+  const shells = [];
+
+  if (isWin) {
+    // PowerShell (always available on Windows)
+    shells.push({ id: 'powershell', label: 'PowerShell', path: 'powershell.exe' });
+    // Try PowerShell 7+ (pwsh)
+    try {
+      const pwshPath = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe');
+      if (fs.existsSync(pwshPath)) {
+        shells.push({ id: 'pwsh', label: 'PowerShell 7', path: pwshPath });
+      }
+    } catch {}
+    // Command Prompt
+    shells.push({ id: 'cmd', label: 'Command Prompt', path: 'cmd.exe' });
+    // Git Bash (if installed)
+    const gitBashPaths = [
+      path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
+      path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Git', 'bin', 'bash.exe'),
+    ];
+    for (const gp of gitBashPaths) {
+      try {
+        if (fs.existsSync(gp)) {
+          shells.push({ id: 'gitbash', label: 'Git Bash', path: gp });
+          break;
+        }
+      } catch {}
+    }
+    // Node.js REPL
+    shells.push({ id: 'node', label: 'Node.js', path: process.execPath });
+  } else {
+    // Unix shells
+    shells.push({ id: 'bash', label: 'bash', path: '/bin/bash' });
+    try {
+      if (fs.existsSync('/bin/zsh')) shells.push({ id: 'zsh', label: 'zsh', path: '/bin/zsh' });
+      if (fs.existsSync('/usr/bin/fish')) shells.push({ id: 'fish', label: 'fish', path: '/usr/bin/fish' });
+    } catch {}
+    shells.push({ id: 'node', label: 'Node.js', path: process.execPath });
+  }
+
+  return shells;
+}
+
+const AVAILABLE_SHELLS = detectShells();
+
+/**
+ * Get the default workspace path (fallback when no chat session active).
+ */
+async function getDefaultWorkspacePath(socket) {
+  const session = chatSessions.get(socket.id);
+  if (session?.workspacePath) return session.workspacePath;
+  const wp = path.join(os.homedir(), '.mcode', 'workspaces', 'default');
+  await mkdir(wp, { recursive: true });
+  return wp;
+}
 
 /**
  * Socket.IO server — clients connect with `{ path: '/live' }`, which maps to
@@ -258,11 +327,132 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       socket.emit('chat:shell_stream', { chunk: '\r\n' });
     });
 
+    // ── Real Terminal PTY Session Management (node-pty) ──────────────
+    socket.on('terminal:get_shells', () => {
+      socket.emit('terminal:available_shells', AVAILABLE_SHELLS);
+    });
+
+    socket.on('terminal:spawn', async (payload = {}) => {
+      const { id, shellType = 'powershell', cols = 80, rows = 24, cwd } = payload;
+      if (!id) return;
+
+      let targetCwd = cwd;
+      if (!targetCwd) {
+        targetCwd = await getDefaultWorkspacePath(socket);
+      }
+
+      // Determine shell executable
+      let shellPath = 'powershell.exe';
+      const isWin = process.platform === 'win32';
+      if (isWin) {
+        if (shellType === 'cmd') shellPath = 'cmd.exe';
+        else if (shellType === 'gitbash') {
+          const found = AVAILABLE_SHELLS.find((s) => s.id === 'gitbash');
+          shellPath = found ? found.path : 'powershell.exe';
+        } else if (shellType === 'pwsh') {
+          const found = AVAILABLE_SHELLS.find((s) => s.id === 'pwsh');
+          shellPath = found ? found.path : 'powershell.exe';
+        } else if (shellType === 'node') {
+          shellPath = process.execPath;
+        } else {
+          shellPath = 'powershell.exe';
+        }
+      } else {
+        if (shellType === 'zsh') shellPath = '/bin/zsh';
+        else if (shellType === 'fish') shellPath = '/usr/bin/fish';
+        else if (shellType === 'node') shellPath = process.execPath;
+        else shellPath = '/bin/bash';
+      }
+
+      // Clean up existing PTY session for this id if re-spawned
+      let socketPtyMap = ptySessionsMap.get(socket.id);
+      if (!socketPtyMap) {
+        socketPtyMap = new Map();
+        ptySessionsMap.set(socket.id, socketPtyMap);
+      }
+      if (socketPtyMap.has(id)) {
+        try {
+          socketPtyMap.get(id).kill();
+        } catch {}
+        socketPtyMap.delete(id);
+      }
+
+      try {
+        console.log(`[SOCKET PTY] Spawning PTY session ${id} (${shellPath}) in ${targetCwd}`);
+        const ptyProcess = pty.spawn(shellPath, [], {
+          name: 'xterm-256color',
+          cols: Math.max(cols || 80, 10),
+          rows: Math.max(rows || 24, 5),
+          cwd: targetCwd,
+          env: { ...process.env, COLORTERM: 'truecolor', TERM: 'xterm-256color' },
+          useConpty: isWin ? false : undefined, // Avoid Windows ConPty AttachConsole issues
+        });
+
+        socketPtyMap.set(id, ptyProcess);
+
+        ptyProcess.onData((data) => {
+          socket.emit('terminal:output', { id, data });
+        });
+
+        ptyProcess.onExit(({ exitCode, signal }) => {
+          console.log(`[SOCKET PTY] Session ${id} exited with code ${exitCode}`);
+          socket.emit('terminal:exit', { id, exitCode, signal });
+          socketPtyMap.delete(id);
+        });
+
+        socket.emit('terminal:spawned', { id, shellPath, cwd: targetCwd });
+      } catch (err) {
+        console.error(`[SOCKET PTY] Failed to spawn PTY for ${id}:`, err);
+        socket.emit('terminal:output', {
+          id,
+          data: `\r\n\x1b[31mFailed to spawn shell process (${shellPath}): ${err.message}\x1b[0m\r\n`,
+        });
+      }
+    });
+
+    socket.on('terminal:input', ({ id, data }) => {
+      const socketPtyMap = ptySessionsMap.get(socket.id);
+      const ptyProcess = socketPtyMap?.get(id);
+      if (ptyProcess && data !== undefined) {
+        ptyProcess.write(data);
+      }
+    });
+
+    socket.on('terminal:resize', ({ id, cols, rows }) => {
+      const socketPtyMap = ptySessionsMap.get(socket.id);
+      const ptyProcess = socketPtyMap?.get(id);
+      if (ptyProcess && cols > 0 && rows > 0) {
+        try {
+          ptyProcess.resize(cols, rows);
+        } catch {}
+      }
+    });
+
+    socket.on('terminal:kill', ({ id }) => {
+      const socketPtyMap = ptySessionsMap.get(socket.id);
+      const ptyProcess = socketPtyMap?.get(id);
+      if (ptyProcess) {
+        try {
+          ptyProcess.kill();
+        } catch {}
+        socketPtyMap.delete(id);
+      }
+    });
+
     socket.on('disconnect', () => {
       const session = chatSessions.get(socket.id);
       if (session) {
         session.cleanup();
         chatSessions.delete(socket.id);
+      }
+      const socketPtyMap = ptySessionsMap.get(socket.id);
+      if (socketPtyMap) {
+        for (const [, proc] of socketPtyMap) {
+          try {
+            proc.kill();
+          } catch {}
+        }
+        ptySessionsMap.delete(socket.id);
       }
     });
   });

@@ -4,7 +4,7 @@ import Link from 'next/link'; import { useRouter } from 'next/navigation';
 
 const MotionLink = motion.create(Link);
 import { ArrowDownRight } from 'lucide-react';
-import robotBg from '../assets/robot-bg-new.png';
+import robotBg from '../../assets/robot-bg-new.png';
 
 export function ForgotPasswordPage() {
   const router = useRouter();
