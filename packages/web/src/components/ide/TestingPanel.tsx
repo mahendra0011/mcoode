@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useIDEStore } from "../../store/ideStore";
 import { toast } from "sonner";
+import { getSocket } from "../../hooks/useChatSocket";
 
 export interface TestCase {
   id: string;
@@ -256,15 +257,23 @@ export function TestingPanel({
 
   async function handleRunAll() {
     setIsRunning(true);
-    setTestSuite((prev) => prev.map((t) => ({ ...t, status: "running" })));
-
-    for (const test of testSuite) {
-      const updated = await runSingleTest(test);
-      setTestSuite((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
-    }
-
-    setIsRunning(false);
-    toast.success("Test run completed");
+    const socket = getSocket();
+    
+    // Set a listener for the result
+    const onTestResult = (res: any) => {
+      setIsRunning(false);
+      socket.off("test:result", onTestResult);
+      if (res.error) {
+        toast.error(`Test run failed: ${res.error}`);
+        return;
+      }
+      toast.success("Test run completed via backend");
+      // In a full implementation we would parse Jest JSON output here
+      // and update the testSuite state accordingly.
+    };
+    
+    socket.on("test:result", onTestResult);
+    socket.emit("test:run");
   }
 
   async function handleRunSingle(e: React.MouseEvent, test: TestCase) {

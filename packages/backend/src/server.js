@@ -32,6 +32,9 @@ import { workspaceRoutes } from './routes/workspaces.js';
 import { settingsRoutes } from './routes/settings.js';
 import { githubAuthRoutes, githubApiRoutes } from './routes/github.js';
 import { searchRoutes } from './routes/search.js';
+import { extensionRoutes } from './routes/extensions.js';
+import { languageRoutes } from './routes/languages.js';
+import { androidRoutes } from './routes/android.js';
 import { validateEnv } from './config/envValidator.js';
 
 export async function startServer({ port = 3100, env = process.env } = {}) {
@@ -128,6 +131,9 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/auth/github', githubAuthRoutes({ secret }));
   app.use('/api/v1/github', githubApiRoutes({ secret }));
   app.use('/api/v1/search', searchRoutes({ secret }));
+  app.use('/api/v1/extensions', extensionRoutes());
+  app.use('/api/v1/languages', languageRoutes());
+  app.use('/api/v1/android', androidRoutes());
 
   // ─── Error handler ──────────────────────────────────────────────────────────
   // Consistent { error: { code, message } } shape

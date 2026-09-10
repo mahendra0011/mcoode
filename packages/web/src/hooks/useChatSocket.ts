@@ -421,12 +421,26 @@ export function useChatSocket(workspaceId: string | null = null) {
     }
   }, []);
 
+  const runFile = useCallback((filename: string, code: string, stdin?: string) => {
+    if (socketRef.current) {
+      socketRef.current.emit('code:run-file', { filename, code, stdin });
+    }
+  }, []);
+
+  const runProject = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit('project:run');
+    }
+  }, []);
+
   return {
     send,
     interrupt,
     answerPermission,
     undo,
     sendTerminalCommand,
+    runFile,
+    runProject,
     reloadModels,
     fetchKeys,
     fetchGithubStatus

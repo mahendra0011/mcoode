@@ -1,1327 +1,895 @@
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link'; import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const MotionLink = motion.create(Link);
 import {
-  Shield, Key, User, Github, ArrowLeft, Loader2,
-  Plus, Trash2, Check, AlertTriangle, Eye, EyeOff, ChevronDown,
-  Palette, Globe, Radar, Zap, X, Box, Plug, RefreshCw, Edit2, BarChart2, Calendar, Clock, Flame, Activity, MessageSquare, Search,
-  Server, Settings, Settings2, Rocket, Workflow, Package, Terminal, BookOpen, Sparkles, TestTube, GitBranch
+  ChevronDown, ArrowLeft, Search,
+  Moon, Sun, Monitor, Copy,
+  Database, BarChart2, Settings, Users, GitBranch, X,
 } from 'lucide-react';
 import api from '../../lib/axios';
 import { connectOAuth } from '../../lib/electron-nav';
-// mcode reference tabs — expose the full mcode knowledge base in Settings
-import { McodeArchitectureTab } from '../../components/mcode/McodeArchitectureTab';
-import { McodeConfigTab } from '../../components/mcode/McodeConfigTab';
-import { McodeSettingsTab } from '../../components/mcode/McodeSettingsTab';
-import { McodeStartupTab } from '../../components/mcode/McodeStartupTab';
-import { McodeTurnMachineTab } from '../../components/mcode/McodeTurnMachineTab';
-import { McodeHooksTab } from '../../components/mcode/McodeHooksTab';
-import { McodePluginsTab } from '../../components/mcode/McodePluginsTab';
-import { McodeMcpTab } from '../../components/mcode/McodeMcpTab';
-import { McodeSkillsTab } from '../../components/mcode/McodeSkillsTab';
-import { McodeAnimationsTab } from '../../components/mcode/McodeAnimationsTab';
-import { McodeTestsTab } from '../../components/mcode/McodeTestsTab';
-import { McodeDependenciesTab } from '../../components/mcode/McodeDependenciesTab';
-import { McodeGitToolsTab } from '../../components/mcode/McodeGitToolsTab';
 
+const MotionLink = motion.create(Link);
 
-const ACCENT_COLORS = [
-  { id: 'emerald', label: 'Emerald', color: '#10b981', gradient: 'from-emerald-500 to-teal-400' },
-  { id: 'blue', label: 'Blue', color: '#3b82f6', gradient: 'from-blue-500 to-cyan-400' },
-  { id: 'purple', label: 'Purple', color: '#8b5cf6', gradient: 'from-purple-500 to-violet-400' },
-  { id: 'amber', label: 'Amber', color: '#f59e0b', gradient: 'from-amber-500 to-yellow-400' },
-  { id: 'red', label: 'Red', color: '#ef4444', gradient: 'from-red-500 to-rose-400' },
-  { id: 'teal', label: 'Teal', color: '#14b8a6', gradient: 'from-teal-500 to-cyan-400' },
+/* ─────────────────── SETTINGS STRUCTURE (mcode actual) ─────────────────── */
+
+const SIDEBAR_SECTIONS = [
+  {
+    id: 'basics',
+    label: 'Basics',
+    icon: Settings,
+    children: [
+      { id: 'general', label: 'General' },
+      { id: 'appearance', label: 'Appearance' },
+      { id: 'models', label: 'Model settings' },
+      { id: 'browser', label: 'Browser Use' },
+      { id: 'computer', label: 'Computer Use' },
+    ],
+  },
+  {
+    id: 'agent',
+    label: 'Agent capabilities',
+    icon: Users,
+    children: [
+      { id: 'memory', label: 'Memory' },
+      { id: 'subagents', label: 'Subagents' },
+    ],
+  },
+  {
+    id: 'plugins',
+    label: 'Plugins',
+    icon: GitBranch,
+    children: [
+      { id: 'plugins', label: 'Plugins' },
+      { id: 'mcp', label: 'MCP Servers' },
+      { id: 'skills', label: 'Skills' },
+      { id: 'commands', label: 'Commands' },
+      { id: 'hooks', label: 'Hooks' },
+    ],
+  },
+  {
+    id: 'data',
+    label: 'Data and statistics',
+    icon: Database,
+    children: [
+      { id: 'indexing', label: 'Indexing' },
+      { id: 'usage', label: 'Usage stats' },
+      { id: 'onboard', label: 'Onboard' },
+    ],
+  },
 ];
 
-const TABS = [
-  { id: 'permissions', label: 'Permissions', icon: Shield },
-  { id: 'keys', label: 'API Keys', icon: Key },
-  { id: 'usage', label: 'Usage stats', icon: BarChart2 },
-  { id: 'theme', label: 'Theme', icon: Palette },
-  { id: 'network', label: 'Network', icon: Globe },
-  { id: 'watch', label: 'Watch Mode', icon: Radar },
-  { id: 'godmode', label: 'God-Mode', icon: Zap },
-  { id: 'account', label: 'Account', icon: User },
-  { id: 'connections', label: 'Connections', icon: Github },
-  // ── mcode knowledge base tabs ──────────────────────────────
-  { id: 'mcode-architecture', label: 'Architecture', icon: Server },
-  { id: 'mcode-config', label: 'Configuration', icon: Settings },
-  { id: 'mcode-settings', label: 'Settings Reference', icon: Settings2 },
-  { id: 'mcode-startup', label: 'Startup Flow', icon: Rocket },
-  { id: 'mcode-turn-machine', label: 'Turn Machine', icon: Workflow },
-  { id: 'mcode-hooks', label: 'Hooks', icon: Shield },
-  { id: 'mcode-plugins', label: 'Plugins', icon: Package },
-  { id: 'mcode-mcp', label: 'MCP Servers', icon: Terminal },
-  { id: 'mcode-skills', label: 'Skills', icon: BookOpen },
-  { id: 'mcode-animations', label: 'Animations', icon: Sparkles },
-  { id: 'mcode-tests', label: 'Tests', icon: TestTube },
-  // ── mcode tools & dependencies reference ─────────────────────
-  { id: 'mcode-deps', label: 'Dependencies', icon: Package },
-  { id: 'mcode-git', label: 'Git Tools', icon: GitBranch },
-];
+const SETTING_GROUPS: Record<string, any> = {
+  general: {
+    title: 'General',
+    settings: [
+      { key: 'locale', label: 'Language', description: 'Choose the display language used by the application UI.', type: 'select', options: ['English'], defaultValue: 'English', defaultOpen: true },
+      { key: 'terminalInheritProfile', label: 'Inherit system terminal profile', description: 'When launching the built-in terminal, inherit login shell environment, proxy, Kubernetes variables, and local terminal font when possible.', type: 'toggle', defaultValue: true },
+      { key: 'terminalFont', label: 'Terminal font', description: 'Leave blank to auto-detect system terminal settings; set a value to override the mcode terminal font.', type: 'text', placeholder: 'e.g. MesloLGS NF, monospace', defaultValue: '' },
+      { key: 'integratedTerminalShell', label: 'Integrated terminal shell', description: 'Applies to new sessions only. On Windows, Bash uses this shell; Auto tries Git Bash, then cmd.exe.', type: 'select', options: ['Auto'], defaultValue: 'Auto' },
+      { key: 'enhancedFind', label: 'Enhanced Find and Grep', description: 'Use enhanced Find and Grep in new sessions and sessions restored after an app restart.', type: 'toggle', defaultValue: true },
+      { key: 'httpProxy', label: 'HTTP Proxy', description: 'Route model, MCP, command-tool, and app renderer egress traffic through this proxy. Leave blank for direct connection.', type: 'text', placeholder: 'e.g. http://127.0.0.1:7890', defaultValue: '' },
+      { key: 'noProxy', label: 'No proxy', description: 'Requests matching these hosts connect directly instead of using the HTTP proxy. Separate rules with commas.', type: 'text', placeholder: 'e.g. localhost,127.0.0.1,::1,.example.com,*.corp.com', defaultValue: '' },
+      { key: 'customCert', label: 'Custom certificate', description: 'Set a PEM root certificate path to inject as NODE_EXTRA_CA_CERTS for models, MCP, and command tools.', type: 'text', placeholder: 'e.g. /Users/name/certs/root-ca.pem', defaultValue: '' },
+      { key: 'chromeHWAccel', label: 'Chrome hardware acceleration', description: 'Turn this off to work around blank windows, crashes, or rendering issues caused by some GPUs or drivers.', type: 'toggle', defaultValue: true },
+      { key: 'previewUpdates', label: 'Receive preview updates early', description: 'Get earliest access to new features and improvements.', type: 'toggle', defaultValue: false },
+      { key: 'autoInstallUpdates', label: 'Automatically download and install updates', description: 'Updates start downloading as soon as they are found.', type: 'toggle', defaultValue: true },
+      { key: 'taskNotifications', label: 'Task notifications', description: 'Send desktop notifications when a task completes, fails, or needs approval.', type: 'toggle', defaultValue: true },
+      { key: 'notificationSound', label: 'Notification sound', description: 'Mute the task notification sound separately.', type: 'toggle', defaultValue: false },
+      { key: 'hideToTray', label: 'Hide to tray when closing window', description: 'Windows only. The close button hides the window; Quit from tray still exits.', type: 'toggle', defaultValue: false },
+      { key: 'keepAwake', label: 'Keep computer running', description: 'Prevent the system from sleeping due to idle.', type: 'toggle', defaultValue: false },
+      { key: 'interactionBehavior', label: 'Interaction behavior', description: 'While mcode is running, add follow-up actions to the queue or guide them.', type: 'select', options: ['Queue', 'Inline', 'Modal'], defaultValue: 'Queue' },
+      { key: 'autoContinue', label: 'Automatically continue questions', description: 'Agent questions automatically continue after 5 minutes without an answer.', type: 'toggle', defaultValue: false },
+      { key: 'keepModelIO', label: 'Keep complete model I/O', description: 'Keep complete model requests and responses without compression.', type: 'toggle', defaultValue: false },
+      { key: 'showReasoning', label: 'Show reasoning', description: 'Show full reasoning inside the message stream.', type: 'toggle', defaultValue: false },
+      { key: 'showTodos', label: 'Show todos', description: 'Show Todo tool cards inside the message stream.', type: 'toggle', defaultValue: true },
+      { key: 'groupExploration', label: 'Group exploration tools', description: 'Group consecutive reads and searches into an Explore section.', type: 'toggle', defaultValue: true },
+      { key: 'groupTerminal', label: 'Group terminal commands', description: 'Group consecutive non-read-only shell commands into a Terminal section.', type: 'toggle', defaultValue: true },
+      { key: 'groupFileChanges', label: 'Group file changes', description: 'Group consecutive Write, Edit, and ApplyPatch calls into a Changes section.', type: 'toggle', defaultValue: true },
+      { key: 'autoArchive', label: 'Auto-archive old tasks', description: 'Periodically scan workspaces and archive completed tasks after retention.', type: 'toggle', defaultValue: true },
+      { key: 'archiveRetention', label: 'Archive retention', description: 'A task becomes eligible after its last update is older than this window.', type: 'select', options: ['7 days', '14 days', '30 days', '90 days'], defaultValue: '7 days' },
+    ],
+  },
+  appearance: {
+    title: 'Appearance',
+    settings: [
+      { key: 'theme', label: 'App theme', description: 'Choose light, dark, or follow the system theme.', type: 'theme', defaultValue: 'dark' },
+      { key: 'uiFontSize', label: 'UI font size', description: 'Adjust interface text without changing icons or layout dimensions.', type: 'slider', min: 10, max: 24, step: 1, defaultValue: 14 },
+      { key: 'codeThemeLight', label: 'Light code theme', description: 'Highlighting theme for code in light mode.', type: 'select', options: ['GitHub Light'], defaultValue: 'GitHub Light' },
+      { key: 'codeThemeDark', label: 'Dark code theme', description: 'Highlighting theme for code in dark mode.', type: 'select', options: ['GitHub Dark'], defaultValue: 'GitHub Dark' },
+      { key: 'showLineNumbers', label: 'Show line numbers', description: 'Display line numbers in code and diff views.', type: 'toggle', defaultValue: true },
+      { key: 'wrapLongLines', label: 'Wrap long lines', description: 'Wrap long code lines automatically.', type: 'toggle', defaultValue: false },
+      { key: 'codeFontSize', label: 'Code font size', description: 'Adjust the default font size for code blocks, file previews, and diff views.', type: 'slider', min: 8, max: 20, step: 1, defaultValue: 12 },
+    ],
+  },
+};
 
-/* ─────────────────── PERMISSIONS TAB ─────────────────── */
-function PermissionsTab({ settings, onUpdate, saving }: { settings: any; onUpdate: (patch: any) => void; saving: boolean }) {
+function SettingToggle({ label, description, defaultChecked }: { label: string; description: string; defaultChecked?: boolean }) {
+  const [checked, setChecked] = useState(defaultChecked ?? false);
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">Permissions</h2>
-        <p className="text-sm text-white/40">Control how the AI agent interacts with your project.</p>
-      </div>
-
-      {/* Shell execution */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">Shell Command Execution</h3>
-        <label className="flex items-start gap-3 cursor-pointer group">
-          <input type="radio" name="shell" checked={!settings.allowShellAll} onChange={() => onUpdate({ allowShellAll: false })} className="mt-1 accent-emerald-500" />
-          <div>
-            <span className="text-sm text-white font-medium">Ask before every command</span>
-            <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full font-semibold">RECOMMENDED</span>
-            <p className="text-xs text-white/40 mt-0.5">Each shell command will require your approval before running.</p>
-          </div>
-        </label>
-        <label className="flex items-start gap-3 cursor-pointer group">
-          <input type="radio" name="shell" checked={settings.allowShellAll} onChange={() => onUpdate({ allowShellAll: true })} className="mt-1 accent-emerald-500" />
-          <div>
-            <span className="text-sm text-white font-medium">Full access — run without asking</span>
-            <p className="text-xs text-white/40 mt-0.5">Commands execute immediately without confirmation prompts.</p>
-          </div>
-        </label>
-        {settings.allowShellAll && (
-          <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mt-2">
-            <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-amber-300/80">Full access lets the AI run any command including installs, deletes, and git operations without confirmation. Only enable if you trust the project.</p>
-          </div>
-        )}
-      </div>
-
-      {/* File edit approval */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">File Edit Approval</h3>
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input type="radio" name="edit" checked={!settings.requireEditApproval} onChange={() => onUpdate({ requireEditApproval: false })} className="mt-1 accent-emerald-500" />
-          <div>
-            <span className="text-sm text-white font-medium">Auto-apply edits</span>
-            <p className="text-xs text-white/40 mt-0.5">File changes are applied automatically (you can always undo).</p>
-          </div>
-        </label>
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input type="radio" name="edit" checked={settings.requireEditApproval} onChange={() => onUpdate({ requireEditApproval: true })} className="mt-1 accent-emerald-500" />
-          <div>
-            <span className="text-sm text-white font-medium">Review before applying</span>
-            <p className="text-xs text-white/40 mt-0.5">Each file edit shows a diff for your approval before writing.</p>
-          </div>
-        </label>
-      </div>
-
-      {saving && <div className="flex items-center gap-2 text-xs text-white/40"><Loader2 className="w-3 h-3 animate-spin" /> Saving...</div>}
-    </div>
-  );
-}
-
-/* ─────────────────── API KEYS TAB ─────────────────── */
-function ApiKeysTab() {
-  const [providers, setProviders] = useState<any[]>([]);
-  const [keys, setKeys] = useState<any[]>([]);
-  const [availableModels, setAvailableModels] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeProviderId, setActiveProviderId] = useState('openrouter');
-  const [newKey, setNewKey] = useState('');
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [selectedModelByProvider, setSelectedModelByProvider] = useState<Record<string, any>>({});
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const fetchData = async () => {
-    // Fetch providers independently so a failure in keys/models doesn't
-    // prevent the provider list from rendering (providers endpoint is public).
-    // Uses the shared axios instance — auth token injected via interceptor.
-    try {
-      const provRes = await api.get('/api/v1/settings/providers', { timeout: 5000 });
-      if (provRes.data?.ok) setProviders(provRes.data.providers || []);
-    } catch (e) {
-      console.error('Failed to fetch providers:', e);
-    }
-    try {
-      const keysRes = await api.get('/api/v1/keys', { timeout: 10000 });
-      if (keysRes.data?.keys) setKeys(keysRes.data.keys || []);
-    } catch (e: any) {
-      if (e?.response?.status !== 401) {
-        console.error('Failed to fetch keys:', e);
-      }
-    }
-    try {
-      // /keys/models makes external API calls to each configured provider —
-      // use a longer timeout (15s) but still bounded so the UI doesn't hang.
-      const modelsRes = await api.get('/api/v1/keys/models', { timeout: 15000 });
-      if (modelsRes.data?.models) setAvailableModels(modelsRes.data.models || []);
-    } catch (e: any) {
-      if (e?.response?.status !== 401) {
-        console.error('Failed to fetch models:', e);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
-
-  const handleSave = async () => {
-    if (!newKey && !existingKey) {
-      return;
-    }
-    setSaving(true);
-    try {
-      const provider = providers.find(p => p.id === activeProviderId);
-      const res = await api.post('/api/v1/keys', {
-        providerId: activeProviderId,
-        envVar: provider?.envVar || `${activeProviderId.toUpperCase()}_API_KEY`,
-        displayName: provider?.displayName || activeProviderId,
-        apiKey: newKey || 'existing-key',
-        model: selectedModelId || undefined
-      });
-      const data = res.data;
-      if (data.ok) {
-        setNewKey('');
-        setShowApiKey(false);
-        await fetchData();
-        window.dispatchEvent(new CustomEvent('mcode:reload-models'));
-      }
-    } catch (e) {
-      console.error('Failed to save key:', e);
-    }
-    setSaving(false);
-  };
-
-  const handleRemove = async (keyId: string) => {
-    try {
-      await api.delete(`/api/v1/keys/${keyId}`);
-      await fetchData();
-      window.dispatchEvent(new CustomEvent('mcode:reload-models'));
-    } catch (e) {
-      console.error('Failed to remove key:', e);
-    }
-  };
-
-  const activeProvider = providers.find(p => p.id === activeProviderId);
-  const existingKey = keys.find(k => k.providerId === activeProviderId);
-
-  useEffect(() => {
-    const saved = existingKey?.model;
-    const cached = selectedModelByProvider[activeProviderId];
-    setSelectedModelId(cached || saved || null);
-  }, [activeProviderId, existingKey?.model]);
-
-  const liveModels = availableModels.filter(m => m.provider === activeProviderId);
-  const staticModels = (activeProvider?.models || []).map((m: any) => ({
-    ref: `${activeProviderId}:${m.id}`,
-    provider: activeProviderId,
-    name: m.name,
-    model: m.id,
-    free: m.free,
-    scores: m.scores
-  }));
-  const displayModels = liveModels.length > 0 ? liveModels : staticModels;
-
-  return (
-    <div className="flex flex-col h-[80vh] min-h-[600px] max-w-[1000px] mx-auto w-full">
-      <div className="mb-8 flex-shrink-0">
-        <div className="inline-block bg-blue-600 text-white font-bold text-2xl px-1 mb-2 leading-tight">
-          Model settings
-        </div>
-        <p className="text-[13px] text-white/50">Manage custom model providers. Once configured, they can be selected during chat.</p>
-      </div>
-
-      <div className="flex flex-1 overflow-hidden rounded-xl bg-[#181818] border border-[#222]">
-        {/* Sidebar */}
-        <div className="w-64 border-r border-[#222] flex flex-col py-4 overflow-y-auto custom-scrollbar flex-shrink-0">
-          <div className="px-4 mb-3">
-            <div className="relative">
-              <Search className="w-4 h-4 text-[#888] absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search providers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#222] border border-[#333] rounded-lg pl-9 pr-3 py-1.5 text-sm text-white placeholder-[#666] focus:outline-none focus:border-[#444] transition-colors"
-              />
-            </div>
-          </div>
-          <div className="px-4 text-[11px] text-[#888] mb-3">Providers</div>
-
-          {loading ? (
-            <>
-              <div className="px-4 text-[11px] text-[#888] mt-8 mb-3">Custom providers</div>
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-4 h-4 text-white/40 animate-spin" />
-              </div>
-            </>
-          ) : (
-            (() => {
-              const q = searchQuery.toLowerCase();
-              const configured = providers
-                .filter(p => keys.some(k => k.providerId === p.id))
-                .filter(p => (p.displayName || p.id).toLowerCase().includes(q))
-                .sort((a, b) => (a.displayName || a.id).localeCompare(b.displayName || b.id));
-
-              const unconfigured = providers
-                .filter(p => !keys.some(k => k.providerId === p.id))
-                .filter(p => (p.displayName || p.id).toLowerCase().includes(q))
-                .sort((a, b) => (a.displayName || a.id).localeCompare(b.displayName || b.id));
-
-              const renderProvider = (provider: any) => {
-                const isActive = activeProviderId === provider.id;
-                const isConfigured = keys.some(k => k.providerId === provider.id);
-                const keyForProvider = keys.find(k => k.providerId === provider.id);
-                return (
-                  <button
-                    key={provider.id}
-                    onClick={() => {
-                      setActiveProviderId(provider.id);
-                      setNewKey('');
-                      setShowApiKey(false);
-                    }}
-                    className={`w-full flex items-center justify-between px-4 py-2 transition ${isActive ? 'bg-[#252525]' : 'hover:bg-[#1f1f1f]'}`}
-                  >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Box className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-white' : 'text-[#888]'}`} />
-                        <span className={`text-[13px] text-left truncate ${isActive ? 'text-white font-medium' : 'text-[#aaa]'}`}>
-                          {provider.displayName || provider.id}
-                        </span>
-                      </div>
-                      {isConfigured && keyForProvider?.model && (
-                        <span className="text-[11px] text-[#888] font-mono ml-7 truncate">
-                          {keyForProvider.model.split(':').pop() || keyForProvider.model}
-                        </span>
-                      )}
-                    </div>
-                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ml-2 ${isConfigured ? 'bg-[#1b7145]' : 'bg-[#444]'}`} />
-                  </button>
-                );
-              };
-
-              return (
-                <>
-                  <div className="px-4 text-[11px] text-[#888] mt-8 mb-3">Configured providers</div>
-                  {configured.length > 0 ? (
-                    configured.map(renderProvider)
-                  ) : (
-                    <div className="px-4 py-2 text-[12px] text-[#555] italic">None configured</div>
-                  )}
-                  
-                  <div className="px-4 text-[11px] text-[#888] mt-8 mb-3">Available providers</div>
-                  {unconfigured.length > 0 ? (
-                    unconfigured.map(renderProvider)
-                  ) : (
-                    <div className="px-4 py-2 text-[12px] text-[#555] italic">None available</div>
-                  )}
-                </>
-              );
-            })()
-          )}
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="w-5 h-5 text-white/40 animate-spin" />
-            </div>
-          ) : activeProvider ? (
-            <div className="max-w-3xl">
-              {/* Header */}
-              <div className="flex items-center mb-8">
-                <h3 className="text-[22px] font-bold text-white mr-3">{activeProvider.displayName || activeProvider.id}</h3>
-                <button className="text-[#666] hover:text-white transition">
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                {existingKey ? (
-                  <div className="px-3 py-1 rounded-full bg-[#181818] text-[#888] border border-[#333] text-[11px] font-medium ml-4">
-                    Configured
-                  </div>
-                ) : (
-                  <div className="px-3 py-1 rounded-full bg-[#181818] text-[#888] border border-[#333] text-[11px] font-medium ml-4">
-                    Not Configured
-                  </div>
-                )}
-                {existingKey && (
-                  <button
-                    onClick={() => handleRemove(existingKey.id)}
-                    className="ml-auto text-red-400/70 hover:text-red-400 text-sm font-medium transition"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-
-              {/* Form Fields */}
-              <div className="space-y-8">
-                {/* API Key */}
-                <div>
-                  <label className="block text-[13px] text-[#aaa] font-medium mb-2.5">API key</label>
-                  <div className="flex items-center gap-4">
-                    <div className="relative flex-1">
-                      <input
-                        type={showApiKey ? "text" : "password"}
-                        value={existingKey && !newKey ? (existingKey.masked || '••••••••••••••••••••••••') : newKey}
-                        onChange={(e) => setNewKey(e.target.value)}
-                        placeholder="sk-..."
-                        className="w-full bg-[#202020] border border-[#2a2a2a] rounded-[8px] px-4 py-2.5 text-[13px] text-white focus:outline-none focus:border-[#444] transition font-mono pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#666] hover:text-white transition"
-                      >
-                        {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    
-                    <button
-                      onClick={handleSave}
-                      disabled={saving || (!existingKey && !newKey)}
-                      className="px-6 py-[11px] bg-[#1d764a] hover:bg-[#155d38] text-white font-medium text-[13px] rounded-[8px] transition disabled:opacity-50 flex items-center justify-center min-w-[80px]"
-                    >
-                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Model list */}
-                <div className="pt-2">
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="block text-[13px] text-[#aaa] font-medium">Available models</label>
-                    <div className="flex items-center gap-2">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={fetchData}
-                        disabled={refreshing}
-                        className="text-[11px] text-[#666] hover:text-white transition flex items-center gap-1"
-                        title="Refresh models"
-                      >
-                        <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
-                        Refresh
-                      </motion.button>
-                      {existingKey && selectedModelId && (
-                        <span className="text-[11px] text-[#666] font-mono truncate max-w-[180px]">
-                          {selectedModelId.split(':').pop() || selectedModelId}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    {displayModels.length === 0 ? (
-                      <div className="text-[13px] text-[#666] py-4 text-center">No models available for this provider. Add an API key to load models.</div>
-                    ) : (
-                      displayModels.map((model: any) => {
-                        const modelId = model.model || model.ref;
-                        const isSelected = selectedModelId === modelId;
-                        return (
-                          <motion.div
-                            key={model.ref || modelId}
-                            className={`flex items-center justify-between p-4 rounded-[8px] cursor-pointer transition-all duration-200 ${
-                              isSelected
-                                ? 'bg-[#1a1a1a]'
-                                : 'bg-[#1c1c1c] hover:border-[#333]'
-                            }`}
-                            style={isSelected ? {
-                              borderImage: 'linear-gradient(90deg, #3b82f6, #a854f7, #ec4899, #f97316)',
-                              borderImageSlice: 1,
-                              borderWidth: '1px',
-                              borderStyle: 'solid',
-                            } : {
-                              borderWidth: '1px',
-                              borderStyle: 'solid',
-                              borderColor: '#2a2a2a',
-                            }}
-                            onClick={() => {
-                              setSelectedModelId(modelId);
-                              setSelectedModelByProvider(prev => ({ ...prev, [activeProviderId]: modelId }));
-                            }}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.2 }}
-                          >
-                            <div className="flex flex-col">
-                              <span className="text-[13px] text-white font-medium">{model.name || modelId}</span>
-                              <span className="text-[11px] text-[#888] font-mono">{modelId}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              {model.free && (
-                                <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-medium">Free</span>
-                              )}
-                              {model.scores && model.scores.coding && (
-                                <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-medium">Coding</span>
-                              )}
-                              {isSelected && (
-                                <Check className="w-4 h-4 text-emerald-400" />
-                              )}
-                            </div>
-                          </motion.div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full text-white/30 text-sm">
-              Select a provider to configure
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────── THEME TAB ─────────────────── */
-function ThemeTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: any) => void }) {
-  const current = settings.accentColor || 'emerald';
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">Theme</h2>
-        <p className="text-sm text-white/40">Choose your accent color for the UI.</p>
-      </div>
-
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-4">Accent Color</h3>
-        <div className="grid grid-cols-3 gap-3">
-          {ACCENT_COLORS.map(c => (
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-              key={c.id}
-              onClick={() => onUpdate({ accentColor: c.id })}
-              className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 ${
-                current === c.id
-                  ? 'border-white/20 bg-white/5 shadow-sm'
-                  : 'border-white/5 hover:border-white/10 hover:bg-white/[0.02]'
-              }`}
-            >
-              <div className="w-6 h-6 rounded-full shadow-lg" style={{ background: c.color }} />
-              <span className="text-sm text-white/80">{c.label}</span>
-              {current === c.id && <Check className="w-3.5 h-3.5 text-emerald-400 ml-auto" />}
-            </motion.button>
-          ))}
-        </div>
-      </div>
-
-      {/* Preview */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6">
-        <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-4">Preview</h3>
-        <div className="flex items-center gap-4">
-          <div className="w-full h-2 rounded-full overflow-hidden bg-white/5">
-            <div className="h-full rounded-full w-2/3 transition-all duration-500" style={{ background: ACCENT_COLORS.find(c => c.id === current)?.color || '#10b981' }} />
-          </div>
-        </div>
-        <div className="flex items-center gap-3 mt-4">
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="px-4 py-2 rounded-lg text-sm text-white font-medium transition" style={{ background: ACCENT_COLORS.find(c => c.id === current)?.color }}>Primary Button</motion.button>
-          <span className="text-xs" style={{ color: ACCENT_COLORS.find(c => c.id === current)?.color }}>Accent text</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────── NETWORK TAB ─────────────────── */
-function NetworkTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: any) => void }) {
-  const whitelist = settings.networkWhitelist || [];
-  const [newDomain, setNewDomain] = useState('');
-
-  const addDomain = () => {
-    const d = newDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    if (d && !whitelist.includes(d)) {
-      onUpdate({ networkWhitelist: [...whitelist, d] });
-    }
-    setNewDomain('');
-  };
-
-  const removeDomain = (domain: string) => {
-    onUpdate({ networkWhitelist: whitelist.filter((d: any) => d !== domain) });
-  };
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">Network Whitelist</h2>
-        <p className="text-sm text-white/40">Restrict which domains the AI agent can access via web_fetch and web_search tools.</p>
-      </div>
-
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">Allowed Domains for AI Web Access</h3>
-
-        {whitelist.length === 0 && (
-          <div className="flex items-start gap-2 bg-blue-500/5 border border-blue-500/10 rounded-lg p-3">
-            <Globe className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-blue-300/70">Empty list = all domains allowed. Add domains to restrict the AI's web access.</p>
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          {whitelist.map((d: any) => (
-            <span key={d} className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/70 font-mono">
-              {d}
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => removeDomain(d)} className="text-white/30 hover:text-red-400 transition"><X className="w-3 h-3" /></motion.button>
-            </span>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={newDomain}
-            onChange={e => setNewDomain(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') addDomain(); }}
-            placeholder="github.com"
-            className="flex-1 bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-blue-500/50 font-mono"
-          />
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={addDomain} disabled={!newDomain.trim()} className="text-xs bg-white/5 hover:bg-white/10 text-white/70 px-3 py-2 rounded-lg transition border border-white/10 disabled:opacity-40 flex items-center gap-1">
-            <Plus className="w-3 h-3" /> Add
-          </motion.button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────── WATCH MODE TAB ─────────────────── */
-function WatchTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: any) => void }) {
-  const watch = settings.watchDefaults || { intervalMs: 30000, autoFix: false };
-
-  const updateWatch = (patch: any) => {
-    onUpdate({ watchDefaults: { ...watch, ...patch } });
-  };
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">Watch Mode Defaults</h2>
-        <p className="text-sm text-white/40">Configure the background watch daemon — continuous auto-scan and auto-fix loop.</p>
-      </div>
-
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6 space-y-5">
-        <div>
-          <label className="text-sm font-medium text-white block mb-2">Scan Interval</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={5000}
-              max={120000}
-              step={5000}
-              value={watch.intervalMs}
-              onChange={e => updateWatch({ intervalMs: Number(e.target.value) })}
-              className="flex-1 accent-emerald-500"
-            />
-            <span className="text-sm text-white/60 font-mono w-16 text-right">{(watch.intervalMs / 1000).toFixed(0)}s</span>
-          </div>
-          <p className="text-xs text-white/30 mt-1">How often the watch daemon scans for changes.</p>
-        </div>
-
-        <div className="border-t border-white/5 pt-4">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <motion.div
-              whileTap={{ scale: 0.9 }}
-              className={`w-10 h-6 rounded-full relative transition-colors duration-200 ${watch.autoFix ? 'bg-emerald-500' : 'bg-white/10'}`}
-              onClick={() => updateWatch({ autoFix: !watch.autoFix })}
-            >
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${watch.autoFix ? 'left-5' : 'left-1'}`} />
-            </motion.div>
-            <div>
-              <span className="text-sm text-white font-medium">Auto-fix on detection</span>
-              <p className="text-xs text-white/40">Automatically attempt to fix issues detected by the watch daemon.</p>
-            </div>
-          </label>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────── GOD-MODE TAB ─────────────────── */
-function GodModeTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: any) => void }) {
-  const god = settings.godModeDefaults || { concurrency: 3, deployTarget: '', skipTests: false };
-
-  const updateGod = (patch: any) => {
-    onUpdate({ godModeDefaults: { ...god, ...patch } });
-  };
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">God-Mode Build Defaults</h2>
-        <p className="text-sm text-white/40">Configure defaults for multi-subagent parallel builds.</p>
-      </div>
-
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6 space-y-5">
-        {/* Concurrency */}
-        <div>
-          <label className="text-sm font-medium text-white block mb-2">Subagent Concurrency</label>
-          <div className="flex items-center gap-3">
-            {[1, 2, 3, 4, 5, 6, 8].map(n => (
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                key={n}
-                onClick={() => updateGod({ concurrency: n })}
-                className={`w-10 h-10 rounded-lg text-sm font-medium transition-all ${
-                  god.concurrency === n
-                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                    : 'bg-white/5 text-white/50 border border-white/5 hover:bg-white/10'
-                }`}
-              >
-                {n}
-              </motion.button>
-            ))}
-          </div>
-          <p className="text-xs text-white/30 mt-2">Number of parallel subagents during god-mode builds.</p>
-        </div>
-
-        {/* Deploy target */}
-        <div className="border-t border-white/5 pt-4">
-          <label className="text-sm font-medium text-white block mb-2">Default Deploy Target</label>
-          <div className="relative">
-            <select
-              value={god.deployTarget}
-              onChange={e => updateGod({ deployTarget: e.target.value })}
-              className="w-full bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500/50 appearance-none cursor-pointer"
-            >
-              <option value="">None</option>
-              <option value="vercel">Vercel</option>
-              <option value="netlify">Netlify</option>
-              <option value="cloudflare">Cloudflare Pages</option>
-              <option value="fly">Fly.io</option>
-              <option value="railway">Railway</option>
-            </select>
-            <ChevronDown className="w-4 h-4 text-white/30 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Skip tests */}
-        <div className="border-t border-white/5 pt-4">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <motion.div
-              whileTap={{ scale: 0.9 }}
-              className={`w-10 h-6 rounded-full relative transition-colors duration-200 ${god.skipTests ? 'bg-amber-500' : 'bg-white/10'}`}
-              onClick={() => updateGod({ skipTests: !god.skipTests })}
-            >
-              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${god.skipTests ? 'left-5' : 'left-1'}`} />
-            </motion.div>
-            <div>
-              <span className="text-sm text-white font-medium">Skip tests by default</span>
-              <p className="text-xs text-white/40">God-mode builds will skip the test phase unless explicitly requested.</p>
-            </div>
-          </label>
-          {god.skipTests && (
-            <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mt-3 ml-13">
-              <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-amber-300/80">Skipping tests can speed up builds but may deploy broken code.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────── ACCOUNT TAB ─────────────────── */
-function AccountTab() {
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    api.get('/api/v1/auth/me', { timeout: 5000 })
-      .then((res) => { setProfile(res.data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">Account</h2>
-        <p className="text-sm text-white/40">Manage your account details and preferences.</p>
-      </div>
-
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-6 space-y-6">
-        <div>
-          <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-4">Profile</h3>
-          {profile ? (
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-2xl font-bold text-white">
-                {profile.email?.[0]?.toUpperCase() || 'U'}
-              </div>
-              <div>
-                <p className="text-[13px] text-white font-medium">{profile.email}</p>
-                <p className="text-[11px] text-[#888]">{profile.name || 'No name set'}</p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-[13px] text-[#666]">Unable to load profile.</p>
-          )}
-        </div>
-
-        <div className="border-t border-white/5 pt-6">
-          <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-4">Security</h3>
-          <div className="space-y-3">
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#0e0e0e] border border-white/5 text-[13px] text-white/80 hover:bg-white/5 transition">
-              <span>Change password</span>
-              <ChevronDown className="w-4 h-4 text-white/30" />
-            </motion.button>
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#0e0e0e] border border-white/5 text-[13px] text-white/80 hover:bg-white/5 transition">
-              <span>Two-factor authentication</span>
-              <ChevronDown className="w-4 h-4 text-white/30" />
-            </motion.button>
-          </div>
-        </div>
-
-        {saving && (
-          <div className="flex items-center gap-2 text-xs text-white/40">
-            <Loader2 className="w-3 h-3 animate-spin" /> Saving...
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────── CONNECTIONS TAB ─────────────────── */
-function ConnectionsTab() {
-  const [githubStatus, setGithubStatus] = useState({ connected: false });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get('/api/v1/github/status', { timeout: 5000 })
-      .then((res) => { setGithubStatus(res.data); setLoading(false); })
-      .catch(() => { setGithubStatus({ connected: false }); setLoading(false); });
-  }, []);
-
-  const handleConnectGithub = () => {
-    const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
-    const url = `/api/v1/auth/github?token=${tokens.access || ''}`;
-    connectOAuth(url);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-lg font-semibold text-white mb-1">Connections</h2>
-        <p className="text-sm text-white/40">Manage your third-party service integrations.</p>
-      </div>
-
-      <div className="space-y-4">
-        <motion.div
-          className="flex items-center justify-between bg-[#151515] border border-white/5 rounded-xl p-6"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+    <motion.label
+      className="flex items-start gap-3 cursor-pointer group"
+      whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
+    >
+      <div className="relative mt-0.5 flex-shrink-0 w-10 h-5">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => setChecked(e.target.checked)}
+          className="opacity-0 w-0 h-0"
+        />
+        <div
+          onClick={() => setChecked(!checked)}
+          className={`absolute inset-0 rounded-full transition-colors cursor-pointer ${
+            checked ? 'bg-[var(--mcode-green,#3ecf8e)]' : 'bg-[#3a3a3f]'
+          }`}
         >
-          <div className="flex items-center gap-4">
-            <Github className="w-6 h-6 text-white" />
-            <div>
-              <h3 className="text-[13px] font-medium text-white">GitHub</h3>
-              <p className="text-[11px] text-[#888] mt-0.5">
-                {githubStatus.connected ? 'Connected' : 'Not connected'}
-              </p>
-            </div>
-          </div>
-          {githubStatus.connected ? (
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-[13px] border border-emerald-500/20 transition">
-              Disconnect
-            </motion.button>
-          ) : (
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleConnectGithub} className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-[13px] text-white transition border border-white/10">
-              Connect
-            </motion.button>
+          <motion.div
+            animate={{ x: checked ? 5 : 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+            className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow"
+          />
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <span className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">{label}</span>
+        <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-0.5">{description}</p>
+      </div>
+    </motion.label>
+  );
+}
+
+function SettingSelect({ label, description, options, defaultValue }: { label: string; description: string; options: string[]; defaultValue?: string }) {
+  const [value, setValue] = useState(defaultValue || '');
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">{label}</label>
+      <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">{description}</p>
+      <select
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-full bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)] rounded-lg px-3 py-2 text-sm text-[var(--mcode-text,#e6e6ea)] focus:outline-none focus:border-[var(--mcode-green,#3ecf8e)] transition-colors"
+      >
+        {options.map((opt) => (
+          <option key={opt} value={opt} className="bg-[var(--mcode-bg,#0d0e12)]">{opt}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function SettingText({ label, description, placeholder, defaultValue }: { label: string; description: string; placeholder?: string; defaultValue?: string }) {
+  const [value, setValue] = useState(defaultValue || '');
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">{label}</label>
+      <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">{description}</p>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
+        className="w-full bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)] rounded-lg px-3 py-2 text-sm text-[var(--mcode-text,#e6e6ea)] placeholder-[var(--mcode-text-dim,#8b8d98)]/50 focus:outline-none focus:border-[var(--mcode-green,#3ecf8e)] transition-colors font-mono"
+      />
+    </div>
+  );
+}
+
+function SettingSlider({ label, description, min, max, step, defaultValue }: { label: string; description: string; min: number; max: number; step: number; defaultValue?: number }) {
+  const [value, setValue] = useState(defaultValue ?? min);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">{label}</span>
+        <span className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">{value}px</span>
+      </div>
+      <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">{description}</p>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => setValue(Number(e.target.value))}
+        className="w-full h-1 bg-[var(--mcode-border,#26272f)] rounded-full accent-[var(--mcode-green,#3ecf8e)]"
+      />
+    </div>
+  );
+}
+
+function SettingTheme({ label, description, options }: { label: string; description: string; options: { id: string; label: string; icon: React.ReactNode }[] }) {
+  const [selected, setSelected] = useState('dark');
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">{label}</label>
+      <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">{description}</p>
+      <div className="flex gap-2">
+        {options.map((opt) => (
+          <button
+            key={opt.id}
+            onClick={() => setSelected(opt.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              selected === opt.id
+                ? 'bg-[var(--mcode-green,#3ecf8e)]/20 text-[var(--mcode-green,#3ecf8e)] border border-[var(--mcode-green,#3ecf8e)]/30'
+                : 'bg-[var(--mcode-panel,#16171d)] text-[var(--mcode-text-dim,#8b8d98)] border border-[var(--mcode-border,#26272f)] hover:text-[var(--mcode-text,#e6e6ea)]'
+            }`}
+          >
+            <div className="flex items-center gap-2">{opt.icon}{opt.label}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SettingCard({ title, children, delay = 0 }: { title: string; children: React.ReactNode; delay?: number }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+      className="bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)] rounded-xl overflow-hidden"
+    >
+      <motion.button
+        whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
+        onClick={() => setOpen(!open)}
+        className="w-full px-5 py-3 flex items-center justify-between text-left cursor-pointer"
+      >
+        <h3 className="text-sm font-semibold text-[var(--mcode-text,#e6e6ea)] uppercase tracking-wider">{title}</h3>
+        <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+          <ChevronDown className="w-4 h-4 text-[var(--mcode-text-dim,#8b8d98)]" />
+        </motion.div>
+      </motion.button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+            className="px-5 pb-4 space-y-4"
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/* ─────────────────── TABS ─────────────────── */
+
+const MODEL_PROVIDERS = [
+  { id: 'openai', name: 'OpenAI', envVar: 'OPENAI_API_KEY', free: false },
+  { id: 'anthropic', name: 'Anthropic', envVar: 'ANTHROPIC_API_KEY', free: false },
+  { id: 'google', name: 'Google', envVar: 'GOOGLE_API_KEY', free: false },
+  { id: 'openrouter', name: 'OpenRouter', envVar: 'OPENROUTER_API_KEY', free: true },
+  { id: 'groq', name: 'Groq', envVar: 'GROQ_API_KEY', free: true },
+  { id: 'cohere', name: 'Cohere', envVar: 'COHERE_API_KEY', free: false },
+  { id: 'openai-compatible', name: 'OpenAI-Compatible', envVar: '', free: false },
+];
+
+const BUILT_IN_SUBAGENTS = [
+  { name: 'general-purpose', tools: 'All tools', description: 'General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks.' },
+  { name: 'Explore', tools: '7 tools', description: 'Read-only search agent for broad fan-out searches.' },
+];
+
+const BUILT_IN_PLUGINS = [
+  { name: 'Android Emulator', description: 'Provides Android development workflows and emulator automation for mcode.', default: true },
+  { name: 'Browser Use', description: 'Built-in browser automation runtime and guidance.', default: true },
+  { name: 'Document Skills', description: 'Built-in DOCX and PDF document production skills.', default: true },
+  { name: 'IOS Simulator', description: 'Provides iOS development workflows and simulator automation.', default: true },
+  { name: 'Restore Legacy Sessions', description: 'Select and restore legacy sessions into the new task store.', default: true },
+  { name: 'Skill Creator', description: 'Create, edit, and iterate local mcode skills.', default: true },
+  { name: 'mcode Guide', description: 'mcode usage and self-diagnosis guide for MCP, commands, skills, hooks, and plugins.', default: true },
+  { name: 'Computer Use', description: 'Automate desktop apps with mouse, keyboard, and UI element control.', default: true },
+];
+
+const MCP_SERVERS = [
+  { name: 'Browser Use', count: 1, description: 'node_repl — managed by the host.' },
+  { name: 'Computer Use', count: 1, description: 'computer-use — connected and available.' },
+  { name: 'Document Skills', count: 1, description: 'image_search — requires Coding Plan.' },
+];
+
+const SKILLS = [
+  { category: 'Browser Use', name: 'control-browser', description: 'Main-agent-only Browser Use.' },
+  { category: 'Browser Use', name: 'web-gui-tester', description: 'Test web frontends interactively.' },
+  { category: 'Document Skills', items: ['docx', 'pdf', 'pptx'] },
+  { category: 'Skill Creator', name: 'skill-creator', description: 'Create and edit local skills.' },
+  { category: 'mcode Guide', items: ['diagnosing-commands', 'diagnosing-hooks', 'diagnosing-mcp', 'diagnosing-plugins', 'diagnosing-skills', 'zcode-configuration-guide'] },
+];
+
+/* ─────────────────── TAB RENDERERS ─────────────────── */
+
+// GeneralTab renders settings from a settings array (used for both General and Appearance)
+function GeneralTab({ settings }: { settings?: any[] }) {
+  const items = settings || SETTING_GROUPS.general.settings;
+  return (
+    <div className="space-y-6">
+      {items.map((s: any, i: number) => (
+        <motion.div
+          key={s.key}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.03 }}
+        >
+          {s.type === 'toggle' && (
+            <SettingToggle label={s.label} description={s.description} defaultChecked={s.defaultValue as boolean} />
+          )}
+          {s.type === 'select' && (
+            <SettingSelect label={s.label} description={s.description} options={s.options} defaultValue={s.defaultValue as string} />
+          )}
+          {s.type === 'text' && (
+            <SettingText label={s.label} description={s.description} placeholder={s.placeholder} defaultValue={s.defaultValue as string} />
+          )}
+          {s.type === 'slider' && (
+            <SettingSlider label={s.label} description={s.description} min={s.min} max={s.max} step={s.step} defaultValue={s.defaultValue as number} />
+          )}
+          {s.type === 'theme' && (
+            <SettingTheme label={s.label} description={s.description} options={[
+              { id: 'light', label: 'Light', icon: <Sun className="w-4 h-4" /> },
+              { id: 'dark', label: 'Dark', icon: <Moon className="w-4 h-4" /> },
+              { id: 'system', label: 'System', icon: <Monitor className="w-4 h-4" /> },
+            ]} />
           )}
         </motion.div>
+      ))}
+    </div>
+  );
+}
+
+function AppearanceTab() {
+  return <GeneralTab settings={SETTING_GROUPS.appearance.settings} />;
+}
+
+function ModelSettingsTab() {
+  const [providers, setProviders] = useState<any[]>([]);
+  const [keys, setKeys] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeProvider, setActiveProvider] = useState('openrouter');
+  const [newKey, setNewKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      api.get('/api/v1/settings/providers', { timeout: 5000 }).then(r => setProviders(r.data?.providers || [])).catch(() => []),
+      api.get('/api/v1/keys', { timeout: 10000 }).then(r => setKeys(r.data?.keys || [])).catch(() => []),
+    ]).finally(() => setLoading(false));
+  }, []);
+
+  const handleSubmit = async () => {
+    if (!newKey) return;
+    const provider = providers.find(p => p.id === activeProvider);
+    await api.post('/api/v1/keys', {
+      providerId: activeProvider,
+      envVar: provider?.envVar || `${activeProvider.toUpperCase()}_API_KEY`,
+      displayName: provider?.name || activeProvider,
+      apiKey: newKey,
+    });
+    setNewKey('');
+    setShowKey(false);
+    window.dispatchEvent(new CustomEvent('mcode:reload-models'));
+  };
+
+  return (
+    <div className="space-y-6">
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+        <h3 className="text-sm font-semibold text-[var(--mcode-text-dim,#8b8d98)] uppercase tracking-wider mb-3">Providers</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {MODEL_PROVIDERS.map((p) => {
+            const isConfigured = keys.some(k => k.providerId === p.id);
+            return (
+              <motion.div
+                key={p.id}
+                whileHover={{ scale: 1.02 }}
+                className={`p-4 rounded-xl border text-center cursor-pointer transition-all ${
+                  isConfigured
+                    ? 'bg-[var(--mcode-green,#3ecf8e)]/10 border-[var(--mcode-green,#3ecf8e)]/30'
+                    : 'bg-[var(--mcode-panel,#16171d)] border-[var(--mcode-border,#26272f)]'
+                }`}
+              >
+                <div className="font-medium text-sm text-[var(--mcode-text,#e6e6ea)]">{p.name}</div>
+                <div className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-1">
+                  {isConfigured ? 'Configured' : p.free ? 'Free' : 'Paid'}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <h3 className="text-sm font-semibold text-[var(--mcode-text-dim,#8b8d98)] uppercase tracking-wider mb-3">API Key</h3>
+        <div className="flex gap-2">
+          <input
+            type="password"
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder="Enter API key"
+            className="flex-1 bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)] rounded-lg px-3 py-2 text-sm text-[var(--mcode-text,#e6e6ea)] focus:outline-none focus:border-[var(--mcode-green,#3ecf8e)]"
+          />
+          <button
+            onClick={handleSubmit}
+            className="px-4 py-2 rounded-lg bg-[var(--mcode-green,#3ecf8e)] text-black font-medium text-sm hover:bg-[var(--mcode-green,#3ecf8e)]/90 transition"
+          >
+            Save
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function BrowserUseTab() {
+  return (
+    <div className="space-y-6">
+      <SettingToggle
+        label="Enable built-in browser control"
+        description="Enable the official Browser Use plugin so new sessions can access and control web pages in the built-in browser."
+        defaultChecked={true}
+      />
+      <SettingToggle
+        label="Ignore certificate errors"
+        description="When enabled, the built-in browser stops verifying HTTPS certificates. Affects the built-in browser only."
+        defaultChecked={false}
+      />
+    </div>
+  );
+}
+
+function ComputerUseTab() {
+  return (
+    <div className="space-y-6">
+      <SettingToggle
+        label="Enable Computer Use"
+        description="Turning this on enables Computer Use — its MCP server and skills."
+        defaultChecked={false}
+      />
+      <SettingToggle
+        label="Show Computer Use button in the composer"
+        description="When off, the composer button is hidden."
+        defaultChecked={true}
+      />
+    </div>
+  );
+}
+
+function MemoryTab() {
+  return (
+    <div className="space-y-6">
+      <SettingToggle
+        label="Workspace Memory"
+        description="Save and reuse long-term context in workspaces. Applies to new sessions and may increase model requests and token costs."
+        defaultChecked={true}
+      />
+    </div>
+  );
+}
+
+function SubagentsTab() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-[var(--mcode-text-dim,#8b8d98)] uppercase tracking-wider">Built-in subagents</h3>
+        <span className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">{BUILT_IN_SUBAGENTS.length} items</span>
+      </div>
+      <div className="space-y-3">
+        {BUILT_IN_SUBAGENTS.map((sub) => (
+          <motion.div key={sub.name} className="p-4 rounded-xl bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm text-[var(--mcode-text,#e6e6ea)]">{sub.name}</div>
+                <div className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-1">{sub.tools}</div>
+                <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-1 opacity-70">{sub.description}</p>
+              </div>
+              <span className="text-xs px-2 py-1 bg-[var(--mcode-green,#3ecf8e)]/10 text-[var(--mcode-green,#3ecf8e)] rounded-full">Default</span>
+            </div>
+          </motion.div>
+        ))}
       </div>
     </div>
+  );
+}
+
+function PluginsTab() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-[var(--mcode-text-dim,#8b8d98)] uppercase tracking-wider">Built-in</h3>
+        <span className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">{BUILT_IN_PLUGINS.length} items</span>
+      </div>
+      <div className="space-y-3">
+        {BUILT_IN_PLUGINS.map((p) => (
+          <motion.div key={p.name} className="p-4 rounded-xl bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm text-[var(--mcode-text,#e6e6ea)]">{p.name}</div>
+                <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-1 opacity-70">{p.description}</p>
+              </div>
+              <span className="text-xs px-2 py-1 bg-[var(--mcode-green,#3ecf8e)]/10 text-[var(--mcode-green,#3ecf8e)] rounded-full">Default</span>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function McpServersTab() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-[var(--mcode-text-dim,#8b8d98)] uppercase tracking-wider">Installed</h3>
+        <span className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">{MCP_SERVERS.length} servers</span>
+      </div>
+      <div className="space-y-3">
+        {MCP_SERVERS.map((s) => (
+          <motion.div key={s.name} className="p-4 rounded-xl bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)]">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium text-sm text-[var(--mcode-text,#e6e6ea)]">{s.name}</div>
+                <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-1">{s.description}</p>
+              </div>
+              <span className="text-xs px-2 py-1 bg-[var(--mcode-green,#3ecf8e)]/10 text-[var(--mcode-green,#3ecf8e)] rounded-full">{s.count} server</span>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkillsTab() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-[var(--mcode-text-dim,#8b8d98)] uppercase tracking-wider">Built-in</h3>
+        <span className="text-xs text-[var(--mcode-text-dim,#8b8d98)]">12 items</span>
+      </div>
+      <div className="space-y-4">
+        {SKILLS.map((cat, i) => (
+          <motion.div key={i} className="p-4 rounded-xl bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)]">
+            <div className="font-medium text-sm text-[var(--mcode-green,#3ecf8e)] mb-2">{cat.category}</div>
+            {'items' in cat ? (
+              <div className="flex flex-wrap gap-2">
+                {cat.items?.map((item: string) => (
+                  <span key={item} className="text-xs px-2 py-1 bg-[var(--mcode-border,#26272f)] rounded text-[var(--mcode-text-dim,#8b8d98)]">{item}</span>
+                ))}
+              </div>
+            ) : (
+              <div>
+                <div className="font-medium text-sm text-[var(--mcode-text,#e6e6ea)]">{cat.name}</div>
+                <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-1 opacity-70">{cat.description}</p>
+              </div>
+            )}
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CommandsTab() {
+  return (
+    <div className="space-y-6">
+      <div className="text-center py-8">
+        <Search className="w-8 h-8 text-[var(--mcode-text-dim,#8b8d98)]/50 mx-auto mb-2" />
+        <p className="text-[var(--mcode-text-dim,#8b8d98)]">No commands installed</p>
+        <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)]/50 mt-1">Create a command or import one from an external agent.</p>
+      </div>
+    </div>
+  );
+}
+
+function HooksTab() {
+  return (
+    <div className="space-y-6">
+      <div className="text-center py-8">
+        <Search className="w-8 h-8 text-[var(--mcode-text-dim,#8b8d98)]/50 mx-auto mb-2" />
+        <p className="text-[var(--mcode-text-dim,#8b8d98)]">No hooks installed</p>
+        <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)]/50 mt-1">Create a hook to run commands during task lifecycle events.</p>
+      </div>
+    </div>
+  );
+}
+
+function IndexingTab() {
+  return (
+    <div className="space-y-6">
+      <SettingToggle
+        label="Index new folders"
+        description="Automatically index any new folders with fewer than 50,000 files."
+        defaultChecked={true}
+      />
+      <SettingToggle
+        label="Index repositories for instant grep"
+        description="Automatically index repositories to speed up Grep searches. All data is stored locally."
+        defaultChecked={false}
+      />
+      <motion.div className="p-4 rounded-xl bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)]">
+        <div className="flex items-center gap-3">
+          <Database className="w-5 h-5 text-[var(--mcode-green,#3ecf8e)]" />
+          <div>
+            <div className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">Data storage path</div>
+            <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-0.5">Root directory for app data.</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <code className="text-xs text-[var(--mcode-text-dim,#8b8d98)] bg-[var(--mcode-bg,#0d0e12)] px-2 py-1 rounded">
+                C:\Users\mahen
+              </code>
+              <button className="p-1 text-[var(--mcode-text-dim,#8b8d98)] hover:text-[var(--mcode-text,#e6e6ea)]">
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function UsageStatsTab() {
+  return (
+    <div className="space-y-6">
+      <motion.div className="p-4 rounded-xl bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)]">
+        <div className="flex items-center gap-3">
+          <BarChart2 className="w-5 h-5 text-[var(--mcode-green,#3ecf8e)]" />
+          <div>
+            <div className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">Data storage path</div>
+            <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-0.5">Root directory for app data (defaults to user home directory).</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <code className="text-xs text-[var(--mcode-text-dim,#8b8d98)] bg-[var(--mcode-bg,#0d0e12)] px-2 py-1 rounded">
+                C:\Users\mahen
+              </code>
+              <button className="p-1 text-[var(--mcode-text-dim,#8b8d98)] hover:text-[var(--mcode-text,#e6e6ea)]">
+                <Copy className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function OnboardTab() {
+  return (
+    <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-4 rounded-xl bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)] cursor-pointer"
+        whileHover={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
+      >
+        <div className="flex items-center gap-3">
+          <Settings className="w-5 h-5 text-[var(--mcode-green,#3ecf8e)]" />
+          <div>
+            <div className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">Reopen onboarding flow</div>
+            <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-0.5">Review migration options and import settings.</p>
+          </div>
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="p-4 rounded-xl bg-[var(--mcode-panel,#16171d)] border border-[var(--mcode-border,#26272f)]"
+      >
+        <div className="flex items-start gap-3">
+          <input type="checkbox" className="mt-0.5 accent-[var(--mcode-green,#3ecf8e)]" defaultChecked />
+          <div>
+            <span className="text-sm font-medium text-[var(--mcode-text,#e6e6ea)]">Improve experience</span>
+            <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-0.5">Allow us to use your conversations to improve the Agent experience.</p>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ─────────────────── SIDEBAR ─────────────────── */
+
+function SettingsSidebar({ activeTab, setActiveTab, onClose, settings }: {
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  onClose?: () => void;
+  settings: any;
+}) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({
+    basics: true, agent: true, plugins: true, data: true,
+  });
+
+  return (
+    <aside className="w-64 flex-shrink-0 bg-[var(--mcode-panel,#16171d)] border-r border-[var(--mcode-border,#26272f)] flex flex-col">
+      <motion.div
+        className="p-5 border-b border-[var(--mcode-border,#26272f)]"
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-2 text-[var(--mcode-text-dim,#8b8d98)] hover:text-[var(--mcode-text,#e6e6ea)] transition text-sm group cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            Back to workspace
+          </button>
+        ) : (
+          <MotionLink
+            href="/ai/chat"
+            className="flex items-center gap-2 text-[var(--mcode-text-dim,#8b8d98)] hover:text-[var(--mcode-text,#e6e6ea)] transition text-sm group"
+            whileHover={{ x: -3 }}
+          >
+            <motion.div whileHover={{ x: -3 }}>
+              <ArrowLeft className="w-4 h-4" />
+            </motion.div>
+            Back to workspace
+          </MotionLink>
+        )}
+        <motion.h1
+          className="text-lg font-semibold text-[var(--mcode-text,#e6e6ea)] mt-4 tracking-tight"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          Settings
+        </motion.h1>
+      </motion.div>
+
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto custom-scrollbar">
+        {SIDEBAR_SECTIONS.map((section) => {
+          const Icon = section.icon;
+          const isOpen = expanded[section.id] ?? false;
+          return (
+            <div key={section.id}>
+              <motion.button
+                onClick={() => setExpanded(e => ({ ...e, [section.id]: !e[section.id] }))}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all group ${
+                  isOpen ? 'text-[var(--mcode-text,#e6e6ea)]' : 'text-[var(--mcode-text-dim,#8b8d98)] hover:text-[var(--mcode-text,#e6e6ea)]'
+                }`}
+                whileHover={{ x: 2 }}
+              >
+                <motion.div animate={{ rotate: isOpen ? 0 : -90 }} transition={{ duration: 0.2 }}>
+                  <ChevronDown className="w-3 h-3 text-[var(--mcode-text-dim,#8b8d98)]" />
+                </motion.div>
+                <Icon className="w-4 h-4" />
+                <span>{section.label}</span>
+              </motion.button>
+              <AnimatePresence>
+                {isOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                  >
+                    {section.children.map((child) => {
+                      const isActive = activeTab === child.id;
+                      return (
+                        <motion.button
+                          key={child.id}
+                          onClick={() => setActiveTab(child.id)}
+                          className={`w-full flex items-center gap-3 ml-7 px-3 py-1.5 rounded-lg text-sm transition-all ${
+                            isActive
+                              ? 'text-[var(--mcode-green,#3ecf8e)]'
+                              : 'text-[var(--mcode-text-dim,#8b8d98)] hover:text-[var(--mcode-text,#e6e6ea)]'
+                          }`}
+                          initial={{ opacity: 0, x: -6 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.05 }}
+                          whileHover={{ x: 2 }}
+                        >
+                          {isActive && (
+                            <motion.div
+                              layoutId="active-pill"
+                              className="absolute w-0.5 h-4 -ml-[13px] bg-[var(--mcode-green,#3ecf8e)] rounded-full"
+                            />
+                          )}
+                          <span>{child.label}</span>
+                        </motion.button>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </nav>
+
+      <motion.div
+        className="p-4 border-t border-[var(--mcode-border,#26272f)]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+      >
+        <p className="text-[10px] text-[var(--mcode-text-dim,#8b8d98)] text-center">mcode v1.0</p>
+      </motion.div>
+    </aside>
   );
 }
 
 /* ─────────────────── MAIN SETTINGS PAGE ─────────────────── */
 export function SettingsPage({ onClose, initialTab }: { onClose?: () => void; initialTab?: string } = {}) {
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState(initialTab || searchParams?.get('tab') || 'permissions');
-  const [settings, setSettings] = useState<Record<string, any>>({ allowShellAll: false, requireEditApproval: false, modelOverrides: {} });
-  const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState(initialTab || searchParams?.get('tab') || 'general');
 
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    }
+    if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
 
   useEffect(() => {
     if (!onClose) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  useEffect(() => {
-    api.get('/api/v1/settings', { timeout: 5000 })
-      .then((res) => { if (res.data?.settings) setSettings(res.data.settings); })
-      .catch(console.error);
-  }, []);
-
-  const updatePermissions = async (patch: any) => {
-    const updated = { ...settings, ...patch };
-    setSettings(updated);
-    setSaving(true);
-    try {
-      await api.put('/api/v1/settings/permissions', { allowShellAll: updated.allowShellAll, requireEditApproval: updated.requireEditApproval });
-    } catch (e) { console.error(e); }
-    setSaving(false);
+  const tabRenderers: Record<string, React.ComponentType> = {
+    general: GeneralTab,
+    appearance: AppearanceTab,
+    models: ModelSettingsTab,
+    browser: BrowserUseTab,
+    computer: ComputerUseTab,
+    memory: MemoryTab,
+    subagents: SubagentsTab,
+    plugins: PluginsTab,
+    mcp: McpServersTab,
+    skills: SkillsTab,
+    commands: CommandsTab,
+    hooks: HooksTab,
+    indexing: IndexingTab,
+    usage: UsageStatsTab,
+    onboard: OnboardTab,
   };
 
-  const updateGeneric = async (patch: any) => {
-    setSettings(s => ({ ...s, ...patch }));
-    if (patch.accentColor) {
-      const c = ACCENT_COLORS.find(x => x.id === patch.accentColor);
-      if (c) document.documentElement.style.setProperty('--theme-accent', c.color);
-    }
-    try {
-      await api.put('/api/v1/settings', patch);
-    } catch (e) { console.error(e); }
-  };
+  const TabContent = tabRenderers[activeTab] || GeneralTab;
+  const activeSection = SIDEBAR_SECTIONS.find(s => s.children.some(c => c.id === activeTab));
+  const activeLabel = activeSection?.children.find(c => c.id === activeTab)?.label || 'Settings';
 
   return (
     <div className="flex h-screen w-screen bg-[var(--mcode-bg,#0d0e12)] text-[var(--mcode-text,#e6e6ea)] font-sans overflow-hidden">
+      <SettingsSidebar activeTab={activeTab} setActiveTab={setActiveTab} onClose={onClose} settings={{}} />
 
-      {/* LEFT SIDEBAR */}
-      <aside className="w-64 flex-shrink-0 bg-[var(--mcode-panel,#16171d)] border-r border-[var(--mcode-border,#26272f)] flex flex-col">
-        {/* Header */}
-        <motion.div
-          className="p-5 border-b border-white/5"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm group cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-              Back to workspace
-            </button>
-          ) : (
-            <MotionLink
-              href="/ai/chat"
-              className="flex items-center gap-2 text-white/50 hover:text-white transition text-sm group"
-              whileHover={{ x: -3 }}
-            >
-              <motion.div whileHover={{ x: -3 }}>
-                <ArrowLeft className="w-4 h-4" />
-              </motion.div>
-              Back to workspace
-            </MotionLink>
-          )}
-          <motion.h1
-            className="text-lg font-semibold text-white mt-4 tracking-tight"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-          >
-            Settings
-          </motion.h1>
-        </motion.div>
-
-        {/* Nav */}
-        <nav className="flex-1 p-3 space-y-1">
-          {TABS.map((tab, i) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <motion.button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-[color-mix(in_oklab,var(--mcode-green,#3ecf8e)_15%,transparent)] text-white border border-[color-mix(in_oklab,var(--mcode-green,#3ecf8e)_30%,transparent)]'
-                    : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-                }`}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.15 + i * 0.05 }}
-                whileHover={{ x: 2, scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <motion.div
-                  animate={{ scale: isActive ? 1.1 : 1 }}
-                  transition={{ type: 'spring', stiffness: 300 }}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-[var(--mcode-green,#3ecf8e)]' : 'text-white/40'}`} />
-                </motion.div>
-                {tab.label}
-              </motion.button>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <motion.div
-          className="p-4 border-t border-white/5"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
-        >
-          <p className="text-[10px] text-white/20 text-center">mcode v1.0</p>
-        </motion.div>
-      </aside>
-
-      {/* MAIN CONTENT */}
       <motion.main
-        className="flex-1 overflow-y-auto custom-scrollbar relative"
+        className="flex-1 overflow-y-auto custom-scrollbar"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15, duration: 0.3 }}
       >
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-6 right-8 px-2.5 py-1 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition z-50 cursor-pointer flex items-center gap-1.5 text-xs border border-white/10 bg-[#141414] shadow-lg"
-            title="Close Settings (Esc)"
+        <div className="max-w-3xl mx-auto px-8 py-10">
+          {/* Page header */}
+          <motion.div
+            className="mb-8 pb-4 border-b border-[var(--mcode-border,#26272f)]"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
           >
-            <span className="text-[10px] text-white/40 font-mono">Esc</span>
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
-        <div className={`mx-auto px-8 py-10 ${activeTab === 'keys' ? 'max-w-5xl' : 'max-w-2xl'}`}>
-          {activeTab === 'permissions' && <PermissionsTab settings={settings} onUpdate={updatePermissions} saving={saving} />}
-          {activeTab === 'keys' && <ApiKeysTab />}
-          {activeTab === 'usage' && <UsageTab />}
-          {activeTab === 'theme' && <ThemeTab settings={settings} onUpdate={updateGeneric} />}
-          {activeTab === 'network' && <NetworkTab settings={settings} onUpdate={updateGeneric} />}
-          {activeTab === 'watch' && <WatchTab settings={settings} onUpdate={updateGeneric} />}
-          {activeTab === 'godmode' && <GodModeTab settings={settings} onUpdate={updateGeneric} />}
-          {activeTab === 'account' && <AccountTab />}
-          {activeTab === 'connections' && <ConnectionsTab />}
-          {/* mcode knowledge base tabs */}
-          {activeTab === 'mcode-architecture' && <McodeArchitectureTab />}
-          {activeTab === 'mcode-config' && <McodeConfigTab />}
-          {activeTab === 'mcode-settings' && <McodeSettingsTab />}
-          {activeTab === 'mcode-startup' && <McodeStartupTab />}
-          {activeTab === 'mcode-turn-machine' && <McodeTurnMachineTab />}
-          {activeTab === 'mcode-hooks' && <McodeHooksTab />}
-          {activeTab === 'mcode-plugins' && <McodePluginsTab />}
-          {activeTab === 'mcode-mcp' && <McodeMcpTab />}
-          {activeTab === 'mcode-skills' && <McodeSkillsTab />}
-          {activeTab === 'mcode-animations' && <McodeAnimationsTab />}
-          {activeTab === 'mcode-tests' && <McodeTestsTab />}
-          {activeTab === 'mcode-deps' && <McodeDependenciesTab />}
-          {activeTab === 'mcode-git' && <McodeGitToolsTab />}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="absolute top-6 right-6 px-2.5 py-1.5 rounded-xl text-[var(--mcode-text-dim,#8b8d98)] hover:text-[var(--mcode-text,#e6e6ea)] hover:bg-white/5 transition z-50 flex items-center gap-1.5 text-xs border border-[var(--mcode-border,#26272f)]"
+                title="Close Settings (Esc)"
+              >
+                <span className="text-[10px] text-[var(--mcode-text-dim,#8b8d98)] font-mono">Esc</span>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <h1 className="text-xl font-semibold text-[var(--mcode-text,#e6e6ea)]">{activeLabel}</h1>
+            <p className="text-sm text-[var(--mcode-text-dim,#8b8d98)] mt-1">{activeSection?.label}</p>
+          </motion.div>
+
+          <TabContent />
         </div>
       </motion.main>
-    </div>
-  );
-}
-
-function formatCount(n: any) {
-  if (!n) return '0';
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
-  return n.toString();
-}
-
-const DONUT_COLORS = ['#3b82f6', '#10b981', '#a854f7', '#f97316', '#06b6d4', '#ef4444', '#eab308', '#8b5cf6'];
-
-/* ─────────────────── USAGE TAB ─────────────────── */
-function UsageTab() {
-  const [timeRange, setTimeRange] = useState('Last 30 days');
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchStats = async () => {
-    try {
-      const days = timeRange === 'Last 7 days' ? 7 : 30;
-      const to = new Date();
-      const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
-      const res = await api.get(`/api/v1/usage/stats?from=${from.toISOString()}&href=${to.toISOString()}`, { timeout: 10000 });
-      const data = res.data;
-      if (data.ok) setStats(data.stats);
-    } catch (e) {
-      console.error('Failed to fetch usage stats:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    fetchStats();
-  }, [timeRange]);
-
-  const dailyActivity = stats?.dailyActivity || {};
-  const dailyTokens = stats?.dailyTokens || {};
-
-  const today = new Date();
-  const heatmapDates: string[] = [];
-  for (let i = 34; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    heatmapDates.push(d.toISOString().slice(0, 10));
-  }
-  const heatmapData = heatmapDates.map(dateStr => {
-    const count = dailyActivity[dateStr] || 0;
-    if (count === 0) return 0;
-    if (count === 1) return 1;
-    if (count === 2) return 2;
-    return 3;
-  });
-
-  const barDates = heatmapDates.slice(-30);
-  const barData = barDates.map(dateStr => ({ date: dateStr, tokens: dailyTokens[dateStr] || 0 }));
-  const maxTokens = Math.max(...barData.map(d => d.tokens), 1);
-
-  const modelUsageEntries = stats?.modelUsage
-    ? (Object.entries(stats.modelUsage) as [string, number][]).sort(([, a], [, b]) => b - a)
-    : [];
-  const totalModelSessions = modelUsageEntries.reduce((sum, [, count]) => sum + count, 0);
-
-  let offset = 0;
-  const circumference = Math.PI * 2 * 37;
-  const donutSegments = modelUsageEntries.map(([model, count], i) => {
-    const pct = totalModelSessions > 0 ? count / totalModelSessions : 0;
-    const dashArray = circumference * pct;
-    const color = DONUT_COLORS[i % DONUT_COLORS.length];
-    offset -= dashArray;
-    return { model, count, pct, color, dashArray, offset };
-  });
-
-  const tokenDisplay = stats?.tokenQuota
-    ? `${formatCount(stats.tokenQuota.used)} / ${formatCount(stats.tokenQuota.limit)}`
-    : '—';
-
-  const favoriteModel = stats?.favoriteModel || '—';
-  const favoriteModelCount = stats?.modelUsage[favoriteModel] || 0;
-  const favoriteModelPct = totalModelSessions > 0
-    ? Math.round((favoriteModelCount / totalModelSessions) * 100)
-    : 0;
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4 border-b border-white/10 pb-2">
-          <h2 className="text-xl font-semibold text-white">Usage stats</h2>
-          <span className="text-sm font-medium text-white border-b-2 border-white pb-2 translate-y-[9px]">App usage</span>
-        </div>
-        <div className="flex bg-[#1a1a1a] rounded-lg p-1 border border-white/5">
-          {['Last 7 days', 'Last 30 days'].map(range => (
-            <button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              className={`px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors ${timeRange === range ? 'bg-[#2a2a2a] text-white' : 'text-[#888] hover:text-white'}`}
-            >
-              {range}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center h-64 text-[#666]">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" />
-          Loading usage stats...
-        </div>
-      ) : (
-        <>
-          {/* METRICS GRID */}
-          <div className="grid grid-cols-3 gap-4">
-            {/* Token Usage */}
-            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-[#888]"><Zap className="w-4 h-4 opacity-70" /><span className="text-sm">Token usage</span></div>
-                <span className="text-xs text-[#666]">{tokenDisplay}</span>
-              </div>
-              <div className="text-3xl font-bold text-white">{stats?.tokenQuota ? formatCount(stats.tokenQuota.used) : '—'}</div>
-            </div>
-            {/* Sessions */}
-            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-[#888]"><Activity className="w-4 h-4 opacity-70" /><span className="text-sm">Sessions</span></div>
-              <div className="text-3xl font-bold text-white">{stats?.totalSessions || 0}</div>
-            </div>
-            {/* Messages */}
-            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-[#888]"><MessageSquare className="w-4 h-4 opacity-70" /><span className="text-sm">Messages</span></div>
-              <div className="text-3xl font-bold text-white">{stats?.totalMessages || 0}</div>
-            </div>
-            {/* Active Days */}
-            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-[#888]"><Calendar className="w-4 h-4 opacity-70" /><span className="text-sm">Active days</span></div>
-              <div className="text-3xl font-bold text-white">{stats?.activeDays || 0}</div>
-            </div>
-            {/* Current Streak */}
-            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-[#888]"><Flame className="w-4 h-4 opacity-70" /><span className="text-sm">Current streak</span></div>
-              <div className="text-3xl font-bold text-white">{stats?.currentStreak || 0}</div>
-            </div>
-            {/* Favorite Model */}
-            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-[#888]"><Zap className="w-4 h-4 opacity-70" /><span className="text-sm">Favorite model</span></div>
-              <div className="text-base font-bold text-white font-mono truncate">{favoriteModel}</div>
-              <div className="text-xs text-[#888]">{favoriteModelPct}% share</div>
-            </div>
-          </div>
-        {/* HEATMAP */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white">Activity heatmap</h3>
-          <div className="flex items-center gap-1 text-xs text-[#666]">
-            <span>Less</span>
-            <div className="w-3 h-3 rounded-[3px] bg-white/5 ml-1"></div>
-            <div className="w-3 h-3 rounded-[3px] bg-blue-500/30"></div>
-            <div className="w-3 h-3 rounded-[3px] bg-blue-500/60"></div>
-            <div className="w-3 h-3 rounded-[3px] bg-blue-500"></div>
-            <span className="ml-1">More</span>
-          </div>
-        </div>
-        <div className="flex gap-1.5 overflow-hidden">
-          {Array.from({ length: 5 }).map((_, weekIndex) => {
-            const weekSlice = heatmapData.slice(weekIndex * 7, weekIndex * 7 + 7);
-            return (
-              <div key={weekIndex} className="flex flex-col gap-1.5">
-                {weekSlice.map((day, j) => (
-                  <div key={j} className={`w-3.5 h-3.5 rounded-[3px] ${day === 0 ? 'bg-white/5' : day === 1 ? 'bg-blue-500/30' : day === 2 ? 'bg-blue-500/60' : 'bg-blue-500'}`}
-                    title={`${heatmapDates[weekIndex * 7 + j]}: ${dailyActivity[heatmapDates[weekIndex * 7 + j]] || 0} sessions`} />
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* TOKENS PER DAY BAR CHART */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-5 mt-4">
-        <h3 className="text-sm font-semibold text-white mb-6">Tokens per day</h3>
-        <div className="relative h-48 border-b border-white/10 flex items-end justify-between px-2 pb-6">
-          {/* Y-axis lines */}
-          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-            <div className="border-t border-white/5 w-full h-0"></div>
-            <div className="border-t border-white/5 w-full h-0"></div>
-            <div className="border-t border-white/5 w-full h-0"></div>
-            <div className="border-t border-white/5 w-full h-0"></div>
-          </div>
-          {/* X-axis labels */}
-          <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-[#666] px-2 translate-y-full pt-2">
-            {barDates.map((d, i) => i % 5 === 0 && <span key={d}>{d.slice(5)}</span>)}
-          </div>
-          {/* Bars */}
-          <div className="relative w-full h-full flex items-end justify-between gap-0.5 pb-1 z-10">
-            {barData.map((d) => (
-              <div key={d.date} className="flex-1 flex flex-col items-center">
-                <motion.div
-                  className="w-full bg-blue-500 rounded-t-sm"
-                  style={{ height: `${(d.tokens / maxTokens) * 100}%` }}
-                  initial={{ height: 0 }}
-                  animate={{ height: `${(d.tokens / maxTokens) * 100}%` }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* Legend: model usage */}
-        <div className="grid grid-cols-3 gap-y-3 mt-10">
-          {modelUsageEntries.slice(0, 6).map(([model, count], i) => (
-            <div key={model} className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }}></div>
-              <span className="text-xs text-[#888] font-mono truncate">{model}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* MODEL USAGE DONUT CHART */}
-      <div className="bg-[#151515] border border-white/5 rounded-xl p-5 mt-4">
-        <h3 className="text-sm font-semibold text-white mb-6">Model usage</h3>
-        <div className="flex gap-10">
-          {/* Donut */}
-          <div className="relative w-48 h-48 flex-shrink-0">
-            <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-              <circle cx="50" cy="50" r="40" fill="transparent" stroke="#222" strokeWidth="20" />
-              {donutSegments.map((seg, i) => (
-                <motion.circle
-                  key={i}
-                  cx="50" cy="50" r="40"
-                  fill="transparent"
-                  stroke={seg.color}
-                  strokeWidth="20"
-                  strokeDasharray={seg.dashArray}
-                  strokeDashoffset={-seg.offset}
-                  className="drop-shadow-md"
-                  initial={{ strokeDashoffset: circumference }}
-                  animate={{ strokeDashoffset: -seg.offset }}
-                  transition={{ duration: 0.8 }}
-                />
-              ))}
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-xl font-bold text-white">
-                {modelUsageEntries.length > 0 ? formatCount(modelUsageEntries[0][1]) : '0'}
-              </span>
-              <span className="text-[11px] text-[#888]">sessions</span>
-            </div>
-          </div>
-          {/* List */}
-          <div className="flex flex-col justify-center flex-1 space-y-4">
-            {modelUsageEntries.map(([model, count], i) => (
-              <div key={model} className="flex items-center justify-between">
-                <div className="flex gap-3">
-                  <div className="w-2.5 h-2.5 rounded-full mt-1" style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }}></div>
-                  <div className="flex flex-col">
-                    <span className="text-sm text-white font-mono truncate">{model}</span>
-                    <span className="text-xs text-[#888]">{count} sessions</span>
-                  </div>
-                </div>
-                <span className="text-xs text-white/50">
-                  {totalModelSessions > 0 ? Math.round((count / totalModelSessions) * 100) : 0}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-        </>
-      )}
     </div>
   );
 }

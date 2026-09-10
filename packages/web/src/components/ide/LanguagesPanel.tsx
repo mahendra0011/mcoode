@@ -17,6 +17,8 @@ import { useIDEStore } from "../../store/ideStore";
 import { ALL_LANGUAGES, LanguageItem } from "../../lib/languagesData";
 import { LanguageIcon } from "./LanguageIcon";
 import { toast } from "sonner";
+import api from "../../lib/axios";
+import { useEffect } from "react";
 
 const CATEGORIES = [
   "All",
@@ -41,6 +43,17 @@ export function LanguagesPanel() {
   const toggleLanguage = useIDEStore((s) => s.toggleLanguage);
   const setSelectedLanguages = useIDEStore((s) => s.setSelectedLanguages);
   const createLanguageFile = useIDEStore((s) => s.createLanguageFile);
+
+  const [runnableLanguages, setRunnableLanguages] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    api.get("/api/v1/languages").then((res) => {
+      if (res.data.runtimes) {
+        const runnable = new Set<string>(res.data.runtimes.map((r: any) => r.language));
+        setRunnableLanguages(runnable);
+      }
+    }).catch(console.error);
+  }, []);
 
   const filteredLanguages = useMemo(() => {
     return ALL_LANGUAGES.filter((lang) => {
@@ -221,9 +234,16 @@ export function LanguagesPanel() {
                         {lang.extension}
                       </span>
                     </div>
-                    <span className="text-[10px] text-white/30 truncate">
-                      {lang.category}
-                    </span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-white/30 truncate">
+                        {lang.category}
+                      </span>
+                      {runnableLanguages.has(lang.id) ? (
+                        <span className="text-green-400 text-[10px]">● Run</span>
+                      ) : (
+                        <span className="text-white/30 text-[10px]">Highlighting</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

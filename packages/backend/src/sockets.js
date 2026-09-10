@@ -8,6 +8,9 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import pty from 'node-pty';
+import { runSingleFile } from './piston-client.js';
+import { ensureProjectContainer, execInContainer, stopProjectContainer, getContainerPort } from './docker-runner.js';
+import { connectSSH, sendToSSH, disconnectSSH } from './ssh-manager.js';
 
 // Per-socket chat sessions (web clients only)
 const chatSessions = new Map();
@@ -278,15 +281,67 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       if (session) session.interrupt();
     });
 
-    // Direct terminal command execution — runs a shell command in the
-    // workspace and streams stdout/stderr chunks back as chat:shell_stream.
-    // This lets the user type commands directly into the IDE terminal
-    // (e.g. `npm install lodash`) without going through the AI agent.
+    // ── Single-file Execution (Piston API Sandbox) ─────────────────────
+    socket.on('code:run-file', async (payload = {}) => {
+      const { filename, code, stdin } = payload;
+      if (!filename || code === undefined) {
+        return socket.emit('code:run-result', { error: 'filename and code are required' });
+      }
+      try {
+        const result = await runSingleFile(filename, code, stdin || '');
+        socket.emit('code:run-result', result);
+      } catch (err) {
+        socket.emit('code:run-result', { error: err.message });
+      }
+    });
+
+    // ── Full Project Execution (Docker Container) ─────────────────────
+    socket.on('project:run', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      const projectPath = session?.workspacePath;
+      if (!projectPath) {
+        return socket.emit('project:run-error', { error: 'No active workspace found' });
+      }
+
+      try {
+        const { readdir } = await import('node:fs/promises');
+        const files = await readdir(projectPath);
+        await ensureProjectContainer(socket.id, projectPath, files);
+
+        // Auto-detect and run install + start command
+        await execInContainer(socket.id, 'npm install', (chunk) => {
+          socket.emit('chat:shell_stream', { chunk });
+        });
+        await execInContainer(socket.id, 'npm start', (chunk) => {
+          socket.emit('chat:shell_stream', { chunk });
+        });
+
+        const port = await getContainerPort(socket.id);
+        socket.emit('project:run-ready', { previewUrl: port ? `http://localhost:${port}` : null });
+      } catch (err) {
+        socket.emit('project:run-error', { error: err.message });
+      }
+    });
+
+    // Direct terminal command execution — attempts container execution first,
+    // falls back to host workspace execa execution if container is inactive.
     socket.on('terminal:command', async (payload = {}) => {
+      const { command } = payload;
+      if (!command || !command.trim()) return;
+
+      // Try container execution if active
+      try {
+        socket.emit('chat:shell_stream', { chunk: `\r\x1b[34m$ ${command}\x1b[0m\r\n` });
+        await execInContainer(socket.id, command, (chunk) => {
+          socket.emit('chat:shell_stream', { chunk });
+        });
+        return;
+      } catch (_) {
+        /* Container not active — fallback to host execution */
+      }
+
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
-      // Fall back to a default workspace so the terminal is usable
-      // even before a chat session has been started via chat:start.
       if (!projectPath) {
         const { join } = await import('node:path');
         const { homedir } = await import('node:os');
@@ -294,13 +349,6 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         projectPath = join(homedir(), '.mcode', 'workspaces', 'default');
         await mkdir(projectPath, { recursive: true });
       }
-      const { command } = payload;
-      if (!command || !command.trim()) return;
-
-      // Echo the command prompt so it appears in the terminal
-      const promptChunk = `\r\x1b[34m$ ${command}\x1b[0m\r\n`;
-      console.log('[SOCKET] emitting prompt chunk:', JSON.stringify(promptChunk));
-      socket.emit('chat:shell_stream', { chunk: promptChunk });
 
       const { execa } = await import('execa');
       const child = execa(command, {
@@ -311,19 +359,14 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         reject: false,
       });
 
-      child.stdout?.on('data', chunk => {
-        const s = chunk.toString();
-        console.log('[SOCKET] stdout chunk:', JSON.stringify(s));
-        socket.emit('chat:shell_stream', { chunk: s });
+      child.stdout?.on('data', (chunk) => {
+        socket.emit('chat:shell_stream', { chunk: chunk.toString() });
       });
-      child.stderr?.on('data', chunk => {
-        const s = chunk.toString();
-        console.log('[SOCKET] stderr chunk:', JSON.stringify(s));
-        socket.emit('chat:shell_stream', { chunk: s });
+      child.stderr?.on('data', (chunk) => {
+        socket.emit('chat:shell_stream', { chunk: chunk.toString() });
       });
 
       await child;
-      console.log('[SOCKET] command done, emitting trailing newline');
       socket.emit('chat:shell_stream', { chunk: '\r\n' });
     });
 
@@ -439,7 +482,68 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
     });
 
-    socket.on('disconnect', () => {
+    // ── Testing Panel ─────────────────────────────
+    socket.on('test:run', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      const projectPath = session?.workspacePath;
+      if (!projectPath) {
+        return socket.emit('test:result', { error: 'No active workspace' });
+      }
+      try {
+        const { execa } = await import('execa');
+        // Simple jest run, returning JSON
+        const { stdout } = await execa('npx', ['jest', '--json'], { cwd: projectPath, reject: false });
+        socket.emit('test:result', { data: stdout });
+      } catch (err) {
+        socket.emit('test:result', { error: err.message });
+      }
+    });
+
+    // ── SSH Remote Explorer ────────────────────────
+    socket.on('ssh:connect', (payload = {}) => {
+      connectSSH(socket.id, payload, 
+        (data) => socket.emit('ssh:data', { data }),
+        () => socket.emit('ssh:ready'),
+        (error) => socket.emit('ssh:error', { error })
+      );
+    });
+
+    socket.on('ssh:input', ({ data }) => {
+      sendToSSH(socket.id, data);
+    });
+
+    // ── Ports Panel ──────────────────────────────
+    socket.on('ports:list', async () => {
+      try {
+        const { execa } = await import('execa');
+        let ports = [];
+        if (process.platform === 'win32') {
+          const { stdout } = await execa('netstat', ['-ano']);
+          // Parse basic windows netstat
+          const lines = stdout.split('\n').filter(l => l.includes('LISTENING'));
+          ports = lines.map(l => {
+            const parts = l.trim().split(/\s+/);
+            const portMatch = parts[1].match(/:(\d+)$/);
+            return portMatch ? parseInt(portMatch[1], 10) : null;
+          }).filter(p => p);
+        } else {
+          // lsof -i -P -n | grep LISTEN
+          const { stdout } = await execa('lsof', ['-i', '-P', '-n'], { reject: false });
+          const lines = stdout.split('\n').filter(l => l.includes('LISTEN'));
+          ports = lines.map(l => {
+            const match = l.match(/:(\d+) \(LISTEN/);
+            return match ? parseInt(match[1], 10) : null;
+          }).filter(p => p);
+        }
+        socket.emit('ports:update', { ports: [...new Set(ports)] });
+      } catch (err) {
+        console.error('Failed to list ports', err);
+      }
+    });
+
+    socket.on('disconnect', async () => {
+      await stopProjectContainer(socket.id);
+      disconnectSSH(socket.id);
       const session = chatSessions.get(socket.id);
       if (session) {
         session.cleanup();

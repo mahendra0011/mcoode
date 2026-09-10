@@ -23,6 +23,7 @@ import {
 import { useIDEStore, BreakpointItem } from "../../store/ideStore";
 import api from "../../lib/axios";
 import { toast } from "sonner";
+import { getSocket } from "../../hooks/useChatSocket";
 
 export type RunMode = "run" | "debug-console";
 
@@ -249,6 +250,76 @@ export function RunDebugPanel({
     }
   }
 
+  // Socket listener for Piston single-file run & Docker project run results
+  useEffect(() => {
+    const socket = getSocket();
+    const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+    const handleRunResult = (result: any) => {
+      setIsRunning(false);
+      if (result.error) {
+        setLogs((prev) => [...prev, { type: "error", text: result.error, time: now() }]);
+        return;
+      }
+      if (result.compileOutput) {
+        setLogs((prev) => [...prev, { type: "warn", text: `[Compilation Output]\n${result.compileOutput}`, time: now() }]);
+      }
+      if (result.stdout) {
+        setLogs((prev) => [...prev, { type: "log", text: result.stdout, time: now() }]);
+      }
+      if (result.stderr) {
+        setLogs((prev) => [...prev, { type: "error", text: result.stderr, time: now() }]);
+      }
+      if (result.exitCode !== undefined && result.exitCode !== null) {
+        setLogs((prev) => [...prev, { type: "log", text: `[Process exited with code ${result.exitCode}]`, time: now() }]);
+      }
+    };
+
+    const handleProjectRunReady = (payload: any) => {
+      setIsRunning(false);
+      setLogs((prev) => [
+        ...prev,
+        { type: "log", text: `[Project container ready! Preview: ${payload.previewUrl || "active"}]`, time: now() },
+      ]);
+      if (payload.previewUrl) {
+        toast.success(`Project running at ${payload.previewUrl}`);
+      }
+    };
+
+    const handleProjectRunError = (payload: any) => {
+      setIsRunning(false);
+      setLogs((prev) => [...prev, { type: "error", text: `[Docker Error] ${payload.error}`, time: now() }]);
+      toast.error(`Docker error: ${payload.error}`);
+    };
+
+    socket.on("code:run-result", handleRunResult);
+    socket.on("project:run-ready", handleProjectRunReady);
+    socket.on("project:run-error", handleProjectRunError);
+
+    return () => {
+      socket.off("code:run-result", handleRunResult);
+      socket.off("project:run-ready", handleProjectRunReady);
+      socket.off("project:run-error", handleProjectRunError);
+    };
+  }, []);
+
+  function handleRunProject() {
+    const socket = getSocket();
+    if (!socket || socket.disconnected) {
+      toast.error("Socket connection unavailable.");
+      return;
+    }
+    setHasStarted(true);
+    setLogs([]);
+    setIsRunning(true);
+    const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    setLogs((prev) => [
+      ...prev,
+      { type: "log", text: "[Starting full project run in Docker container...]", time: now() },
+    ]);
+    socket.emit("project:run");
+  }
+
   function handleRun() {
     let targetFilePath = activePath;
     let targetCode = activeContent;
@@ -286,28 +357,34 @@ export function RunDebugPanel({
     const codeToExecute =
       activeBpLines.length > 0 ? insertBreakpoints(targetCode, activeBpLines) : targetCode;
 
+    const filename = targetFilePath.split("/").pop() || targetFilePath;
     setLogs((prev) => [
       ...prev,
       {
         type: "log",
-        text: `[Running ${targetFilePath.split("/").pop()}...]`,
+        text: `[Running ${filename}...]`,
         time: now(),
       },
     ]);
 
-    runCode(
-      codeToExecute,
-      (msg) => setLogs((l) => [...l, { type: "log", text: msg, time: now() }]),
-      (msg) => setLogs((l) => [...l, { type: "error", text: msg, time: now() }]),
-      (msg) => setLogs((l) => [...l, { type: "warn", text: msg, time: now() }]),
-      (msg) => {
-        if (mode === "debug-console") {
-          setLogs((l) => [...l, { type: "result", text: msg, time: now() }]);
+    const socket = getSocket();
+    if (socket && socket.connected) {
+      socket.emit("code:run-file", { filename, code: codeToExecute });
+    } else {
+      runCode(
+        codeToExecute,
+        (msg) => setLogs((l) => [...l, { type: "log", text: msg, time: now() }]),
+        (msg) => setLogs((l) => [...l, { type: "error", text: msg, time: now() }]),
+        (msg) => setLogs((l) => [...l, { type: "warn", text: msg, time: now() }]),
+        (msg) => {
+          if (mode === "debug-console") {
+            setLogs((l) => [...l, { type: "result", text: msg, time: now() }]);
+          }
         }
-      }
-    );
+      );
+      setIsRunning(false);
+    }
 
-    setIsRunning(false);
     evaluateWatch();
   }
 
@@ -502,12 +579,23 @@ export function RunDebugPanel({
                   onClick={handleRun}
                   disabled={isRunning}
                   className="flex items-center gap-1.5 px-3 py-1 rounded font-medium bg-[#0e639c] hover:bg-[#1177bb] text-white text-xs disabled:opacity-40 transition shadow-sm"
-                  title="Run / Start Debugging (F5)"
+                  title="Run Single File (Piston Sandbox)"
                 >
                   <Play className="w-3 h-3 fill-current" />
-                  <span>Run</span>
+                  <span>Run File</span>
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={handleRunProject}
+                disabled={isRunning}
+                className="flex items-center gap-1 px-2.5 py-1 rounded font-medium bg-[#238636] hover:bg-[#2ea043] text-white text-xs disabled:opacity-40 transition shadow-sm"
+                title="Run full project in Docker container"
+              >
+                <Layers className="w-3 h-3" />
+                <span>Run Project</span>
+              </button>
 
               {hasLaunchConfig && (
                 <button

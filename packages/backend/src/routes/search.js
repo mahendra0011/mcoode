@@ -21,12 +21,33 @@ export function searchRoutes({ secret }) {
       // 2. Build the context block for the LLM
       const context = buildContextBlock(results);
 
-      // In a real implementation, you would pass `context` to your LLM here.
-      // For this example/integration, we'll simulate the LLM response or just return the data.
-      // The frontend expects { results, answer }
+      // 3. Call the LLM to generate the answer
+      let answer = `Based on the web search for "${query}", I found ${results.length} sources. The context has been extracted successfully.`;
       
-      // Simulating a dummy answer if not actually calling an LLM right here
-      const answer = `Based on the web search for "${query}", I found ${results.length} sources. The context has been extracted successfully.`;
+      try {
+        const { getProviders } = await import('mcode-cli/providers');
+        const { ModelRouter } = await import('mcode-cli/router');
+        const secrets = process.env;
+        const providers = await getProviders({ secrets });
+        const router = new ModelRouter({ secrets, providers });
+        const best = await router.find('anthropic:claude-3-5-sonnet-latest') || 
+                     await router.find('openai:gpt-4o') || 
+                     await router.find('google:gemini-2.5-flash');
+        
+        if (best) {
+          const res = await best.provider.complete(best.model.id, {
+            messages: [
+              { role: 'system', content: 'You are a helpful assistant. Use the provided search context to answer the user query concisely. Cite sources where possible.' },
+              { role: 'user', content: `Query: ${query}\n\nContext:\n${context}` }
+            ]
+          });
+          if (res.text) {
+            answer = res.text;
+          }
+        }
+      } catch (llmErr) {
+        console.error('LLM search fallback failed', llmErr);
+      }
 
       res.json({ results, answer, context });
     } catch (err) {

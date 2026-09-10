@@ -46,15 +46,31 @@ export const runtime: Record<string, EditorExtensionRuntime> = {
   eslint: {
     id: "eslint",
     activate: async (editorApi) => {
-      // Swap for `eslint-linter-browserify` if you want real linting rules
-      editorApi.registerLinter?.((code: string) => {
-        // placeholder rule set — replace with real Linter().verify(...)
-        const problems: any[] = [];
-        if (code.includes("var ")) {
-          problems.push({ message: "Use let/const instead of var", severity: "warning" });
-        }
-        return problems;
-      });
+      try {
+        const { Linter } = await import("eslint-linter-browserify");
+        const linter = new Linter();
+        
+        editorApi.registerLinter?.((code: string) => {
+          const messages = linter.verify(code, {
+            env: { browser: true, es2021: true },
+            parserOptions: { ecmaVersion: "latest", sourceType: "module" },
+            rules: {
+              "no-var": "error",
+              "semi": ["warn", "always"],
+              "no-unused-vars": "warn",
+            }
+          });
+          
+          return messages.map((msg: any) => ({
+            message: msg.message,
+            severity: msg.severity === 1 ? "warning" : "error",
+            line: msg.line,
+            column: msg.column
+          }));
+        });
+      } catch (e) {
+        console.warn("ESLint activation error:", e);
+      }
     },
     deactivate: (editorApi) => {
       editorApi.unregisterLinter?.();

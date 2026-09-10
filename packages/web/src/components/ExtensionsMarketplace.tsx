@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { catalog, categories } from "@/lib/extensions/catalog";
+import { catalog as staticCatalog, categories } from "@/lib/extensions/catalog";
 import { runtime } from "@/lib/extensions/runtime";
+import api from "@/lib/axios";
 
 const STORAGE_KEY = "activeExtensions";
 
@@ -15,6 +16,24 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
   const [activeCategory, setActiveCategory] = useState("All categories");
   const [sortBy, setSortBy] = useState<"Relevance" | "Downloads" | "Rating" | "Name">("Relevance");
   const [active, setActive] = useState<Record<string, boolean>>({});
+  const [catalog, setCatalog] = useState<any[]>(staticCatalog);
+
+  // Live search from Open VSX
+  useEffect(() => {
+    // Only search if not empty, otherwise show static
+    if (!query && activeCategory === "All categories") {
+      setCatalog(staticCatalog);
+      return;
+    }
+    const catQuery = activeCategory !== "All categories" ? `&category=${encodeURIComponent(activeCategory)}` : "";
+    api.get(`/api/v1/extensions/search?q=${encodeURIComponent(query)}${catQuery}`)
+      .then((res) => {
+        if (res.data.extensions) {
+          setCatalog(res.data.extensions);
+        }
+      })
+      .catch(console.error);
+  }, [query, activeCategory]);
 
   // restore previously activated extensions on mount
   useEffect(() => {
@@ -48,14 +67,7 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
   }
 
   const filtered = useMemo(() => {
-    let list = catalog.filter((ext) => {
-      const matchesCategory =
-        activeCategory === "All categories" || ext.category === activeCategory;
-      const matchesQuery =
-        ext.name.toLowerCase().includes(query.toLowerCase()) ||
-        ext.publisher.toLowerCase().includes(query.toLowerCase());
-      return matchesCategory && matchesQuery;
-    });
+    let list = catalog;
 
     switch (sortBy) {
       case "Downloads":
