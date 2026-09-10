@@ -51,7 +51,7 @@ export function ReactionBurst({
             return (
               <motion.span
                 key={i}
-                className="absolute inline-block w-1 h-1 bg-emerald-400 rounded-full"
+                className="mcode-reaction-particles absolute inline-block w-1 h-1 bg-emerald-400 rounded-full"
                 style={{ left: '50%', top: '50%', translateX: x, translateY: y }}
                 initial={{ opacity: 0.8, scale: 0 }}
                 animate={{

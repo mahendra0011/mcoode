@@ -53,9 +53,7 @@ import { ModelSelector } from '../../components/ide/ModelSelector';
 import { SparkleButton } from '../../components/ide/SparkleButton';
 import { WaveProgress } from '../../components/ide/WaveProgress';
 import { ChatMessage } from '../../components/chat/ChatMessage';
-import { ThoughtBlock } from '../../components/chat/ThoughtBlock';
-import { WorkingHeader } from '../../components/chat/WorkingHeader';
-import { ThinkingIndicator } from '../../components/chat/ThinkingIndicator';
+import { SpinnerBlock } from '../../components/chat/SpinnerBlock';
 import { AgentActionSequence } from '../../components/chat/AgentActionSequence';
 
 export function AIChatPage() {
@@ -1108,26 +1106,8 @@ export function AIChatPage() {
             {(activeTab === 'Chat' || activeTab === 'AI Code Assistant') && messages.length === 0 ? (
               /* EMPTY STATE (Chat or AI Code Assistant, no messages — the AI Code Editor tab shows the IDE view) */
               <div className="w-full h-full flex flex-col items-center justify-center px-4 relative z-10">
-                <div className="w-24 h-24 mb-10 relative animate-spin-slow">
-                  <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">
-                    <defs>
-                      <linearGradient id="spinner-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#10b981" />
-                        <stop offset="100%" stopColor="#3b82f6" />
-                      </linearGradient>
-                    </defs>
-                    {[...Array(12)].map((_, i) => (
-                      <line 
-                        key={i} 
-                        x1="50" y1="20" x2="50" y2="2" 
-                        stroke="url(#spinner-grad)" 
-                        strokeWidth="8" 
-                        strokeLinecap="round"
-                        transform={`rotate(${i * 30} 50 50)`}
-                        opacity={0.2 + (i / 12) * 0.8}
-                      />
-                    ))}
-                  </svg>
+                <div className="mb-10">
+                  <SpinnerBlock label="Ready…" size="lg" color="emerald" />
                 </div>
                 <h1 className="text-[2.5rem] font-bold mb-10 tracking-tight text-white">What do you want to build?</h1>
                 <div className="flex flex-wrap items-center justify-center gap-3 mb-16">
@@ -1152,12 +1132,12 @@ export function AIChatPage() {
                 <form onSubmit={handleSubmit} className="w-full max-w-xl relative rounded-[24px] group mt-6">
                   {/* Premium Animated Glowing Border (Outer Glow) */}
                   <div className="absolute -inset-[2px] rounded-[26px] overflow-hidden z-0 blur-[10px] opacity-50 group-focus-within:opacity-80 transition-opacity duration-500">
-                    <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg_at_50%_50%,transparent_0%,#3b82f6_30%,transparent_50%,transparent_50%,#10b981_80%,transparent_100%)]"></div>
+                    <div className="absolute inset-[-150%] mcode-input-glow"></div>
                   </div>
                   
                   {/* Premium Animated Glowing Border (Sharp Border) */}
                   <div className="absolute -inset-[2px] rounded-[26px] overflow-hidden z-0 opacity-80 group-focus-within:opacity-100 transition-opacity duration-500">
-                    <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg_at_50%_50%,transparent_0%,#3b82f6_30%,transparent_50%,transparent_50%,#10b981_80%,transparent_100%)]"></div>
+                    <div className="absolute inset-[-150%] mcode-input-glow"></div>
                   </div>
                   
                   {/* Main background */}
@@ -1363,16 +1343,7 @@ export function AIChatPage() {
                           M
                         </div>
                         <div className="flex-1 min-w-0">
-                          {mode === 'chat' ? (
-                            <>
-                              <ThinkingIndicator showAvatar={false} />
-                            </>
-                          ) : (
-                            <>
-                              <WorkingHeader done={false} />
-                              <ThoughtBlock done={false} />
-                            </>
-                          )}
+                          <AgentActionSequence key="agent-action-sequence-1" />
                         </div>
                       </motion.div>
                     )}
@@ -1386,12 +1357,12 @@ export function AIChatPage() {
                   <form onSubmit={handleSubmit} className="w-full max-w-xl relative rounded-[24px] group mt-2">
                     {/* Premium Animated Glowing Border (Outer Glow) */}
                     <div className="absolute -inset-[2px] rounded-[26px] overflow-hidden z-0 blur-[10px] opacity-50 group-focus-within:opacity-80 transition-opacity duration-500">
-                      <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg_at_50%_50%,transparent_0%,#3b82f6_30%,transparent_50%,transparent_50%,#10b981_80%,transparent_100%)]"></div>
+                      <div className="absolute inset-[-150%] mcode-input-glow"></div>
                     </div>
                     
                     {/* Premium Animated Glowing Border (Sharp Border) */}
                     <div className="absolute -inset-[2px] rounded-[26px] overflow-hidden z-0 opacity-80 group-focus-within:opacity-100 transition-opacity duration-500">
-                      <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg_at_50%_50%,transparent_0%,#3b82f6_30%,transparent_50%,transparent_50%,#10b981_80%,transparent_100%)]"></div>
+                      <div className="absolute inset-[-150%] mcode-input-glow"></div>
                     </div>
                     
                     {/* Main background */}
@@ -1666,7 +1637,7 @@ export function AIChatPage() {
                   <div className="p-4 border-t border-white/5 bg-[#0c0c0c]">
                     <form onSubmit={handleSubmit} className="w-full relative rounded-[20px] group">
                       <div className="absolute -inset-[1.5px] rounded-[21px] overflow-hidden z-0">
-                        <div className="absolute inset-[-150%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,transparent_70%,#10b981,#3b82f6)] opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
+                        <div className="absolute inset-[-150%] mcode-input-glow-reversed opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
                       </div>
                       <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
                         <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2" ref={commandPickerRef}>

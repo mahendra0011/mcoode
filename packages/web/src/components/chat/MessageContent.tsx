@@ -251,6 +251,8 @@ export function MessageContent({ msg, text, size = "md", isStreaming = false, ch
     [copied]
   );
 
+  const parsedParts = useMemo(() => parseToolCalls(text || ""), [text]);
+
   // Handle direct standalone web fetch tool message
   if (msg?.kind === "tool" && msg?.tool === "web_fetch") {
     return <WebFetchAnimation msg={msg} />;
@@ -269,8 +271,6 @@ export function MessageContent({ msg, text, size = "md", isStreaming = false, ch
       />
     );
   }
-
-  const parsedParts = useMemo(() => parseToolCalls(text || ""), [text]);
 
   return (
     <div className={`prose prose-invert max-w-none ${textSize} font-sans`}>

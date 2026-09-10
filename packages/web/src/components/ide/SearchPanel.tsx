@@ -472,7 +472,7 @@ export function SearchPanel() {
                           </span>
                           <div className="font-mono text-xs truncate flex-1 leading-snug">
                             <span>{before.trimStart()}</span>
-                            <mark className="bg-yellow-500/40 text-yellow-200 px-0.5 rounded-sm">
+                            <mark className="task-search-result-highlight bg-yellow-500/40 text-yellow-200 px-0.5 rounded-sm">
                               {matched}
                             </mark>
                             <span>{after}</span>

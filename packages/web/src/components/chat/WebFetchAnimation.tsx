@@ -59,7 +59,7 @@ export function WebFetchAnimation({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
             </span>
-            <span>Reading {domain}</span>
+            <span className="browser-use-operation-breathe">Reading {domain}</span>
           </span>
         ) : (
           <span>Searched the web</span>

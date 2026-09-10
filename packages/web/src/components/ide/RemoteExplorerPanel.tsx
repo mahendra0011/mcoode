@@ -56,6 +56,7 @@ export function RemoteExplorerPanel({
   const [customSshHosts, setCustomSshHosts] = useState<RemoteTarget[]>([]);
   const [customContainers, setCustomContainers] = useState<RemoteTarget[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
 
   // Collapsible section states
   const [openSections, setOpenSections] = useState({
@@ -171,6 +172,9 @@ export function RemoteExplorerPanel({
 
   const handleConnect = (target: RemoteTarget) => {
     toast.info(`Connecting to ${target.name} (${target.category.toUpperCase()})...`);
+    setConnectingId(target.id);
+    // Clear connecting state after 3s (simulates connection lifecycle)
+    setTimeout(() => setConnectingId(null), 3000);
     // If terminal runner is bound, announce connection
     const runCmd = useIDEStore.getState().runTerminalCommandFn;
     if (runCmd) {
@@ -267,6 +271,7 @@ export function RemoteExplorerPanel({
                     target={t}
                     icon={<Box className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />}
                     onConnect={() => handleConnect(t)}
+                    isConnecting={connectingId === t.id}
                   />
                 ))
               )}
@@ -384,6 +389,7 @@ export function RemoteExplorerPanel({
                         ? () => handleRemoveSshHost(t.id, t.name)
                         : undefined
                     }
+                    isConnecting={connectingId === t.id}
                   />
                 ))
               )}
@@ -428,6 +434,7 @@ export function RemoteExplorerPanel({
                     target={t}
                     icon={<Monitor className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />}
                     onConnect={() => handleConnect(t)}
+                    isConnecting={connectingId === t.id}
                   />
                 ))
               )}
@@ -455,11 +462,13 @@ function TargetRow({
   icon,
   onConnect,
   onRemove,
+  isConnecting,
 }: {
   target: RemoteTarget;
   icon: React.ReactNode;
   onConnect?: () => void;
   onRemove?: () => void;
+  isConnecting?: boolean;
 }) {
   return (
     <div className="group flex items-center justify-between px-4 py-1.5 hover:bg-white/5 transition rounded mx-1">
@@ -473,7 +482,12 @@ function TargetRow({
           <span className="text-white/80 group-hover:text-white font-mono text-[11px] truncate">
             {target.name}
           </span>
-          {target.details && (
+          {isConnecting && (
+            <span className="workspace-remote-connecting-breathe text-xs text-emerald-400 font-medium">
+              Connecting…
+            </span>
+          )}
+          {target.details && !isConnecting && (
             <span className="text-white/40 text-[10px] truncate">{target.details}</span>
           )}
         </div>

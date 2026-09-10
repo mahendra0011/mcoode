@@ -11,7 +11,7 @@ import {
  *
  * Covers the 4-layer animation architecture:
  *   Layer 1: CSS keyframes (mcode-stream-text-in, collapsible, reaction burst)
- *   Layer 2: Tailwind utilities (.animate-spin-slow, .animate-in, etc.)
+ *   Layer 2: Tailwind utilities (.mcode-input-glow, .animate-in, etc.)
  *   Layer 3: Framer Motion patterns (message stagger, button springs, ThinkingIndicator)
  *   Layer 4: CLI Terminal Animations (shared 80ms ticker, blocks, hooks)
  *
@@ -122,7 +122,7 @@ export function McodeAnimationsTab() {
             className="space-y-6"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <TailwindAnim name=".animate-spin-slow" desc="3s linear infinite rotation for loading spinners" />
+              <TailwindAnim name=".mcode-input-glow" desc="4s linear infinite conic sweep for input border glow" />
               <TailwindAnim name=".animate-ping" desc="Scale up + fade for notification indicators" />
               <TailwindAnim name=".animate-pulse" desc="Opacity 50% at 50% for skeleton loaders" />
               <TailwindAnim name=".animate-in" desc="Custom enter animation via Tailwind utilities" />

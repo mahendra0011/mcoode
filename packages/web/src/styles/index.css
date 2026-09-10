@@ -221,9 +221,18 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* Slow spin for loading indicators */
-.animate-spin-slow {
-  animation: spin 3s linear infinite;
+/* mcode input border glow — conic sweep animation for chat/IDE input fields */
+.mcode-input-glow {
+  animation: mcode-input-glow-spin 4s linear infinite;
+  background: conic-gradient(from 0deg at 50% 50%, transparent 0%, #3b82f6 30%, transparent 50%, transparent 50%, #10b981 80%, transparent 100%);
+}
+.mcode-input-glow-reversed {
+  animation: mcode-input-glow-spin 4s linear infinite;
+  background: conic-gradient(from 90deg at 50% 50%, transparent 70%, #10b981, #3b82f6);
+}
+
+@keyframes mcode-input-glow-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* mcode UX Animations — extracted from mcode's actual app.asar CSS
@@ -297,11 +306,15 @@
   }
 }
 
-/* Update charge sweep */
+/* Update charge sweep — 1.15s infinite charge sweep across progress bars */
 @keyframes mcode-update-charge-sweep {
   0% {
     opacity: .35;
-    transform: translate(-120%);
+    transform: translateX(-120%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
   }
 }
 
@@ -593,44 +606,11 @@
   overflow: hidden;
 }
 
-.browser-use-operation-breathe {
-  animation: 0.9s cubic-bezier(.16, 1, .3, 1) both browser-use-operation-breathe;
-}
-
-@keyframes browser-use-operation-breathe {
-  0%, to {
-    opacity: .5;
-    transform: scale(.9);
-  }
-}
-
-.task-search-result-highlight {
-  animation: 1.2s ease-out both task-search-result-highlight;
-}
-
-@keyframes task-search-result-highlight {
-  0% {
-    background-color: color-mix(in oklab, var(--color-brand) 20%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-brand) 28%, transparent);
-  }
-}
-
 .task-title-marquee-track {
   will-change: transform;
   overflow: hidden;
   text-overflow: clip;
   white-space: nowrap;
-}
-
-.workspace-remote-connecting-breathe {
-  animation: 2s ease-in-out infinite workspace-remote-connecting-breathe;
-}
-
-@keyframes workspace-remote-connecting-breathe {
-  0%, to {
-    background-color: color-mix(in oklab, var(--color-accent, #6c8cff) 10%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent, #6c8cff) 10%, transparent);
-  }
 }
 
 .mcode-update-charge-progress {
