@@ -17,6 +17,82 @@ import { useChatSocket } from '../../hooks/useChatSocket';
 import api from '../../lib/axios';
 import { setMode, addMessage, clearChat, setGodMode, resetStreaming } from '../../store/chatSlice';
 import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../../lib/slashCommands';
+import { zipFilesOffMainThread, WORKSPACE_UPLOAD_TIMEOUT_MS, type ZipEntry } from '../../lib/zipInWorker';
+
+// Moved out of the component (was previously re-created on every single render, since it
+// lived inside the AIChatPage function body). These are static lookup tables, so they only
+// need to be built once per page load, not once per keystroke/render.
+const MASTER_IGNORE_DIRS = new Set([
+  'node_modules', '.next', 'dist', 'build', 'coverage', '.cache', '.turbo', 'out',
+  'bower_components', 'jspm_packages', '.expo', '.serverless', '.swc', '.yarn',
+  '.pnpm-store', '.parcel-cache', '.nuxt', '.output', '.astro', '.vite',
+  '.cache-loader', '.storybook-out', 'storybook-static', '.wxt', '.docusaurus',
+  'venv', '.venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',
+  '.htmlcov', 'htmlcov', '.nox', '.tox', '.conda', 'env', '.env', 'ENV',
+  'pip-wheel-metadata', 'site-packages',
+  'target', '.target', '.gradle', '.cargo', '.nuget', 'vendor', 'obj', 'bin',
+  'cmake-build-debug', 'cmake-build-release', 'CMakeFiles', 'ipch', '.vs',
+  'x64', 'x86', 'Debug', 'Release',
+  '.dart_tool', '.fvm', '.flutter-plugins', '.flutter-plugins-dependencies',
+  'Pods', 'DerivedData', '.build', '.swiftpm', 'captures', '.externalNativeBuild',
+  '.bundle', 'deps', '_build',
+  '.git', '.idea', '.vscode', 'tmp', 'temp', '.docker', '.vagrant',
+  '.terraform', '.terragrunt-cache', '.elasticbeanstalk', '.local', '.npm',
+  '.pnpm', '.nvm', '.hg', '.svn'
+]);
+
+const MASTER_IGNORE_EXACT_FILES = new Set([
+  '.DS_Store', 'Thumbs.db', 'desktop.ini', 'ehthumbs.db', 'npm-debug.log',
+  'yarn-debug.log', 'yarn-error.log', 'pnpm-debug.log', 'coverage.xml',
+  'lcov.info'
+]);
+
+const MASTER_IGNORE_EXTENSIONS = new Set([
+  'log', 'tmp', 'temp', 'bak', 'swp', 'swo',
+  'pyc', 'pyo', 'pyd',
+  'class', 'jar', 'war', 'ear',
+  'o', 'obj', 'dll', 'so', 'dylib', 'exe', 'a', 'lib',
+  'pdb', 'idb', 'ilk', 'suo', 'user',
+  'zip', 'tar', 'gz', 'rar', '7z', 'iso', 'dmg'
+]);
+
+const FAST_SKIP_REGEX = /(\/|\\|^)(node_modules|\.git|\.next|dist|build|coverage|\.cache|vendor|venv|\.venv|__pycache__|\.turbo|out|\.idea|\.vscode|tmp|temp|target|\.target|\.gradle|\.cargo|\.nuget|\.output|bower_components|jspm_packages|\.expo|\.serverless|\.swc|obj|bin|\.yarn|\.pnpm-store)(\/|\\|$)/i;
+
+function isIgnoredUploadPath(relPath: string): boolean {
+  const normalized = relPath.replace(/\\/g, '/');
+  const parts = normalized.split('/');
+  for (const part of parts) {
+    if (MASTER_IGNORE_DIRS.has(part)) return true;
+  }
+  const fileName = parts[parts.length - 1];
+  if (!fileName) return false;
+  if (MASTER_IGNORE_EXACT_FILES.has(fileName)) return true;
+  const dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex > 0) {
+    const ext = fileName.substring(dotIndex + 1).toLowerCase();
+    if (MASTER_IGNORE_EXTENSIONS.has(ext)) return true;
+  }
+  return false;
+}
+
+/** Read a batch of DataTransferItem directory entries to exhaustion (readEntries only
+ *  returns ~100 at a time per the spec), then return the full list. */
+function readAllDirectoryEntries(dirReader: any): Promise<any[]> {
+  return new Promise((resolve) => {
+    const all: any[] = [];
+    const readBatch = () => {
+      dirReader.readEntries((batch: any[]) => {
+        if (!batch || batch.length === 0) {
+          resolve(all);
+        } else {
+          all.push(...batch);
+          readBatch();
+        }
+      }, () => resolve(all));
+    };
+    readBatch();
+  });
+}
 
 import { FileTree } from '../../components/ide/FileTree';
 import { ExplorerPanel } from '../../components/ide/ExplorerPanel';
@@ -302,6 +378,7 @@ export function AIChatPage() {
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
 		const [isUploading, setIsUploading] = useState(false);
 		const [uploadProgressText, setUploadProgressText] = useState('');
+		const [uploadProgressPercent, setUploadProgressPercent] = useState(0);
 		const [watchMode, setWatchMode] = useState(false);
 		const [debugMode, setDebugMode] = useState(false);
 
@@ -551,77 +628,85 @@ export function AIChatPage() {
     }
   };
 
-  const MASTER_IGNORE_DIRS = new Set([
-    'node_modules', '.next', 'dist', 'build', 'coverage', '.cache', '.turbo', 'out',
-    'bower_components', 'jspm_packages', '.expo', '.serverless', '.swc', '.yarn',
-    '.pnpm-store', '.parcel-cache', '.nuxt', '.output', '.astro', '.vite',
-    '.cache-loader', '.storybook-out', 'storybook-static', '.wxt', '.docusaurus',
-    'venv', '.venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',
-    '.htmlcov', 'htmlcov', '.nox', '.tox', '.conda', 'env', '.env', 'ENV',
-    'pip-wheel-metadata', 'site-packages',
-    'target', '.target', '.gradle', '.cargo', '.nuget', 'vendor', 'obj', 'bin',
-    'cmake-build-debug', 'cmake-build-release', 'CMakeFiles', 'ipch', '.vs',
-    'x64', 'x86', 'Debug', 'Release',
-    '.dart_tool', '.fvm', '.flutter-plugins', '.flutter-plugins-dependencies',
-    'Pods', 'DerivedData', '.build', '.swiftpm', 'captures', '.externalNativeBuild',
-    '.bundle', 'deps', '_build',
-    '.git', '.idea', '.vscode', 'tmp', 'temp', '.docker', '.vagrant',
-    '.terraform', '.terragrunt-cache', '.elasticbeanstalk', '.local', '.npm',
-    '.pnpm', '.nvm', '.hg', '.svn'
-  ]);
-
-  const MASTER_IGNORE_EXACT_FILES = new Set([
-    '.DS_Store', 'Thumbs.db', 'desktop.ini', 'ehthumbs.db', 'npm-debug.log',
-    'yarn-debug.log', 'yarn-error.log', 'pnpm-debug.log', 'coverage.xml',
-    'lcov.info'
-  ]);
-
-  const MASTER_IGNORE_EXTENSIONS = new Set([
-    'log', 'tmp', 'temp', 'bak', 'swp', 'swo',
-    'pyc', 'pyo', 'pyd',
-    'class', 'jar', 'war', 'ear',
-    'o', 'obj', 'dll', 'so', 'dylib', 'exe', 'a', 'lib',
-    'pdb', 'idb', 'ilk', 'suo', 'user',
-    'zip', 'tar', 'gz', 'rar', '7z', 'iso', 'dmg'
-  ]);
-
-  function isIgnoredUploadPath(relPath: string): boolean {
-    const normalized = relPath.replace(/\\/g, '/');
-    const parts = normalized.split('/');
-    for (const part of parts) {
-      if (MASTER_IGNORE_DIRS.has(part)) return true;
+  /** Shared tail: zip the collected entries off the main thread, then upload with real
+   *  network progress. Used by all three folder-upload entry points below so the
+   *  performance-critical path only has to be fixed in one place. */
+  const zipAndUploadEntries = async (
+    entries: ZipEntry[],
+    folderName: string,
+    successVerb: string
+  ) => {
+    if (entries.length === 0) {
+      showToast('No valid source files found in selected folder (all ignored)', 'error');
+      setIsUploading(false);
+      return;
     }
-    const fileName = parts[parts.length - 1];
-    if (!fileName) return false;
-    if (MASTER_IGNORE_EXACT_FILES.has(fileName)) return true;
-    const dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex > 0) {
-      const ext = fileName.substring(dotIndex + 1).toLowerCase();
-      if (MASTER_IGNORE_EXTENSIONS.has(ext)) return true;
+
+    // Scan phase already happened by the time we get here → treat as 0-15%.
+    setUploadProgressPercent(15);
+    setUploadProgressText(`Bundling ${entries.length} files (off main thread)...`);
+
+    // Zip phase: 15-55%. Runs in a Web Worker so the UI (this very overlay's animation,
+    // typing, tab switching, etc.) never freezes, no matter how large the project is.
+    const zipBlob = await zipFilesOffMainThread(entries, (pct) => {
+      setUploadProgressPercent(15 + pct * 0.4);
+      setUploadProgressText(`Bundling '${folderName}' (${pct}%)...`);
+    });
+
+    // Upload phase: 55-100%, driven by real bytes sent, not a guess.
+    setUploadProgressText(`Uploading & extracting '${folderName}' on server...`);
+    showToast(`Uploading project archive to server...`, 'info');
+
+    const formData = new FormData();
+    formData.append('name', folderName);
+    formData.append('source', 'zip');
+    formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
+
+    const res = await api.post('/api/v1/workspaces', formData, {
+      timeout: WORKSPACE_UPLOAD_TIMEOUT_MS,
+      onUploadProgress: (evt: any) => {
+        if (evt.total) {
+          const pct = (evt.loaded / evt.total) * 100;
+          setUploadProgressPercent(55 + pct * 0.45);
+        }
+      },
+    });
+
+    if (res.status >= 400) {
+      const msg = res.data?.error?.message || `Upload failed (${res.status})`;
+      showToast(msg, 'error');
+      throw new Error(msg);
     }
-    return false;
-  }
+
+    const data = res.data;
+    if (data.workspace) {
+      setUploadProgressPercent(100);
+      setWorkspaces(prev => [...prev, data.workspace]);
+      setActiveWorkspaceId(data.workspace._id);
+      bumpRefresh();
+      showToast(`Folder '${folderName}' (${entries.length} files) ${successVerb}!`);
+    } else {
+      const msg = data.error?.message || 'Upload failed — no workspace returned';
+      showToast(msg, 'error');
+      throw new Error(msg);
+    }
+  };
 
   const handleUploadFolder = async (files: FileList) => {
     if (!files || files.length === 0) return;
-    
-    // 1. Immediately trigger full-screen uploading animation overlay
+
     setIsUploading(true);
+    setUploadProgressPercent(2);
 
     const firstFile = files[0];
     const rawPath = firstFile.webkitRelativePath || firstFile.name;
     const folderName = rawPath.includes('/') ? rawPath.split('/')[0] : 'Uploaded-Folder';
-    
-    setUploadProgressText(`Scanning & bundling folder '${folderName}'...`);
-    showToast(`Bundling '${folderName}' for fast ZIP upload...`, 'info');
 
-    const FAST_SKIP_REGEX = /(\/|\\|^)(node_modules|\.git|\.next|dist|build|coverage|\.cache|vendor|venv|\.venv|__pycache__|\.turbo|out|\.idea|\.vscode|tmp|temp|target|\.target|\.gradle|\.cargo|\.nuget|\.output|bower_components|jspm_packages|\.expo|\.serverless|\.swc|obj|bin|\.yarn|\.pnpm-store)(\/|\\|$)/i;
+    setUploadProgressText(`Scanning folder '${folderName}'...`);
+    showToast(`Scanning '${folderName}'...`, 'info');
 
     try {
-      const zip = new JSZip();
-
-      // Filter out ignore patterns and populate JSZip
-      let validCount = 0;
+      const entries: ZipEntry[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const relPath = file.webkitRelativePath || file.name;
@@ -631,59 +716,11 @@ export function AIChatPage() {
           const zipPath = normalized.startsWith(`${folderName}/`)
             ? normalized.substring(folderName.length + 1)
             : normalized;
-
-          zip.file(zipPath, file);
-          validCount++;
+          entries.push({ path: zipPath, file });
         }
       }
 
-      if (validCount === 0) {
-        showToast('No valid source files found in selected folder (all ignored)', 'error');
-        setIsUploading(false);
-        return;
-      }
-
-      setUploadProgressText(`Max-speed bundling ${validCount} files...`);
-
-      // Compress into single ZIP blob with zero CPU DEFLATE overhead ('STORE') for maximum speed!
-      const zipBlob = await zip.generateAsync(
-        {
-          type: 'blob',
-          compression: 'STORE'
-        },
-        (metadata) => {
-          const pct = Math.round(metadata.percent);
-          setUploadProgressText(`Bundling '${folderName}' (${pct}%)...`);
-        }
-      );
-
-      // Send single compressed ZIP file to server
-      setUploadProgressText(`Uploading & parallel extracting '${folderName}' on server...`);
-      showToast(`Parallel uploading project archive to server...`, 'info');
-
-      const formData = new FormData();
-      formData.append('name', folderName);
-      formData.append('source', 'zip');
-      formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
-
-      const res = await api.post('/api/v1/workspaces', formData, { timeout: 120000 });
-      if (res.status >= 400) {
-        const msg = res.data?.error?.message || `Upload failed (${res.status})`;
-        showToast(msg, 'error');
-        throw new Error(msg);
-      }
-
-      const data = res.data;
-      if (data.workspace) {
-        setWorkspaces(prev => [...prev, data.workspace]);
-        setActiveWorkspaceId(data.workspace._id);
-        bumpRefresh();
-        showToast(`Folder '${folderName}' (${validCount} files) uploaded & extracted successfully!`);
-      } else {
-        const msg = data.error?.message || 'Upload failed — no workspace returned';
-        showToast(msg, 'error');
-        throw new Error(msg);
-      }
+      await zipAndUploadEntries(entries, folderName, 'uploaded & extracted successfully');
     } catch (err: any) {
       console.error('Folder ZIP upload error:', err);
       const msg = err?.response?.data?.error?.message || err?.message || 'Folder upload failed';
@@ -691,6 +728,7 @@ export function AIChatPage() {
     } finally {
       setIsUploading(false);
       setUploadProgressText('');
+      setUploadProgressPercent(0);
     }
   };
 
@@ -698,90 +736,62 @@ export function AIChatPage() {
     if (!dirHandle) return;
     const folderName = dirHandle.name || 'Uploaded-Folder';
 
-    // 1. Immediately trigger full-screen high-tech animated upload overlay
     setIsUploading(true);
+    setUploadProgressPercent(2);
     setUploadProgressText(`Scanning '${folderName}' (skipping heavy cache/build dirs)...`);
-    showToast(`Instant scanning '${folderName}'...`, 'info');
+    showToast(`Scanning '${folderName}'...`, 'info');
 
     try {
-      const zip = new JSZip();
-      let validCount = 0;
+      // Phase 1: walk the directory tree, collecting {handle, path} for every file.
+      // Sibling entries and subdirectories are all walked CONCURRENTLY (Promise.all)
+      // instead of one-at-a-time — this was previously a fully sequential
+      // `for await ... await traverseDir(...)` walk, which is the main reason a big
+      // project's folder tree took so long just to *scan*, before any zipping even began.
+      type PendingFile = { handle: any; path: string };
+      const pendingFiles: PendingFile[] = [];
 
-      // Fast async handle traversal skipping heavy dirs at directory handle level
-      async function traverseDir(handle: any, currentPath: string) {
+      async function collect(handle: any, currentPath: string) {
+        const children: { entry: any; relPath: string }[] = [];
         for await (const entry of handle.values()) {
           if (entry.kind === 'directory' && (MASTER_IGNORE_DIRS.has(entry.name) || MASTER_IGNORE_DIRS.has(entry.name.toLowerCase()))) {
             continue;
           }
-
           const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
           if (isIgnoredUploadPath(relPath)) continue;
+          children.push({ entry, relPath });
+        }
 
+        await Promise.all(children.map(async ({ entry, relPath }) => {
           if (entry.kind === 'file') {
-            try {
-              const file = await entry.getFile();
-              zip.file(relPath, file);
-              validCount++;
-              if (validCount % 30 === 0) {
-                setUploadProgressText(`Scanned ${validCount} source files...`);
-              }
-            } catch {
-              // skip unreadable
-            }
+            pendingFiles.push({ handle: entry, path: relPath });
           } else if (entry.kind === 'directory') {
-            await traverseDir(entry, relPath);
+            await collect(entry, relPath);
           }
-        }
+        }));
       }
 
-      await traverseDir(dirHandle, '');
+      await collect(dirHandle, '');
+      setUploadProgressText(`Found ${pendingFiles.length} files, reading in parallel...`);
 
-      if (validCount === 0) {
-        showToast('No valid source files found in selected folder', 'error');
-        setIsUploading(false);
-        return;
+      // Phase 2: actually read file contents with bounded concurrency (32 at a time,
+      // matching the backend's extraction concurrency for consistency) instead of
+      // reading one file, awaiting it, then moving to the next.
+      const entries: ZipEntry[] = [];
+      const CONCURRENCY = 32;
+      for (let i = 0; i < pendingFiles.length; i += CONCURRENCY) {
+        const chunk = pendingFiles.slice(i, i + CONCURRENCY);
+        await Promise.all(chunk.map(async ({ handle, path }) => {
+          try {
+            const file = await handle.getFile();
+            entries.push({ path, file });
+          } catch {
+            // skip unreadable file, don't fail the whole upload
+          }
+        }));
+        setUploadProgressText(`Read ${Math.min(i + CONCURRENCY, pendingFiles.length)}/${pendingFiles.length} files...`);
       }
 
-      setUploadProgressText(`Max-speed memory bundling ${validCount} files...`);
-
-      // Compress into single ZIP blob with zero CPU DEFLATE overhead ('STORE')
-      const zipBlob = await zip.generateAsync(
-        {
-          type: 'blob',
-          compression: 'STORE'
-        },
-        (metadata) => {
-          const pct = Math.round(metadata.percent);
-          setUploadProgressText(`Bundling '${folderName}' (${pct}%)...`);
-        }
-      );
-
-      setUploadProgressText(`Uploading & parallel extracting '${folderName}' on server...`);
-      showToast(`Parallel uploading project archive to server...`, 'info');
-
-      const formData = new FormData();
-      formData.append('name', folderName);
-      formData.append('source', 'zip');
-      formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
-
-      const res = await api.post('/api/v1/workspaces', formData, { timeout: 120000 });
-      if (res.status >= 400) {
-        const msg = res.data?.error?.message || `Upload failed (${res.status})`;
-        showToast(msg, 'error');
-        throw new Error(msg);
-      }
-
-      const data = res.data;
-      if (data.workspace) {
-        setWorkspaces(prev => [...prev, data.workspace]);
-        setActiveWorkspaceId(data.workspace._id);
-        bumpRefresh();
-        showToast(`Folder '${folderName}' (${validCount} files) uploaded & extracted in 0.4s!`);
-      } else {
-        const msg = data.error?.message || 'Upload failed — no workspace returned';
-        showToast(msg, 'error');
-        throw new Error(msg);
-      }
+      await zipAndUploadEntries(entries, folderName, 'uploaded & extracted successfully');
     } catch (err: any) {
       console.error('Directory handle upload error:', err);
       const msg = err?.response?.data?.error?.message || err?.message || 'Folder upload failed';
@@ -789,109 +799,65 @@ export function AIChatPage() {
     } finally {
       setIsUploading(false);
       setUploadProgressText('');
+      setUploadProgressPercent(0);
     }
   };
 
   const handleUploadDataTransferItems = async (items: DataTransferItemList) => {
     if (!items || items.length === 0) return;
-    
+
     setIsUploading(true);
-    setUploadProgressText("Processing dropped folder...");
+    setUploadProgressPercent(2);
+    setUploadProgressText("Scanning dropped folder...");
     showToast("Scanning dropped folder...", "info");
 
     try {
-      const zip = new JSZip();
-      let validCount = 0;
+      const entries: ZipEntry[] = [];
       let folderName = 'Dropped-Project';
 
-      const readEntry = (entry: any, currentPath: string): Promise<void> => {
-        return new Promise((resolve) => {
-          if (entry.isDirectory && MASTER_IGNORE_DIRS.has(entry.name)) {
-            return resolve();
-          }
+      // Same fix as the directory-handle path: gather every sibling entry first, then
+      // recurse/read them all CONCURRENTLY via Promise.all instead of a sequential
+      // `for (const subEntry of entries) { await readEntry(...) }` loop.
+      const readEntry = async (entry: any, currentPath: string): Promise<void> => {
+        if (entry.isDirectory && MASTER_IGNORE_DIRS.has(entry.name)) return;
 
-          const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
-          if (isIgnoredUploadPath(relPath)) {
-            return resolve();
-          }
+        const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+        if (isIgnoredUploadPath(relPath)) return;
 
-          if (entry.isFile) {
-            entry.file((file: File) => {
-              const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
-              zip.file(filePath, file);
-              validCount++;
-              resolve();
-            }, () => resolve());
-          } else if (entry.isDirectory) {
-            if (!currentPath && entry.name) {
-              folderName = entry.name;
-            }
-            const dirReader = entry.createReader();
-            const readBatch = () => {
-              dirReader.readEntries(async (entries: any[]) => {
-                if (entries.length === 0) {
-                  resolve();
-                } else {
-                  const subRelPath = currentPath ? `${currentPath}/${entry.name}` : (entry.name !== folderName ? entry.name : '');
-                  for (const subEntry of entries) {
-                    await readEntry(subEntry, subRelPath);
-                  }
-                  readBatch();
-                }
-              }, () => resolve());
-            };
-            readBatch();
-          } else {
-            resolve();
-          }
-        });
+        if (entry.isFile) {
+          const file: File | null = await new Promise((resolve) => entry.file(resolve, () => resolve(null)));
+          if (!file) return;
+          const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+          entries.push({ path: filePath, file });
+        } else if (entry.isDirectory) {
+          if (!currentPath && entry.name) folderName = entry.name;
+          const dirReader = entry.createReader();
+          const allChildren = await readAllDirectoryEntries(dirReader);
+          const subRelPath = currentPath ? `${currentPath}/${entry.name}` : (entry.name !== folderName ? entry.name : '');
+          await Promise.all(allChildren.map((subEntry) => readEntry(subEntry, subRelPath)));
+        }
       };
 
-      const entries: any[] = [];
+      const topLevelEntries: any[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (item.kind === 'file') {
           const entry = item.webkitGetAsEntry();
-          if (entry) entries.push(entry);
+          if (entry) topLevelEntries.push(entry);
         }
       }
 
-      for (const entry of entries) {
-        await readEntry(entry, '');
-      }
+      await Promise.all(topLevelEntries.map((entry) => readEntry(entry, '')));
 
-      if (validCount === 0) {
-        showToast('No valid source files found in dropped folder', 'error');
-        setIsUploading(false);
-        return;
-      }
-
-      setUploadProgressText(`Memory bundling ${validCount} files...`);
-
-      const zipBlob = await zip.generateAsync(
-        { type: 'blob', compression: 'STORE' },
-        (meta) => setUploadProgressText(`Bundling '${folderName}' (${Math.round(meta.percent)}%)...`)
-      );
-
-      setUploadProgressText(`Uploading '${folderName}' to server...`);
-      const formData = new FormData();
-      formData.append('name', folderName);
-      formData.append('source', 'zip');
-      formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
-
-      const res = await api.post('/api/v1/workspaces', formData, { timeout: 120000 });
-      if (res.data?.workspace) {
-        setWorkspaces(prev => [...prev, res.data.workspace]);
-        setActiveWorkspaceId(res.data.workspace._id);
-        bumpRefresh();
-        showToast(`Folder '${folderName}' (${validCount} files) uploaded instantly with 0 browser prompts!`);
-      }
+      await zipAndUploadEntries(entries, folderName, 'uploaded instantly with 0 browser prompts');
     } catch (err: any) {
       console.error('Drag drop upload error:', err);
-      showToast('Drag and drop folder upload failed', 'error');
+      const msg = err?.response?.data?.error?.message || err?.message || 'Drag and drop folder upload failed';
+      showToast(msg, 'error');
     } finally {
       setIsUploading(false);
       setUploadProgressText('');
+      setUploadProgressPercent(0);
     }
   };
 
@@ -3094,8 +3060,13 @@ export function AIChatPage() {
               </div>
 
               <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/10 mt-2">
-                <div className="bg-gradient-to-r from-purple-500 via-blue-500 to-emerald-400 h-full rounded-full animate-pulse w-full"></div>
+                <motion.div
+                  className="bg-gradient-to-r from-purple-500 via-blue-500 to-emerald-400 h-full rounded-full"
+                  animate={{ width: `${Math.max(4, Math.min(100, uploadProgressPercent))}%` }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                />
               </div>
+              <p className="text-[10px] text-white/30 font-mono -mt-1">{Math.round(uploadProgressPercent)}%</p>
             </motion.div>
           </motion.div>
         )}

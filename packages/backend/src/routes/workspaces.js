@@ -8,13 +8,40 @@ import { createReadStream } from 'node:fs';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 
+import { mkdirSync } from 'node:fs';
+
 const WORKSPACE_ROOT = join(homedir(), 'mcode-workspaces');
 const UPLOADS_DIR = join(homedir(), '.mcode', 'uploads');
 
+// Ensure destination directories exist on disk before Multer streams files
+try {
+  mkdirSync(WORKSPACE_ROOT, { recursive: true });
+  mkdirSync(UPLOADS_DIR, { recursive: true });
+} catch {}
+
+// 50MB was too tight for "upload whole project" — any real project with a few images,
+// fonts, or a lockfile-heavy zip would silently fail this limit mid-upload, which is
+// part of what made folder upload feel like it randomly "gets stuck". Multer streams
+// to disk (dest: UPLOADS_DIR, not memory storage), so raising this only costs disk
+// space, not server RAM. Configurable via env for deployments with tighter constraints.
+const MAX_UPLOAD_MB = Number(process.env.MCODE_MAX_UPLOAD_MB) || 1024;
+
 const upload = multer({
   dest: UPLOADS_DIR,
-  limits: { fileSize: 50 * 1024 * 1024 }
+  limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 }
 });
+
+const handleZipfileUpload = (req, res, next) => {
+  upload.single('zipfile')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: { code: 'FILE_TOO_LARGE', message: `ZIP file exceeds maximum upload limit of ${MAX_UPLOAD_MB}MB` } });
+      }
+      return res.status(400).json({ error: { code: 'UPLOAD_ERROR', message: err.message || 'File upload error' } });
+    }
+    next();
+  });
+};
 
 export function workspaceRoutes({ secret }) {
   const router = Router();
@@ -31,7 +58,7 @@ export function workspaceRoutes({ secret }) {
   });
 
   // POST /workspaces — create from ZIP (multipart) or Git (JSON)
-  router.post('/', upload.single('zipfile'), async (req, res, next) => {
+  router.post('/', handleZipfileUpload, async (req, res, next) => {
     try {
       const { name, source, repoUrl, branch, branchName, zipFilename } = req.body;
       if (!name || !source) {
@@ -291,15 +318,22 @@ export function workspaceRoutes({ secret }) {
       }
 
       if (req.files && req.files.length > 0) {
-        for (let i = 0; i < req.files.length; i++) {
-          const file = req.files[i];
-          const rawRelPath = relativePaths[i] || file.originalname;
-          // Strip top-level folder name if webkitRelativePath includes root folder prefix
-          const relPath = rawRelPath.includes('/') ? rawRelPath.split('/').slice(1).join('/') || rawRelPath : rawRelPath;
-          const dest = safeJoin(ws.diskPath, relPath);
-          await mkDir(join(dest, '..'), { recursive: true });
-          await copyFile(file.path, dest);
-          uploadedFiles.push(relPath);
+        // Copy files with bounded concurrency instead of one-at-a-time — mirrors the
+        // 32-concurrency pattern already used in extractZipTo() below for consistency.
+        const CONCURRENCY = 32;
+        for (let i = 0; i < req.files.length; i += CONCURRENCY) {
+          const chunk = req.files.slice(i, i + CONCURRENCY);
+          const chunkResults = await Promise.all(chunk.map(async (file, idx) => {
+            const globalIdx = i + idx;
+            const rawRelPath = relativePaths[globalIdx] || file.originalname;
+            // Strip top-level folder name if webkitRelativePath includes root folder prefix
+            const relPath = rawRelPath.includes('/') ? rawRelPath.split('/').slice(1).join('/') || rawRelPath : rawRelPath;
+            const dest = safeJoin(ws.diskPath, relPath);
+            await mkDir(join(dest, '..'), { recursive: true });
+            await copyFile(file.path, dest);
+            return relPath;
+          }));
+          uploadedFiles.push(...chunkResults);
         }
       }
 

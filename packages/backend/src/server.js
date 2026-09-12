@@ -173,6 +173,11 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   });
 
   const httpServer = createServer();
+  // 10 minutes timeout for large project ZIP uploads
+  httpServer.requestTimeout = 10 * 60 * 1000;
+  httpServer.headersTimeout = 10 * 60 * 1000;
+  httpServer.keepAliveTimeout = 10 * 60 * 1000;
+
   const io = attachSockets(httpServer, { secret });
   app.set('io', io);
   httpServer.on('request', app);
