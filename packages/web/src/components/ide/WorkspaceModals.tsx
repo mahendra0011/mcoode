@@ -43,54 +43,65 @@ export function WorkspaceModals({
     }
   };
 
+  // SINGLE, RELIABLE folder-upload path.
+  //
+  // We deliberately do NOT use `showDirectoryPicker()` here. It requires a secure
+  // top-level context, silently throws inside cross-origin/sandboxed iframes and
+  // some webviews, and — critically — when it fails, the old code fell back to a
+  // *second* input silently, so a user could click "Upload Folder", pick a folder,
+  // and see literally nothing happen with zero error shown ("hang" feeling).
+  // The plain `<input webkitdirectory>` below works in every real browser and needs
+  // no special permission prompt, so there is exactly one code path to debug.
   const triggerFolderInput = () => {
     const input = document.createElement('input');
     input.type = 'file';
     (input as any).webkitdirectory = true;
     (input as any).directory = true;
     input.multiple = true;
+    // Must be attached to the DOM — some browsers/webviews refuse to fire the
+    // native picker (or silently drop the change event) on a fully detached input.
+    input.style.position = 'fixed';
+    input.style.top = '-9999px';
+    input.style.left = '-9999px';
+    document.body.appendChild(input);
+
+    const cleanup = () => {
+      input.remove();
+    };
+
     input.onchange = (e: Event) => {
       const files = (e.target as HTMLInputElement).files;
-      if (files && files.length > 0) {
-        onClose();
-        if (onStartUploading) {
-          onStartUploading('⚡ Scanning & bundling project files...');
-        }
-        if (onUploadFolder) {
-          onUploadFolder(files);
-        }
+      // Fire the loading animation and close the modal SYNCHRONOUSLY, in the same
+      // tick as the change event — before any async work — so the user sees the
+      // "processing" overlay instantly instead of a frozen modal.
+      if (onStartUploading) {
+        onStartUploading(
+          files && files.length > 0
+            ? '⚡ Zipping your folder...'
+            : undefined
+        );
       }
+      onClose();
+      if (files && files.length > 0 && onUploadFolder) {
+        onUploadFolder(files);
+      }
+      cleanup();
     };
+
+    // If the user opens the picker and cancels, the browser never fires `change`.
+    // `cancel` is supported in modern Chromium/Firefox; for the rest we clean up on
+    // window focus returning (best-effort, doesn't block anything if it doesn't fire).
+    (input as any).oncancel = cleanup;
+    window.addEventListener('focus', cleanup, { once: true });
+
     input.click();
   };
 
-  const handleTriggerFolderUpload = async (e?: React.MouseEvent) => {
+  const handleTriggerFolderUpload = (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-
-    if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
-      try {
-        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
-        if (dirHandle) {
-          onClose();
-          if (onStartUploading) {
-            onStartUploading(`⚡ Scanning '${dirHandle.name}' (skipping heavy cache/build dirs)...`);
-          }
-          if (onUploadDirectoryHandle) {
-            onUploadDirectoryHandle(dirHandle);
-          }
-        }
-        return;
-      } catch (err: any) {
-        if (err?.name === 'AbortError') {
-          return;
-        }
-        console.warn('showDirectoryPicker error, triggering fallback input:', err);
-      }
-    }
-
     triggerFolderInput();
   };
 

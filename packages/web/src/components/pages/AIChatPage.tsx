@@ -631,18 +631,6 @@ export function AIChatPage() {
   /** Shared tail: zip the collected entries off the main thread, then upload with real
    *  network progress. Used by all three folder-upload entry points below so the
    *  performance-critical path only has to be fixed in one place. */
-  /** Shared tail: zip the collected entries off the main thread, then upload with real
-   *  network progress, then real server-side extraction progress over the socket
-   *  (backend emits 'workspace:upload-progress' into an 'upload:<id>' room — see
-   *  sockets.js + workspaces.js). Used by all three folder-upload entry points below
-   *  so the performance-critical path only has to be fixed in one place.
-   *
-   *  Percent bands so the bar is ALWAYS moving and never silently frozen:
-   *    0-10%  scan/discover files (caller-driven, before this function is called)
-   *    10-45% zip bundling (Web Worker)
-   *    45-85% network upload (axios onUploadProgress — real bytes sent)
-   *    85-100% server-side extraction (socket progress — real files written to disk)
-   */
   const zipAndUploadEntries = async (
     entries: ZipEntry[],
     folderName: string,
@@ -654,76 +642,71 @@ export function AIChatPage() {
       return;
     }
 
-    setUploadProgressPercent(10);
+    // Scan phase already happened by the time we get here → treat as 0-15%.
+    setUploadProgressPercent(15);
     setUploadProgressText(`Bundling ${entries.length} files (off main thread)...`);
 
-    const zipBlob = await zipFilesOffMainThread(entries, (pct) => {
-      setUploadProgressPercent(10 + pct * 0.35);
-      setUploadProgressText(`Bundling '${folderName}' (${pct}%)...`);
+    // Zip phase: 15-55%. Runs in a Web Worker so the UI (this very overlay's animation,
+    // typing, tab switching, etc.) never freezes, no matter how large the project is.
+    //
+    // Watchdog: if the worker never posts a message back (crashed silently, blocked by
+    // a broken CSP, whatever), the old code just hung forever with the overlay stuck
+    // on screen. Race it against a hard timeout so the user always gets an error
+    // instead of an infinite "processing" spinner.
+    const ZIP_WATCHDOG_MS = 90_000;
+    const zipBlob = await Promise.race([
+      zipFilesOffMainThread(entries, (pct) => {
+        setUploadProgressPercent(15 + pct * 0.4);
+        setUploadProgressText(`Bundling '${folderName}' (${pct}%)...`);
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Zipping timed out — try again or upload a smaller folder')), ZIP_WATCHDOG_MS)
+      ),
+    ]);
+
+    // Upload phase: 55-100%, driven by real bytes sent, not a guess.
+    setUploadProgressText(`Uploading & extracting '${folderName}' on server...`);
+    showToast(`Uploading project archive to server...`, 'info');
+
+    const formData = new FormData();
+    formData.append('name', folderName);
+    formData.append('source', 'zip');
+    formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
+
+    const res = await api.post('/api/v1/workspaces', formData, {
+      timeout: WORKSPACE_UPLOAD_TIMEOUT_MS,
+      onUploadProgress: (evt: any) => {
+        if (evt.total) {
+          const pct = (evt.loaded / evt.total) * 100;
+          setUploadProgressPercent(55 + pct * 0.44);
+          // Once network bytes are fully sent, the server still has to unzip everything
+          // to disk before it responds. Without this, the bar sat frozen at 100% for
+          // several seconds and looked hung. Cap at 99% and relabel so it's clear
+          // something is still happening.
+          if (pct >= 100) {
+            setUploadProgressText(`Extracting '${folderName}' on server...`);
+          }
+        }
+      },
     });
 
-    // Join a private room for this specific upload so the server can stream back
-    // real extraction progress instead of us guessing. Best-effort: if the socket
-    // isn't connected for some reason, the upload still completes fine — we just
-    // won't see the 85-100% band move until the response comes back.
-    const uploadId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    const socket = getSocket();
-    const onProgress = (payload: { phase?: string; extracted?: number; total?: number }) => {
-      if (payload?.phase === 'extracting' && payload.total) {
-        const pct = (payload.extracted || 0) / payload.total;
-        setUploadProgressPercent(85 + pct * 15);
-        setUploadProgressText(`Extracting ${payload.extracted}/${payload.total} files on server...`);
-      }
-    };
-    socket.emit('upload:join', { uploadId });
-    socket.on('workspace:upload-progress', onProgress);
+    if (res.status >= 400) {
+      const msg = res.data?.error?.message || `Upload failed (${res.status})`;
+      showToast(msg, 'error');
+      throw new Error(msg);
+    }
 
-    try {
-      setUploadProgressText(`Uploading '${folderName}' to server...`);
-      showToast(`Uploading project archive to server...`, 'info');
-
-      const formData = new FormData();
-      formData.append('name', folderName);
-      formData.append('source', 'zip');
-      formData.append('uploadId', uploadId);
-      formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
-
-      const res = await api.post('/api/v1/workspaces', formData, {
-        timeout: WORKSPACE_UPLOAD_TIMEOUT_MS,
-        onUploadProgress: (evt: any) => {
-          if (evt.total) {
-            const pct = (evt.loaded / evt.total) * 100;
-            setUploadProgressPercent(45 + pct * 0.4);
-            if (evt.loaded >= evt.total) {
-              // All bytes sent — server is now unzipping to disk. Show that explicitly
-              // instead of leaving the bar pinned with no explanation, which is what
-              // used to look like a random 5-20s freeze right at the end.
-              setUploadProgressText(`Uploaded — extracting '${folderName}' on server...`);
-            }
-          }
-        },
-      });
-
-      if (res.status >= 400) {
-        const msg = res.data?.error?.message || `Upload failed (${res.status})`;
-        showToast(msg, 'error');
-        throw new Error(msg);
-      }
-
-      const data = res.data;
-      if (data.workspace) {
-        setUploadProgressPercent(100);
-        setWorkspaces(prev => [...prev, data.workspace]);
-        setActiveWorkspaceId(data.workspace._id);
-        bumpRefresh();
-        showToast(`Folder '${folderName}' (${entries.length} files) ${successVerb}!`);
-      } else {
-        const msg = data.error?.message || 'Upload failed — no workspace returned';
-        showToast(msg, 'error');
-        throw new Error(msg);
-      }
-    } finally {
-      socket.off('workspace:upload-progress', onProgress);
+    const data = res.data;
+    if (data.workspace) {
+      setUploadProgressPercent(100);
+      setWorkspaces(prev => [...prev, data.workspace]);
+      setActiveWorkspaceId(data.workspace._id);
+      bumpRefresh();
+      showToast(`Folder '${folderName}' (${entries.length} files) ${successVerb}!`);
+    } else {
+      const msg = data.error?.message || 'Upload failed — no workspace returned';
+      showToast(msg, 'error');
+      throw new Error(msg);
     }
   };
 
@@ -731,22 +714,17 @@ export function AIChatPage() {
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
-    setUploadProgressPercent(1);
+    setUploadProgressPercent(2);
 
     const firstFile = files[0];
     const rawPath = firstFile.webkitRelativePath || firstFile.name;
     const folderName = rawPath.includes('/') ? rawPath.split('/')[0] : 'Uploaded-Folder';
 
-    setUploadProgressText(`Scanning folder '${folderName}' (${files.length} files)...`);
+    setUploadProgressText(`Scanning folder '${folderName}'...`);
     showToast(`Scanning '${folderName}'...`, 'info');
 
     try {
       const entries: ZipEntry[] = [];
-      // Chunked with periodic yields: for folders with tens of thousands of files this
-      // loop alone could previously block the main thread (and freeze the overlay's own
-      // animation) for several seconds with zero visual feedback. Yielding every 1500
-      // files keeps the browser painting and the progress text/bar moving throughout.
-      const YIELD_EVERY = 1500;
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const relPath = file.webkitRelativePath || file.name;
@@ -757,11 +735,6 @@ export function AIChatPage() {
             ? normalized.substring(folderName.length + 1)
             : normalized;
           entries.push({ path: zipPath, file });
-        }
-        if (i > 0 && i % YIELD_EVERY === 0) {
-          setUploadProgressPercent(Math.min(10, (i / files.length) * 10));
-          setUploadProgressText(`Scanning '${folderName}' (${i}/${files.length})...`);
-          await new Promise((resolve) => setTimeout(resolve, 0));
         }
       }
 
