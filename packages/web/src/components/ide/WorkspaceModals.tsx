@@ -97,11 +97,48 @@ export function WorkspaceModals({
     input.click();
   };
 
-  const handleTriggerFolderUpload = (e?: React.MouseEvent) => {
+  const handleTriggerFolderUpload = async (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
+
+    // Preferred path: FileSystemDirectoryHandle. We call this SYNCHRONOUSLY at the
+    // top of the click handler (no await before it) so the browser still counts it as
+    // a direct response to the user gesture. The big win over the plain <input> below:
+    // we control the traversal ourselves (see handleUploadDirectoryHandle in
+    // AIChatPage.tsx), so we can skip descending into node_modules/.git/dist/etc.
+    // entirely — the browser never has to enumerate those files at all. The plain
+    // <input webkitdirectory> fallback, by contrast, forces the OS/browser to fully
+    // walk and materialize a File object for EVERY file in the tree — including
+    // ignored ones — before it can even fire `change`, which is what made big
+    // projects feel frozen for several seconds with nothing on screen.
+    if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
+      try {
+        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
+        // Fire the overlay + close the modal in the very next microtask, before any
+        // further async traversal work starts, so the animation appears instantly.
+        onClose();
+        if (onStartUploading) {
+          onStartUploading(`⚡ Scanning '${dirHandle.name}' (skipping node_modules/.git/build/etc.)...`);
+        }
+        if (onUploadDirectoryHandle) {
+          onUploadDirectoryHandle(dirHandle);
+        } else {
+          // Defensive: parent didn't wire this prop, don't leave the user stuck.
+          triggerFolderInput();
+        }
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          return; // user cancelled the picker — do nothing, no error needed
+        }
+        // Real failure (unsupported context, permission policy, etc.) — fall back,
+        // but tell the user why instead of failing silently like before.
+        console.warn('showDirectoryPicker failed, falling back to classic picker:', err);
+      }
+    }
+
     triggerFolderInput();
   };
 

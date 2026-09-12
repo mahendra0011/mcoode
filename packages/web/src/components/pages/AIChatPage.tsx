@@ -1163,12 +1163,14 @@ export function AIChatPage() {
         <div className="flex items-center gap-3 z-20 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="relative group flex items-center justify-center">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg blur opacity-40 group-hover:opacity-80 transition duration-300"></div>
-              <img
-                src="/logo.png"
-                alt="MCODE"
-                className="relative w-7 h-7 rounded-lg object-contain bg-[#0a0a0d] p-0.5"
-              />
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-40 group-hover:opacity-80 transition duration-300"></div>
+              <div className="relative w-7 h-7 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="MCODE"
+                  className="w-full h-full object-cover rounded-lg"
+                />
+              </div>
             </div>
             {activeTab === 'AI Code Editor' ? (
               <IDEMenuBar
@@ -1435,11 +1437,16 @@ export function AIChatPage() {
             {/* Header */}
             <div className="h-16 flex items-center justify-between px-5 border-b border-white/5 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <img
-                  src="/logo.png"
-                  alt="MCODE"
-                  className="w-8 h-8 rounded-lg object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.6)] flex-shrink-0"
-                />
+                <div className="relative group flex items-center justify-center flex-shrink-0">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-40 group-hover:opacity-80 transition duration-300"></div>
+                  <div className="relative w-8 h-8 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
+                    <img
+                      src="/logo.png"
+                      alt="MCODE"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
+                </div>
                 <span className="text-white font-bold tracking-wider text-sm">MCODE</span>
               </div>
               <div className="flex items-center gap-3">
@@ -1682,14 +1689,21 @@ export function AIChatPage() {
               /* EMPTY STATE (Chat or AI Code Assistant, no messages — the AI Code Editor tab shows the IDE view) */
               <div className="w-full h-full flex flex-col items-center justify-center px-4 relative z-10">
                 <div className="mb-8 flex flex-col items-center gap-4">
-                  <motion.img
-                    src="/logo.png"
-                    alt="MCODE"
-                    className="w-24 h-24 object-contain drop-shadow-[0_0_35px_rgba(59,130,246,0.6)]"
+                  <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.4 }}
-                  />
+                    className="relative group"
+                  >
+                    <div className="absolute -inset-1.5 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 rounded-3xl blur-xl opacity-60 group-hover:opacity-100 transition duration-500"></div>
+                    <div className="relative w-28 h-28 rounded-3xl p-2 bg-[#09090b] border border-white/20 shadow-[0_0_40px_rgba(59,130,246,0.4)] overflow-hidden flex items-center justify-center">
+                      <img
+                        src="/logo.png"
+                        alt="MCODE"
+                        className="w-full h-full object-cover rounded-2xl"
+                      />
+                    </div>
+                  </motion.div>
                   <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium shadow-sm backdrop-blur-sm">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     <span>Ready</span>
@@ -2772,11 +2786,16 @@ export function AIChatPage() {
               className="w-full max-w-lg bg-[#181818] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 text-white cursor-default"
             >
               <div className="flex items-center gap-3">
-                <img
-                  src="/logo.png"
-                  alt="MCODE"
-                  className="w-10 h-10 rounded-xl object-contain drop-shadow-[0_0_16px_rgba(59,130,246,0.6)] flex-shrink-0"
-                />
+                <div className="relative group flex items-center justify-center flex-shrink-0">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-50"></div>
+                  <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
+                    <img
+                      src="/logo.png"
+                      alt="MCODE"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
+                </div>
                 <div>
                   <h3 className="text-base font-semibold text-white">Switch to AI Code Editor</h3>
                   <p className="text-xs text-white/50">Choose how you want to proceed into the editor</p>

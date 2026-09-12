@@ -96,7 +96,12 @@ export function McodeDashboard() {
       <div className="w-64 flex-shrink-0 border-r border-white/5 bg-[#0c0c0c] flex flex-col overflow-y-auto">
         <div className="p-4 border-b border-white/5">
           <div className="flex items-center gap-2.5 text-sm font-semibold text-white">
-            <img src="/logo.png" alt="Mcode" className="w-5 h-5 rounded object-contain drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+            <div className="relative group flex items-center justify-center flex-shrink-0">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-md blur opacity-40"></div>
+              <div className="relative w-6 h-6 rounded-md overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
+                <img src="/logo.png" alt="Mcode" className="w-full h-full object-cover rounded" />
+              </div>
+            </div>
             Mcode Dashboard
           </div>
         </div>

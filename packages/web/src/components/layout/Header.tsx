@@ -34,11 +34,16 @@ export function Header() {
             transition={{ duration: 0.4, delay: 0.1, ease: [0.4, 0, 0.2, 1] }}
           >
             <Link href="/" className="flex items-center gap-2.5 ml-4 max-[850px]:ml-0 group">
-              <img
-                src="/logo.png"
-                alt="mcode"
-                className="w-8 h-8 rounded-md object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.6)] group-hover:scale-105 transition-transform duration-200"
-              />
+              <div className="relative group/logo flex items-center justify-center flex-shrink-0">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-40 group-hover/logo:opacity-80 transition duration-300"></div>
+                <div className="relative w-8 h-8 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
+                  <img
+                    src="/logo.png"
+                    alt="mcode"
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                </div>
+              </div>
               <span className="text-lg font-bold tracking-tight text-foreground leading-none max-[1200px]:hidden max-[850px]:inline">
                 mcode
               </span>

@@ -46,11 +46,16 @@ export function AboutModal() {
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#1f1f23]">
           <div className="flex items-center gap-3">
-            <img
-              src="/logo.png"
-              alt="MCODE"
-              className="w-8 h-8 rounded-lg object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.6)] flex-shrink-0"
-            />
+            <div className="relative group flex items-center justify-center flex-shrink-0">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-50"></div>
+              <div className="relative w-8 h-8 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="MCODE"
+                  className="w-full h-full object-cover rounded-lg"
+                />
+              </div>
+            </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-wide">About MCODE</h2>
               <p className="text-xs text-white/40">Version 1.0.0</p>

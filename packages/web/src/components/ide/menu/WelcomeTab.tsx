@@ -121,11 +121,16 @@ export function WelcomeTab({
         
         {/* Header: mcode Brand */}
         <div className="flex items-center gap-3.5 pt-1">
-          <img
-            src="/logo.png"
-            alt="MCODE"
-            className="w-11 h-11 rounded-lg object-contain drop-shadow-[0_0_16px_rgba(59,130,246,0.6)] flex-shrink-0"
-          />
+          <div className="relative group flex items-center justify-center flex-shrink-0">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-50"></div>
+            <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-1 flex items-center justify-center">
+              <img
+                src="/logo.png"
+                alt="MCODE"
+                className="w-full h-full object-cover rounded-lg"
+              />
+            </div>
+          </div>
           <div>
             <h1 className="text-[34px] font-bold tracking-tight text-[#e8e8e8] leading-tight font-sans">
               mcode

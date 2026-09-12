@@ -43,11 +43,16 @@ export function McodeStartupOverlay() {
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
           >
-            <img
-              src="/logo.png"
-              alt="MCODE"
-              className="w-24 h-24 object-contain rounded-2xl drop-shadow-[0_0_35px_rgba(59,130,246,0.8)]"
-            />
+            <div className="relative group flex items-center justify-center">
+              <div className="absolute -inset-1.5 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 rounded-3xl blur-xl opacity-70"></div>
+              <div className="relative w-28 h-28 rounded-3xl p-2 bg-[#09090b] border border-white/20 shadow-[0_0_40px_rgba(59,130,246,0.5)] overflow-hidden flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="MCODE"
+                  className="w-full h-full object-cover rounded-2xl"
+                />
+              </div>
+            </div>
           </motion.div>
           <motion.div
             className="startup-title"

@@ -170,11 +170,16 @@ export function SignupPage() {
           transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
         >
           <div className="text-center mb-8 flex flex-col items-center">
-            <img
-              src="/logo.png"
-              alt="MCODE"
-              className="w-16 h-16 object-contain mb-3 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]"
-            />
+            <div className="relative group flex items-center justify-center mb-3">
+              <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 rounded-2xl blur-lg opacity-50 group-hover:opacity-80 transition duration-300"></div>
+              <div className="relative w-16 h-16 rounded-2xl p-1.5 bg-[#09090b] border border-white/20 shadow-xl overflow-hidden flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="MCODE"
+                  className="w-full h-full object-cover rounded-xl"
+                />
+              </div>
+            </div>
             <AnimatePresence mode="wait">
               {!otpStep ? (
                 <motion.h1
