@@ -440,13 +440,16 @@ export class ChatSession {
       memoryDir: this.memoryDir,
       environment,
       onTool: ({ tool, args, replaceKey }) => {
-        const payload = { tool, args, replaceKey, status: 'running', timestamp: Date.now() };
+        const preview = typeof args === 'object' && args !== null
+          ? (args.path || args.file || args.command || args.query || args.url || '')
+          : args;
+        const payload = { tool, args: preview, replaceKey, status: 'running', timestamp: Date.now() };
         // For search-type tools, include a searchResults stub so the frontend
         // renders the ZCode-style animated SearchResultBlock with a spinner
         // while the tool executes, then swaps to the done results.
         if (tool === 'web_search' || tool === 'web_fetch') {
           payload.searchResults = {
-            query: tool === 'web_search' ? args.query : args.url,
+            query: tool === 'web_search' ? (args?.query || preview) : (args?.url || preview),
             phase: 'searching',
             results: [],
             answer: ''
@@ -505,10 +508,13 @@ export class ChatSession {
       reasoning: this.router?.reasoning || null,
       history: this.history,
       onTool: ({ tool, args, replaceKey }) => {
-        const payload = { tool, args, replaceKey, status: 'running', timestamp: Date.now() };
+        const preview = typeof args === 'object' && args !== null
+          ? (args.path || args.file || args.command || args.query || args.url || '')
+          : args;
+        const payload = { tool, args: preview, replaceKey, status: 'running', timestamp: Date.now() };
         if (tool === 'web_search' || tool === 'web_fetch') {
           payload.searchResults = {
-            query: tool === 'web_search' ? args.query : args.url,
+            query: tool === 'web_search' ? (args?.query || preview) : (args?.url || preview),
             phase: 'searching',
             results: [],
             answer: ''

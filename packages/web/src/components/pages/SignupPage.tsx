@@ -169,7 +169,12 @@ export function SignupPage() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
         >
-          <div className="text-center mb-8">
+          <div className="text-center mb-8 flex flex-col items-center">
+            <img
+              src="/logo.png"
+              alt="MCODE"
+              className="w-16 h-16 object-contain mb-3 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]"
+            />
             <AnimatePresence mode="wait">
               {!otpStep ? (
                 <motion.h1

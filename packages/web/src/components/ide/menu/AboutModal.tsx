@@ -45,12 +45,14 @@ export function AboutModal() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#1f1f23]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white font-bold text-xs shadow-md">
-              M
-            </div>
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo.png"
+              alt="MCODE"
+              className="w-8 h-8 rounded-lg object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.6)] flex-shrink-0"
+            />
             <div>
-              <h2 className="text-base font-semibold text-white">About M CODE</h2>
+              <h2 className="text-base font-bold text-white tracking-wide">About MCODE</h2>
               <p className="text-xs text-white/40">Version 1.0.0</p>
             </div>
           </div>

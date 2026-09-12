@@ -64,7 +64,10 @@ class FileLockManager {
         agentId,
         resolve: () => {
           clearTimeout(timer);
-          this.locks.set(filePath, { ownerId: agentId, waiters: [] });
+          // Preserve remaining waiters from the existing entry
+          const existing = this.locks.get(filePath);
+          const remainingWaiters = existing ? existing.waiters : [];
+          this.locks.set(filePath, { ownerId: agentId, waiters: remainingWaiters });
           const holderFiles = this.holderFiles.get(agentId) || new Set();
           holderFiles.add(filePath);
           this.holderFiles.set(agentId, holderFiles);
@@ -84,10 +87,9 @@ class FileLockManager {
     if (holderFiles) holderFiles.delete(filePath);
 
     if (entry.waiters.length > 0) {
-      // Hand off to next waiter
+      // Hand off to next waiter (FIFO) — preserve remaining waiters
       const next = entry.waiters.shift();
       entry.ownerId = next.agentId;
-      entry.waiters = [];
       next.resolve();
     } else {
       this.locks.delete(filePath);
@@ -123,6 +125,7 @@ class FileLockManager {
  * runs ready todos concurrently up to a cap, merges results, and pushes
  * every event onto the shared bus (terminal UI + Socket.IO bridge subscribe).
  */
+export class SubagentManager {
   constructor({ plan, router, projectPath, config = {}, bus = null, options = {} }) {
     this.plan = resolveFileConflicts(plan);
     this.router = router;

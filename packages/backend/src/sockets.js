@@ -8,7 +8,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import pty from 'node-pty';
-import { runSingleFile } from './piston-client.js';
+import { runSmart } from './piston-client.js';
 import { ensureProjectContainer, execInContainer, stopProjectContainer, getContainerPort } from './docker-runner.js';
 import { connectSSH, sendToSSH, disconnectSSH } from './ssh-manager.js';
 
@@ -281,21 +281,21 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       if (session) session.interrupt();
     });
 
-    // ── Single-file Execution (Piston API Sandbox) ─────────────────────
+    // ── Single-file Execution (Smart: Host → Piston fallback) ──────────
     socket.on('code:run-file', async (payload = {}) => {
       const { filename, code, stdin } = payload;
       if (!filename || code === undefined) {
         return socket.emit('code:run-result', { error: 'filename and code are required' });
       }
       try {
-        const result = await runSingleFile(filename, code, stdin || '');
+        const result = await runSmart(filename, code, stdin || '');
         socket.emit('code:run-result', result);
       } catch (err) {
         socket.emit('code:run-result', { error: err.message });
       }
     });
 
-    // ── Full Project Execution (Docker Container) ─────────────────────
+    // ── Full Project Execution (Docker → Host fallback) ────────────────
     socket.on('project:run', async (payload = {}) => {
       const session = chatSessions.get(socket.id);
       const projectPath = session?.workspacePath;
@@ -303,9 +303,11 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         return socket.emit('project:run-error', { error: 'No active workspace found' });
       }
 
+      const { readdir } = await import('node:fs/promises');
+      const files = await readdir(projectPath);
+
+      // ── Try Docker first ──────────────────────────────────
       try {
-        const { readdir } = await import('node:fs/promises');
-        const files = await readdir(projectPath);
         await ensureProjectContainer(socket.id, projectPath, files);
 
         // Auto-detect and run install + start command
@@ -318,8 +320,84 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
         const port = await getContainerPort(socket.id);
         socket.emit('project:run-ready', { previewUrl: port ? `http://localhost:${port}` : null });
+        return;
+      } catch (dockerErr) {
+        // Docker not available — fallback to host execution
+        console.warn(`[project:run] Docker unavailable: ${dockerErr.message}, falling back to host execution`);
+      }
+
+      // ── Host-based fallback ───────────────────────────────
+      try {
+        const { execa } = await import('execa');
+        const streamChunk = (chunk) => socket.emit('chat:shell_stream', { chunk: chunk.toString() });
+
+        socket.emit('chat:shell_stream', { chunk: '\x1b[33m[mcode] Docker unavailable — running project on host...\x1b[0m\r\n' });
+
+        // Auto-detect project type and run appropriate commands
+        if (files.includes('package.json')) {
+          // Node.js project
+          socket.emit('chat:shell_stream', { chunk: '\x1b[34m$ npm install\x1b[0m\r\n' });
+          const install = execa('npm', ['install'], { cwd: projectPath, reject: false, env: { ...process.env, FORCE_COLOR: '1' } });
+          install.stdout?.on('data', streamChunk);
+          install.stderr?.on('data', streamChunk);
+          await install;
+
+          socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[34m$ npm start\x1b[0m\r\n' });
+          const start = execa('npm', ['start'], { cwd: projectPath, reject: false, env: { ...process.env, FORCE_COLOR: '1' } });
+          start.stdout?.on('data', streamChunk);
+          start.stderr?.on('data', streamChunk);
+          // Don't await — npm start usually runs a long-lived server
+          start.then(() => {
+            socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Process exited]\x1b[0m\r\n' });
+          }).catch(() => {});
+
+          // Give the server a moment to start, then notify
+          setTimeout(() => {
+            socket.emit('project:run-ready', { previewUrl: 'http://localhost:3000' });
+          }, 3000);
+
+        } else if (files.includes('requirements.txt') || files.includes('main.py') || files.includes('app.py')) {
+          // Python project
+          if (files.includes('requirements.txt')) {
+            socket.emit('chat:shell_stream', { chunk: '\x1b[34m$ pip install -r requirements.txt\x1b[0m\r\n' });
+            const pip = execa('pip', ['install', '-r', 'requirements.txt'], { cwd: projectPath, reject: false });
+            pip.stdout?.on('data', streamChunk);
+            pip.stderr?.on('data', streamChunk);
+            await pip;
+          }
+
+          const entryFile = files.includes('app.py') ? 'app.py' : 'main.py';
+          socket.emit('chat:shell_stream', { chunk: `\r\n\x1b[34m$ python ${entryFile}\x1b[0m\r\n` });
+          const py = execa('python', [entryFile], { cwd: projectPath, reject: false });
+          py.stdout?.on('data', streamChunk);
+          py.stderr?.on('data', streamChunk);
+          py.then(() => {
+            socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Process exited]\x1b[0m\r\n' });
+          }).catch(() => {});
+
+          setTimeout(() => {
+            socket.emit('project:run-ready', { previewUrl: 'http://localhost:5000' });
+          }, 3000);
+
+        } else if (files.includes('go.mod')) {
+          // Go project
+          socket.emit('chat:shell_stream', { chunk: '\x1b[34m$ go run .\x1b[0m\r\n' });
+          const goRun = execa('go', ['run', '.'], { cwd: projectPath, reject: false });
+          goRun.stdout?.on('data', streamChunk);
+          goRun.stderr?.on('data', streamChunk);
+          goRun.then(() => {
+            socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Process exited]\x1b[0m\r\n' });
+          }).catch(() => {});
+
+          setTimeout(() => {
+            socket.emit('project:run-ready', { previewUrl: 'http://localhost:8080' });
+          }, 3000);
+
+        } else {
+          socket.emit('project:run-error', { error: 'Could not detect project type. Ensure package.json, requirements.txt, or go.mod exists.' });
+        }
       } catch (err) {
-        socket.emit('project:run-error', { error: err.message });
+        socket.emit('project:run-error', { error: `Host execution failed: ${err.message}` });
       }
     });
 
@@ -375,9 +453,9 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       socket.emit('terminal:available_shells', AVAILABLE_SHELLS);
     });
 
-    socket.on('terminal:spawn', async (payload = {}) => {
+    async function spawnPtySession(payload = {}) {
       const { id, shellType = 'powershell', cols = 80, rows = 24, cwd } = payload;
-      if (!id) return;
+      if (!id) return null;
 
       let targetCwd = cwd;
       if (!targetCwd) {
@@ -444,18 +522,28 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         });
 
         socket.emit('terminal:spawned', { id, shellPath, cwd: targetCwd });
+        return ptyProcess;
       } catch (err) {
         console.error(`[SOCKET PTY] Failed to spawn PTY for ${id}:`, err);
         socket.emit('terminal:output', {
           id,
           data: `\r\n\x1b[31mFailed to spawn shell process (${shellPath}): ${err.message}\x1b[0m\r\n`,
         });
+        return null;
       }
+    }
+
+    socket.on('terminal:spawn', async (payload = {}) => {
+      await spawnPtySession(payload);
     });
 
-    socket.on('terminal:input', ({ id, data }) => {
-      const socketPtyMap = ptySessionsMap.get(socket.id);
-      const ptyProcess = socketPtyMap?.get(id);
+    socket.on('terminal:input', async ({ id, data }) => {
+      let socketPtyMap = ptySessionsMap.get(socket.id);
+      let ptyProcess = socketPtyMap?.get(id);
+      if (!ptyProcess && id && data !== undefined) {
+        console.log(`[SOCKET PTY] Auto-spawning missing session ${id} on terminal:input`);
+        ptyProcess = await spawnPtySession({ id });
+      }
       if (ptyProcess && data !== undefined) {
         ptyProcess.write(data);
       }

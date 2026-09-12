@@ -43,32 +43,11 @@ export function McodeStartupOverlay() {
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
           >
-            <svg
-              width="80"
-              height="80"
-              viewBox="0 0 100 100"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <motion.rect
-                width="100"
-                height="100"
-                rx="18"
-                initial={{ fill: '#0c0c0c' }}
-                animate={{ fill: '#10b981' }}
-                transition={{ delay: 0.3, duration: 0.4 }}
-              />
-              <motion.path
-                d="M30 50l10 10 30-30"
-                stroke="white"
-                strokeWidth="8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                initial={{ pathLength: 0, opacity: 0 }}
-                animate={{ pathLength: 1, opacity: 1 }}
-                transition={{ delay: 0.3, duration: 0.4, ease: 'easeOut' }}
-              />
-            </svg>
+            <img
+              src="/logo.png"
+              alt="MCODE"
+              className="w-24 h-24 object-contain rounded-2xl drop-shadow-[0_0_35px_rgba(59,130,246,0.8)]"
+            />
           </motion.div>
           <motion.div
             className="startup-title"

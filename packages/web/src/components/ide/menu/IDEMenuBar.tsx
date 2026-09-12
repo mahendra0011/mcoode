@@ -392,7 +392,7 @@ export function IDEMenuBar({
         {
           label: "Preferences: Open Settings",
           shortcut: "Ctrl+,",
-          action: () => store.openSettings("permissions"),
+          action: () => store.openSettings("models"),
         },
         { divider: true },
         {

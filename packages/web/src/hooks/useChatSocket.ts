@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { io, type Socket } from 'socket.io-client';
 import { getToken } from '../lib/api';
 import api from '../lib/axios';
+import { useIDEStore } from '../store/ideStore';
 import {
   setStatus,
   chatReady,
@@ -182,16 +183,17 @@ export function useChatSocket(workspaceId: string | null = null) {
       dispatch(agentMessage(payload));
 
       // When the agent writes/edits a file via a tool, notify any open editor
-      // panes so they can auto-refresh content for that file path.
+      // panes so they can auto-refresh content for that file path and refresh the file tree.
       if (
         payload &&
         payload.kind === 'tool' &&
         (payload.tool === 'write_file' || payload.tool === 'edit_file') &&
-        payload.status === 'done' &&
-        typeof payload.args === 'string'
+        payload.status === 'done'
       ) {
+        useIDEStore.getState().bumpRefresh();
+        const filePath = typeof payload.args === 'string' ? payload.args : payload.path || '';
         document.dispatchEvent(
-          new CustomEvent('file:changed', { detail: { path: payload.args } })
+          new CustomEvent('file:changed', { detail: { path: filePath } })
         );
       }
     };
@@ -224,6 +226,8 @@ export function useChatSocket(workspaceId: string | null = null) {
       }
       dispatch(chatDone(payload || {}));
       doneRef.current = true;
+      useIDEStore.getState().bumpRefresh();
+      document.dispatchEvent(new CustomEvent('file:changed', { detail: {} }));
     };
 
     const onUndoResult = (payload: any) => {
@@ -253,14 +257,24 @@ export function useChatSocket(workspaceId: string | null = null) {
     const onSubagentStep = (payload: any) => { dispatch(setSubagentStep(payload)); };
     const onSubagentDone = (payload: any) => { dispatch(setSubagentDone(payload)); };
     const onSubagentFailed = (payload: any) => { dispatch(setSubagentFailed(payload)); };
-    const onSubagentFile = (payload: any) => { dispatch(setSubagentFile(payload)); };
+    const onSubagentFile = (payload: any) => {
+      dispatch(setSubagentFile(payload));
+      useIDEStore.getState().bumpRefresh();
+      document.dispatchEvent(
+        new CustomEvent('file:changed', { detail: { path: payload?.file } })
+      );
+    };
     const onSubagentToolCall = (payload: any) => { dispatch(setSubagentToolCall(payload)); };
     const onSubagentToolResult = (payload: any) => { dispatch(setSubagentToolResult(payload)); };
     const onSubagentNeedsReview = (payload: any) => { dispatch(setSubagentNeedsReview(payload)); };
     const onWaveStart = (payload: any) => { dispatch(setWaveStart(payload)); };
     const onWaveComplete = (payload: any) => { dispatch(setWaveComplete(payload)); };
     const onIntegrationPass = (payload: any) => { dispatch(setIntegrationPass(payload)); };
-    const onBuildComplete = (payload: any) => { dispatch(setBuildComplete(payload)); };
+    const onBuildComplete = (payload: any) => {
+      dispatch(setBuildComplete(payload));
+      useIDEStore.getState().bumpRefresh();
+      document.dispatchEvent(new CustomEvent('file:changed', { detail: {} }));
+    };
     const onToast = (payload: any) => {
       if (payload) {
         const id = Date.now().toString();

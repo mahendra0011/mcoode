@@ -24,7 +24,9 @@ export function LandingPage() {
       </div>
       
       {/* 3rd Section: AI Agent Feature */}
-      <AgentFeature />
+      <div className="relative w-full">
+        <AgentFeature />
+      </div>
       
       <LogoTicker />
       <FeaturesGrid />

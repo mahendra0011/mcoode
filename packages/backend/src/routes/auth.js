@@ -41,7 +41,7 @@ export function authRoutes({ secret }) {
       }
       const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
       const codeHash = hashPassword(code);
-      await db().otp.deleteOne({ email, intent });
+      await db().otp.deleteMany({ email, intent });
       await db().otp.create({ email, codeHash, intent, expiresAt: new Date(Date.now() + OTP_TTL_MS), attempts: 0 });
       const mail = await sendMail({
         to: email,

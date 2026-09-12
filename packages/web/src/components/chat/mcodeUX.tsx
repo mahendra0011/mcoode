@@ -1,6 +1,6 @@
 import React, { useState, useEffect, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Terminal, FileText, Pencil, FolderSearch, Send, Paperclip, ShieldCheck, ChevronDown } from "lucide-react";
+import { Search, Terminal, FileText, Pencil, FolderSearch, Send, Paperclip, ShieldCheck, ChevronDown, ChevronRight, FileCode } from "lucide-react";
 
 export type IconKey = keyof typeof ICONS;
 
@@ -94,12 +94,15 @@ export function ToolCallCard({ type = "explored", label, summary, children, defa
           textAlign: "left",
         }}
       >
-        <Icon size={15} style={{ color: "var(--mcode-accent)", flexShrink: 0 }} />
+        <Icon size={14} className="text-emerald-400" style={{ flexShrink: 0 }} />
         <span style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
           {label}
         </span>
         <span style={{ fontSize: 13, color: "var(--mcode-text-dim)", marginLeft: 4 }}>
           {summary}
+        </span>
+        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
+          <ChevronRight size={12} className={`transition-transform duration-200 text-white/30 ${open ? 'rotate-90' : ''}`} />
         </span>
       </button>
 
@@ -144,16 +147,9 @@ export function WroteFile({ filename, lang, lines }: WroteFileProps) {
         fontSize: 12.5,
       }}
     >
-      <span
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 2,
-          background: LANG_COLOR[lang ?? ""] ?? "#888",
-        }}
-      />
+      <FileCode size={14} style={{ color: LANG_COLOR[lang ?? ""] ?? "var(--mcode-green, #3ecf8e)", flexShrink: 0 }} />
       <span style={{ color: "var(--mcode-text)" }}>{filename}</span>
-      <span style={{ color: "var(--mcode-green)" }}>+{lines}</span>
+      <span style={{ color: "var(--mcode-green)", fontWeight: 600 }}>+{lines}</span>
     </motion.div>
   );
 }
@@ -162,8 +158,11 @@ export function DiffBlock({ filename, added, removed }: DiffBlockProps) {
   const total = added + removed || 1;
   return (
     <div style={{ fontFamily: "var(--mcode-mono)", fontSize: 12.5 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-        <span style={{ color: "var(--mcode-text)" }}>{filename}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
+        <span style={{ color: "var(--mcode-text)", display: "flex", alignItems: "center", gap: 6 }}>
+          <Pencil size={12} className="text-emerald-400 shrink-0" />
+          {filename}
+        </span>
         <span>
           <span style={{ color: "var(--mcode-green)" }}>+{added}</span>{" "}
           <span style={{ color: "var(--mcode-red)" }}>-{removed}</span>
@@ -219,7 +218,10 @@ export function TerminalOutput({ command, output }: TerminalOutputProps) {
         fontSize: 12,
       }}
     >
-      <div style={{ color: "var(--mcode-accent)" }}>$ {command}</div>
+      <div style={{ color: "var(--mcode-accent)", display: "flex", alignItems: "center", gap: 6 }}>
+        <Terminal size={12} className="text-emerald-400 shrink-0" />
+        <span>$ {command}</span>
+      </div>
       <pre style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", color: "var(--mcode-text-dim)" }}>
         {output ? output.slice(0, visibleChars) : ""}
         {output && visibleChars < output.length && (

@@ -1,11 +1,29 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileType2, FileCode, FileJson, File as FileIcon } from 'lucide-react';
+import {
+  FileType2,
+  FileCode,
+  FileJson,
+  File as FileIcon,
+  Play,
+  ChevronDown,
+  SplitSquareHorizontal,
+  MoreHorizontal,
+  Terminal,
+  Cpu,
+  Package,
+  Check,
+  Globe,
+  ExternalLink,
+} from 'lucide-react';
 import api from '../../lib/axios';
 import { useIDEStore } from '../../store/ideStore';
+import { useSettingsStore } from '../../store/settingsStore';
+import { getSocket } from '../../hooks/useChatSocket';
 import editorApi from '../../lib/extensions/editorApi';
 import { WelcomeTab } from './menu/WelcomeTab';
+import { EditorContextMenu } from './EditorContextMenu';
 import { toast } from 'sonner';
 
 const getFileIcon = (name: string) => {
@@ -51,16 +69,39 @@ export function EditorPane({
   const columnSelection = useIDEStore((s) => s.columnSelection);
   const autoSaveEnabled = useIDEStore((s) => s.autoSaveEnabled);
 
+  const editorSettings = useSettingsStore((s) => s.editor);
+  const advancedEditor = useSettingsStore((s) => s.advancedEditor);
+  const colorTheme = useSettingsStore((s) => s.appearance.colorTheme);
+  const autoSave = editorSettings.autoSave;
+  const autoSaveDelay = advancedEditor.autoSaveDelay;
+  const formatOnSave = editorSettings.formatOnSave;
+
+  const monacoOptions = useMemo(() => {
+    return useSettingsStore.getState().getMonacoOptions();
+  }, [editorSettings, advancedEditor]);
+
   const [fileContents, setFileContents] = useState<Record<string, string | undefined>>({});
   const [loading, setLoading] = useState(false);
   const [dirty, setDirty] = useState(new Set<string>());
-  const [editorTheme, setEditorTheme] = useState(editorApi.getTheme() || 'vs-dark');
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number } | null>(null);
+  const [editorTheme, setEditorTheme] = useState(() => {
+    if (colorTheme === 'mcode-light' || colorTheme === 'github-light') return 'vs';
+    if (colorTheme === 'one-dark') return 'one-dark-pro';
+    return editorApi.getTheme() || 'vs-dark';
+  });
 
   useEffect(() => {
-    return editorApi.subscribeTheme((theme) => {
-      setEditorTheme(theme === 'default-dark' ? 'vs-dark' : theme);
-    });
-  }, []);
+    let theme = 'vs-dark';
+    if (colorTheme === 'mcode-light' || colorTheme === 'github-light') {
+      theme = 'vs';
+    } else if (colorTheme === 'one-dark') {
+      theme = 'one-dark-pro';
+    }
+    setEditorTheme(theme);
+    if (monacoRef.current) {
+      monacoRef.current.editor.setTheme(theme);
+    }
+  }, [colorTheme]);
 
   const targetJump = useIDEStore((s) => s.targetJump);
   const setTargetJump = useIDEStore((s) => s.setTargetJump);
@@ -78,6 +119,19 @@ export function EditorPane({
     editorRef.current = editor;
     monacoRef.current = monaco;
     useIDEStore.getState().setActiveEditor(editor, monaco);
+
+    // Custom right-click context menu (matching Screenshot 3)
+    editor.onContextMenu((e: any) => {
+      e.event?.preventDefault?.();
+      e.event?.stopPropagation?.();
+      const mouseX = e.event?.posx || e.event?.browserEvent?.clientX || 0;
+      const mouseY = e.event?.posy || e.event?.browserEvent?.clientY || 0;
+      setContextMenu({
+        visible: true,
+        x: mouseX,
+        y: mouseY,
+      });
+    });
 
     // Track cursor position for navigation history
     editor.onDidChangeCursorPosition((e: any) => {
@@ -146,15 +200,15 @@ export function EditorPane({
     monaco.languages.registerDocumentFormattingEditProvider('html', formatProvider);
   }, []);
 
-  // Update editor options reactively when wordWrap or columnSelection change
+  // Update editor options reactively when monacoOptions or columnSelection change
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.updateOptions({
-        wordWrap: wordWrap ? 'on' : 'off',
+        ...monacoOptions,
         columnSelection,
       });
     }
-  }, [wordWrap, columnSelection]);
+  }, [monacoOptions, columnSelection]);
 
   // Update glyph margin decorations whenever breakpoints or activePath change
   useEffect(() => {
@@ -200,22 +254,20 @@ export function EditorPane({
     if (!workspaceId) return;
 
     setLoading(true);
-    api.get(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, { timeout: 5000 })
+    api.get(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`)
       .then(res => {
-        if (res.data.content !== undefined) {
-          setFileContents(prev => ({ ...prev, [activePath]: res.data.content }));
-          setFileContent(activePath, res.data.content);
-          setSavedContent(activePath, res.data.content);
-        }
+        const text = typeof res.data === 'string' ? res.data : (res.data?.content ?? '');
+        setFileContents(prev => ({ ...prev, [activePath]: text }));
+        setFileContent(activePath, text);
+        setSavedContent(activePath, text);
+        recordTimeline(activePath, 'Opened', text);
       })
-      .catch(() => {
-        // Fallback for new / offline file
+      .catch(err => {
+        console.error('Failed to load file content:', err);
         setFileContents(prev => ({ ...prev, [activePath]: '' }));
-        setFileContent(activePath, '');
-        setSavedContent(activePath, '');
       })
       .finally(() => setLoading(false));
-  }, [workspaceId, activePath, fileContents, setFileContent, setSavedContent]);
+  }, [activePath, workspaceId, fileContents, setFileContent, setSavedContent, recordTimeline]);
 
   const handleEditorChange = useCallback((value: string | undefined) => {
     if (!activePath) return;
@@ -228,6 +280,11 @@ export function EditorPane({
   // Handle Save (Cmd+S)
   const handleSave = useCallback(() => {
     if (!activePath) return;
+    if (formatOnSave && editorRef.current) {
+      try {
+        editorRef.current.getAction('editor.action.formatDocument')?.run();
+      } catch {}
+    }
     const content = fileContents[activePath] || '';
 
     if (workspaceId) {
@@ -244,11 +301,12 @@ export function EditorPane({
       setSavedContent(activePath, content);
       recordTimeline(activePath, 'Saved', content);
     }
-  }, [workspaceId, activePath, fileContents, recordTimeline, setSavedContent]);
+  }, [workspaceId, activePath, fileContents, formatOnSave, recordTimeline, setSavedContent]);
 
   // Auto-Save interval
   useEffect(() => {
-    if (!autoSaveEnabled || dirty.size === 0) return;
+    const isAutoSave = autoSave || autoSaveEnabled;
+    if (!isAutoSave || dirty.size === 0) return;
     const interval = setInterval(() => {
       dirty.forEach((path) => {
         const content = fileContents[path] || '';
@@ -264,9 +322,9 @@ export function EditorPane({
           setSavedContent(path, content);
         }
       });
-    }, 2500);
+    }, autoSaveDelay || 1500);
     return () => clearInterval(interval);
-  }, [autoSaveEnabled, dirty, fileContents, workspaceId, setSavedContent]);
+  }, [autoSave, autoSaveEnabled, autoSaveDelay, dirty, fileContents, workspaceId, setSavedContent]);
 
   // Listen for file:changed events from the agent
   useEffect(() => {
@@ -304,6 +362,101 @@ export function EditorPane({
     return () => window.removeEventListener('keydown', onKeyDown as EventListener);
   }, [handleSave]);
 
+  const [runMenuOpen, setRunMenuOpen] = useState(false);
+  const [runMode, setRunMode] = useState<'piston' | 'terminal' | 'docker'>('piston');
+  const runMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (runMenuRef.current && !runMenuRef.current.contains(e.target as Node)) {
+        setRunMenuOpen(false);
+      }
+    }
+    if (runMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [runMenuOpen]);
+
+  const handleRunCode = useCallback(
+    (overrideMode?: 'piston' | 'terminal' | 'docker') => {
+      const mode = overrideMode || runMode;
+      setRunMenuOpen(false);
+
+      if (!activePath) {
+        toast.info('No active file is open to run.');
+        return;
+      }
+
+      const editorValue = editorRef.current?.getValue();
+      const currentCode = editorValue !== undefined ? editorValue : fileContents[activePath] || '';
+      const filename = activePath.split('/').pop() || activePath;
+
+      // Always open bottom panel
+      useIDEStore.getState().setTerminalOpen(true);
+
+      if (mode === 'docker') {
+        useIDEStore.getState().setActivePanelTab('terminal');
+        toast.info(`Running project in Docker container...`);
+        const socket = getSocket();
+        socket.emit('project:run');
+        return;
+      }
+
+      if (mode === 'terminal') {
+        useIDEStore.getState().setActivePanelTab('terminal');
+        const ext = filename.split('.').pop()?.toLowerCase();
+        let cmd = '';
+        if (ext === 'js' || ext === 'mjs' || ext === 'cjs') cmd = `node "${filename}"`;
+        else if (ext === 'ts') cmd = `npx ts-node "${filename}"`;
+        else if (ext === 'py') cmd = `python "${filename}"`;
+        else if (ext === 'sh') cmd = `bash "${filename}"`;
+        else if (ext === 'go') cmd = `go run "${filename}"`;
+        else if (ext === 'rs') cmd = `rustc "${filename}" && ./${filename.replace(/\.rs$/, '')}`;
+        else if (ext === 'cpp' || ext === 'c') cmd = `g++ "${filename}" -o a.out && ./a.out`;
+        else if (ext === 'java') cmd = `java "${filename}"`;
+        else cmd = `./"${filename}"`;
+
+        const socket = getSocket();
+        socket.emit('terminal:input', { id: 'term-1', data: `${cmd}\r` });
+        toast.success(`Running ${filename} in terminal`);
+        return;
+      }
+
+      // Default: Piston single-file sandbox execution
+      if (!currentCode.trim()) {
+        toast.info('Active file is empty.');
+        return;
+      }
+
+      useIDEStore.getState().setActivePanelTab('output');
+      toast.info(`Running ${filename} via Piston sandbox...`);
+
+      const socket = getSocket();
+      socket.emit('code:run-file', {
+        filename,
+        code: currentCode,
+        stdin: '',
+      });
+    },
+    [activePath, fileContents, runMode]
+  );
+
+  // Bind Ctrl+Alt+N & F5 globally to run code
+  useEffect(() => {
+    const onRunKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        handleRunCode();
+      } else if (e.key === 'F5') {
+        e.preventDefault();
+        handleRunCode();
+      }
+    };
+    window.addEventListener('keydown', onRunKeyDown as EventListener);
+    return () => window.removeEventListener('keydown', onRunKeyDown as EventListener);
+  }, [handleRunCode]);
+
   const showWelcomeTab = isWelcomeOpen;
   const isWelcomeActive = showWelcomeTab && (!activePath || !openFiles.includes(activePath));
 
@@ -314,85 +467,226 @@ export function EditorPane({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
-      {/* Editor Tabs matching VS Code */}
-      <motion.div
-        className="flex items-center border-b border-[#252525] bg-[#181818] overflow-x-auto custom-scrollbar flex-shrink-0 select-none h-9"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      >
-        {/* Welcome Tab (Persistent in Tab Bar like VS Code desktop) */}
-        {showWelcomeTab && (
-          <div
-            onClick={() => setActivePath(null)}
-            className={`flex items-center gap-2 px-3.5 h-full text-xs cursor-pointer whitespace-nowrap font-normal border-r border-[#252525] transition-colors group ${
-              isWelcomeActive
-                ? 'bg-[#1e1e1e] border-t-2 border-[#0078d4] text-white font-medium'
-                : 'text-white/60 hover:text-white hover:bg-white/5 border-t-2 border-transparent'
-            }`}
-          >
-            {/* Official VS Code Blue Ribbon Icon */}
-            <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.27a.998.998 0 0 0-.005 1.458L4.35 12 .322 15.272a.998.998 0 0 0 .005 1.458l1.322 1.212a1 1 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zM18 17.807l-7.07-5.807L18 6.193v11.614z" fill="#0078D4"/>
-            </svg>
-            <span>Welcome</span>
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                setWelcomeOpen(false);
-                if (openFiles.length > 0 && (!activePath || !openFiles.includes(activePath))) {
-                  setActivePath(openFiles[0]);
-                }
-              }}
-              className="text-white/40 hover:text-white cursor-pointer ml-1 text-sm leading-none px-1 py-0.5 rounded hover:bg-white/10 transition"
-              title="Close Welcome"
-            >
-              ×
-            </span>
-          </div>
-        )}
-
-        {openFiles.map((path, i) => {
-          const name = path.split('/').pop() || '';
-          const isActive = !isWelcomeActive && activePath === path;
-          const isDirty = dirty.has(path);
-          return (
-            <motion.div
-              key={path}
-              initial={{ opacity: 0, x: -5 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -5 }}
-              transition={{ delay: i * 0.04 + 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-              onClick={() => {
-                setActivePath(path);
-              }}
-              className={`flex items-center gap-2 px-3.5 h-full text-xs cursor-pointer whitespace-nowrap border-r border-[#252525] transition-colors ${
-                isActive
-                  ? 'bg-[#1e1e1e] border-t-2 border-[#0078d4] font-medium text-white'
-                  : 'text-white/50 hover:bg-white/5 border-t-2 border-transparent'
+      {/* Editor Header: Tabs on Left + Action Toolbar (Run Code, Split, More) on Right */}
+      <div className="flex items-center justify-between border-b border-[#252525] bg-[#181818] flex-shrink-0 select-none h-9 relative">
+        {/* Tabs on Left */}
+        <motion.div
+          className="flex items-center overflow-x-auto custom-scrollbar flex-1 h-full min-w-0"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+        >
+          {/* Welcome Tab (Persistent in Tab Bar like VS Code desktop) */}
+          {showWelcomeTab && (
+            <div
+              onClick={() => setActivePath(null)}
+              className={`flex items-center gap-2 px-3.5 h-full text-xs cursor-pointer whitespace-nowrap font-normal border-r border-[#252525] transition-colors group ${
+                isWelcomeActive
+                  ? 'bg-[#1e1e1e] border-t-2 border-[#0078d4] text-white font-medium'
+                  : 'text-white/60 hover:text-white hover:bg-white/5 border-t-2 border-transparent'
               }`}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
             >
-              {getFileIcon(name)} {name}
-              {isDirty && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Unsaved changes" />
-              )}
-              <motion.span
-                className="text-white/30 ml-2 hover:text-white cursor-pointer px-1 rounded hover:bg-white/10 text-sm leading-none"
-                whileHover={{ scale: 1.15 }}
-                onClick={(e: React.MouseEvent) => {
+              {/* Official VS Code Blue Ribbon Icon */}
+              <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.27a.998.998 0 0 0-.005 1.458L4.35 12 .322 15.272a.998.998 0 0 0 .005 1.458l1.322 1.212a1 1 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zM18 17.807l-7.07-5.807L18 6.193v11.614z" fill="#0078D4"/>
+              </svg>
+              <span>Welcome</span>
+              <span
+                onClick={(e) => {
                   e.stopPropagation();
-                  if (isDirty && !window.confirm('This file has unsaved changes. Close anyway?')) return;
-                  closeFile(path);
+                  setWelcomeOpen(false);
+                  if (openFiles.length > 0 && (!activePath || !openFiles.includes(activePath))) {
+                    setActivePath(openFiles[0]);
+                  }
                 }}
+                className="text-white/40 hover:text-white cursor-pointer ml-1 text-sm leading-none px-1 py-0.5 rounded hover:bg-white/10 transition"
+                title="Close Welcome"
               >
                 ×
-              </motion.span>
-            </motion.div>
-          );
-        })}
-      </motion.div>
+              </span>
+            </div>
+          )}
+
+          {openFiles.map((path, i) => {
+            const name = path.split('/').pop() || '';
+            const isActive = !isWelcomeActive && activePath === path;
+            const isDirty = dirty.has(path);
+            return (
+              <motion.div
+                key={path}
+                initial={{ opacity: 0, x: -5 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -5 }}
+                transition={{ delay: i * 0.04 + 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                onClick={() => {
+                  setActivePath(path);
+                }}
+                className={`flex items-center gap-2 px-3.5 h-full text-xs cursor-pointer whitespace-nowrap border-r border-[#252525] transition-colors ${
+                  isActive
+                    ? 'bg-[#1e1e1e] border-t-2 border-[#0078d4] font-medium text-white'
+                    : 'text-white/50 hover:bg-white/5 border-t-2 border-transparent'
+                }`}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.99 }}
+              >
+                {getFileIcon(name)} {name}
+                {isDirty && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Unsaved changes" />
+                )}
+                <motion.span
+                  className="text-white/30 ml-2 hover:text-white cursor-pointer px-1 rounded hover:bg-white/10 text-sm leading-none"
+                  whileHover={{ scale: 1.15 }}
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    if (isDirty && !window.confirm('This file has unsaved changes. Close anyway?')) return;
+                    closeFile(path);
+                  }}
+                >
+                  ×
+                </motion.span>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+
+        {/* Right-Side Editor Action Icons (matching VS Code top-right editor header) */}
+        {activePath && (
+          <div className="flex items-center gap-1.5 px-2 h-full flex-shrink-0 bg-[#181818] border-l border-[#252525]/50 z-20" ref={runMenuRef}>
+            {/* Run Button Group */}
+            <div className="relative flex items-center bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded transition group">
+              <button
+                onClick={() => handleRunCode()}
+                className="flex items-center gap-1 px-2 py-1 text-emerald-400 hover:text-emerald-300 transition text-xs font-medium"
+                title={`Run Code (${runMode === 'piston' ? 'Piston Sandbox' : runMode === 'terminal' ? 'Terminal' : 'Docker'}) [Ctrl+Alt+N / F5]`}
+              >
+                <Play className="w-3.5 h-3.5 fill-emerald-400 text-emerald-400" />
+                <span className="text-white/90 text-xs font-medium">Run</span>
+              </button>
+              <button
+                onClick={() => setRunMenuOpen((v) => !v)}
+                className="px-1 py-1 text-emerald-400/70 hover:text-emerald-300 border-l border-emerald-500/20 transition"
+                title="Run Options..."
+              >
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {/* Dropdown Menu */}
+              {runMenuOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-64 bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl py-1.5 z-50 text-xs text-white">
+                  <div className="px-3 py-1 text-[10px] text-white/40 font-semibold uppercase tracking-wider">
+                    Execution Mode
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setRunMode('piston');
+                      handleRunCode('piston');
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center gap-2.5 transition"
+                  >
+                    <Cpu className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-white/90 flex items-center justify-between">
+                        <span>Run File (Piston)</span>
+                        {runMode === 'piston' && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                      </div>
+                      <div className="text-[11px] text-white/40 truncate">
+                        Sandboxed multi-language execution (53+ langs)
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setRunMode('terminal');
+                      handleRunCode('terminal');
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center gap-2.5 transition"
+                  >
+                    <Terminal className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-white/90 flex items-center justify-between">
+                        <span>Run in Terminal</span>
+                        {runMode === 'terminal' && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                      </div>
+                      <div className="text-[11px] text-white/40 truncate">
+                        Direct execution in PowerShell / Bash
+                      </div>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setRunMode('docker');
+                      handleRunCode('docker');
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center gap-2.5 transition"
+                  >
+                    <Package className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-white/90 flex items-center justify-between">
+                        <span>Run Project (Docker)</span>
+                        {runMode === 'docker' && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                      </div>
+                      <div className="text-[11px] text-white/40 truncate">
+                        Full project container with port preview
+                      </div>
+                    </div>
+                  </button>
+
+                  <div className="h-[1px] bg-white/10 my-1" />
+
+                  <button
+                    onClick={() => {
+                      setRunMenuOpen(false);
+                      window.open('/preview', '_blank');
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center gap-2.5 transition text-blue-400"
+                  >
+                    <Globe className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium flex items-center justify-between">
+                        <span>Open Web Preview</span>
+                        <ExternalLink className="w-3 h-3 text-white/40" />
+                      </div>
+                      <div className="text-[11px] text-white/40 truncate">
+                        Full-screen clean preview at /preview
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Web Preview Button */}
+            <button
+              onClick={() => window.open('/preview', '_blank')}
+              className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-blue-400 transition"
+              title="Open Web Preview Window (/preview)"
+            >
+              <Globe className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Split Editor */}
+            <button
+              onClick={() => toast.info('Split Editor layout')}
+              className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition"
+              title="Split Editor Right"
+            >
+              <SplitSquareHorizontal className="w-3.5 h-3.5" />
+            </button>
+
+            {/* More Actions */}
+            <button
+              onClick={() => toast.info('Editor actions')}
+              className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition"
+              title="More Actions..."
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Editor Body: Welcome Tab or Empty Canvas or Monaco Editor */}
       {isWelcomeActive ? (
@@ -447,16 +741,20 @@ export function EditorPane({
               value={fileContents[activePath] || ''}
               onChange={handleEditorChange}
               options={{
-                glyphMargin: true,
-                minimap: { enabled: false },
-                fontSize: 13,
-                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                padding: { top: 16 },
-                scrollBeyondLastLine: false,
-                renderLineHighlight: 'all',
-                wordWrap: wordWrap ? 'on' : 'off',
+                ...monacoOptions,
+                contextmenu: false,
                 columnSelection,
+                padding: { top: 16 },
               }}
+            />
+          )}
+          {contextMenu?.visible && (
+            <EditorContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              onClose={() => setContextMenu(null)}
+              editor={editorRef.current}
+              monaco={monacoRef.current}
             />
           )}
         </div>

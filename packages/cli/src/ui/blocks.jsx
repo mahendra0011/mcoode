@@ -42,7 +42,7 @@ export function SpinnerBlock({ label }) {
 
   return (
     <box flexDirection="row" paddingLeft={SPACING.md} marginTop={SPACING.sm} flexShrink={0}>
-      <text fg={theme.amber}>{SPIN_FRAMES[f]} </text>
+      <text fg={theme.green}>{SPIN_FRAMES[f]} </text>
       <text fg={theme.dim}>{label}</text>
     </box>
   );

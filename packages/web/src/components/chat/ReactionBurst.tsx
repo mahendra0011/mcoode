@@ -23,6 +23,7 @@ export function ReactionBurst({
     <AnimatePresence>
       {show && (
         <motion.div
+          key="reaction-burst-pop"
           className="mcode-reaction-burst"
           initial={{ opacity: 1, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}

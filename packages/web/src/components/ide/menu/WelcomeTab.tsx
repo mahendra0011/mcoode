@@ -120,12 +120,14 @@ export function WelcomeTab({
       <div className="max-w-4xl mx-auto w-full space-y-6">
         
         {/* Header: mcode Brand */}
-        <div className="flex items-center gap-3 pt-1">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)] flex-shrink-0">
-            M
-          </div>
+        <div className="flex items-center gap-3.5 pt-1">
+          <img
+            src="/logo.png"
+            alt="MCODE"
+            className="w-11 h-11 rounded-lg object-contain drop-shadow-[0_0_16px_rgba(59,130,246,0.6)] flex-shrink-0"
+          />
           <div>
-            <h1 className="text-[34px] font-normal tracking-tight text-[#e8e8e8] leading-tight font-sans">
+            <h1 className="text-[34px] font-bold tracking-tight text-[#e8e8e8] leading-tight font-sans">
               mcode
             </h1>
             <p className="text-[14px] text-[#858585] mt-0.5 font-sans">Editing evolved</p>

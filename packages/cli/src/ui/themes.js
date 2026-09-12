@@ -13,12 +13,12 @@ export const themes = {
     divider: '#3c3c3c',
 
     // ── Accent / Brand ──────────────────
-    accent: '#4ADE80',
+    accent: '#3ecf8e',
     accentDim: '#2a5a3a',
 
     // ── Semantic ──────────────────────
-    green: '#4ADE80',
-    greenBright: '#4ADE80',
+    green: '#3ecf8e',
+    greenBright: '#3ecf8e',
     blue: '#5c9cf5',
     purple: '#9d7cd8',
     amber: '#f5a742',
@@ -29,8 +29,8 @@ export const themes = {
     // ── Text ──────────────────────────
     text: '#eeeeee',
     textBright: '#ffffff',
-    dim: '#808080',
-    meta: '#808080',
+    dim: '#8b8d98',
+    meta: '#8b8d98',
     gray: '#7a7d85',
     muted: '#52555e',
 
@@ -141,7 +141,7 @@ export default themes.dark;
 
 /** Color scheme variants — accent color palettes that can be mixed with any theme. */
 export const COLOR_SCHEMES = {
-  default: { accent: '#4ADE80', blue: '#5c9cf5', purple: '#9d7cd8', amber: '#f5a742' },
+  default: { accent: '#3ecf8e', blue: '#5c9cf5', purple: '#9d7cd8', amber: '#f5a742' },
   blue: { accent: '#5c9cf5', blue: '#5c9cf5', purple: '#c084fc', amber: '#fbbf24' },
   purple: { accent: '#c084fc', blue: '#93c5fd', purple: '#c084fc', amber: '#fcd34d' },
   amber: { accent: '#fbbf24', blue: '#5c9cf5', purple: '#9d7cd8', amber: '#fbbf24' },

@@ -62,11 +62,7 @@ export interface FetchItem {
 }
 
 /** Loose arguments attached to a tool message. */
-export interface ToolArgs {
-  query?: string;
-  url?: string;
-  [k: string]: unknown;
-}
+export type ToolArgs = any;
 
 /** Chat message shape shared across the chat + animation components. */
 export interface ChatMessage {
@@ -79,7 +75,7 @@ export interface ChatMessage {
   block?: string;
   /** Blocks list attached to a stream/tool message. */
   blocks?: unknown[];
-  args?: ToolArgs;
+  args?: any;
   output?: string;
   lines?: string[];
   path?: string;
@@ -96,6 +92,9 @@ export interface ChatMessage {
   title?: string | null;
   /** Stable key used to replace a streaming/tool message in place. */
   replaceKey?: string | null;
+  /** Thinking / reasoning text for thought blocks. */
+  thought?: string | null;
+  reasoning?: string | null;
 }
 
 export interface MessageContentProps {

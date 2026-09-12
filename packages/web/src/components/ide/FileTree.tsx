@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -10,6 +10,7 @@ import {
   Folder,
   File,
   Upload,
+  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -19,6 +20,10 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
 } from "@radix-ui/react-context-menu";
 import { useIDEStore } from "../../store/ideStore";
 import api from "../../lib/axios";
@@ -41,6 +46,8 @@ interface FileTreeProps {
 interface TreeNodeProps {
   node: TreeNodeData;
   level?: number;
+  workspaceId?: string | null;
+  onRefresh?: () => void;
 }
 
 const getFileIcon = (name: string) => {
@@ -68,11 +75,210 @@ const copyPath = async (path: string) => {
   }
 };
 
-const TreeNode = ({ node, level = 0 }: TreeNodeProps) => {
+const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const addOpenFile = useIDEStore((s) => s.addOpenFile);
+  const closeFile = useIDEStore((s) => s.closeFile);
+  const bumpRefresh = useIDEStore((s) => s.bumpRefresh);
   const activePath = useIDEStore((s) => s.activePath);
   const isDir = !!node.children?.length;
+
+  useEffect(() => {
+    const handleCollapse = () => setIsOpen(false);
+    document.addEventListener("filetree:collapse-all", handleCollapse);
+    return () => document.removeEventListener("filetree:collapse-all", handleCollapse);
+  }, []);
+
+  const handleRename = async () => {
+    const newName = window.prompt(`Rename "${node.name}" to:`, node.name);
+    if (!newName || newName.trim() === "" || newName.trim() === node.name) return;
+    const trimmed = newName.trim();
+    const parent = node.path.includes("/") ? node.path.substring(0, node.path.lastIndexOf("/")) : "";
+    const newPath = parent ? `${parent}/${trimmed}` : trimmed;
+
+    try {
+      await api.post(`/api/v1/workspaces/${workspaceId}/rename-file`, {
+        oldPath: node.path,
+        newPath,
+      });
+      toast.success(`Renamed to "${trimmed}"`);
+      bumpRefresh();
+      onRefresh?.();
+    } catch (err: any) {
+      toast.error(`Rename failed: ${err?.response?.data?.error?.message || err.message}`);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete "${node.name}"?`)) return;
+    try {
+      await api.delete(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(node.path)}`);
+      closeFile(node.path);
+      toast.success(`Deleted "${node.name}"`);
+      bumpRefresh();
+      onRefresh?.();
+    } catch (err: any) {
+      toast.error(`Delete failed: ${err?.response?.data?.error?.message || err.message}`);
+    }
+  };
+
+  const fileContextMenu = (
+    <ContextMenuContent className="min-w-[240px] bg-[#1e1e1e] border border-white/10 rounded-md shadow-2xl p-1 text-xs text-white/90 z-50 select-none animate-in fade-in-80 duration-100">
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => addOpenFile(node.path)}
+      >
+        <span>Open Preview</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">Ctrl+Shift+V</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => {
+          addOpenFile(node.path);
+          toast.info(`Opened ${node.name} to the side`);
+        }}
+      >
+        <span>Open to the Side</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">Ctrl+Enter</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => addOpenFile(node.path)}
+      >
+        <span>Open With...</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => toast.info(`Revealed ${node.name} in File Explorer`)}
+      >
+        <span>Reveal in File Explorer</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">Shift+Alt+R</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => {
+          const dir = node.path.includes("/") ? node.path.slice(0, node.path.lastIndexOf("/")) : ".";
+          document.dispatchEvent(new CustomEvent("terminal:write", { detail: `cd ${dir}\r\n` }));
+          toast.info(`Opened in terminal: ${dir}`);
+        }}
+      >
+        <span>Open in Integrated Terminal</span>
+      </ContextMenuItem>
+
+      <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+      <ContextMenuSub>
+        <ContextMenuSubTrigger className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors">
+          <span>Share</span>
+          <ChevronRight className="w-3.5 h-3.5 text-white/40" />
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent className="min-w-[160px] bg-[#1e1e1e] border border-white/10 rounded-md shadow-2xl p-1 text-xs text-white/90 z-50 select-none">
+          <ContextMenuItem
+            className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+            onSelect={() => {
+              navigator.clipboard.writeText(node.path);
+              toast.success("Link copied to clipboard");
+            }}
+          >
+            <span>Copy Link</span>
+          </ContextMenuItem>
+          <ContextMenuItem
+            className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+            onSelect={() => toast.info(`Shared ${node.name}`)}
+          >
+            <span>Share File</span>
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+
+      <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => toast.info(`Selected ${node.name} for compare`)}
+      >
+        <span>Select for Compare</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => toast.info(`Searching references for ${node.name}`)}
+      >
+        <span>Find File References</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => toast.info(`Timeline opened for ${node.name}`)}
+      >
+        <span>Open Timeline</span>
+      </ContextMenuItem>
+
+      <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => {
+          navigator.clipboard.writeText(node.path);
+          toast.info(`Cut ${node.name}`);
+        }}
+      >
+        <span>Cut</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">Ctrl+X</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => {
+          navigator.clipboard.writeText(node.path);
+          toast.success(`Copied ${node.name}`);
+        }}
+      >
+        <span>Copy</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">Ctrl+C</span>
+      </ContextMenuItem>
+
+      <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => copyPath(node.path)}
+      >
+        <span>Copy Path</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">Shift+Alt+C</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={() => copyPath(node.path)}
+      >
+        <span>Copy Relative Path</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">Ctrl+K Ctrl+Shift+C</span>
+      </ContextMenuItem>
+
+      <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={handleRename}
+      >
+        <span>Rename...</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">F2</span>
+      </ContextMenuItem>
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-rose-900/60 hover:text-rose-200 text-rose-300 cursor-pointer outline-none transition-colors"
+        onSelect={handleDelete}
+      >
+        <span>Delete</span>
+        <span className="text-[10px] text-rose-400/60 font-mono tracking-tighter">Delete</span>
+      </ContextMenuItem>
+    </ContextMenuContent>
+  );
 
   if (!isDir) {
     const isActive = activePath === node.path;
@@ -92,20 +298,7 @@ const TreeNode = ({ node, level = 0 }: TreeNodeProps) => {
             <span className="text-[13px] truncate">{node.name}</span>
           </motion.div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="min-w-[180px] bg-[#1e1e1e] border border-white/10 text-xs text-white/80 p-1">
-          <ContextMenuItem
-            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/10 cursor-pointer"
-            onSelect={() => addOpenFile(node.path)}
-          >
-            Open
-          </ContextMenuItem>
-          <ContextMenuItem
-            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/10 cursor-pointer"
-            onSelect={() => copyPath(node.path)}
-          >
-            Copy path
-          </ContextMenuItem>
-        </ContextMenuContent>
+        {fileContextMenu}
       </ContextMenu>
     );
   }
@@ -128,14 +321,7 @@ const TreeNode = ({ node, level = 0 }: TreeNodeProps) => {
             <span className="text-[13px]">{node.name}</span>
           </motion.div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="min-w-[180px] bg-[#1e1e1e] border border-white/10 text-xs text-white/80 p-1">
-          <ContextMenuItem
-            className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/10 cursor-pointer"
-            onSelect={() => copyPath(node.path)}
-          >
-            Copy path
-          </ContextMenuItem>
-        </ContextMenuContent>
+        {fileContextMenu}
       </ContextMenu>
 
       <AnimatePresence initial={false}>
@@ -148,7 +334,13 @@ const TreeNode = ({ node, level = 0 }: TreeNodeProps) => {
             className="overflow-hidden"
           >
             {node.children!.sort(sortNodes).map((child) => (
-              <TreeNode key={child.path || child.name} node={child} level={level + 1} />
+              <TreeNode
+                key={child.path || child.name}
+                node={child}
+                level={level + 1}
+                workspaceId={workspaceId}
+                onRefresh={onRefresh}
+              />
             ))}
           </motion.div>
         )}
@@ -160,31 +352,41 @@ const TreeNode = ({ node, level = 0 }: TreeNodeProps) => {
 /**
  * FileTree — recursive workspace file explorer (React Query data layer).
  *
- * Open-files state (`activePath`, `openFiles`, `triggerRefresh`) now lives in the
- * Zustand `useIDEStore` (see ideStore.ts), so this component reads its highlight
- * + re-fetch signal from the store rather than via props threaded from the page.
- *
- * Props:
- *  - workspaceId: drives the /files fetch (via React Query, disabled until set).
- *
- * Each node is wrapped in a Radix ContextMenu so right-click exposes
- * Open / Copy path (files). Rename/Delete/New are intentionally omitted:
- * the backend currently exposes no such workspace-file endpoints.
+ * Open-files state (`activePath`, `openFiles`, `triggerRefresh`) lives in the
+ * Zustand `useIDEStore`. FileTree listens to `triggerRefresh` and `file:changed`
+ * events dispatched when AI tools write/edit files, and refreshes immediately.
  */
 export function FileTree({ workspaceId }: FileTreeProps) {
   const triggerRefresh = useIDEStore((s) => s.triggerRefresh);
+  const bumpRefresh = useIDEStore((s) => s.bumpRefresh);
   const addOpenFile = useIDEStore((s) => s.addOpenFile);
   const setFileContent = useIDEStore((s) => s.setFileContent);
 
-  const { data: files = [], isLoading: loading } = useQuery<FlatFile[]>({
+  const {
+    data: files = [],
+    isLoading: loading,
+    refetch,
+  } = useQuery<FlatFile[]>({
     queryKey: ["workspaceFiles", workspaceId, triggerRefresh],
     queryFn: () =>
       api
         .get(`/api/v1/workspaces/${workspaceId}/files`, { timeout: 5000 })
         .then((res) => res.data.files || []),
     enabled: !!workspaceId,
-    staleTime: 15_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
+
+  // Listen to file change events from AI tools or external changes
+  useEffect(() => {
+    const handleFileChanged = () => {
+      refetch();
+    };
+    document.addEventListener("file:changed", handleFileChanged);
+    return () => {
+      document.removeEventListener("file:changed", handleFileChanged);
+    };
+  }, [refetch]);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
@@ -197,6 +399,8 @@ export function FileTree({ workspaceId }: FileTreeProps) {
         setFileContent(path, content);
         addOpenFile(path);
         toast.success(`Uploaded ${file.name}`);
+        bumpRefresh();
+        refetch();
       };
       reader.readAsText(file);
     });
@@ -225,36 +429,26 @@ export function FileTree({ workspaceId }: FileTreeProps) {
   if (!workspaceId) {
     return <div className="p-4 text-xs text-white/40 italic">Select or create a workspace to begin.</div>;
   }
-  if (loading) {
-    return <div className="p-4 text-xs text-white/40">Loading files…</div>;
-  }
-  if (files.length === 0) {
-    return (
-      <div className="p-4 text-xs text-white/40 italic">
-        No files in workspace. Upload a ZIP or Clone a repo to begin.
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-white/[0.02]">
-        <span className="text-[10px] text-white/40 uppercase tracking-wider font-semibold">Workspace</span>
-        <label htmlFor="file-tree-upload" className="cursor-pointer text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 transition">
-          <Upload className="w-3 h-3" /> Upload
-          <input
-            id="file-tree-upload"
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleUpload}
-          />
-        </label>
-      </div>
-      <div className="flex-1 overflow-y-auto custom-scrollbar py-2">
-        {rootNodes.map((node) => (
-          <TreeNode key={node.path || node.name} node={node} />
-        ))}
+      <div className="flex-1 overflow-y-auto relative custom-scrollbar py-1">
+        {loading ? (
+          <div className="p-4 text-xs text-white/40">Loading files…</div>
+        ) : files.length === 0 ? (
+          <div className="p-4 text-xs text-white/40 italic">
+            No files in workspace yet. Ask AI to generate code or upload above.
+          </div>
+        ) : (
+          rootNodes.map((node) => (
+            <TreeNode
+              key={node.path || node.name}
+              node={node}
+              workspaceId={workspaceId}
+              onRefresh={() => refetch()}
+            />
+          ))
+        )}
       </div>
     </div>
   );

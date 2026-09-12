@@ -33,12 +33,21 @@ interface TerminalSession extends TerminalSessionMeta {
   historyIndex: number;
 }
 
-const SHELL_TYPES: { id: TerminalSessionMeta['shellType']; label: string }[] = [
-  { id: 'bash', label: 'bash' },
-  { id: 'zsh', label: 'zsh' },
-  { id: 'powershell', label: 'PowerShell' },
-  { id: 'node', label: 'Node.js' },
-];
+const isWindowsPlatform = typeof window !== 'undefined' && (/win/i.test(navigator.userAgent || '') || /win/i.test(navigator.platform || ''));
+const DEFAULT_SHELL: TerminalSessionMeta['shellType'] = isWindowsPlatform ? 'powershell' : 'bash';
+
+const SHELL_TYPES: { id: TerminalSessionMeta['shellType']; label: string }[] = isWindowsPlatform
+  ? [
+      { id: 'powershell', label: 'PowerShell' },
+      { id: 'bash', label: 'Git Bash / Bash' },
+      { id: 'node', label: 'Node.js' },
+    ]
+  : [
+      { id: 'bash', label: 'bash' },
+      { id: 'zsh', label: 'zsh' },
+      { id: 'powershell', label: 'PowerShell' },
+      { id: 'node', label: 'Node.js' },
+    ];
 
 export interface MultiTerminalPanelHandle {
   newTerminal: (shellType?: TerminalSessionMeta['shellType']) => void;
@@ -94,7 +103,7 @@ export const MultiTerminalPanel = React.forwardRef<MultiTerminalPanelHandle, Mul
   ) {
     const [sessions, setSessions] = useState<TerminalSession[]>(() => {
       const initialId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'term-1';
-      return [{ id: initialId, name: 'bash', shellType: 'bash', history: [], historyIndex: -1 }];
+      return [{ id: initialId, name: DEFAULT_SHELL === 'powershell' ? 'PowerShell' : 'bash', shellType: DEFAULT_SHELL, history: [], historyIndex: -1 }];
     });
     const [activeId, setActiveId] = useState(sessions[0]?.id || 'term-1');
     const recentDirectoriesRef = useRef<string[]>([]);
@@ -130,10 +139,11 @@ export const MultiTerminalPanel = React.forwardRef<MultiTerminalPanelHandle, Mul
     const visibleIds = [activeId, ...splitIds].filter((id, i, arr) => arr.indexOf(id) === i);
 
     // Tab management
-    function newTerminal(shellType: TerminalSessionMeta['shellType'] = 'bash') {
+    function newTerminal(shellType: TerminalSessionMeta['shellType'] = DEFAULT_SHELL) {
       const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `term-${Date.now()}`;
+      const defaultName = shellType === 'powershell' ? 'PowerShell' : shellType;
       const existingOfType = sessions.filter((s) => s.shellType === shellType).length;
-      const name = existingOfType === 0 ? shellType : `${shellType} (${existingOfType + 1})`;
+      const name = existingOfType === 0 ? defaultName : `${defaultName} (${existingOfType + 1})`;
       setSessions((prev) => [...prev, { id, name, shellType, history: [], historyIndex: -1 }]);
       setActiveId(id);
       setShellMenuOpen(false);
@@ -145,7 +155,7 @@ export const MultiTerminalPanel = React.forwardRef<MultiTerminalPanelHandle, Mul
         if (next.length === 0) {
           const freshId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `term-${Date.now()}`;
           setActiveId(freshId);
-          return [{ id: freshId, name: 'bash', shellType: 'bash', history: [], historyIndex: -1 }];
+          return [{ id: freshId, name: DEFAULT_SHELL === 'powershell' ? 'PowerShell' : 'bash', shellType: DEFAULT_SHELL, history: [], historyIndex: -1 }];
         }
         if (activeId === id) setActiveId(next[0].id);
         return next;
@@ -218,6 +228,7 @@ export const MultiTerminalPanel = React.forwardRef<MultiTerminalPanelHandle, Mul
       },
       runInActiveTerminal: (cmd) => {
         pushHistory(activeId, cmd);
+        getSocket().emit('terminal:input', { id: activeId, data: cmd.endsWith('\n') ? cmd : cmd + '\r' });
         onCommand?.(cmd);
       },
       getRecentDirectories: () => recentDirectoriesRef.current,
@@ -435,6 +446,23 @@ function TerminalInstance({
     const cursorBlink = localStorage.getItem('mcode.terminal.cursorBlink') !== 'false';
     const scrollback = parseInt(localStorage.getItem('mcode.terminal.scrollback') || '5000', 10);
 
+    const handleSettingsUpdate = () => {
+      const fs = parseInt(localStorage.getItem('mcode.terminal.fontSize') || '13', 10);
+      const ff = localStorage.getItem('mcode.terminal.fontFamily') || 'monospace';
+      const cs = (localStorage.getItem('mcode.terminal.cursorStyle') as any) || 'block';
+      const cb = localStorage.getItem('mcode.terminal.cursorBlink') !== 'false';
+      const sb = parseInt(localStorage.getItem('mcode.terminal.scrollback') || '5000', 10);
+      if (term) {
+        term.options.fontSize = fs;
+        term.options.fontFamily = ff;
+        term.options.cursorStyle = cs;
+        term.options.cursorBlink = cb;
+        term.options.scrollback = sb;
+        try { fitAddon.fit(); } catch {}
+      }
+    };
+    window.addEventListener('mcode:terminal-settings-updated', handleSettingsUpdate);
+
     const term = new Terminal({
       theme: {
         background: '#0a0a0a',
@@ -486,12 +514,17 @@ function TerminalInstance({
     const socket = getSocket();
 
     // Spawn PTY session on backend
-    socket.emit('terminal:spawn', {
-      id: session.id,
-      shellType: session.shellType,
-      cols: term.cols || 80,
-      rows: term.rows || 24,
-    });
+    const spawnTerminal = () => {
+      socket.emit('terminal:spawn', {
+        id: session.id,
+        shellType: session.shellType,
+        cols: term.cols || 80,
+        rows: term.rows || 24,
+      });
+    };
+
+    spawnTerminal();
+    socket.on('connect', spawnTerminal);
 
     // Stream output from backend PTY process directly to xterm
     const handleOutput = (payload: { id: string; data: string }) => {
@@ -503,32 +536,20 @@ function TerminalInstance({
 
     // Forward user keystrokes straight to PTY stdin
     const dataDisposable = term.onData((data) => {
-      const activeEl = document.activeElement;
-      if (
-        activeEl &&
-        activeEl !== terminalRef.current &&
-        !terminalRef.current?.contains(activeEl) &&
-        (activeEl.tagName === 'INPUT' ||
-          activeEl.tagName === 'TEXTAREA' ||
-          (activeEl as HTMLElement).isContentEditable)
-      ) {
-        return;
-      }
       socket.emit('terminal:input', { id: session.id, data });
     });
 
-    // Custom key event handler
+    // Custom key event handler: Allow Ctrl+C copy if text is selected, Ctrl+F search
     term.attachCustomKeyEventHandler((e) => {
-      const activeEl = document.activeElement;
-      if (
-        activeEl &&
-        activeEl !== terminalRef.current &&
-        !terminalRef.current?.contains(activeEl) &&
-        (activeEl.tagName === 'INPUT' ||
-          activeEl.tagName === 'TEXTAREA' ||
-          (activeEl as HTMLElement).isContentEditable)
-      ) {
-        return false;
+      if (e.type === 'keydown') {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          setSearchOpen(true);
+          return false;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && term.hasSelection()) {
+          return false; // let browser handle standard copy
+        }
       }
       return true;
     });
@@ -571,9 +592,11 @@ function TerminalInstance({
     document.addEventListener('terminal:clear', handleClear as EventListener);
 
     return () => {
+      window.removeEventListener('mcode:terminal-settings-updated', handleSettingsUpdate);
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
       document.removeEventListener('terminal:clear', handleClear as EventListener);
+      socket.off('connect', spawnTerminal);
       socket.off('terminal:output', handleOutput);
       socket.emit('terminal:kill', { id: session.id });
       dataDisposable.dispose();
@@ -581,10 +604,23 @@ function TerminalInstance({
     };
   }, [session.id, session.shellType]);
 
+  // Auto-focus terminal when it becomes active
+  useEffect(() => {
+    if (isActive) {
+      const timer = setTimeout(() => {
+        xtermRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isActive]);
+
   // Keyboard Shortcuts (Ctrl+F search, Ctrl+V paste)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!isActive) return;
+
+      const activeEl = document.activeElement;
+      if (activeEl?.tagName === 'INPUT') return;
 
       // Ctrl+F search
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
@@ -712,8 +748,19 @@ function TerminalInstance({
         )}
       </AnimatePresence>
 
-      <div className="flex-1 overflow-hidden p-2 relative h-full">
-        <div className="w-full h-full cursor-text" ref={terminalRef} />
+      <div
+        className="flex-1 overflow-hidden p-2 relative h-full cursor-text"
+        onClick={() => {
+          xtermRef.current?.focus();
+        }}
+      >
+        <div
+          className="w-full h-full cursor-text"
+          ref={terminalRef}
+          onClick={() => {
+            xtermRef.current?.focus();
+          }}
+        />
       </div>
 
       {/* VS Code Right-Click Terminal Context Menu */}

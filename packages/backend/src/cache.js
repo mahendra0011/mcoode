@@ -50,7 +50,7 @@ export async function connectRedis(uri) {
     console.error('[cache] ❌ Redis connection failed:', err.message);
     console.error('[cache]    Running in pass-through mode — caching disabled.');
     try {
-      redis.removeAllListeners();
+      redis.on('error', () => {}); // Catch any lingering disconnect/DNS errors to prevent unhandled EventEmitter throw
       redis.disconnect(false);
     } catch { /* ignore */ }
     mode = 'passthrough';

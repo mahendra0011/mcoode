@@ -32,6 +32,7 @@ import {
 } from './MultiTerminalPanel';
 import type { ChatMessage } from '../../types/chat';
 import { useIDEStore, type PanelTab } from '../../store/ideStore';
+import { getSocket } from '../../hooks/useChatSocket';
 import { toast } from 'sonner';
 
 /**
@@ -94,6 +95,11 @@ const SHELL_TYPES: { id: TerminalSessionMeta['shellType']; label: string }[] = [
 ];
 
 const DEFAULT_OUTPUT_CHANNELS: OutputChannel[] = [
+  {
+    id: 'code-runner',
+    name: 'Code Runner',
+    lines: ['[Code Runner] Ready. Click the "Run" button on the top-right of the editor to execute files.'],
+  },
   {
     id: 'tasks',
     name: 'Tasks',
@@ -214,6 +220,71 @@ export function BottomPanel({
     },
     []
   );
+
+  // Listen to Piston single-file run results and Docker project run events
+  useEffect(() => {
+    const socket = getSocket();
+
+    const handleRunResult = (payload: any) => {
+      const now = new Date().toLocaleTimeString();
+      const newLines: string[] = [];
+
+      if (payload.error) {
+        newLines.push(`[${now}] [Error]: ${payload.error}`);
+        toast.error(`Code execution error: ${payload.error}`);
+      } else {
+        newLines.push(`[${now}] === Execution Result (Exit Code: ${payload.exitCode ?? 0}) ===`);
+        if (payload.compileOutput) {
+          newLines.push(`[Compile Output]:\n${payload.compileOutput}`);
+        }
+        if (payload.stdout) {
+          newLines.push(`[stdout]:\n${payload.stdout}`);
+        }
+        if (payload.stderr) {
+          newLines.push(`[stderr]:\n${payload.stderr}`);
+        }
+        toast.success(`Execution completed (exit code: ${payload.exitCode ?? 0})`);
+      }
+
+      setChannelsList((prev) => {
+        const found = prev.find((c) => c.id === 'code-runner');
+        if (found) {
+          return prev.map((c) =>
+            c.id === 'code-runner' ? { ...c, lines: [...c.lines, ...newLines] } : c
+          );
+        }
+        return [{ id: 'code-runner', name: 'Code Runner', lines: newLines }, ...prev];
+      });
+      setActiveChannelId('code-runner');
+      setStoreActiveTab('output');
+    };
+
+    const handleProjectReady = (payload: any) => {
+      if (payload.previewUrl) {
+        toast.success(`Project running in Docker container: ${payload.previewUrl}`, {
+          action: {
+            label: 'Open Preview',
+            onClick: () =>
+              window.open(`/preview?url=${encodeURIComponent(payload.previewUrl)}`, '_blank'),
+          },
+        });
+      }
+    };
+
+    const handleProjectError = (payload: any) => {
+      toast.error(`Docker error: ${payload.error}`);
+    };
+
+    socket.on('code:run-result', handleRunResult);
+    socket.on('project:run-ready', handleProjectReady);
+    socket.on('project:run-error', handleProjectError);
+
+    return () => {
+      socket.off('code:run-result', handleRunResult);
+      socket.off('project:run-ready', handleProjectReady);
+      socket.off('project:run-error', handleProjectError);
+    };
+  }, [setStoreActiveTab]);
 
   const onHidePanel = useCallback(() => {
     if (onClose) {

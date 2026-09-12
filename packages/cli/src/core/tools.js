@@ -60,8 +60,14 @@ export class ToolExecutor {
   }
 
   _abs(path) {
-    const full = resolve(this.projectPath, path);
-    if (full !== this.projectPath && !full.startsWith(this.projectPath + '\\') && !full.startsWith(this.projectPath + '/')) {
+    let cleanPath = String(path || '').trim();
+    const normProj = resolve(this.projectPath);
+    const full = resolve(normProj, cleanPath);
+    const isWin = process.platform === 'win32';
+    const normProjCheck = isWin ? normProj.toLowerCase() : normProj;
+    const fullCheck = isWin ? full.toLowerCase() : full;
+    const rel = relative(normProjCheck, fullCheck);
+    if (rel.startsWith('..') || (isWin ? /^[a-zA-Z]:/.test(rel) : rel.startsWith('/'))) {
       throw new Error(`path escapes project root: ${path}`);
     }
     return full;
@@ -209,9 +215,11 @@ export class ToolExecutor {
     await mkdir(join(full, '..'), { recursive: true });
     const prev = await readFile(full, 'utf8').catch(() => null);
     if (prev !== null) {
-      const answer = await this._askOverwrite(path, prev);
-      if (answer !== 'y' && answer !== 'always') {
-        return { ok: false, error: `Overwrite denied by user for ${path}` };
+      if (this.requireEditApproval) {
+        const answer = await this._askOverwrite(path, prev);
+        if (answer !== 'y' && answer !== 'always') {
+          return { ok: false, error: `Overwrite denied by user for ${path}` };
+        }
       }
     } else if (this.requireEditApproval) {
       // New file — prompt for approval when review-before-write is enabled
@@ -224,15 +232,16 @@ export class ToolExecutor {
     await writeFile(full, content, 'utf8');
     const created = prev === null;
     const diff = created ? null : lineDiff(prev || '', content);
+    const rel = relative(this.projectPath, full).replace(/\\/g, '/');
     this.bus?.emit(EVENTS.SUBAGENT_FILE, {
       todoId: this.todoId || null,
-      file: path,
+      file: rel,
       content,
       diff: diff || diffText(prev || '', content),
-      language: path.split('.').pop() || 'txt',
+      language: rel.split('.').pop() || 'txt',
       timestamp: Date.now()
     });
-    return { ok: true, file: path, created, diff, diffLines: diff?.lines || [], content, undoId };
+    return { ok: true, file: rel, created, diff, diffLines: diff?.lines || [], content, undoId };
   }
 
   async edit_file({ path, old: oldText, new: newText }) {

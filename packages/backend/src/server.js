@@ -36,6 +36,9 @@ import { extensionRoutes } from './routes/extensions.js';
 import { languageRoutes } from './routes/languages.js';
 import { androidRoutes } from './routes/android.js';
 import { validateEnv } from './config/envValidator.js';
+import { isPistonAvailable } from './piston-client.js';
+import { detectAvailableLanguages } from './host-runner.js';
+import { exec } from 'node:child_process';
 
 export async function startServer({ port = 3100, env = process.env } = {}) {
   // ─── Environment validation (fail fast) ─────────────────────────────────────
@@ -98,8 +101,20 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     }
     next();
   });
-  app.use(helmet());
-  app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:4173', 'http://localhost:3000'], credentials: true }));
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false,
+  }));
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (Electron, curl, server-to-server) or any dev origin
+      if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+  }));
   app.use(express.json({ limit: '10mb' }));
   app.use(pinoHttp({ logger }));
   app.use('/api/v1', rateLimit({
@@ -109,14 +124,25 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     legacyHeaders: false
   }));
 
-  // Health endpoint — reports true Atlas connection status
-  app.get('/health', (_req, res) => res.json({
-    ok: storage.connected,
-    storage: storage.mode,
-    cache: cache().mode,
-    queue: jobQueue().mode,
-    uptime: process.uptime()
-  }));
+  // Health endpoint — reports true Atlas connection status + execution capabilities
+  app.get('/health', async (_req, res) => {
+    const pistonReady = await isPistonAvailable();
+    const dockerAvailable = await new Promise((resolve) => {
+      exec('docker info', { timeout: 3000 }, (err) => resolve(!err));
+    });
+    res.json({
+      ok: storage.connected,
+      storage: storage.mode,
+      cache: cache().mode,
+      queue: jobQueue().mode,
+      uptime: process.uptime(),
+      execution: {
+        hostRunner: true,
+        piston: pistonReady,
+        docker: dockerAvailable,
+      }
+    });
+  });
 
   // ─── Routes (all auth-protected routes use authMiddleware) ───────────────────
   app.use('/api/v1/auth', authRoutes({ secret }));
@@ -186,11 +212,75 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     }
   });
 
+  let retries = 0;
+  const maxRetries = 5;
+
+  httpServer.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      if (retries < maxRetries) {
+        retries++;
+        logger.warn(`Port ${port} in use (EADDRINUSE). Retrying connection in 1s (${retries}/${maxRetries})...`);
+        setTimeout(() => {
+          httpServer.listen(port);
+        }, 1000);
+      } else {
+        logger.error(`Port ${port} is still in use after ${maxRetries} retries. Please stop the process running on port ${port} or free up the port.`);
+        process.exit(1);
+      }
+    } else {
+      logger.error({ err }, 'HTTP server error');
+    }
+  });
+
   httpServer.listen(port, () => {
     logger.info(
       { port, storage: storage.mode, cache: cache().mode, queue: queue.mode },
       'mcode backend listening'
     );
+
+    // ── Non-blocking: auto-detect execution capabilities ──────────────
+    (async () => {
+      try {
+        // 1. Check what languages the host can run natively
+        const { available, unavailable } = await detectAvailableLanguages();
+        logger.info(
+          { hostLanguages: available.length, unavailableLanguages: unavailable.length },
+          `[exec] Host runner ready — ${available.length} languages available (${available.slice(0, 8).join(', ')}${available.length > 8 ? '...' : ''})`
+        );
+
+        // 2. Check if Docker is available
+        const dockerAvailable = await new Promise((resolve) => {
+          exec('docker info', { timeout: 5000 }, (err) => resolve(!err));
+        });
+
+        if (dockerAvailable) {
+          logger.info('[exec] Docker daemon detected ✓');
+
+          // 3. Auto-start Piston container if not already running
+          const pistonReady = await isPistonAvailable();
+          if (!pistonReady) {
+            logger.info('[exec] Piston not running — attempting auto-start...');
+            exec(
+              'docker start piston 2>/dev/null || docker run -d --name piston --restart unless-stopped -p 2000:2000 --privileged ghcr.io/engineer-man/piston',
+              { timeout: 60_000 },
+              (err) => {
+                if (err) {
+                  logger.warn(`[exec] Piston auto-start failed: ${err.message}. Single-file execution will use host runner.`);
+                } else {
+                  logger.info('[exec] Piston container started ✓ — sandboxed execution available');
+                }
+              }
+            );
+          } else {
+            logger.info('[exec] Piston sandbox already running ✓');
+          }
+        } else {
+          logger.info('[exec] Docker not available — using host-based execution (no sandbox). Install Docker Desktop for sandboxed execution.');
+        }
+      } catch (err) {
+        logger.warn(`[exec] Execution auto-detection failed: ${err.message}`);
+      }
+    })();
   });
 
   return { app, httpServer, io, queue, db: () => db() };

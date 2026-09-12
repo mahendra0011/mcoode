@@ -6,12 +6,15 @@ let server;
 let base;
 
 beforeAll(async () => {
-  server = await startServer({ port: 0 });
+  server = await startServer({
+    port: 0,
+    env: { ...process.env, MONGODB_URI: '', REDIS_URI: '', BREVO_API_KEY: '', NODE_ENV: 'test' }
+  });
   base = `http://127.0.0.1:${server.httpServer.address().port}`;
 });
 
 afterAll(async () => {
-  server.httpServer.close();
+  server?.httpServer?.close();
 });
 
 describe('OTP auth flow', () => {

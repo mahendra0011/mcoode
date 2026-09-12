@@ -8,20 +8,43 @@ import { Copy, Check, ChevronDown, Cpu, Terminal, Wrench } from "lucide-react";
 import { WebSearchAnimation, WebFetchAnimation } from "./SearchAnimation";
 import type { ChatMessage, MessageContentProps } from "../../types/chat";
 
-/** Clean raw tool tags from user-facing text without deleting answer text */
+/** Clean raw tool tags and tool action JSON from user-facing text */
 function cleanProse(str: string): string {
   if (!str) return "";
-  return str
+  let out = str
     .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, "")
     .replace(/<tool_call>[\s\S]*$/gi, "")
     .replace(/<arg_key>[\s\S]*?<\/arg_key>/gi, "")
     .replace(/<arg_value>[\s\S]*?<\/arg_value>/gi, "")
     .replace(/<\/?tool_call[^>]*>/gi, "")
     .replace(/<\/?arg_[^>]*>/gi, "")
-    .replace(/```mcode-action[\s\S]*?```/gi, "")
-    .replace(/```mcode-action[\s\S]*$/gi, "")
+    .replace(/```(?:mcode-action|action|tool_call)[\s\S]*?```/gi, "")
+    .replace(/```(?:mcode-action|action|tool_call)[\s\S]*$/gi, "")
+    .replace(/```(?:json)?\s*\{[\s\S]*?"(?:tool|path|write_file|read_file|edit_file|run_shell)"[\s\S]*?\}\s*```/gi, "")
+    .replace(/```(?:json)?\s*\{[\s\S]*?"(?:tool|path|write_file|read_file|edit_file|run_shell)"[\s\S]*$/gi, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  // If the entire text or trailing text is a raw JSON tool object like {"path":"...","content":"..."}
+  const trimmed = out.trim();
+  if (trimmed.startsWith('{') && (trimmed.endsWith('}') || trimmed.includes('"content"'))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed.path || parsed.tool || parsed.write_file) {
+        return "";
+      }
+    } catch {
+      // If it looks like a JSON tool invocation that failed JSON.parse because it's incomplete
+      if (/^\s*\{\s*"(?:path|tool|write_file|read_file)"/i.test(trimmed)) {
+        return "";
+      }
+    }
+  }
+
+  // Remove any standalone JSON tool block from the end of the text
+  out = out.replace(/\{\s*"(?:path|tool|write_file|read_file|edit_file|run_shell)"\s*:[\s\S]*?\}\s*$/g, "").trim();
+
+  return out;
 }
 
 interface ParsedPart {
@@ -83,7 +106,9 @@ function parseToolCalls(text: string): ParsedPart[] {
     if (prose) parts.push({ type: "text", content: prose });
   }
 
-  return parts.length > 0 ? parts : [{ type: "text", content: cleanProse(text) }];
+  if (parts.length > 0) return parts;
+  const clean = cleanProse(text);
+  return clean ? [{ type: "text", content: clean }] : [];
 }
 
 /** Clean accordion for general development tools (shell, files, etc.) */
@@ -270,6 +295,10 @@ export function MessageContent({ msg, text, size = "md", isStreaming = false, ch
         answer={searchResults.answer || ""}
       />
     );
+  }
+
+  if (parsedParts.length === 0 && !children) {
+    return null;
   }
 
   return (

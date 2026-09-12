@@ -1,17 +1,17 @@
 "use client";
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Info, ChevronDown, ExternalLink } from "lucide-react";
+import {
+  X, Info, ChevronDown, ExternalLink, Zap, Shield, Sparkles, Command,
+  Terminal, FileCheck, Wrench, Gauge, BrainCircuit, GitFork, ShieldCheck
+} from "lucide-react";
 import { useIDEStore } from "../../store/ideStore";
-
-/**
- * QuickSettingsPanel — A slide-out panel on the right side (like VS Code's
- * Copilot Quick Settings) showing Agent and Tab/Editor quick toggles.
- */
+import { useSettingsStore } from "../../store/settingsStore";
 
 type DropdownOption = { value: string; label: string };
 
 function SettingRow({
+  icon: Icon,
   label,
   tooltip,
   options,
@@ -20,6 +20,7 @@ function SettingRow({
   linkLabel,
   onLinkClick,
 }: {
+  icon?: React.ElementType;
   label: string;
   tooltip?: string;
   options?: DropdownOption[];
@@ -31,8 +32,13 @@ function SettingRow({
   const [showTooltip, setShowTooltip] = useState(false);
 
   return (
-    <div className="flex items-center justify-between py-2 px-1 group">
-      <div className="flex items-center gap-1.5 text-[13px] text-white/80">
+    <div className="flex items-center justify-between py-2.5 px-2 group hover:bg-white/[0.03] rounded-lg transition">
+      <div className="flex items-center gap-2.5 text-[13px] text-white/85">
+        {Icon && (
+          <div className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-emerald-400 transition flex-shrink-0">
+            <Icon className="w-3.5 h-3.5" />
+          </div>
+        )}
         <span>{label}</span>
         {tooltip && (
           <div className="relative">
@@ -84,19 +90,10 @@ function SettingRow({
 export function QuickSettingsPanel() {
   const isOpen = useIDEStore((s) => s.isQuickSettingsOpen);
   const setOpen = useIDEStore((s) => s.setQuickSettingsOpen);
-  const openSettings = useIDEStore((s) => s.openSettings);
 
-  // Agent settings state
-  const [agentAutoFixLints, setAgentAutoFixLints] = useState("on");
-  const [autoExecution, setAutoExecution] = useState("request-review");
-  const [reviewPolicy, setReviewPolicy] = useState("request-review");
-
-  // Tab settings state
-  const [suggestionsInEditor, setSuggestionsInEditor] = useState("on");
-  const [tabGitignoreAccess, setTabGitignoreAccess] = useState("off");
-  const [tabSpeed, setTabSpeed] = useState("fast");
-  const [tabToImport, setTabToImport] = useState("on");
-  const [tabToJump, setTabToJump] = useState("on");
+  // Unified settings store
+  const ai = useSettingsStore((s) => s.ai);
+  const updateAISetting = useSettingsStore((s) => s.updateAISetting);
 
   // Bottom tab
   const [activeBottomTab, setActiveBottomTab] = useState<"settings" | "shortcuts">("settings");
@@ -110,21 +107,33 @@ export function QuickSettingsPanel() {
 
   const executionOptions: DropdownOption[] = [
     { value: "request-review", label: "Request Review" },
-    { value: "auto", label: "Auto" },
-    { value: "off", label: "Off" },
+    { value: "auto", label: "Auto Execute" },
+    { value: "strict", label: "Strict Approval" },
+  ];
+
+  const reviewPolicyOptions: DropdownOption[] = [
+    { value: "always-ask", label: "Always Ask" },
+    { value: "auto", label: "Auto Approve" },
+    { value: "skip", label: "Skip Reviews" },
   ];
 
   const speedOptions: DropdownOption[] = [
-    { value: "fast", label: "Fast" },
-    { value: "normal", label: "Normal" },
-    { value: "slow", label: "Slow" },
+    { value: "fast", label: "Fast (Instant deltas)" },
+    { value: "normal", label: "Normal (Batched 60fps)" },
+    { value: "balanced", label: "Balanced (Low CPU)" },
+  ];
+
+  const contextOptions: DropdownOption[] = [
+    { value: "high", label: "High (Whole Workspace)" },
+    { value: "medium", label: "Medium (Active Tabs)" },
+    { value: "low", label: "Low (Active File Only)" },
   ];
 
   return createPortal(
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-[9998] bg-black/40"
+        className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-[2px]"
         onClick={() => setOpen(false)}
       />
       {/* Panel */}
@@ -134,7 +143,10 @@ export function QuickSettingsPanel() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
-          <span className="text-[14px] font-semibold text-white">Quick Settings</span>
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-emerald-400" />
+            <span className="text-[14px] font-semibold text-white">AI Quick Settings</span>
+          </div>
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -146,109 +158,142 @@ export function QuickSettingsPanel() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-4 custom-scrollbar">
-          {/* Agent Section */}
-          <div className="mb-6">
-            <h3 className="text-[13px] font-bold text-white mb-2 tracking-wide">Agent</h3>
-            <div className="flex flex-col">
-              <SettingRow
-                label="Agent Auto-Fix Lints"
-                tooltip="Automatically fix lint errors when the agent makes changes"
-                options={onOffOptions}
-                value={agentAutoFixLints}
-                onChange={setAgentAutoFixLints}
-              />
-              <SettingRow
-                label="Auto Execution"
-                tooltip="Controls whether agent commands run automatically or require approval"
-                options={executionOptions}
-                value={autoExecution}
-                onChange={setAutoExecution}
-              />
-              <SettingRow
-                label="Review Policy"
-                tooltip="Whether changes require your review before being applied"
-                options={executionOptions}
-                value={reviewPolicy}
-                onChange={setReviewPolicy}
-              />
-              <SettingRow
-                label="Customizations"
-                linkLabel="Manage"
-                onLinkClick={() => {
+          {activeBottomTab === "settings" ? (
+            <>
+              {/* Runtime AI Execution Section */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-3.5 h-3.5 text-blue-400" />
+                  <h3 className="text-[13px] font-bold text-white tracking-wide">Agent Execution Policy</h3>
+                </div>
+                <div className="flex flex-col">
+                  <SettingRow
+                    icon={Terminal}
+                    label="Command Execution"
+                    tooltip="Controls whether agent terminal commands execute automatically or require user review."
+                    options={executionOptions}
+                    value={ai.autoExecution}
+                    onChange={(v) => updateAISetting("autoExecution", v as any)}
+                  />
+                  <SettingRow
+                    icon={FileCheck}
+                    label="Plan & File Review"
+                    tooltip="Controls review behavior when the agent produces plan changes or multi-file edits."
+                    options={reviewPolicyOptions}
+                    value={ai.reviewPolicy}
+                    onChange={(v) => updateAISetting("reviewPolicy", v as any)}
+                  />
+                  <SettingRow
+                    icon={Wrench}
+                    label="Auto-Fix Lints"
+                    tooltip="When enabled, Agent automatically inspects lint diagnostics and fixes syntax errors."
+                    options={onOffOptions}
+                    value={ai.autoFixLints ? "on" : "off"}
+                    onChange={(v) => updateAISetting("autoFixLints", v === "on")}
+                  />
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-white/5 mb-6" />
+
+              {/* Copilot & Stream Controls */}
+              <div className="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <h3 className="text-[13px] font-bold text-white tracking-wide">Copilot & Generation</h3>
+                </div>
+                <div className="flex flex-col">
+                  <SettingRow
+                    icon={Sparkles}
+                    label="Inline Ghost Suggestions"
+                    tooltip="Show inline AI autocomplete suggestions while typing in Monaco editor."
+                    options={onOffOptions}
+                    value={ai.inlineAssist ? "on" : "off"}
+                    onChange={(v) => updateAISetting("inlineAssist", v === "on")}
+                  />
+                  <SettingRow
+                    icon={Gauge}
+                    label="Streaming Speed"
+                    tooltip="Pacing and chunk batching rate of streamed model responses."
+                    options={speedOptions}
+                    value={ai.streamSpeed}
+                    onChange={(v) => updateAISetting("streamSpeed", v as any)}
+                  />
+                  <SettingRow
+                    icon={BrainCircuit}
+                    label="Context Sensitivity"
+                    tooltip="Scope of project files automatically attached to prompts."
+                    options={contextOptions}
+                    value={ai.contextSensitivity}
+                    onChange={(v) => updateAISetting("contextSensitivity", v as any)}
+                  />
+                  <SettingRow
+                    icon={GitFork}
+                    label="Respect .gitignore"
+                    tooltip="Exclude files matching .gitignore from being indexed by AI."
+                    options={onOffOptions}
+                    value={ai.tabGitignoreAccess ? "on" : "off"}
+                    onChange={(v) => updateAISetting("tabGitignoreAccess", v === "on")}
+                  />
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-white/5 mb-4" />
+
+              {/* Advanced Settings Link */}
+              <button
+                type="button"
+                onClick={() => {
                   setOpen(false);
-                  openSettings("permissions");
+                  useIDEStore.getState().setAdvancedSettingsOpen(true);
                 }}
-              />
+                className="text-[13px] text-blue-400 hover:text-blue-300 transition cursor-pointer mb-4 flex items-center gap-1.5"
+              >
+                Open Advanced Monaco Engine Settings
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : (
+            /* AI Shortcuts Cheatsheet */
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Command className="w-4 h-4 text-purple-400" />
+                <h3 className="text-[13px] font-bold text-white">AI Keybindings & Commands</h3>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between p-2 rounded bg-white/5">
+                  <span className="text-white/80">Send Message / Submit</span>
+                  <kbd className="px-2 py-0.5 bg-[#2a2a2a] rounded text-white/60 font-mono">Enter</kbd>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded bg-white/5">
+                  <span className="text-white/80">New Line in Chat</span>
+                  <kbd className="px-2 py-0.5 bg-[#2a2a2a] rounded text-white/60 font-mono">Shift+Enter</kbd>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded bg-white/5">
+                  <span className="text-white/80">Open Slash Commands</span>
+                  <kbd className="px-2 py-0.5 bg-[#2a2a2a] rounded text-white/60 font-mono">/</kbd>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded bg-white/5">
+                  <span className="text-white/80">Toggle Integrated Terminal</span>
+                  <kbd className="px-2 py-0.5 bg-[#2a2a2a] rounded text-white/60 font-mono">Ctrl+`</kbd>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded bg-white/5">
+                  <span className="text-white/80">Toggle File Explorer</span>
+                  <kbd className="px-2 py-0.5 bg-[#2a2a2a] rounded text-white/60 font-mono">Ctrl+B</kbd>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded bg-white/5">
+                  <span className="text-white/80">Open Quick Settings</span>
+                  <kbd className="px-2 py-0.5 bg-[#2a2a2a] rounded text-white/60 font-mono">Ctrl+Shift+,</kbd>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded bg-white/5">
+                  <span className="text-white/80">Open Mcode Settings</span>
+                  <kbd className="px-2 py-0.5 bg-[#2a2a2a] rounded text-white/60 font-mono">Ctrl+,</kbd>
+                </div>
+              </div>
             </div>
-          </div>
-
-          {/* Divider */}
-          <div className="h-px bg-white/5 mb-6" />
-
-          {/* Tab Section */}
-          <div className="mb-6">
-            <h3 className="text-[13px] font-bold text-white mb-2 tracking-wide">Tab</h3>
-            <div className="flex flex-col">
-              <SettingRow
-                label="Suggestions in Editor"
-                tooltip="Show inline AI completions while you type"
-                options={onOffOptions}
-                value={suggestionsInEditor}
-                onChange={setSuggestionsInEditor}
-              />
-              <SettingRow
-                label="Tab Gitignore Access"
-                tooltip="Allow AI to read .gitignore files for context"
-                options={onOffOptions}
-                value={tabGitignoreAccess}
-                onChange={setTabGitignoreAccess}
-              />
-              <SettingRow
-                label="Tab Speed"
-                tooltip="Speed of inline AI completions"
-                options={speedOptions}
-                value={tabSpeed}
-                onChange={setTabSpeed}
-              />
-              <SettingRow
-                label="Tab to Import"
-                tooltip="Automatically add missing imports when accepting completions"
-                options={onOffOptions}
-                value={tabToImport}
-                onChange={setTabToImport}
-              />
-              <SettingRow
-                label="Tab to Jump"
-                tooltip="Press Tab to jump to the next relevant code location"
-                options={onOffOptions}
-                value={tabToJump}
-                onChange={setTabToJump}
-              />
-              <SettingRow
-                label="Snooze"
-                linkLabel="Start"
-                onLinkClick={() => {
-                  setOpen(false);
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="h-px bg-white/5 mb-4" />
-
-          {/* Advanced Settings Link */}
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              useIDEStore.getState().setAdvancedSettingsOpen(true);
-            }}
-            className="text-[13px] text-blue-400 hover:text-blue-300 transition cursor-pointer mb-4 flex items-center gap-1"
-          >
-            Advanced Settings
-            <ExternalLink className="w-3 h-3" />
-          </button>
+          )}
         </div>
 
         {/* Bottom Tabs */}
@@ -258,18 +303,18 @@ export function QuickSettingsPanel() {
             onClick={() => setActiveBottomTab("settings")}
             className={`flex-1 py-2.5 text-[12px] font-medium transition cursor-pointer ${
               activeBottomTab === "settings"
-                ? "text-white border-b-2 border-white bg-white/5"
+                ? "text-white border-b-2 border-emerald-400 bg-white/5"
                 : "text-white/50 hover:text-white/80 hover:bg-white/5"
             }`}
           >
-            Settings
+            Quick Switches
           </button>
           <button
             type="button"
             onClick={() => setActiveBottomTab("shortcuts")}
             className={`flex-1 py-2.5 text-[12px] font-medium transition cursor-pointer ${
               activeBottomTab === "shortcuts"
-                ? "text-white border-b-2 border-white bg-white/5"
+                ? "text-white border-b-2 border-emerald-400 bg-white/5"
                 : "text-white/50 hover:text-white/80 hover:bg-white/5"
             }`}
           >

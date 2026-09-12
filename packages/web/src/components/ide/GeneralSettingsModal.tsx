@@ -1,19 +1,26 @@
 "use client";
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  X, Search, ChevronRight, ChevronDown, User, Settings, Shield, Palette,
-  BarChart2, Puzzle, Globe, Keyboard, Code2, Monitor, Bell, Volume2,
-  ToggleLeft, ExternalLink, Crown, Mail, Eye, Terminal, FolderOpen,
-  FileEdit, Cpu, History, Brain, Sparkles, Gauge, Lock, Zap,
+  X, Search, User, Settings, Palette, Terminal, Shield, Code2,
+  Crown, LogOut, ExternalLink, ChevronDown, Check,
+  Type, FileCode, Indent, WrapText, ListOrdered, Map, FileCheck, Save,
+  MousePointer, Sparkles, Scroll, Copy, Cpu, Layers, MessageSquare,
+  Eye, ZoomIn, ShieldAlert, FolderLock, FilePlus, Activity, Mail
 } from "lucide-react";
 import { useIDEStore } from "../../store/ideStore";
+import { useSettingsStore } from "../../store/settingsStore";
+import { toast } from "sonner";
 
-/* ═══════════════════════════════════════════════════════════════
-   Toggle Switch — reusable iOS-style toggle
-   ═══════════════════════════════════════════════════════════════ */
-
-function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+function Toggle({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -34,12 +41,10 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Dropdown — styled select
-   ═══════════════════════════════════════════════════════════════ */
-
 function Dropdown({
-  value, onChange, options,
+  value,
+  onChange,
+  options,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -53,7 +58,9 @@ function Dropdown({
         className="appearance-none bg-[#3c3c3c] border border-white/10 text-white text-[13px] px-2.5 py-1 pr-7 rounded cursor-pointer hover:border-white/20 focus:outline-none focus:border-[#0078d4] transition min-w-[160px]"
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
         ))}
       </select>
       <ChevronDown className="w-3 h-3 text-white/40 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -61,723 +68,424 @@ function Dropdown({
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Text Input  
-   ═══════════════════════════════════════════════════════════════ */
-
-function TextInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="bg-[#3c3c3c] border border-white/10 text-white text-[13px] px-2.5 py-1 rounded focus:outline-none focus:border-[#0078d4] transition w-full max-w-[400px] placeholder:text-white/30"
-    />
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Section header + setting row helpers
-   ═══════════════════════════════════════════════════════════════ */
-
 function SectionHeader({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-[14px] font-bold text-[#569cd6] mt-6 mb-3 first:mt-0">{children}</h3>;
+  return <h3 className="text-[13px] font-bold text-[#569cd6] mt-6 mb-3 first:mt-0 tracking-wide">{children}</h3>;
 }
 
-function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+function SettingRow({
+  icon: Icon,
+  label,
+  description,
+  children,
+}: {
+  icon?: React.ElementType;
+  label: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5 px-3 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition rounded-sm">
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold text-white">{label}</div>
-        {description && <div className="text-[12px] text-white/45 mt-0.5 leading-relaxed">{description}</div>}
+    <div className="flex items-start justify-between gap-4 py-3 px-3 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition rounded-sm group">
+      <div className="flex items-start gap-3 flex-1 min-w-0">
+        {Icon && (
+          <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-zinc-400 group-hover:text-[#569cd6] transition flex-shrink-0 mt-0.5">
+            <Icon className="w-3.5 h-3.5" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-semibold text-white">{label}</div>
+          {description && <div className="text-[12px] text-white/45 mt-0.5 leading-relaxed">{description}</div>}
+        </div>
       </div>
       <div className="flex-shrink-0 mt-0.5">{children}</div>
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Sidebar categories — mcode-specific
-   ═══════════════════════════════════════════════════════════════ */
-
-interface SidebarItem {
+interface CategoryTab {
   id: string;
   label: string;
   icon: any;
 }
 
-const SIDEBAR_CATEGORIES: SidebarItem[] = [
-  { id: "account", label: "Account", icon: User },
-  { id: "general", label: "General", icon: Settings },
+const CATEGORIES: CategoryTab[] = [
+  { id: "editor", label: "Editor Layout", icon: Code2 },
   { id: "terminal", label: "Terminal", icon: Terminal },
-  { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "models", label: "Models & Usage", icon: BarChart2 },
-  { id: "customizations", label: "Customizations", icon: Puzzle },
-  { id: "browser", label: "Browser", icon: Globe },
-  { id: "tab", label: "Tab", icon: Keyboard },
-  { id: "editor", label: "Editor", icon: Code2 },
+  { id: "appearance", label: "Appearance & Themes", icon: Palette },
+  { id: "security", label: "Security & Sandbox", icon: Shield },
+  { id: "account", label: "Account & Preferences", icon: User },
 ];
-
-/* ═══════════════════════════════════════════════════════════════
-   Each panel's content — adapted for Mcode
-   ═══════════════════════════════════════════════════════════════ */
-
-function AccountPanel({ state, set }: { state: any; set: (k: string, v: any) => void }) {
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">Account</h2>
-      <p className="text-[13px] text-white/40 mb-5">Manage your plan, credentials, and general preferences.</p>
-
-      <SectionHeader>General</SectionHeader>
-      <SettingRow label="Enable Telemetry" description="When toggled on, Mcode IDE collects usage data to help improve performance and features.">
-        <Toggle checked={state.telemetry} onChange={(v) => set("telemetry", v)} />
-      </SettingRow>
-      <SettingRow label="Marketing Emails" description="Receive product updates, tips, and promotions from Mcode IDE via email.">
-        <Toggle checked={state.marketingEmails} onChange={(v) => set("marketingEmails", v)} />
-      </SettingRow>
-
-      <SectionHeader>Account</SectionHeader>
-      <div className="bg-[#252526] border border-white/5 rounded-lg p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[13px] font-semibold text-white">Your Plan: Mcode Pro</div>
-            <div className="text-[12px] text-white/40">You can upgrade to Mcode Ultra for higher rate limits.</div>
-          </div>
-          <button type="button" className="px-3 py-1 bg-[#0078d4] hover:bg-[#106ebe] text-white text-[12px] font-medium rounded transition cursor-pointer flex items-center gap-1">
-            <Crown className="w-3 h-3" /> Upgrade
-          </button>
-        </div>
-        <div className="h-px bg-white/5" />
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[13px] font-medium text-white">Email</div>
-            <div className="text-[12px] text-white/40">kishorilalprajapati56@gmail.com</div>
-          </div>
-          <button type="button" className="px-3 py-1 bg-white/10 hover:bg-white/15 text-white text-[12px] font-medium rounded transition cursor-pointer">
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      <p className="text-[12px] text-white/30 mt-4">
-        By using this app, you agree to its{" "}
-        <a href="#" className="text-[#569cd6] hover:underline">Terms of Service</a>
-      </p>
-    </>
-  );
-}
-
-function GeneralPanel({ state, set }: { state: any; set: (k: string, v: any) => void }) {
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">General</h2>
-      <p className="text-[13px] text-white/40 mb-5">Configure agent execution, permissions, and automation.</p>
-
-      <SectionHeader>Execution</SectionHeader>
-      <SettingRow label="Agent Security Mode" description="Select one of the three options to control agent access level.">
-        <Dropdown value={state.securityMode} onChange={(v) => set("securityMode", v)} options={[
-          { value: "full", label: "Full Access" },
-          { value: "sandboxed", label: "Sandboxed" },
-          { value: "strict", label: "Strict" },
-        ]} />
-      </SettingRow>
-      <div className="px-3 py-2 text-[11px] text-white/35 leading-relaxed space-y-1">
-        <div><strong className="text-white/50">Full Access</strong> — Agents have full access to your machine and external resources.</div>
-        <div><strong className="text-white/50">Sandboxed</strong> — Agents run in a secure sandbox restricting external resource access.</div>
-        <div><strong className="text-white/50">Strict</strong> — Terminal commands always require review; no file access outside workspaces.</div>
-      </div>
-
-      <SectionHeader>Terminal</SectionHeader>
-      <SettingRow label="Terminal Command Auto Execution" description="Controls whether terminal commands require your approval before running.">
-        <Dropdown value={state.terminalAutoExec} onChange={(v) => set("terminalAutoExec", v)} options={[
-          { value: "request-review", label: "Request Review" },
-          { value: "auto", label: "Auto Execute" },
-          { value: "always-ask", label: "Always Ask" },
-        ]} />
-      </SettingRow>
-      <SettingRow label="Enable Shell Integration" description="When enabled, Mcode will use shell integration to detect and report terminal command execution.">
-        <Toggle checked={state.shellIntegration} onChange={(v) => set("shellIntegration", v)} />
-      </SettingRow>
-
-      <SectionHeader>File Access</SectionHeader>
-      <SettingRow label="Agent Non-Workspace File Access" description="Allows the agent to access files outside of your current workspace.">
-        <Toggle checked={state.nonWorkspaceAccess} onChange={(v) => set("nonWorkspaceAccess", v)} />
-      </SettingRow>
-      <SettingRow label="Auto-Open Edited Files" description="Open files in the background if Agent creates or edits them.">
-        <Toggle checked={state.autoOpenEdited} onChange={(v) => set("autoOpenEdited", v)} />
-      </SettingRow>
-
-      <SectionHeader>Planning</SectionHeader>
-      <SettingRow label="Review Policy" description="Specifies Agent's behavior when asking for review on artifacts and plans.">
-        <Dropdown value={state.reviewPolicy} onChange={(v) => set("reviewPolicy", v)} options={[
-          { value: "always-ask", label: "Always Ask" },
-          { value: "auto", label: "Auto Approve" },
-          { value: "skip", label: "Skip Reviews" },
-        ]} />
-      </SettingRow>
-
-      <SectionHeader>Automation</SectionHeader>
-      <SettingRow label="Agent Auto-Fix Lints" description="When enabled, Agent is given awareness of lint errors and may fix them without explicit prompting.">
-        <Toggle checked={state.autoFixLints} onChange={(v) => set("autoFixLints", v)} />
-      </SettingRow>
-
-      <SectionHeader>History & Knowledge</SectionHeader>
-      <SettingRow label="Conversation History" description="When enabled, the agent can access past conversations to inform its responses.">
-        <Toggle checked={state.conversationHistory} onChange={(v) => set("conversationHistory", v)} />
-      </SettingRow>
-      <SettingRow label="Knowledge Base" description="When enabled, the agent can access its knowledge base and auto-generate knowledge items.">
-        <Toggle checked={state.knowledgeBase} onChange={(v) => set("knowledgeBase", v)} />
-      </SettingRow>
-
-      <SectionHeader>General</SectionHeader>
-      <SettingRow label="Open Agent on Reload" description="Open Agent panel on window reload.">
-        <Toggle checked={state.openOnReload} onChange={(v) => set("openOnReload", v)} />
-      </SettingRow>
-      <SettingRow label="Enable Sounds" description="Play a sound when Agent finishes generating a response.">
-        <Toggle checked={state.enableSounds} onChange={(v) => set("enableSounds", v)} />
-      </SettingRow>
-      <SettingRow label="Enable Notifications" description="Show browser notifications when user action is needed or execution finishes.">
-        <Toggle checked={state.enableNotifications} onChange={(v) => set("enableNotifications", v)} />
-      </SettingRow>
-    </>
-  );
-}
-
-function TerminalPanel({ state, set }: { state: any; set: (k: string, v: any) => void }) {
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">Terminal</h2>
-      <p className="text-[13px] text-white/40 mb-5">Configure integrated terminal font, shell profiles, and behavior.</p>
-
-      <SectionHeader>Integrated Terminal</SectionHeader>
-      <SettingRow label="Font Size" description="Controls the font size in pixels of the terminal.">
-        <Dropdown
-          value={String(state.terminalFontSize || '13')}
-          onChange={(v) => {
-            set('terminalFontSize', v);
-            localStorage.setItem('mcode.terminal.fontSize', v);
-          }}
-          options={[
-            { value: '11', label: '11 px' },
-            { value: '12', label: '12 px' },
-            { value: '13', label: '13 px (Default)' },
-            { value: '14', label: '14 px' },
-            { value: '15', label: '15 px' },
-            { value: '16', label: '16 px' },
-            { value: '18', label: '18 px' },
-            { value: '20', label: '20 px' },
-          ]}
-        />
-      </SettingRow>
-
-      <SettingRow label="Font Family" description="Controls the font family of the terminal.">
-        <Dropdown
-          value={state.terminalFontFamily || 'monospace'}
-          onChange={(v) => {
-            set('terminalFontFamily', v);
-            localStorage.setItem('mcode.terminal.fontFamily', v);
-          }}
-          options={[
-            { value: 'monospace', label: 'monospace (System Default)' },
-            { value: 'Consolas, monospace', label: 'Consolas' },
-            { value: 'Menlo, Monaco, monospace', label: 'Menlo / Monaco' },
-            { value: '"Fira Code", monospace', label: 'Fira Code' },
-            { value: '"JetBrains Mono", monospace', label: 'JetBrains Mono' },
-          ]}
-        />
-      </SettingRow>
-
-      <SettingRow label="Cursor Style" description="Controls the style of the terminal cursor.">
-        <Dropdown
-          value={state.terminalCursorStyle || 'block'}
-          onChange={(v) => {
-            set('terminalCursorStyle', v);
-            localStorage.setItem('mcode.terminal.cursorStyle', v);
-          }}
-          options={[
-            { value: 'block', label: 'Block' },
-            { value: 'underline', label: 'Underline' },
-            { value: 'bar', label: 'Bar' },
-          ]}
-        />
-      </SettingRow>
-
-      <SettingRow label="Cursor Blink" description="Controls whether the terminal cursor blinks.">
-        <Toggle
-          checked={state.terminalCursorBlink}
-          onChange={(v) => {
-            set('terminalCursorBlink', v);
-            localStorage.setItem('mcode.terminal.cursorBlink', String(v));
-          }}
-        />
-      </SettingRow>
-
-      <SettingRow label="Scrollback Lines" description="Controls the maximum number of lines kept in the terminal buffer.">
-        <Dropdown
-          value={String(state.terminalScrollback || '5000')}
-          onChange={(v) => {
-            set('terminalScrollback', v);
-            localStorage.setItem('mcode.terminal.scrollback', v);
-          }}
-          options={[
-            { value: '1000', label: '1,000 lines' },
-            { value: '2000', label: '2,000 lines' },
-            { value: '5000', label: '5,000 lines (Default)' },
-            { value: '10000', label: '10,000 lines' },
-            { value: '20000', label: '20,000 lines' },
-          ]}
-        />
-      </SettingRow>
-
-      <SettingRow label="Copy On Selection" description="Controls whether text selected in the terminal is automatically copied to the clipboard.">
-        <Toggle
-          checked={state.terminalCopyOnSelection}
-          onChange={(v) => {
-            set('terminalCopyOnSelection', v);
-            localStorage.setItem('mcode.terminal.copyOnSelection', String(v));
-          }}
-        />
-      </SettingRow>
-    </>
-  );
-}
-
-function AppearancePanel({ state, set }: { state: any; set: (k: string, v: any) => void }) {
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">Appearance</h2>
-      <p className="text-[13px] text-white/40 mb-5">Configure the agent's visual theme and display preferences.</p>
-
-      <SectionHeader>Chat Settings</SectionHeader>
-      <SettingRow label="Verbose Agent Chat" description="Display and preserve intermediate thinking steps.">
-        <Toggle checked={state.verboseChat} onChange={(v) => set("verboseChat", v)} />
-      </SettingRow>
-      <SettingRow label="Auto-Expand Changes Overview" description="When enabled, the Changes Overview toolbar will automatically expand when Agent finishes.">
-        <Toggle checked={state.autoExpandChanges} onChange={(v) => set("autoExpandChanges", v)} />
-      </SettingRow>
-      <SettingRow label="Chat Font Size" description="Controls font size in chat messages.">
-        <Dropdown value={state.chatFontSize} onChange={(v) => set("chatFontSize", v)} options={[
-          { value: "12", label: "12px" },
-          { value: "13", label: "13px" },
-          { value: "14", label: "14px (Default)" },
-          { value: "15", label: "15px" },
-          { value: "16", label: "16px" },
-        ]} />
-      </SettingRow>
-
-      <SectionHeader>Theme</SectionHeader>
-      <SettingRow label="Color Theme" description="Specifies the color theme used in the IDE.">
-        <Dropdown value={state.colorTheme} onChange={(v) => set("colorTheme", v)} options={[
-          { value: "mcode-dark", label: "Mcode Dark (Default)" },
-          { value: "mcode-light", label: "Mcode Light" },
-          { value: "monokai", label: "Monokai Pro" },
-          { value: "one-dark", label: "One Dark Pro" },
-          { value: "dracula", label: "Dracula" },
-          { value: "github-dark", label: "GitHub Dark" },
-        ]} />
-      </SettingRow>
-      <SettingRow label="Icon Theme" description="Specifies the file icon theme in the explorer.">
-        <Dropdown value={state.iconTheme} onChange={(v) => set("iconTheme", v)} options={[
-          { value: "seti", label: "Seti (Default)" },
-          { value: "material", label: "Material Icons" },
-          { value: "minimal", label: "Minimal" },
-          { value: "none", label: "None" },
-        ]} />
-      </SettingRow>
-    </>
-  );
-}
-
-function ModelsPanel({ state, set }: { state: any; set: (k: string, v: any) => void }) {
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">Models & Usage</h2>
-      <p className="text-[13px] text-white/40 mb-5">Manage your model quota and credits.</p>
-
-      <SectionHeader>Plan</SectionHeader>
-      <div className="bg-[#252526] border border-white/5 rounded-lg p-4 mb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-[13px] font-semibold text-white">Your Plan: Mcode Pro</div>
-            <div className="text-[12px] text-white/40">Upgrade to Mcode Ultra for higher rate limits.</div>
-          </div>
-          <button type="button" className="px-3 py-1 bg-[#0078d4] hover:bg-[#106ebe] text-white text-[12px] font-medium rounded transition cursor-pointer flex items-center gap-1">
-            <Crown className="w-3 h-3" /> Upgrade
-          </button>
-        </div>
-      </div>
-
-      <SectionHeader>Model Credits</SectionHeader>
-      <SettingRow label="Enable AI Credit Overages" description="Use your AI credits to fulfill model requests once you're out of quota. Mcode will use your model quota first.">
-        <Toggle checked={state.creditOverages} onChange={(v) => set("creditOverages", v)} />
-      </SettingRow>
-      <div className="px-3 py-2 text-[12px] text-white/40">Available AI Credits: <span className="text-white font-semibold">0</span></div>
-
-      <SectionHeader>Gemini Models</SectionHeader>
-      <div className="bg-[#252526] border border-white/5 rounded-lg p-4 space-y-3">
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[12px] text-white/60">Weekly Limit Remaining</span>
-            <span className="text-[12px] text-emerald-400 font-semibold">100%</span>
-          </div>
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 rounded-full" style={{ width: "100%" }} />
-          </div>
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[12px] text-white/60">Five Hour Limit Remaining</span>
-            <span className="text-[12px] text-emerald-400 font-semibold">100%</span>
-          </div>
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-emerald-500 rounded-full" style={{ width: "100%" }} />
-          </div>
-        </div>
-      </div>
-
-      <SectionHeader>Claude & GPT Models</SectionHeader>
-      <div className="bg-[#252526] border border-white/5 rounded-lg p-4 space-y-3">
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[12px] text-white/60">Weekly Limit Remaining</span>
-            <span className="text-[12px] text-amber-400 font-semibold">94%</span>
-          </div>
-          <div className="text-[11px] text-white/30 mb-1.5">Refreshes in 6 days, 23 hours.</div>
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-amber-500 rounded-full" style={{ width: "94%" }} />
-          </div>
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[12px] text-white/60">Five Hour Limit Remaining</span>
-            <span className="text-[12px] text-amber-400 font-semibold">82%</span>
-          </div>
-          <div className="text-[11px] text-white/30 mb-1.5">Refreshes in 4 hours, 57 minutes.</div>
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-amber-500 rounded-full" style={{ width: "82%" }} />
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function CustomizationsPanel() {
-  const SAMPLE_SKILLS = [
-    { name: "code-review", scope: "Workspace", desc: "Automated code review and quality analysis." },
-    { name: "deploy-helper", scope: "Workspace", desc: "Streamlined deployment workflows for cloud platforms." },
-    { name: "test-generator", scope: "Global", desc: "Auto-generate unit tests from function signatures." },
-    { name: "refactor-assist", scope: "Global", desc: "Suggest and apply code refactoring patterns." },
-    { name: "api-designer", scope: "Workspace", desc: "Design RESTful APIs from schema definitions." },
-  ];
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">Customizations</h2>
-      <p className="text-[13px] text-white/40 mb-5">Configure default behaviors, skills, and MCP servers.</p>
-
-      <SectionHeader>Token Usage</SectionHeader>
-      <div className="bg-[#252526] border border-white/5 rounded-lg p-4 mb-4">
-        <div className="text-[12px] text-white/50 mb-2">Token usage from customizations like skills, rules, and MCP.</div>
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[12px] text-white/60">Customization Budget Available</span>
-          <span className="text-[12px] text-emerald-400 font-semibold">72.2%</span>
-        </div>
-        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-          <div className="h-full bg-emerald-500 rounded-full" style={{ width: "72.2%" }} />
-        </div>
-        <div className="flex gap-4 mt-3 text-[11px] text-white/40">
-          <span>Skills: <span className="text-white/60">27.3%</span> (5,451 tokens)</span>
-          <span>MCP Tools: <span className="text-white/60">0.5%</span> (101 tokens)</span>
-        </div>
-      </div>
-
-      <SectionHeader>Skills ({SAMPLE_SKILLS.length})</SectionHeader>
-      <div className="space-y-1">
-        {SAMPLE_SKILLS.map((s) => (
-          <div key={s.name} className="flex items-start gap-3 py-2 px-3 rounded hover:bg-white/[0.03] transition">
-            <Puzzle className="w-3.5 h-3.5 text-[#569cd6] mt-0.5 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-semibold text-white">{s.name}</div>
-              <div className="text-[11px] text-white/40">{s.scope} — {s.desc}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <SectionHeader>Installed MCP Servers</SectionHeader>
-      <div className="bg-[#252526] border border-white/5 rounded-lg p-3">
-        <div className="flex items-center gap-2">
-          <Globe className="w-3.5 h-3.5 text-[#569cd6]" />
-          <span className="text-[12px] font-semibold text-white">StitchMCP</span>
-          <span className="text-[11px] text-white/40 ml-auto">15 tools enabled</span>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function BrowserPanel({ state, set }: { state: any; set: (k: string, v: any) => void }) {
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">Browser Settings</h2>
-      <p className="text-[13px] text-white/40 mb-5">Configure the browser agent's behavior and permissions.</p>
-
-      <SectionHeader>General</SectionHeader>
-      <SettingRow label="Enable Browser Tools" description="When enabled, Agent can open URLs, read web pages, and interact with browser content.">
-        <Toggle checked={state.browserTools} onChange={(v) => set("browserTools", v)} />
-      </SettingRow>
-      <SettingRow label="Browser JavaScript Execution Policy" description="Controls whether the agent can run custom JavaScript to automate complex browser actions.">
-        <Dropdown value={state.browserJsPolicy} onChange={(v) => set("browserJsPolicy", v)} options={[
-          { value: "disabled", label: "Disabled" },
-          { value: "ask", label: "Ask Before Running" },
-          { value: "enabled", label: "Enabled" },
-        ]} />
-      </SettingRow>
-      <SettingRow label="Enable Browser Notifications" description="Show browser notifications when user action is needed.">
-        <Toggle checked={state.browserNotifications} onChange={(v) => set("browserNotifications", v)} />
-      </SettingRow>
-
-      <SectionHeader>Actuation Permissions</SectionHeader>
-      <SettingRow label="Browser Actuation Rules" description="Configure allowed and denied URLs for browser actuation.">
-        <button type="button" className="text-[12px] text-[#569cd6] hover:text-[#7cb8f0] transition cursor-pointer">
-          Configure →
-        </button>
-      </SettingRow>
-    </>
-  );
-}
-
-function TabPanel({ state, set }: { state: any; set: (k: string, v: any) => void }) {
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">Tab</h2>
-      <p className="text-[13px] text-white/40 mb-5">Configure tab completion, suggestions, and navigation behavior.</p>
-
-      <SectionHeader>Suggestions</SectionHeader>
-      <SettingRow label="Suggestions in Editor" description="Show AI suggestions when typing in the editor.">
-        <Dropdown value={state.suggestionsInEditor} onChange={(v) => set("suggestionsInEditor", v)} options={[
-          { value: "on", label: "On" },
-          { value: "off", label: "Off" },
-        ]} />
-      </SettingRow>
-      <SettingRow label="Tab Speed" description="Set the speed of tab suggestions.">
-        <Dropdown value={state.tabSpeed} onChange={(v) => set("tabSpeed", v)} options={[
-          { value: "fast", label: "Fast" },
-          { value: "normal", label: "Normal" },
-          { value: "slow", label: "Slow" },
-        ]} />
-      </SettingRow>
-      <SettingRow label="Highlight After Accept" description="Highlight newly inserted text after accepting a Tab completion.">
-        <Toggle checked={state.highlightAfterAccept} onChange={(v) => set("highlightAfterAccept", v)} />
-      </SettingRow>
-      <SettingRow label="Tab to Import" description="Quickly add and update imports with a tab keypress.">
-        <Toggle checked={state.tabToImport} onChange={(v) => set("tabToImport", v)} />
-      </SettingRow>
-
-      <SectionHeader>Navigation</SectionHeader>
-      <SettingRow label="Tab to Jump" description="Predict the location of your next edit and navigate there with a tab keypress.">
-        <Toggle checked={state.tabToJump} onChange={(v) => set("tabToJump", v)} />
-      </SettingRow>
-
-      <SectionHeader>Context</SectionHeader>
-      <SettingRow label="Tab Gitignore Access" description="Allow Tab to view and edit files in .gitignore. Use with caution if those files contain credentials.">
-        <Dropdown value={state.tabGitignoreAccess} onChange={(v) => set("tabGitignoreAccess", v)} options={[
-          { value: "off", label: "Off" },
-          { value: "on", label: "On" },
-        ]} />
-      </SettingRow>
-    </>
-  );
-}
-
-function EditorPanel({ state, set }: { state: any; set: (k: string, v: any) => void }) {
-  return (
-    <>
-      <h2 className="text-[20px] font-bold text-white mb-1">Editor Settings</h2>
-      <p className="text-[13px] text-white/40 mb-5">Configure editor-specific behaviors and extensions.</p>
-
-      <SectionHeader>Marketplace</SectionHeader>
-      <SettingRow label="Marketplace Item URL" description="Base URL for extension pages. Restart Mcode IDE to apply changes.">
-        <TextInput value={state.marketplaceItemUrl} onChange={(v) => set("marketplaceItemUrl", v)} />
-      </SettingRow>
-      <SettingRow label="Marketplace Gallery URL" description="Base URL for marketplace search results. Restart Mcode IDE to apply changes.">
-        <TextInput value={state.marketplaceGalleryUrl} onChange={(v) => set("marketplaceGalleryUrl", v)} />
-      </SettingRow>
-
-      <SectionHeader>Selection Actions</SectionHeader>
-      <SettingRow label="Show Selection Actions" description="Show 'Edit' and 'Chat' buttons when selecting text in the editor.">
-        <Toggle checked={state.showSelectionActions} onChange={(v) => set("showSelectionActions", v)} />
-      </SettingRow>
-
-      <SectionHeader>General</SectionHeader>
-      <SettingRow label="Editor Settings" description="To modify detailed editor settings (font, theme, minimap, etc.), use the Advanced Settings panel.">
-        <button
-          type="button"
-          onClick={() => {
-            useIDEStore.getState().setGeneralSettingsOpen(false);
-            useIDEStore.getState().setAdvancedSettingsOpen(true);
-          }}
-          className="text-[12px] text-[#569cd6] hover:text-[#7cb8f0] transition cursor-pointer flex items-center gap-1"
-        >
-          Open Advanced Settings <ExternalLink className="w-3 h-3" />
-        </button>
-      </SettingRow>
-    </>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Main Modal
-   ═══════════════════════════════════════════════════════════════ */
-
-const DEFAULT_STATE = {
-  // Account
-  telemetry: true,
-  marketingEmails: false,
-  // General
-  securityMode: "full",
-  terminalAutoExec: "request-review",
-  shellIntegration: true,
-  nonWorkspaceAccess: false,
-  autoOpenEdited: true,
-  reviewPolicy: "always-ask",
-  autoFixLints: true,
-  conversationHistory: true,
-  knowledgeBase: true,
-  openOnReload: false,
-  enableSounds: false,
-  enableNotifications: false,
-  // Appearance
-  verboseChat: false,
-  autoExpandChanges: true,
-  chatFontSize: "14",
-  colorTheme: "mcode-dark",
-  iconTheme: "seti",
-  // Models
-  creditOverages: false,
-  // Browser
-  browserTools: true,
-  browserJsPolicy: "disabled",
-  browserNotifications: true,
-  // Tab
-  suggestionsInEditor: "on",
-  tabSpeed: "fast",
-  highlightAfterAccept: true,
-  tabToImport: true,
-  tabToJump: true,
-  tabGitignoreAccess: "off",
-  // Editor
-  marketplaceItemUrl: "https://open-vsx.org/vscode/item",
-  marketplaceGalleryUrl: "https://open-vsx.org/vscode/gallery",
-  showSelectionActions: true,
-};
 
 export function GeneralSettingsModal() {
   const isOpen = useIDEStore((s) => s.isGeneralSettingsOpen);
   const setOpen = useIDEStore((s) => s.setGeneralSettingsOpen);
 
-  const [activeCategory, setActiveCategory] = useState("account");
-  const [settingValues, setSettingValues] = useState<Record<string, any>>(DEFAULT_STATE);
+  const [activeTab, setActiveTab] = useState<string>("editor");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const handleSet = useCallback((key: string, val: any) => {
-    setSettingValues((prev) => ({ ...prev, [key]: val }));
-  }, []);
+  const editor = useSettingsStore((s) => s.editor);
+  const updateEditor = useSettingsStore((s) => s.updateEditorSetting);
 
-  const renderPanel = () => {
-    const props = { state: settingValues, set: handleSet };
-    switch (activeCategory) {
-      case "account": return <AccountPanel {...props} />;
-      case "general": return <GeneralPanel {...props} />;
-      case "terminal": return <TerminalPanel {...props} />;
-      case "appearance": return <AppearancePanel {...props} />;
-      case "models": return <ModelsPanel {...props} />;
-      case "customizations": return <CustomizationsPanel />;
-      case "browser": return <BrowserPanel {...props} />;
-      case "tab": return <TabPanel {...props} />;
-      case "editor": return <EditorPanel {...props} />;
-      default: return <AccountPanel {...props} />;
-    }
-  };
+  const terminal = useSettingsStore((s) => s.terminal);
+  const updateTerminal = useSettingsStore((s) => s.updateTerminalSetting);
+
+  const appearance = useSettingsStore((s) => s.appearance);
+  const updateAppearance = useSettingsStore((s) => s.updateAppearanceSetting);
+
+  const security = useSettingsStore((s) => s.security);
+  const updateSecurity = useSettingsStore((s) => s.updateSecuritySetting);
+
+  const account = useSettingsStore((s) => s.account);
+  const updateAccount = useSettingsStore((s) => s.updateAccountSetting);
 
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60" onClick={() => setOpen(false)}>
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={() => setOpen(false)}
+    >
       <div
-        className="w-[880px] max-w-[95vw] h-[85vh] bg-[#1e1e1e] border border-white/10 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+        className="bg-[#1e1e1e] border border-white/10 rounded-xl w-full max-w-4xl h-[82vh] shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
-        style={{ animation: "gsModalIn 0.2s ease-out" }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 bg-[#252526] flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#252526]">
           <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4 text-white/50" />
-            <span className="text-[14px] font-semibold text-white">Mcode Settings</span>
+            <Settings className="w-5 h-5 text-emerald-400" />
+            <div>
+              <h2 className="text-[15px] font-semibold text-white">Mcode IDE Settings</h2>
+              <p className="text-[11px] text-white/40">Manage primary editor preferences, terminal, and workspace configuration</p>
+            </div>
           </div>
-          <button type="button" onClick={() => setOpen(false)} className="p-1 hover:bg-white/10 rounded transition cursor-pointer text-white/40 hover:text-white">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="p-1 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition cursor-pointer"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="flex flex-1 min-h-0">
-          {/* Sidebar */}
-          <div className="w-[180px] border-r border-white/5 flex flex-col flex-shrink-0 bg-[#1e1e1e]">
-            {/* Sidebar Header */}
-            <div className="px-3 pt-3 pb-1">
-              <span className="text-[11px] font-semibold text-white/30 uppercase tracking-wider">Settings</span>
-            </div>
-            {/* Sidebar Items */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar py-1">
-              {SIDEBAR_CATEGORIES.map((cat) => {
-                const Icon = cat.icon;
-                const isActive = activeCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-[13px] transition cursor-pointer ${
-                      isActive
-                        ? "bg-[#04395e] text-white font-semibold"
-                        : "text-white/60 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                    {cat.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Workspace list */}
-            <div className="border-t border-white/5 px-3 py-2">
-              <span className="text-[11px] font-semibold text-white/30 uppercase tracking-wider">Workspaces</span>
-              <div className="mt-1.5 space-y-0.5">
-                {["mcoode", "mfrontend", "mdesign"].map((ws) => (
-                  <div key={ws} className="text-[12px] text-[#569cd6] hover:text-[#7cb8f0] transition cursor-pointer py-0.5 px-1 rounded hover:bg-white/5">
-                    {ws}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
-            {renderPanel()}
+        {/* Search */}
+        <div className="px-6 py-3 border-b border-white/5 bg-[#1e1e1e]">
+          <div className="relative">
+            <Search className="w-4 h-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search settings (e.g. font, theme, terminal, autosave)..."
+              className="w-full bg-[#2a2a2a] border border-white/10 rounded-lg pl-9 pr-4 py-1.5 text-[13px] text-white placeholder:text-white/30 focus:outline-none focus:border-emerald-500 transition"
+            />
           </div>
         </div>
-      </div>
 
-      <style>{`
-        @keyframes gsModalIn {
-          from { transform: scale(0.97); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
-        }
-      `}</style>
+        {/* Main Body */}
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          {/* Sidebar */}
+          <aside className="w-60 bg-[#252526] border-r border-white/5 p-2 space-y-1 overflow-y-auto custom-scrollbar">
+            {CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const isActive = activeTab === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveTab(cat.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition cursor-pointer ${
+                    isActive
+                      ? "bg-emerald-600 text-white"
+                      : "text-white/60 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{cat.label}</span>
+                </button>
+              );
+            })}
+          </aside>
+
+          {/* Panel Content */}
+          <main className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+            {activeTab === "editor" && (
+              <>
+                <h2 className="text-[18px] font-bold text-white mb-1">Editor Layout & Behavior</h2>
+                <p className="text-[12px] text-white/40 mb-6">Core code editor presentation, typography, and file saving mechanics.</p>
+
+                <SectionHeader>Typography & Sizing</SectionHeader>
+                <SettingRow icon={Type} label="Font Size" description="Controls the font size in pixels for the code editor pane.">
+                  <Dropdown
+                    value={String(editor.fontSize)}
+                    onChange={(v) => updateEditor("fontSize", Number(v))}
+                    options={[
+                      { value: "11", label: "11 px" },
+                      { value: "12", label: "12 px" },
+                      { value: "13", label: "13 px (Default)" },
+                      { value: "14", label: "14 px" },
+                      { value: "15", label: "15 px" },
+                      { value: "16", label: "16 px" },
+                      { value: "18", label: "18 px" },
+                      { value: "20", label: "20 px" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={FileCode} label="Font Family" description="Font family applied to all Monaco code editors.">
+                  <Dropdown
+                    value={editor.fontFamily}
+                    onChange={(v) => updateEditor("fontFamily", v)}
+                    options={[
+                      { value: "'JetBrains Mono', 'Fira Code', monospace", label: "JetBrains Mono / Fira Code" },
+                      { value: "Consolas, 'Courier New', monospace", label: "Consolas" },
+                      { value: "'Fira Code', monospace", label: "Fira Code" },
+                      { value: "Menlo, Monaco, monospace", label: "Menlo / Monaco" },
+                      { value: "monospace", label: "System Monospace" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={Indent} label="Tab Size" description="Number of spaces inserted per indentation level.">
+                  <Dropdown
+                    value={String(editor.tabSize)}
+                    onChange={(v) => updateEditor("tabSize", Number(v))}
+                    options={[
+                      { value: "2", label: "2 Spaces" },
+                      { value: "4", label: "4 Spaces" },
+                      { value: "8", label: "8 Spaces" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SectionHeader>Display & Formatting</SectionHeader>
+                <SettingRow icon={WrapText} label="Word Wrap" description="Wrap long lines to fit within editor width without horizontal scrolling.">
+                  <Toggle checked={editor.wordWrap} onChange={(v) => updateEditor("wordWrap", v)} />
+                </SettingRow>
+
+                <SettingRow icon={ListOrdered} label="Show Line Numbers" description="Display line numbering in the left gutter.">
+                  <Toggle checked={editor.lineNumbers} onChange={(v) => updateEditor("lineNumbers", v)} />
+                </SettingRow>
+
+                <SettingRow icon={Map} label="Show Minimap" description="Render code overview thumbnail on the right side of the editor.">
+                  <Toggle checked={editor.minimap} onChange={(v) => updateEditor("minimap", v)} />
+                </SettingRow>
+
+                <SettingRow icon={FileCheck} label="Format on Save" description="Automatically format code file whenever you hit Save (Ctrl+S).">
+                  <Toggle checked={editor.formatOnSave} onChange={(v) => updateEditor("formatOnSave", v)} />
+                </SettingRow>
+
+                <SettingRow icon={Save} label="Auto Save" description="Automatically save file changes in the background after edits.">
+                  <Toggle checked={editor.autoSave} onChange={(v) => updateEditor("autoSave", v)} />
+                </SettingRow>
+              </>
+            )}
+
+            {activeTab === "terminal" && (
+              <>
+                <h2 className="text-[18px] font-bold text-white mb-1">Integrated Terminal</h2>
+                <p className="text-[12px] text-white/40 mb-6">Configure integrated xterm shell font, cursor, and scrollback.</p>
+
+                <SectionHeader>Terminal Display</SectionHeader>
+                <SettingRow icon={Type} label="Font Size" description="Font size in pixels for integrated terminal sessions.">
+                  <Dropdown
+                    value={String(terminal.fontSize)}
+                    onChange={(v) => updateTerminal("fontSize", Number(v))}
+                    options={[
+                      { value: "11", label: "11 px" },
+                      { value: "12", label: "12 px" },
+                      { value: "13", label: "13 px (Default)" },
+                      { value: "14", label: "14 px" },
+                      { value: "15", label: "15 px" },
+                      { value: "16", label: "16 px" },
+                      { value: "18", label: "18 px" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={Terminal} label="Font Family" description="Font family for the terminal buffer.">
+                  <Dropdown
+                    value={terminal.fontFamily}
+                    onChange={(v) => updateTerminal("fontFamily", v)}
+                    options={[
+                      { value: "monospace", label: "System Monospace" },
+                      { value: "Consolas, monospace", label: "Consolas" },
+                      { value: "'Fira Code', monospace", label: "Fira Code" },
+                      { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={MousePointer} label="Cursor Style" description="Visual style of the terminal prompt cursor.">
+                  <Dropdown
+                    value={terminal.cursorStyle}
+                    onChange={(v) => updateTerminal("cursorStyle", v as any)}
+                    options={[
+                      { value: "block", label: "Block" },
+                      { value: "underline", label: "Underline" },
+                      { value: "bar", label: "Vertical Bar" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={Sparkles} label="Cursor Blink" description="Blink terminal cursor when inactive.">
+                  <Toggle checked={terminal.cursorBlink} onChange={(v) => updateTerminal("cursorBlink", v)} />
+                </SettingRow>
+
+                <SectionHeader>Terminal Buffer</SectionHeader>
+                <SettingRow icon={Scroll} label="Scrollback Lines" description="Maximum number of historical lines retained in the terminal buffer.">
+                  <Dropdown
+                    value={String(terminal.scrollback)}
+                    onChange={(v) => updateTerminal("scrollback", Number(v))}
+                    options={[
+                      { value: "1000", label: "1,000 lines" },
+                      { value: "2000", label: "2,000 lines" },
+                      { value: "5000", label: "5,000 lines (Default)" },
+                      { value: "10000", label: "10,000 lines" },
+                      { value: "20000", label: "20,000 lines" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={Copy} label="Copy on Selection" description="Automatically copy selected terminal text to clipboard.">
+                  <Toggle checked={terminal.copyOnSelection} onChange={(v) => updateTerminal("copyOnSelection", v)} />
+                </SettingRow>
+
+                <SettingRow icon={Cpu} label="Shell Integration" description="Enable shell integration hooks to monitor exit codes and working directory changes.">
+                  <Toggle checked={terminal.shellIntegration} onChange={(v) => updateTerminal("shellIntegration", v)} />
+                </SettingRow>
+              </>
+            )}
+
+            {activeTab === "appearance" && (
+              <>
+                <h2 className="text-[18px] font-bold text-white mb-1">Appearance & Themes</h2>
+                <p className="text-[12px] text-white/40 mb-6">Select your preferred color schemes, icon packs, and chat appearance.</p>
+
+                <SectionHeader>Theme Scheme</SectionHeader>
+                <SettingRow icon={Palette} label="Color Theme" description="Visual theme applied to the entire IDE and code editor.">
+                  <Dropdown
+                    value={appearance.colorTheme}
+                    onChange={(v) => updateAppearance("colorTheme", v)}
+                    options={[
+                      { value: "mcode-dark", label: "Mcode Dark (Default)" },
+                      { value: "mcode-light", label: "Mcode Light" },
+                      { value: "one-dark", label: "One Dark Pro" },
+                      { value: "monokai", label: "Monokai Pro" },
+                      { value: "dracula", label: "Dracula" },
+                      { value: "github-dark", label: "GitHub Dark" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={Layers} label="File Icon Theme" description="Icon set used in the workspace File Explorer.">
+                  <Dropdown
+                    value={appearance.iconTheme}
+                    onChange={(v) => updateAppearance("iconTheme", v as any)}
+                    options={[
+                      { value: "seti", label: "Seti Icons (Default)" },
+                      { value: "material", label: "Material Icons" },
+                      { value: "minimal", label: "Minimal" },
+                      { value: "none", label: "None" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SectionHeader>AI Chat UI</SectionHeader>
+                <SettingRow icon={MessageSquare} label="Chat Font Size" description="Text size inside message bubbles.">
+                  <Dropdown
+                    value={String(appearance.chatFontSize)}
+                    onChange={(v) => updateAppearance("chatFontSize", Number(v))}
+                    options={[
+                      { value: "12", label: "12 px" },
+                      { value: "13", label: "13 px" },
+                      { value: "14", label: "14 px (Default)" },
+                      { value: "15", label: "15 px" },
+                      { value: "16", label: "16 px" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={Eye} label="Verbose Agent Chat" description="Display intermediate thinking steps and subagent trace logs in message feed.">
+                  <Toggle checked={appearance.verboseChat} onChange={(v) => updateAppearance("verboseChat", v)} />
+                </SettingRow>
+
+                <SettingRow icon={ZoomIn} label="Interface Scale" description="Scale overall UI zoom ratio.">
+                  <Dropdown
+                    value={appearance.uiScale}
+                    onChange={(v) => updateAppearance("uiScale", v as any)}
+                    options={[
+                      { value: "100%", label: "100% (Standard)" },
+                      { value: "110%", label: "110%" },
+                      { value: "120%", label: "120%" },
+                    ]}
+                  />
+                </SettingRow>
+              </>
+            )}
+
+            {activeTab === "security" && (
+              <>
+                <h2 className="text-[18px] font-bold text-white mb-1">Security & Workspace Isolation</h2>
+                <p className="text-[12px] text-white/40 mb-6">Control how AI agents interact with your local machine and file system.</p>
+
+                <SectionHeader>Execution Sandbox</SectionHeader>
+                <SettingRow icon={ShieldAlert} label="Agent Security Level" description="Choose boundary restrictions for agent tool executions.">
+                  <Dropdown
+                    value={security.agentSecurityMode}
+                    onChange={(v) => updateSecurity("agentSecurityMode", v as any)}
+                    options={[
+                      { value: "full", label: "Full Access (Host Machine)" },
+                      { value: "sandboxed", label: "Sandboxed (Restricted Filesystem)" },
+                      { value: "strict", label: "Strict (Require Approval for All)" },
+                    ]}
+                  />
+                </SettingRow>
+
+                <SettingRow icon={FolderLock} label="Allow Non-Workspace File Access" description="Allow agent to read and modify files outside current project folder.">
+                  <Toggle checked={security.nonWorkspaceAccess} onChange={(v) => updateSecurity("nonWorkspaceAccess", v)} />
+                </SettingRow>
+
+                <SettingRow icon={FilePlus} label="Auto-Open Created Files" description="Automatically open new files created by the agent in editor tabs.">
+                  <Toggle checked={security.autoOpenEdited} onChange={(v) => updateSecurity("autoOpenEdited", v)} />
+                </SettingRow>
+              </>
+            )}
+
+            {activeTab === "account" && (
+              <>
+                <h2 className="text-[18px] font-bold text-white mb-1">Account & Preferences</h2>
+                <p className="text-[12px] text-white/40 mb-6">Manage user subscription, telemetry, and communications.</p>
+
+                <SectionHeader>Plan Status</SectionHeader>
+                <div className="bg-[#252526] border border-white/5 rounded-lg p-4 mb-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-[14px] font-semibold text-white flex items-center gap-1.5">
+                      <Crown className="w-4 h-4 text-amber-400" />
+                      Mcode Pro
+                    </div>
+                    <div className="text-[12px] text-white/40 mt-0.5">High-speed model inference & parallel subagent support.</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toast.success("You are on Mcode Pro plan!")}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[12px] font-medium rounded transition cursor-pointer"
+                  >
+                    Active Plan
+                  </button>
+                </div>
+
+                <SectionHeader>Privacy & Diagnostics</SectionHeader>
+                <SettingRow icon={Activity} label="Anonymous Usage Telemetry" description="Send anonymous crash reports and performance metrics to help improve Mcode.">
+                  <Toggle checked={account.telemetry} onChange={(v) => updateAccount("telemetry", v)} />
+                </SettingRow>
+
+                <SettingRow icon={Mail} label="Product Update Emails" description="Receive occasional product updates, new model releases, and tips.">
+                  <Toggle checked={account.marketingEmails} onChange={(v) => updateAccount("marketingEmails", v)} />
+                </SettingRow>
+              </>
+            )}
+          </main>
+        </div>
+      </div>
     </div>,
     document.body
   );

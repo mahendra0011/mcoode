@@ -13,6 +13,11 @@ export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'mcode — terminal-first AI coding',
   description: 'mcode: AI coding assistant in your terminal and browser',
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

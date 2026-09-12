@@ -24,7 +24,10 @@ export function AILandingPage() {
         <AIChatPreview />
       </div>
       
-      <AgentFeature />
+      {/* 3rd Section: AI Agent Feature */}
+      <div className="relative w-full">
+        <AgentFeature />
+      </div>
       <LogoTicker />
       <FeaturesGrid />
       <Testimonials />

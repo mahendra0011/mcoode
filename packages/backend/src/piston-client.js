@@ -1,6 +1,12 @@
 import axios from 'axios';
+import { runOnHost, getSupportedExtensions } from './host-runner.js';
 
 const PISTON_URL = process.env.PISTON_URL || 'http://localhost:2000';
+
+// Cache Piston availability (re-checked periodically)
+let _pistonAvailable = null;
+let _pistonCheckedAt = 0;
+const PISTON_CHECK_INTERVAL = 30_000; // re-check every 30s
 
 // Comprehensive Extension → Piston language mapping (All 53 Piston Languages)
 export const LANGUAGE_MAP = {
@@ -195,3 +201,58 @@ export async function runSingleFile(filename, code, stdin = '') {
   };
 }
 
+/**
+ * Checks if the Piston sandbox service is reachable.
+ * Caches the result for 30s to avoid hammering the endpoint.
+ * @returns {Promise<boolean>}
+ */
+export async function isPistonAvailable() {
+  const now = Date.now();
+  if (_pistonAvailable !== null && (now - _pistonCheckedAt) < PISTON_CHECK_INTERVAL) {
+    return _pistonAvailable;
+  }
+
+  try {
+    await axios.get(`${PISTON_URL}/api/v2/runtimes`, { timeout: 2000 });
+    _pistonAvailable = true;
+  } catch {
+    _pistonAvailable = false;
+  }
+  _pistonCheckedAt = now;
+  return _pistonAvailable;
+}
+
+/**
+ * Smart execution router — runs code through the best available backend:
+ *   1. Host-based execution (always available, no Docker needed)
+ *   2. Piston sandbox (if running — better isolation)
+ *
+ * @param {string} filename - e.g. "main.py"
+ * @param {string} code     - source code
+ * @param {string} [stdin]  - optional stdin
+ * @returns {Promise<{ stdout, stderr, exitCode, compileOutput, backend: 'host'|'piston' }>}
+ */
+export async function runSmart(filename, code, stdin = '') {
+  // Strategy: Try Piston first (sandboxed), fall back to host
+  const pistonReady = await isPistonAvailable();
+
+  if (pistonReady) {
+    try {
+      const result = await runSingleFile(filename, code, stdin);
+      return { ...result, backend: 'piston' };
+    } catch (err) {
+      // Piston failed (unsupported language, timeout, etc.) — fall through to host
+      console.warn(`[runSmart] Piston failed for ${filename}: ${err.message}, trying host runner`);
+    }
+  }
+
+  // Host-based execution
+  try {
+    const result = await runOnHost(filename, code, stdin);
+    return { ...result, backend: 'host' };
+  } catch (err) {
+    throw new Error(
+      `Code execution failed. ${pistonReady ? 'Piston and host' : 'Host'} runner error: ${err.message}`
+    );
+  }
+}

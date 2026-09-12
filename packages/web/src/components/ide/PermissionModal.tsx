@@ -19,6 +19,7 @@ export function PermissionModal({ request, onAnswer }: PermissionModalProps) {
     <AnimatePresence>
       {isVisible && (
         <motion.div
+          key={request?.requestId || "permission-modal-dialog"}
           initial={{ opacity: 0, y: -12, height: 0 }}
           animate={{ opacity: 1, y: 0, height: 'auto' }}
           exit={{ opacity: 0, y: -12, height: 0 }}

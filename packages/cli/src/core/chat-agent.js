@@ -223,8 +223,9 @@ function canParallelize(toolName, args, changedFiles) {
 }
 
 export function stripActions(text) {
-  const out = String(text || '')
+  let out = String(text || '')
     .replace(ACTION_FENCE, '')
+    .replace(/```(?:json)?\s*\{[\s\S]*?"(?:tool|path|write_file|read_file|edit_file|run_shell)"[\s\S]*?\}\s*```/gi, '')
     .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
     .replace(/<tool_call>[\s\S]*$/gi, '')
     .replace(/<\/?tool_call[^>]*>/gi, '')
@@ -233,6 +234,16 @@ export function stripActions(text) {
     .replace(/<\/?arg_[^>]*>/gi, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  // If the remaining text is just a JSON tool invocation or file write object, strip it
+  if (out.startsWith('{') && out.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(out);
+      if (parsed && (parsed.tool || parsed.path || parsed.write_file || parsed.read_file || parsed.edit_file)) {
+        return '';
+      }
+    } catch {}
+  }
   return out;
 }
 
@@ -630,8 +641,8 @@ export class ChatAgent {
           if (this.aborted) break;
           text += chunk;
 
-          // Suppress raw tool call tags (<tool_call> or ```mcode-action) from leaking to the user stream
-          const toolCallIdx = text.search(/<tool_call|```mcode-action/i);
+          // Suppress raw tool call tags (<tool_call> or ```mcode-action or raw action JSON) from leaking to the user stream
+          const toolCallIdx = text.search(/<tool_call|```(?:mcode-action|json)?|^\s*\{\s*"(?:tool|path|write_file|read_file|edit_file|run_shell)"|\n\s*\{\s*"(?:tool|path|write_file|read_file|edit_file|run_shell)"/i);
           if (toolCallIdx !== -1) {
             if (streamedLength < toolCallIdx) {
               const safeChunk = text.slice(streamedLength, toolCallIdx);
@@ -667,7 +678,7 @@ export class ChatAgent {
       // Batch process all actions — run independent tools in parallel
       const batch = actions.map((action) => {
         const seq = ++this.toolSeq;
-        const replaceKey = `t${seq}`;
+        const replaceKey = `t${seq}_${Date.now().toString(36)}`;
         const preview = this._toolArgsPreview(action.tool, action.args);
         this.bus?.emit(EVENTS.MESSAGE, {
           kind: 'tool',

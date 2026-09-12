@@ -9,6 +9,26 @@ function safeHostname(url: string | null | undefined): string {
   }
 }
 
+function sanitizeToolArgs(args: any): any {
+  if (typeof args === 'string') {
+    const trimmed = args.trim();
+    if (trimmed.startsWith('{') && (trimmed.includes('"path"') || trimmed.includes('"command"') || trimmed.includes('"content"'))) {
+      try {
+        const p = JSON.parse(trimmed);
+        return p.path || p.file || p.command || p.query || p.url || args;
+      } catch {
+        const m = /"path"\s*:\s*"([^"]+)"/.exec(trimmed);
+        if (m) return m[1];
+      }
+    }
+    return args;
+  }
+  if (args && typeof args === 'object') {
+    return args.path || args.file || args.command || args.query || args.url || '';
+  }
+  return args;
+}
+
 type Status = 'idle' | 'connecting' | 'ready' | 'error';
 type Mode = 'chat' | 'agent';
 
@@ -252,17 +272,20 @@ const chatSlice = createSlice({
         return;
       }
 
+      const cleanArgs = sanitizeToolArgs(payload.args);
+      const sanitizedPayload = payload.args !== undefined ? { ...payload, args: cleanArgs } : payload;
+
       if (payload.replaceKey) {
-        const existingIdx = state.messages.findIndex(
-          (m) => m.id === payload.replaceKey || (m as any).replaceKey === payload.replaceKey
-        );
-        if (existingIdx !== -1) {
-          state.messages[existingIdx] = {
-            ...state.messages[existingIdx],
-            ...payload,
-            id: payload.replaceKey
-          };
-          return;
+        for (let i = state.messages.length - 1; i >= 0; i--) {
+          const m = state.messages[i];
+          if (m.id === payload.replaceKey || (m as any).replaceKey === payload.replaceKey) {
+            state.messages[i] = {
+              ...state.messages[i],
+              ...sanitizedPayload,
+              id: payload.replaceKey
+            };
+            return;
+          }
         }
       }
 
@@ -270,12 +293,14 @@ const chatSlice = createSlice({
         id: payload.replaceKey || Date.now().toString(),
         role: 'assistant',
         kind: payload.kind || 'tool',
-        ...payload
+        ...sanitizedPayload
       });
     },
     toolCallStarted: (state, action) => {
       const payload = action.payload;
       if (!payload) return;
+
+      const cleanArgs = sanitizeToolArgs(payload.args);
 
       const isWebTool =
         payload.tool === 'web_search' || payload.tool === 'web_fetch' || payload.searchResults;
@@ -293,7 +318,7 @@ const chatSlice = createSlice({
 
         const fetchUrl =
           payload.tool === 'web_fetch'
-            ? (typeof payload.args === 'string' ? payload.args : payload.args?.url || '')
+            ? (typeof cleanArgs === 'string' ? cleanArgs : cleanArgs?.url || '')
             : '';
 
         if (existingWebMsg) {
@@ -321,9 +346,9 @@ const chatSlice = createSlice({
           kind: 'tool',
           tool: 'web_search',
           status: 'running',
-          args: payload.args,
+          args: cleanArgs,
           searchResults: payload.searchResults || {
-            query: payload.args?.query || fetchUrl || 'web search',
+            query: typeof cleanArgs === 'string' ? cleanArgs : fetchUrl || 'web search',
             phase: 'searching',
             results: fetchUrl ? [{ title: fetchUrl, url: fetchUrl, domain: safeHostname(fetchUrl) }] : [],
             answer: ''
@@ -333,12 +358,29 @@ const chatSlice = createSlice({
         return;
       }
 
+      // Deduplicate: If replaceKey already exists, update in-place instead of creating duplicate
+      if (payload.replaceKey) {
+        for (let i = state.messages.length - 1; i >= 0; i--) {
+          const m = state.messages[i];
+          if (m.id === payload.replaceKey || (m as any).replaceKey === payload.replaceKey) {
+            state.messages[i] = {
+              ...state.messages[i],
+              status: 'running',
+              tool: payload.tool,
+              args: cleanArgs,
+              replaceKey: payload.replaceKey
+            };
+            return;
+          }
+        }
+      }
+
       state.messages.push({
         id: payload.replaceKey || Date.now().toString(),
         role: 'assistant',
         kind: 'tool',
         tool: payload.tool,
-        args: payload.args,
+        args: cleanArgs,
         status: 'running',
         replaceKey: payload.replaceKey,
         blocks: []

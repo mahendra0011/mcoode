@@ -81,7 +81,12 @@ export function LoginPage() {
           transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
         >
 
-          <div className="text-center mb-8">
+          <div className="text-center mb-8 flex flex-col items-center">
+            <img
+              src="/logo.png"
+              alt="MCODE"
+              className="w-16 h-16 object-contain mb-3 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]"
+            />
             <motion.h1
               className="text-[28px] font-bold text-zinc-900 leading-tight mb-3"
               initial={{ opacity: 0, y: 10 }}

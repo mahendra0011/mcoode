@@ -33,16 +33,13 @@ export function Header() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, delay: 0.1, ease: [0.4, 0, 0.2, 1] }}
           >
-            <Link href="/" className="flex items-center gap-2 ml-4 max-[850px]:ml-0">
-              <motion.div
-                className="w-6 h-6 rounded-full bg-foreground"
-                animate={{
-                  scale: [1, 1.1, 1],
-                  opacity: [0.6, 1, 0.6]
-                }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            <Link href="/" className="flex items-center gap-2.5 ml-4 max-[850px]:ml-0 group">
+              <img
+                src="/logo.png"
+                alt="mcode"
+                className="w-8 h-8 rounded-md object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.6)] group-hover:scale-105 transition-transform duration-200"
               />
-              <span className="text-lg font-semibold text-foreground leading-none max-[1200px]:hidden max-[850px]:inline">
+              <span className="text-lg font-bold tracking-tight text-foreground leading-none max-[1200px]:hidden max-[850px]:inline">
                 mcode
               </span>
             </Link>

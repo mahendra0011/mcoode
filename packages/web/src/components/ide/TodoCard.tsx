@@ -27,12 +27,12 @@ export function TodoCard({ plan }: TodoCardProps) {
         <span className="text-xs text-white/50 truncate flex-1">{plan.summary}</span>
       </div>
       <div className="p-2 flex flex-col gap-1">
-        {plan.todos.map((todo) => {
+        {plan.todos.map((todo, idx) => {
           const isDone = todo.status === 'done';
           const isRunning = todo.status === 'in_progress';
 
           return (
-            <div key={todo.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+            <div key={todo.id != null && String(todo.id).trim() ? String(todo.id) : `todo-item-${idx}`} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
               <div className="mt-0.5 flex-shrink-0">
                 {isDone ? (
                   <motion.div

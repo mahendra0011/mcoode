@@ -39,7 +39,7 @@ export function ThoughtBlock({ content, done = false, startedAt }: ThoughtBlockP
   if (!done) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0', fontSize: 13 }}>
-        <BrainCircuit size={14} style={{ color: 'var(--mcode-text-dim, #8b8d98)' }} />
+        <BrainCircuit size={14} style={{ color: 'var(--mcode-green, #3ecf8e)' }} />
         <span style={{ fontWeight: 600, color: 'var(--mcode-text, #e6e6ea)' }}>Thinking...</span>
       </div>
     );

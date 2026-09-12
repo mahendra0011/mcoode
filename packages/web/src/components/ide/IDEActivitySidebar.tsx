@@ -363,7 +363,7 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
                 type="button"
                 onClick={() => {
                   closeAccountMenu();
-                  openSettings("theme");
+                  useIDEStore.getState().setGeneralSettingsOpen(true);
                 }}
                 className="flex items-center justify-between w-full px-3 py-2 text-[13px] text-white/80 hover:text-white hover:bg-white/10 rounded-md transition-colors text-left group cursor-pointer"
               >
@@ -607,7 +607,7 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
               type="button"
               onClick={() => {
                 closeSettingsMenu();
-                openSettings("theme");
+                useIDEStore.getState().setGeneralSettingsOpen(true);
               }}
               className="w-full flex items-center justify-between px-3 py-1.5 text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >
@@ -622,13 +622,13 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
               type="button"
               onClick={() => {
                 closeSettingsMenu();
-                openSettings("permissions");
+                openSettings("models");
               }}
               className="flex items-center justify-between w-full px-3 py-1.5 text-left text-white hover:bg-white/10 transition font-medium cursor-pointer"
             >
               <span className="flex items-center gap-2 text-emerald-400">
                 <Settings className="w-3.5 h-3.5" />
-                <span>Settings</span>
+                <span>Platform Settings</span>
               </span>
               <kbd className="text-[10px] text-white/40 font-mono">Ctrl+,</kbd>
             </button>

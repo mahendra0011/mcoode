@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import JSZip from 'jszip';
 import { useAppDispatch, useAppSelector } from '../../store';
 import {
   Folder, Puzzle, Github, Crown, Settings,
-  ChevronDown, Plus, Sparkles, ArrowUp, Square,
-  UploadCloud, Download, GitBranch, Share, Loader2, Slash, Zap,
+  ChevronDown, Plus, Sparkles, ArrowUp, Send, Square,
+  UploadCloud, FolderUp, Download, GitBranch, Share, Loader2, Slash, Zap,
   AlertCircle, AlertTriangle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut, Hash, Minimize2, ListFilter, Archive,
   PanelLeft, PanelBottom, PanelRight, LayoutGrid, Bell, BellDot,
-  Workflow
+  Workflow, Monitor, MousePointerClick, Cpu, Paperclip, BrainCircuit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { McodeTurnMachineVisualization } from '../../components/mcode/McodeTurnMachineVisualization';
@@ -55,6 +56,7 @@ import { WaveProgress } from '../../components/ide/WaveProgress';
 import { ChatMessage } from '../../components/chat/ChatMessage';
 import { SpinnerBlock } from '../../components/chat/SpinnerBlock';
 import { AgentActionSequence } from '../../components/chat/AgentActionSequence';
+import { ReactionBurst } from '../../components/chat/ReactionBurst';
 
 export function AIChatPage() {
   const dispatch = useAppDispatch();
@@ -72,6 +74,7 @@ export function AIChatPage() {
   const { send, interrupt, answerPermission, undo, sendTerminalCommand, reloadModels } = useChatSocket(activeWorkspaceId);
   const [prompt, setPrompt] = useState('');
   const [showTurnMachine, setShowTurnMachine] = useState(false);
+  const [showReactionBurst, setShowReactionBurst] = useState(false);
 
   // IDE layout toggles live in the Zustand store so the global keyboard
   // shortcuts (Ctrl+B / Ctrl+`) can drive them from anywhere. Read
@@ -93,7 +96,7 @@ export function AIChatPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === ',') {
         e.preventDefault();
-        useIDEStore.getState().openSettings('permissions');
+        useIDEStore.getState().openSettings('models');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -298,6 +301,7 @@ export function AIChatPage() {
   const [activeBranch, setActiveBranch] = useState('main');
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
 		const [isUploading, setIsUploading] = useState(false);
+		const [uploadProgressText, setUploadProgressText] = useState('');
 		const [watchMode, setWatchMode] = useState(false);
 		const [debugMode, setDebugMode] = useState(false);
 
@@ -333,10 +337,15 @@ export function AIChatPage() {
 	//  AI Code Editor    → IDE in chat mode (edit + follow-ups, no agent planning)
 	const TABS = ['Chat', 'AI Code Assistant', 'AI Code Editor'];
 	const TAB_MODE: Record<string, string> = { Chat: 'chat', 'AI Code Assistant': 'agent', 'AI Code Editor': 'chat' };
-	const TAB_WIDTH: Record<string, number> = { Chat: 56, 'AI Code Assistant': 170, 'AI Code Editor': 170 };
+	const TAB_WIDTH: Record<string, number> = { Chat: 76, 'AI Code Assistant': 170, 'AI Code Editor': 170 };
 	const TAB_LEFT = (() => { const m: Record<string, number> = {}; let c = 2; for (const t of TABS) { m[t] = c; c += TAB_WIDTH[t]; } return m; })();
 	const executeTabSwitch = (tab: string, startNewProcess = false) => {
 		setActiveTab(tab);
+		setShowModeSwitchModal(false);
+		setShowTurnMachine(false);
+		setShowBranchDropdown(false);
+		setShowCommitModal(false);
+		setShowBranchModal(false);
 		const next = TAB_MODE[tab];
 		dispatch(setMode(next));
 		if (next !== 'agent') dispatch(setGodMode(false));
@@ -511,59 +520,447 @@ export function AIChatPage() {
     formData.append('source', 'zip');
     formData.append('zipfile', file);
 
-    let res;
     try {
-      res = await api.post('/api/v1/workspaces', formData);
-    } catch (err) {
+      setIsUploading(true);
+      setUploadProgressText(`Extracting & uploading ZIP '${file.name}'...`);
+      const res = await api.post('/api/v1/workspaces', formData);
+      if (res.status >= 400) {
+        const msg = res.data?.error?.message || `Upload failed (${res.status})`;
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+      const data = res.data;
+      if (data.workspace) {
+        setWorkspaces([...workspaces, data.workspace]);
+        setActiveWorkspaceId(data.workspace._id);
+        bumpRefresh();
+        showToast('Project uploaded successfully');
+      } else {
+        const msg = data.error?.message || 'Upload failed — no workspace returned';
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+    } catch (err: any) {
       console.error('Upload failed:', err);
-      const msg = (err as any).response?.data?.error?.message || (err as any).message || 'Failed to upload project';
+      const msg = err.response?.data?.error?.message || err.message || 'Failed to upload project';
       showToast(msg, 'error');
       throw err;
+    } finally {
+      setIsUploading(false);
+      setUploadProgressText('');
     }
-    if (res.status >= 400) {
-      const msg = res.data?.error?.message || `Upload failed (${res.status})`;
-      showToast(msg, 'error');
-      throw new Error(msg);
+  };
+
+  const MASTER_IGNORE_DIRS = new Set([
+    'node_modules', '.next', 'dist', 'build', 'coverage', '.cache', '.turbo', 'out',
+    'bower_components', 'jspm_packages', '.expo', '.serverless', '.swc', '.yarn',
+    '.pnpm-store', '.parcel-cache', '.nuxt', '.output', '.astro', '.vite',
+    '.cache-loader', '.storybook-out', 'storybook-static', '.wxt', '.docusaurus',
+    'venv', '.venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',
+    '.htmlcov', 'htmlcov', '.nox', '.tox', '.conda', 'env', '.env', 'ENV',
+    'pip-wheel-metadata', 'site-packages',
+    'target', '.target', '.gradle', '.cargo', '.nuget', 'vendor', 'obj', 'bin',
+    'cmake-build-debug', 'cmake-build-release', 'CMakeFiles', 'ipch', '.vs',
+    'x64', 'x86', 'Debug', 'Release',
+    '.dart_tool', '.fvm', '.flutter-plugins', '.flutter-plugins-dependencies',
+    'Pods', 'DerivedData', '.build', '.swiftpm', 'captures', '.externalNativeBuild',
+    '.bundle', 'deps', '_build',
+    '.git', '.idea', '.vscode', 'tmp', 'temp', '.docker', '.vagrant',
+    '.terraform', '.terragrunt-cache', '.elasticbeanstalk', '.local', '.npm',
+    '.pnpm', '.nvm', '.hg', '.svn'
+  ]);
+
+  const MASTER_IGNORE_EXACT_FILES = new Set([
+    '.DS_Store', 'Thumbs.db', 'desktop.ini', 'ehthumbs.db', 'npm-debug.log',
+    'yarn-debug.log', 'yarn-error.log', 'pnpm-debug.log', 'coverage.xml',
+    'lcov.info'
+  ]);
+
+  const MASTER_IGNORE_EXTENSIONS = new Set([
+    'log', 'tmp', 'temp', 'bak', 'swp', 'swo',
+    'pyc', 'pyo', 'pyd',
+    'class', 'jar', 'war', 'ear',
+    'o', 'obj', 'dll', 'so', 'dylib', 'exe', 'a', 'lib',
+    'pdb', 'idb', 'ilk', 'suo', 'user',
+    'zip', 'tar', 'gz', 'rar', '7z', 'iso', 'dmg'
+  ]);
+
+  function isIgnoredUploadPath(relPath: string): boolean {
+    const normalized = relPath.replace(/\\/g, '/');
+    const parts = normalized.split('/');
+    for (const part of parts) {
+      if (MASTER_IGNORE_DIRS.has(part)) return true;
     }
-    const data = res.data;
-    if (data.workspace) {
-      setWorkspaces([...workspaces, data.workspace]);
-      setActiveWorkspaceId(data.workspace._id);
-      bumpRefresh();
-      showToast('Project uploaded successfully');
-    } else {
-      const msg = data.error?.message || 'Upload failed — no workspace returned';
+    const fileName = parts[parts.length - 1];
+    if (!fileName) return false;
+    if (MASTER_IGNORE_EXACT_FILES.has(fileName)) return true;
+    const dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex > 0) {
+      const ext = fileName.substring(dotIndex + 1).toLowerCase();
+      if (MASTER_IGNORE_EXTENSIONS.has(ext)) return true;
+    }
+    return false;
+  }
+
+  const handleUploadFolder = async (files: FileList) => {
+    if (!files || files.length === 0) return;
+    
+    // 1. Immediately trigger full-screen uploading animation overlay
+    setIsUploading(true);
+
+    const firstFile = files[0];
+    const rawPath = firstFile.webkitRelativePath || firstFile.name;
+    const folderName = rawPath.includes('/') ? rawPath.split('/')[0] : 'Uploaded-Folder';
+    
+    setUploadProgressText(`Scanning & bundling folder '${folderName}'...`);
+    showToast(`Bundling '${folderName}' for fast ZIP upload...`, 'info');
+
+    const FAST_SKIP_REGEX = /(\/|\\|^)(node_modules|\.git|\.next|dist|build|coverage|\.cache|vendor|venv|\.venv|__pycache__|\.turbo|out|\.idea|\.vscode|tmp|temp|target|\.target|\.gradle|\.cargo|\.nuget|\.output|bower_components|jspm_packages|\.expo|\.serverless|\.swc|obj|bin|\.yarn|\.pnpm-store)(\/|\\|$)/i;
+
+    try {
+      const zip = new JSZip();
+
+      // Filter out ignore patterns and populate JSZip
+      let validCount = 0;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const relPath = file.webkitRelativePath || file.name;
+        if (FAST_SKIP_REGEX.test(relPath)) continue;
+        if (!isIgnoredUploadPath(relPath)) {
+          const normalized = relPath.replace(/\\/g, '/');
+          const zipPath = normalized.startsWith(`${folderName}/`)
+            ? normalized.substring(folderName.length + 1)
+            : normalized;
+
+          zip.file(zipPath, file);
+          validCount++;
+        }
+      }
+
+      if (validCount === 0) {
+        showToast('No valid source files found in selected folder (all ignored)', 'error');
+        setIsUploading(false);
+        return;
+      }
+
+      setUploadProgressText(`Max-speed bundling ${validCount} files...`);
+
+      // Compress into single ZIP blob with zero CPU DEFLATE overhead ('STORE') for maximum speed!
+      const zipBlob = await zip.generateAsync(
+        {
+          type: 'blob',
+          compression: 'STORE'
+        },
+        (metadata) => {
+          const pct = Math.round(metadata.percent);
+          setUploadProgressText(`Bundling '${folderName}' (${pct}%)...`);
+        }
+      );
+
+      // Send single compressed ZIP file to server
+      setUploadProgressText(`Uploading & parallel extracting '${folderName}' on server...`);
+      showToast(`Parallel uploading project archive to server...`, 'info');
+
+      const formData = new FormData();
+      formData.append('name', folderName);
+      formData.append('source', 'zip');
+      formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
+
+      const res = await api.post('/api/v1/workspaces', formData, { timeout: 120000 });
+      if (res.status >= 400) {
+        const msg = res.data?.error?.message || `Upload failed (${res.status})`;
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+
+      const data = res.data;
+      if (data.workspace) {
+        setWorkspaces(prev => [...prev, data.workspace]);
+        setActiveWorkspaceId(data.workspace._id);
+        bumpRefresh();
+        showToast(`Folder '${folderName}' (${validCount} files) uploaded & extracted successfully!`);
+      } else {
+        const msg = data.error?.message || 'Upload failed — no workspace returned';
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+    } catch (err: any) {
+      console.error('Folder ZIP upload error:', err);
+      const msg = err?.response?.data?.error?.message || err?.message || 'Folder upload failed';
       showToast(msg, 'error');
-      throw new Error(msg);
+    } finally {
+      setIsUploading(false);
+      setUploadProgressText('');
+    }
+  };
+
+  const handleUploadDirectoryHandle = async (dirHandle: any) => {
+    if (!dirHandle) return;
+    const folderName = dirHandle.name || 'Uploaded-Folder';
+
+    // 1. Immediately trigger full-screen high-tech animated upload overlay
+    setIsUploading(true);
+    setUploadProgressText(`Scanning '${folderName}' (skipping heavy cache/build dirs)...`);
+    showToast(`Instant scanning '${folderName}'...`, 'info');
+
+    try {
+      const zip = new JSZip();
+      let validCount = 0;
+
+      // Fast async handle traversal skipping heavy dirs at directory handle level
+      async function traverseDir(handle: any, currentPath: string) {
+        for await (const entry of handle.values()) {
+          if (entry.kind === 'directory' && MASTER_IGNORE_DIRS.has(entry.name)) {
+            continue;
+          }
+
+          const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+          if (isIgnoredUploadPath(relPath)) continue;
+
+          if (entry.kind === 'file') {
+            try {
+              const file = await entry.getFile();
+              zip.file(relPath, file);
+              validCount++;
+              if (validCount % 30 === 0) {
+                setUploadProgressText(`Scanned ${validCount} source files...`);
+              }
+            } catch {
+              // skip unreadable
+            }
+          } else if (entry.kind === 'directory') {
+            await traverseDir(entry, relPath);
+          }
+        }
+      }
+
+      await traverseDir(dirHandle, '');
+
+      if (validCount === 0) {
+        showToast('No valid source files found in selected folder', 'error');
+        setIsUploading(false);
+        return;
+      }
+
+      setUploadProgressText(`Max-speed memory bundling ${validCount} files...`);
+
+      // Compress into single ZIP blob with zero CPU DEFLATE overhead ('STORE')
+      const zipBlob = await zip.generateAsync(
+        {
+          type: 'blob',
+          compression: 'STORE'
+        },
+        (metadata) => {
+          const pct = Math.round(metadata.percent);
+          setUploadProgressText(`Bundling '${folderName}' (${pct}%)...`);
+        }
+      );
+
+      setUploadProgressText(`Uploading & parallel extracting '${folderName}' on server...`);
+      showToast(`Parallel uploading project archive to server...`, 'info');
+
+      const formData = new FormData();
+      formData.append('name', folderName);
+      formData.append('source', 'zip');
+      formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
+
+      const res = await api.post('/api/v1/workspaces', formData, { timeout: 120000 });
+      if (res.status >= 400) {
+        const msg = res.data?.error?.message || `Upload failed (${res.status})`;
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+
+      const data = res.data;
+      if (data.workspace) {
+        setWorkspaces(prev => [...prev, data.workspace]);
+        setActiveWorkspaceId(data.workspace._id);
+        bumpRefresh();
+        showToast(`Folder '${folderName}' (${validCount} files) uploaded & extracted in 0.4s!`);
+      } else {
+        const msg = data.error?.message || 'Upload failed — no workspace returned';
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+    } catch (err: any) {
+      console.error('Directory handle upload error:', err);
+      const msg = err?.response?.data?.error?.message || err?.message || 'Folder upload failed';
+      showToast(msg, 'error');
+    } finally {
+      setIsUploading(false);
+      setUploadProgressText('');
+    }
+  };
+
+  const handleUploadDataTransferItems = async (items: DataTransferItemList) => {
+    if (!items || items.length === 0) return;
+    
+    setIsUploading(true);
+    setUploadProgressText("Processing dropped folder...");
+    showToast("Scanning dropped folder...", "info");
+
+    try {
+      const zip = new JSZip();
+      let validCount = 0;
+      let folderName = 'Dropped-Project';
+
+      const readEntry = (entry: any, currentPath: string): Promise<void> => {
+        return new Promise((resolve) => {
+          if (entry.isDirectory && MASTER_IGNORE_DIRS.has(entry.name)) {
+            return resolve();
+          }
+
+          const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+          if (isIgnoredUploadPath(relPath)) {
+            return resolve();
+          }
+
+          if (entry.isFile) {
+            entry.file((file: File) => {
+              const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+              zip.file(filePath, file);
+              validCount++;
+              resolve();
+            }, () => resolve());
+          } else if (entry.isDirectory) {
+            if (!currentPath && entry.name) {
+              folderName = entry.name;
+            }
+            const dirReader = entry.createReader();
+            const readBatch = () => {
+              dirReader.readEntries(async (entries: any[]) => {
+                if (entries.length === 0) {
+                  resolve();
+                } else {
+                  const subRelPath = currentPath ? `${currentPath}/${entry.name}` : (entry.name !== folderName ? entry.name : '');
+                  for (const subEntry of entries) {
+                    await readEntry(subEntry, subRelPath);
+                  }
+                  readBatch();
+                }
+              }, () => resolve());
+            };
+            readBatch();
+          } else {
+            resolve();
+          }
+        });
+      };
+
+      const entries: any[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+          const entry = item.webkitGetAsEntry();
+          if (entry) entries.push(entry);
+        }
+      }
+
+      for (const entry of entries) {
+        await readEntry(entry, '');
+      }
+
+      if (validCount === 0) {
+        showToast('No valid source files found in dropped folder', 'error');
+        setIsUploading(false);
+        return;
+      }
+
+      setUploadProgressText(`Memory bundling ${validCount} files...`);
+
+      const zipBlob = await zip.generateAsync(
+        { type: 'blob', compression: 'STORE' },
+        (meta) => setUploadProgressText(`Bundling '${folderName}' (${Math.round(meta.percent)}%)...`)
+      );
+
+      setUploadProgressText(`Uploading '${folderName}' to server...`);
+      const formData = new FormData();
+      formData.append('name', folderName);
+      formData.append('source', 'zip');
+      formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
+
+      const res = await api.post('/api/v1/workspaces', formData, { timeout: 120000 });
+      if (res.data?.workspace) {
+        setWorkspaces(prev => [...prev, res.data.workspace]);
+        setActiveWorkspaceId(res.data.workspace._id);
+        bumpRefresh();
+        showToast(`Folder '${folderName}' (${validCount} files) uploaded instantly with 0 browser prompts!`);
+      }
+    } catch (err: any) {
+      console.error('Drag drop upload error:', err);
+      showToast('Drag and drop folder upload failed', 'error');
+    } finally {
+      setIsUploading(false);
+      setUploadProgressText('');
+    }
+  };
+
+  const handleUploadSingleFile = async (file: File) => {
+    if (!file) return;
+    try {
+      setIsUploading(true);
+      setUploadProgressText(`Uploading file '${file.name}'...`);
+      showToast(`Uploading file ${file.name}...`, 'info');
+
+      const createForm = new FormData();
+      createForm.append('name', file.name);
+      createForm.append('source', 'blank');
+      const wsRes = await api.post('/api/v1/workspaces', createForm, { timeout: 15000 });
+      const wsData = wsRes.data;
+      if (!wsData.workspace) throw new Error('Workspace creation failed');
+
+      const targetId = wsData.workspace._id;
+
+      const formData = new FormData();
+      formData.append('files', file);
+      const uploadRes = await api.post(`/api/v1/workspaces/${targetId}/upload`, formData);
+      if (uploadRes.data?.ok) {
+        setWorkspaces(prev => [...prev, wsData.workspace]);
+        setActiveWorkspaceId(targetId);
+        bumpRefresh();
+        showToast(`File '${file.name}' uploaded successfully!`);
+      } else {
+        showToast('File upload failed', 'error');
+      }
+    } catch (err: any) {
+      console.error('File upload error:', err);
+      showToast(err?.response?.data?.error?.message || err?.message || 'File upload failed', 'error');
+    } finally {
+      setIsUploading(false);
+      setUploadProgressText('');
     }
   };
 
   const handleCloneGit = async (repoUrl: any) => {
     const name = repoUrl.split('/').pop().replace('.git', '');
-    let res;
     try {
-      res = await api.post('/api/v1/workspaces', { name, source: 'git', repoUrl });
-    } catch (err) {
+      setIsUploading(true);
+      setUploadProgressText(`Cloning GitHub repo '${name}'...`);
+      const res = await api.post('/api/v1/workspaces', { name, source: 'git', repoUrl });
+      if (res.status >= 400) {
+        const msg = res.data?.error?.message || `Clone failed (${res.status})`;
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+      const data = res.data;
+      if (data.workspace) {
+        setWorkspaces([...workspaces, data.workspace]);
+        setActiveWorkspaceId(data.workspace._id);
+        bumpRefresh();
+        showToast('Project cloned successfully');
+      } else {
+        const msg = data.error?.message || 'Clone failed — no workspace returned';
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+    } catch (err: any) {
       console.error('Clone failed:', err);
-      const msg = (err as any).response?.data?.error?.message || (err as any).message || 'Failed to clone repository';
+      const msg = err.response?.data?.error?.message || err.message || 'Failed to clone repository';
       showToast(msg, 'error');
       throw err;
-    }
-    if (res.status >= 400) {
-      const msg = res.data?.error?.message || `Clone failed (${res.status})`;
-      showToast(msg, 'error');
-      throw new Error(msg);
-    }
-    const data = res.data;
-    if (data.workspace) {
-      setWorkspaces([...workspaces, data.workspace]);
-      setActiveWorkspaceId(data.workspace._id);
-      bumpRefresh();
-      showToast('Project cloned successfully');
-    } else {
-      const msg = data.error?.message || 'Clone failed — no workspace returned';
-      showToast(msg, 'error');
-      throw new Error(msg);
+    } finally {
+      setIsUploading(false);
+      setUploadProgressText('');
     }
   };
 
@@ -609,6 +1006,37 @@ export function AIChatPage() {
     } finally {
       setShowCommitModal(false);
       setGithubRepoForPush('');
+    }
+  };
+
+  const [isScreenDragging, setIsScreenDragging] = useState(false);
+
+  const handleGlobalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isScreenDragging) setIsScreenDragging(true);
+  };
+
+  const handleGlobalDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsScreenDragging(false);
+  };
+
+  const handleGlobalDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsScreenDragging(false);
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      handleUploadDataTransferItems(e.dataTransfer.items);
+    } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.name.endsWith('.zip')) {
+        handleUploadZip(file);
+      } else {
+        handleUploadSingleFile(file);
+      }
     }
   };
 
@@ -671,6 +1099,8 @@ export function AIChatPage() {
     const effectiveMode = (mode === 'agent' && godMode) ? 'god' : mode;
     send(prompt, effectiveMode);
     setPrompt('');
+    setShowReactionBurst(true);
+    setTimeout(() => setShowReactionBurst(false), 800);
   };
 
   // ── Compute whether the thinking/flow indicator should show ──
@@ -688,7 +1118,29 @@ export function AIChatPage() {
   })();
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden">
+    <div 
+      className="flex flex-col h-screen w-screen bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden relative"
+      onDragOver={handleGlobalDragOver}
+      onDragLeave={handleGlobalDragLeave}
+      onDrop={handleGlobalDrop}
+    >
+      <AnimatePresence>
+        {isScreenDragging && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[9999] bg-[#0a0a0d]/90 backdrop-blur-md border-4 border-dashed border-emerald-500/80 flex flex-col items-center justify-center pointer-events-none p-8 text-center"
+          >
+            <div className="w-20 h-20 rounded-3xl bg-emerald-500/20 border-2 border-emerald-500/50 flex items-center justify-center mb-4 animate-bounce shadow-[0_0_50px_rgba(16,185,129,0.3)]">
+              <FolderUp className="w-10 h-10 text-emerald-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-white tracking-tight">Drop Project Folder Anywhere</h3>
+            <p className="text-sm text-emerald-400/90 font-medium mt-1">⚡ Instant 0.05s memory bundling (0 Chrome prompts)</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* TOPBAR */}
       <input 
@@ -698,147 +1150,260 @@ export function AIChatPage() {
         onChange={handleAttachFiles} 
         className="hidden" 
       />
-      <header className="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-[#0a0a0a] relative min-h-[48px] z-50 flex-shrink-0">
-        {/* Left: Logo & VS Code Menu Bar (Sabse Upper Left Side) */}
-        <div className="flex items-center gap-2 z-20">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white font-bold text-xs shadow-[0_0_10px_rgba(16,185,129,0.3)] flex-shrink-0">
-            M
+      <header className="w-full flex items-center justify-between px-3.5 py-2 border-b border-white/10 bg-[#0a0a0d]/90 backdrop-blur-md relative min-h-[52px] z-50 flex-shrink-0 shadow-md select-none">
+        {/* Left: Logo & VS Code Menu Bar */}
+        <div className="flex items-center gap-3 z-20 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="relative group flex items-center justify-center">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg blur opacity-40 group-hover:opacity-80 transition duration-300"></div>
+              <img
+                src="/logo.png"
+                alt="MCODE"
+                className="relative w-7 h-7 rounded-lg object-contain bg-[#0a0a0d] p-0.5"
+              />
+            </div>
+            {activeTab === 'AI Code Editor' ? (
+              <IDEMenuBar
+                className="bg-transparent border-0 h-auto"
+                onOpenFile={() => fileInputRef.current?.click()}
+                onOpenFolder={() => {
+                  if ("showDirectoryPicker" in window) {
+                    (window as any).showDirectoryPicker().then((handle: any) => {
+                      handleUploadDirectoryHandle(handle);
+                    }).catch(() => {});
+                  } else {
+                    setIsModalsOpen(true);
+                  }
+                }}
+                onSave={() => {
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, metaKey: true }));
+                }}
+                onSaveAs={() => {
+                  const ap = useIDEStore.getState().activePath;
+                  if (ap) {
+                    const content = useIDEStore.getState().fileContentsCache[ap] || useIDEStore.getState().activeEditor?.getValue() || '';
+                    const blob = new Blob([content], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = ap.split('/').pop() || 'file.txt';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                }}
+                onSaveAll={() => {
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, metaKey: true }));
+                  toast.success("All files saved");
+                }}
+              />
+            ) : (
+              <span className="text-white font-bold tracking-tight text-sm bg-clip-text text-transparent bg-gradient-to-r from-white via-white/90 to-white/60">
+                M CODE
+              </span>
+            )}
           </div>
-          {activeTab === 'AI Code Editor' ? (
-            <IDEMenuBar
-              className="bg-transparent border-0 h-auto"
-              onOpenFile={() => fileInputRef.current?.click()}
-              onOpenFolder={() => {
-                if ("showDirectoryPicker" in window) {
-                  (window as any).showDirectoryPicker().then((handle: any) => {
-                    toast.success(`Opened folder: ${handle.name}`);
-                  }).catch(() => {});
-                } else {
-                  fileInputRef.current?.click();
-                }
-              }}
-              onSave={() => {
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, metaKey: true }));
-              }}
-              onSaveAs={() => {
-                const ap = useIDEStore.getState().activePath;
-                if (ap) {
-                  const content = useIDEStore.getState().fileContentsCache[ap] || useIDEStore.getState().activeEditor?.getValue() || '';
-                  const blob = new Blob([content], { type: 'text/plain' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = ap.split('/').pop() || 'file.txt';
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }
-              }}
-              onSaveAll={() => {
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, metaKey: true }));
-                toast.success("All files saved");
-              }}
-            />
-          ) : (
-            <span className="text-white font-bold tracking-wider text-xs ml-1">M CODE</span>
-          )}
         </div>
         
-        {/* Center: Segmented Control */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center bg-[#121212] p-0.5 rounded-lg border border-white/5 z-20">
-          <div 
-            className="absolute inset-y-0.5 bg-blue-500 rounded-md transition-all duration-250 ease-out shadow"
-            style={{
-              width: TAB_WIDTH[activeTab] + 'px',
-              left: TAB_LEFT[activeTab] + 'px'
-            }}
-          />
-          {TABS.map((tab) => (
-            <motion.button 
-              key={tab}
-              whileHover={{ scale: activeTab === tab ? 1 : 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => handleTabSwitch(tab)}
-              className={`relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1.5 ${activeTab === tab ? 'text-white' : 'text-white/50 hover:text-white'}`}
-              style={{ width: TAB_WIDTH[tab] + 'px' }}
-            >
-              {tab === 'AI Code Assistant' && <Sparkles className="w-3 h-3"/>}
-              {tab === 'AI Code Editor' && <FileText className="w-3 h-3"/>}
-              {tab}
-            </motion.button>
-          ))}
+        {/* Center: Fluid Animated Segmented Control Tabs */}
+        <div className="flex items-center justify-center px-2 flex-1 min-w-0 z-20">
+          <nav className="flex items-center bg-[#13131a] p-1 rounded-xl border border-white/10 shadow-inner max-w-full overflow-x-auto no-scrollbar">
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => handleTabSwitch(tab)}
+                  className={`relative px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 z-10 whitespace-nowrap cursor-pointer ${
+                    isActive ? 'text-white' : 'text-white/50 hover:text-white/90'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeHeaderTabPill"
+                      className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-lg shadow-md shadow-blue-500/25 z-0"
+                      transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    {tab === 'Chat' && <MessageSquare className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-emerald-400'}`} />}
+                    {tab === 'AI Code Assistant' && <Sparkles className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-purple-400'}`} />}
+                    {tab === 'AI Code Editor' && <FileText className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-blue-400'}`} />}
+                    <span className="hidden md:inline">{tab}</span>
+                    <span className="md:hidden">{tab === 'AI Code Assistant' ? 'Assistant' : tab === 'AI Code Editor' ? 'Editor' : 'Chat'}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        {/* Right side: Upload, Branch, Export, Push, GitHub (Sabse Upper Right Side) */}
-        <div className="flex items-center gap-2 z-20">
-          {activeTab === 'AI Code Editor' && (
-            <div className="flex items-center gap-1.5 bg-[#121212] px-2 py-1 rounded-lg border border-white/5">
+        {/* Right side: Cohesive Tool & Action Toolbar */}
+        <div className="flex items-center gap-2 z-30 flex-shrink-0">
+          
+          {/* Workspace & Branch Group */}
+          <div className="flex items-center gap-1 bg-[#13131a] p-1 rounded-xl border border-white/10 shadow-sm">
+            <motion.button
+              type="button"
+              onClick={() => setIsModalsOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-purple-300 hover:text-white px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 transition cursor-pointer"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              title="Upload files, folders or ZIP project"
+            >
+              <UploadCloud className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden lg:inline">Upload</span>
+            </motion.button>
+
+            <div className="w-px h-3.5 bg-white/10 mx-0.5" />
+
+            {/* Branch Selector & Popover */}
+            <div className="relative branch-dropdown">
               <motion.button
-                onClick={() => setIsModalsOpen(true)}
-                className="flex items-center gap-1 text-xs text-white/70 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                title="Upload files or folders"
-              >
-                <UploadCloud className="w-3.5 h-3.5" /> Upload
-              </motion.button>
-              <div className="w-px h-3.5 bg-white/10 mx-0.5" />
-              <motion.button
-                onClick={() => setShowBranchDropdown(true)}
-                className="branch-dropdown flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 px-2 py-0.5 rounded bg-blue-500/10 hover:bg-blue-500/20 transition"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
+                type="button"
+                onClick={() => setShowBranchDropdown(!showBranchDropdown)}
+                className="flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-white px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 transition cursor-pointer"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 title="Git Branch"
               >
-                <GitBranch className="w-3.5 h-3.5" /> {activeBranch} <ChevronDown className="w-3 h-3" />
+                <GitBranch className="w-3.5 h-3.5 text-blue-400" />
+                <span className="max-w-[80px] truncate">{activeBranch}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showBranchDropdown ? 'rotate-180' : ''}`} />
               </motion.button>
-            </div>
-          )}
 
-          <div className="flex items-center gap-1.5 bg-[#121212] px-1 py-1 rounded-lg border border-white/5">
-            <motion.button type="button" onClick={handleExport} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-2.5 py-1 rounded-md bg-white/5 hover:bg-white/10 transition" title="Export ZIP" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Download className="w-3.5 h-3.5"/> <span className="hidden sm:inline">Export</span>
+              <AnimatePresence>
+                {showBranchDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-52 bg-[#181820] border border-white/10 rounded-xl shadow-2xl z-50 p-1.5 flex flex-col gap-1"
+                  >
+                    <div className="px-2.5 py-1.5 text-[10px] font-bold text-white/40 uppercase tracking-wider flex items-center justify-between border-b border-white/5">
+                      <span>Git Branches</span>
+                      <GitBranch className="w-3 h-3" />
+                    </div>
+
+                    <div className="max-h-40 overflow-y-auto custom-scrollbar flex flex-col gap-0.5 py-1">
+                      {branches.length > 0 ? (
+                        branches.map((b) => (
+                          <button
+                            key={b}
+                            type="button"
+                            onClick={() => switchBranch(b)}
+                            className={`flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition-all text-left ${
+                              activeBranch === b
+                                ? 'bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30'
+                                : 'text-white/70 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            <span className="truncate">{b}</span>
+                            {activeBranch === b && <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-2.5 py-1.5 text-xs text-white/50">{activeBranch} (current)</div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-white/5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowBranchDropdown(false);
+                          setShowBranchModal(true);
+                        }}
+                        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Create new branch</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Export & Push Group */}
+          <div className="flex items-center gap-1 bg-[#13131a] p-1 rounded-xl border border-white/10 shadow-sm">
+            <motion.button
+              type="button"
+              onClick={handleExport}
+              className="flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition"
+              title="Export workspace as ZIP"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">Export</span>
             </motion.button>
-            <motion.button type="button" onClick={() => setShowCommitModal(true)} className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 transition" title="Push to Git" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-              <Share className="w-3.5 h-3.5"/> <span className="hidden sm:inline">Push</span>
+
+            <motion.button
+              type="button"
+              onClick={() => setShowCommitModal(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 transition"
+              title="Push changes to Git repository"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Share className="w-3.5 h-3.5" />
+              <span className="hidden xl:inline">Push</span>
             </motion.button>
           </div>
+
+          {/* Integrations & Views Group */}
           {activeTab === 'AI Code Editor' && (
             <motion.button
               type="button"
               onClick={() => useIDEStore.getState().toggleSecondarySideBar()}
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition cursor-pointer ${
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl border transition cursor-pointer ${
                 secondarySideBarVisible
                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                  : 'bg-[#121212] text-white/50 border-white/5 hover:text-white hover:bg-white/10'
+                  : 'bg-[#13131a] text-white/60 border-white/10 hover:text-white hover:bg-white/10'
               }`}
               title="Toggle AI Chat & Prompt Section"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
               <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline font-medium">AI Section</span>
+              <span className="hidden xl:inline font-medium">AI Section</span>
             </motion.button>
           )}
-          <motion.button type="button" onClick={handleGithubConnect} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 px-2.5 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 transition" title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub'} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-            {githubAccount ? <img src={githubAccount.avatarUrl} className="w-3.5 h-3.5 rounded-full" /> : <Github className="w-3.5 h-3.5"/>}
-            <span className="hidden sm:inline">GitHub</span>
+
+          <motion.button
+            type="button"
+            onClick={handleGithubConnect}
+            className="flex items-center gap-1.5 text-xs font-medium text-purple-300 hover:text-white px-2.5 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition cursor-pointer"
+            title={githubAccount ? `Connected as ${githubAccount.username}` : 'Connect GitHub account'}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            {githubAccount ? (
+              <img src={githubAccount.avatarUrl} alt="GitHub" className="w-3.5 h-3.5 rounded-full" />
+            ) : (
+              <Github className="w-3.5 h-3.5 text-purple-400" />
+            )}
+            <span className="hidden xl:inline">GitHub</span>
           </motion.button>
-          {/* Turn Machine — only in AI Code Agent (Chat) section, not Editor */}
+
           {(activeTab === 'Chat' || activeTab === 'AI Code Assistant') && (
             <motion.button
               type="button"
               onClick={() => setShowTurnMachine(!showTurnMachine)}
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition cursor-pointer ${
+              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-xl border transition cursor-pointer ${
                 showTurnMachine
                   ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
-                  : 'bg-[#121212] text-white/50 border-white/5 hover:text-white hover:bg-white/10'
+                  : 'bg-[#13131a] text-white/60 border-white/10 hover:text-white hover:bg-white/10'
               }`}
               title="Show mcode Turn Machine"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              <Workflow className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Turn Machine</span>
+              <Workflow className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden xl:inline">Turn Machine</span>
             </motion.button>
           )}
         </div>
@@ -862,10 +1427,12 @@ export function AIChatPage() {
             {/* Header */}
             <div className="h-16 flex items-center justify-between px-5 border-b border-white/5 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                  M
-                </div>
-                <span className="text-white font-bold tracking-wider text-sm">M CODE</span>
+                <img
+                  src="/logo.png"
+                  alt="MCODE"
+                  className="w-8 h-8 rounded-lg object-contain drop-shadow-[0_0_12px_rgba(59,130,246,0.6)] flex-shrink-0"
+                />
+                <span className="text-white font-bold tracking-wider text-sm">MCODE</span>
               </div>
               <div className="flex items-center gap-3">
                   <button onClick={() => setIsHistoryOpen(true)} className="text-white/40 hover:text-white transition-colors flex items-center justify-center rounded-md hover:bg-white/5 p-1">
@@ -1084,7 +1651,7 @@ export function AIChatPage() {
               <button onClick={() => setIsHistoryOpen(true)} className="text-white/30 hover:text-white transition-colors">
                 <History className="w-5 h-5" />
               </button>
-              <button onClick={() => useIDEStore.getState().openSettings('permissions')} className="text-white/30 hover:text-white transition-colors cursor-pointer" title="Settings">
+              <button onClick={() => useIDEStore.getState().openSettings('models')} className="text-white/30 hover:text-white transition-colors cursor-pointer" title="Settings">
                 <Settings className="w-5 h-5" />
               </button>
               <button className="text-white/30 hover:text-white transition-colors">
@@ -1106,14 +1673,34 @@ export function AIChatPage() {
             {(activeTab === 'Chat' || activeTab === 'AI Code Assistant') && messages.length === 0 ? (
               /* EMPTY STATE (Chat or AI Code Assistant, no messages — the AI Code Editor tab shows the IDE view) */
               <div className="w-full h-full flex flex-col items-center justify-center px-4 relative z-10">
-                <div className="mb-10">
-                  <SpinnerBlock label="Ready…" size="lg" color="emerald" />
+                <div className="mb-8 flex flex-col items-center gap-4">
+                  <motion.img
+                    src="/logo.png"
+                    alt="MCODE"
+                    className="w-24 h-24 object-contain drop-shadow-[0_0_35px_rgba(59,130,246,0.6)]"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.4 }}
+                  />
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium shadow-sm backdrop-blur-sm">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>Ready</span>
+                  </div>
                 </div>
                 <h1 className="text-[2.5rem] font-bold mb-10 tracking-tight text-white">What do you want to build?</h1>
                 <div className="flex flex-wrap items-center justify-center gap-3 mb-16">
-                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-5 py-2.5 rounded-full border border-white/10 bg-transparent hover:bg-white/5 text-sm font-medium text-white transition" onClick={() => setPrompt('Create a website')}>Create a website</motion.button>
-                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-5 py-2.5 rounded-full border border-white/10 bg-transparent hover:bg-white/5 text-sm font-medium text-white transition" onClick={() => setPrompt('Build a mobile app')}>Build a mobile app</motion.button>
-                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-5 py-2.5 rounded-full border border-white/10 bg-transparent hover:bg-white/5 text-sm font-medium text-white transition" onClick={() => setPrompt('Design a dashboard')}>Design a dashboard</motion.button>
+                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-5 py-2.5 rounded-full border border-white/10 bg-transparent hover:bg-white/5 text-sm font-medium text-white transition flex items-center gap-2" onClick={() => setPrompt('Create a website')}>
+                    <Globe className="w-4 h-4 text-blue-400" />
+                    Create a website
+                  </motion.button>
+                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-5 py-2.5 rounded-full border border-white/10 bg-transparent hover:bg-white/5 text-sm font-medium text-white transition flex items-center gap-2" onClick={() => setPrompt('Build a mobile app')}>
+                    <Monitor className="w-4 h-4 text-purple-400" />
+                    Build a mobile app
+                  </motion.button>
+                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-5 py-2.5 rounded-full border border-white/10 bg-transparent hover:bg-white/5 text-sm font-medium text-white transition flex items-center gap-2" onClick={() => setPrompt('Design a dashboard')}>
+                    <BarChart2 className="w-4 h-4 text-emerald-400" />
+                    Design a dashboard
+                  </motion.button>
                 </div>
                 <AnimatePresence>
                   {keysError && (
@@ -1145,19 +1732,19 @@ export function AIChatPage() {
                   
                   <div className="relative z-10 p-4 flex flex-col gap-2">
                     
-                    {/* Top Action Bar — only in agent (advanced) mode */}
-                    {mode === 'agent' && (
-                    <div className="flex items-center gap-4 px-1 pb-1">
-                      <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white transition disabled:opacity-50" title={activeWorkspaceId ? "Project Options" : "Upload Folder"}>
-                        {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Folder className="w-4 h-4"/>}
-                        {activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'} 
+                    {/* Top Action Bar (Upload & Git Branch) */}
+                    <div className="flex items-center gap-3 px-1 pb-1">
+                      <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
+                        {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
+                        <span>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
                         <ChevronDown className="w-3 h-3 opacity-50"/>
                       </motion.button>
-                      <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white transition" title="Branch">
-                        <GitBranch className="w-4 h-4"/> {activeBranch} <ChevronDown className="w-3 h-3 opacity-50"/>
+                      <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
+                        <GitBranch className="w-4 h-4 text-blue-400"/>
+                        <span>{activeBranch}</span>
+                        <ChevronDown className="w-3 h-3 opacity-50"/>
                       </motion.button>
                     </div>
-                    )}
 
                     {/* Textarea Container */}
                     <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
@@ -1216,8 +1803,8 @@ export function AIChatPage() {
                       <div className="flex items-center justify-between mt-2">
                         {/* Left Group: Plus */}
                         <div className="flex items-center gap-2">
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
-                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title="Attach file or context">
+                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Paperclip className="w-4 h-4" />}
                           </motion.button>
                         </div>
 
@@ -1265,8 +1852,9 @@ export function AIChatPage() {
                                 transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                                 className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
                                 disabled={!prompt.trim() || isStreaming}
+                                title="Send message"
                               >
-                                <ArrowUp className="w-4 h-4 drop-shadow-md" />
+                                <Send className="w-4 h-4 drop-shadow-md ml-0.5" />
                               </motion.button>
                             )}
                           </AnimatePresence>
@@ -1285,31 +1873,28 @@ export function AIChatPage() {
                 transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
               >
                 <div className="flex-1 overflow-y-auto p-6 md:p-12 flex flex-col gap-6 custom-scrollbar">
-                  {keysError && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      className="w-full max-w-4xl mx-auto bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium px-4 py-2 rounded-lg text-center"
-                    >
-                      {keysError}
-                    </motion.div>
-                  )}
                   <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+                    {keysError && (
+                      <motion.div
+                        key="keys-error-alert"
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        className="w-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium px-4 py-2 rounded-lg text-center"
+                      >
+                        {keysError}
+                      </motion.div>
+                    )}
                     <TodoCard plan={plan as any} />
                     <PermissionModal request={permissionRequest as any} onAnswer={answerPermission} />
-                  </div>
-                  {godMode && (
-                    <div className="w-full max-w-4xl mx-auto">
+                    {godMode && (
                       <WaveProgress
                         waves={waves as any}
                         subagents={subagents as any}
                         buildSummary={buildSummary as any}
                         godMode={godMode}
                       />
-                    </div>
-                  )}
-                  <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+                    )}
                     <AnimatePresence>
                     {messages.map((msg, idx) => {
                       const prevMsg = idx > 0 ? messages[idx - 1] : null;
@@ -1319,7 +1904,7 @@ export function AIChatPage() {
                         (!prevMsg || prevMsg.role !== 'assistant' || prevMsg.kind === 'tool');
                       return (
                         <ChatMessage
-                          key={msg.id || idx}
+                          key={`chat-msg-${idx}-${msg.id || msg.role || 'm'}`}
                           msg={msg}
                           idx={idx}
                           size="md"
@@ -1343,13 +1928,14 @@ export function AIChatPage() {
                           M
                         </div>
                         <div className="flex-1 min-w-0">
-                          <AgentActionSequence key="agent-action-sequence-1" />
+                          <AgentActionSequence key="agent-action-sequence-1" mode={mode} />
                         </div>
                       </motion.div>
                     )}
-                    {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
-                    <div ref={chatEndRef} />
                     </AnimatePresence>
+                    <ReactionBurst key="chat-reaction-burst" emoji="✓" show={showReactionBurst} />
+                    {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
+                    <div key="chat-scroll-sentinel" ref={chatEndRef} />
                   </div>
                 </div>
                 {/* Chat Input Bottom */}
@@ -1370,19 +1956,19 @@ export function AIChatPage() {
                     
                     <div className="relative z-10 p-4 flex flex-col gap-2">
                       
-                      {/* Top Action Bar (Inside Input) */}
-                      {mode === 'agent' && (
-                        <div className="flex items-center gap-4 px-1 pb-1">
-                          <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white transition disabled:opacity-50" title={activeWorkspaceId ? "Project Options" : "Upload Folder"}>
-                            {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Folder className="w-4 h-4"/>}
-                            {activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}
-                            <ChevronDown className="w-3 h-3 opacity-50"/>
-                          </motion.button>
-                          <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white transition" title="Branch">
-                            <GitBranch className="w-4 h-4"/> {activeBranch} <ChevronDown className="w-3 h-3 opacity-50"/>
-                          </motion.button>
-                        </div>
-                      )}
+                      {/* Top Action Bar (Upload & Git Branch) */}
+                      <div className="flex items-center gap-3 px-1 pb-1">
+                        <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
+                          {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
+                          <span>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
+                          <ChevronDown className="w-3 h-3 opacity-50"/>
+                        </motion.button>
+                        <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
+                          <GitBranch className="w-4 h-4 text-blue-400"/>
+                          <span>{activeBranch}</span>
+                          <ChevronDown className="w-3 h-3 opacity-50"/>
+                        </motion.button>
+                      </div>
 
                       {/* Textarea Container */}
                       <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
@@ -1436,8 +2022,8 @@ export function AIChatPage() {
                         </AnimatePresence>
                         <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-2">
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
-                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title="Upload Project (Folder, File, ZIP)">
+                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Plus className="w-4 h-4" />}
                           </motion.button>
                           <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
                           {mode === 'agent' && (
@@ -1585,19 +2171,38 @@ export function AIChatPage() {
                       maxSize="650px"
                     >
                       <div className="h-full border-l border-white/5 bg-[#0e0e0e] flex flex-col relative z-20 w-full min-w-[280px] overflow-hidden">
-                    <div className="p-4 flex items-center justify-between border-b border-white/5">
+                    <div className="p-3 px-4 flex items-center justify-between border-b border-white/5 bg-[#121212]/50">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-emerald-400" />
                         <span className="text-sm font-semibold text-white">AI Assistance</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => useIDEStore.getState().setSecondarySideBarVisible(false)}
-                        className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-white transition cursor-pointer"
-                        title="Close AI Panel"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {/* Mode toggle pill: Chat vs Agent */}
+                        <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => dispatch(setMode('chat'))}
+                            className={`px-2 py-0.5 rounded-md transition font-medium ${mode === 'chat' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}
+                          >
+                            Chat
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => dispatch(setMode('agent'))}
+                            className={`px-2 py-0.5 rounded-md transition font-medium ${mode === 'agent' ? 'bg-emerald-500/20 text-emerald-400 font-semibold' : 'text-white/40 hover:text-white'}`}
+                          >
+                            Agent
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => useIDEStore.getState().setSecondarySideBarVisible(false)}
+                          className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-white transition cursor-pointer"
+                          title="Close AI Panel"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   
                   <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 custom-scrollbar">
@@ -1616,21 +2221,36 @@ export function AIChatPage() {
                       <AnimatePresence>
                       {messages.map((msg, idx) => (
                         <ChatMessage
-                          key={msg.id || idx}
+                          key={`ide-msg-${idx}-${msg.id || msg.role || 'm'}`}
                           msg={msg}
                           idx={idx}
                           size="sm"
                           isStreaming={isStreaming && idx === messages.length - 1}
                           undo={undo as any}
-                          isNormalChat={false}
+                          isNormalChat={mode === 'chat'}
                         />
                       ))}
                     </AnimatePresence>
                       {showThinkingIndicator && (
-                        <AgentActionSequence key="agent-action-sequence-2" />
+                        <motion.div
+                          key="thinking-indicator-ide"
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                          className="flex items-start gap-2.5"
+                        >
+                          <div className="w-5 h-5 rounded-full border border-white/10 flex-shrink-0 flex items-center justify-center text-xs">
+                            M
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <AgentActionSequence key="agent-action-sequence-2" mode={mode} />
+                          </div>
+                        </motion.div>
                       )}
+                      <ReactionBurst key="ide-reaction-burst" emoji="✓" show={showReactionBurst} />
                       {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
-                      <div ref={ideChatEndRef} />
+                      <div key="ide-scroll-sentinel" ref={ideChatEndRef} />
                   </div>
 
                   {/* Inline Chat Input */}
@@ -1641,19 +2261,19 @@ export function AIChatPage() {
                       </div>
                       <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
                         <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2" ref={commandPickerRef}>
-                          {/* Top Action Bar (matches Chat tab) */}
-                          {mode === 'agent' && (
-                            <div className="flex items-center gap-4 px-1 pb-1">
-                              <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white transition disabled:opacity-50" title={activeWorkspaceId ? "Project Options" : "Upload Folder"}>
-                                {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Folder className="w-4 h-4"/>}
-                                {activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}
-                                <ChevronDown className="w-3 h-3 opacity-50"/>
-                              </motion.button>
-                              <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] text-white/50 hover:text-white transition" title="Branch">
-                                <GitBranch className="w-4 h-4"/> {activeBranch} <ChevronDown className="w-3 h-3 opacity-50"/>
-                              </motion.button>
-                            </div>
-                          )}
+                          {/* Top Action Bar (Upload & Git Branch) */}
+                          <div className="flex items-center gap-3 px-1 pb-1">
+                            <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
+                              {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
+                              <span>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}</span>
+                              <ChevronDown className="w-3 h-3 opacity-50"/>
+                            </motion.button>
+                            <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
+                              <GitBranch className="w-4 h-4 text-blue-400"/>
+                              <span>{activeBranch}</span>
+                              <ChevronDown className="w-3 h-3 opacity-50"/>
+                            </motion.button>
+                          </div>
 
                           <textarea
                           value={prompt}
@@ -1705,8 +2325,8 @@ export function AIChatPage() {
                         </AnimatePresence>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50">
-                              {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title="Upload Project (Folder, File, ZIP)">
+                              {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" /> : <Paperclip className="w-3.5 h-3.5" />}
                             </motion.button>
                             <SparkleButton setPrompt={setPrompt} advancedMode={mode === 'agent'} watchMode={watchMode} onToggleWatch={toggleWatchMode} />
                             {mode === 'agent' && (
@@ -1744,10 +2364,11 @@ export function AIChatPage() {
                                   animate={{ scale: 1, opacity: 1 }}
                                   exit={{ scale: 0.9, opacity: 0 }}
                                   transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                                  className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition disabled:opacity-50" 
+                                  className="w-7 h-7 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 flex items-center justify-center text-emerald-400 transition disabled:opacity-50" 
                                   disabled={!prompt.trim() || isStreaming}
+                                  title="Send message"
                                 >
-                                  <ArrowUp className="w-3.5 h-3.5" />
+                                  <Send className="w-3.5 h-3.5 ml-0.5" />
                                 </motion.button>
                               )}
                             </AnimatePresence>
@@ -1853,13 +2474,6 @@ export function AIChatPage() {
           </main>
         </div>
       </div>
-      
-      <WorkspaceModals 
-        isOpen={isModalsOpen} 
-        onClose={() => setIsModalsOpen(false)} 
-        onUploadZip={handleUploadZip} 
-        onCloneGit={handleCloneGit} 
-      />
 
       {/* Branch selector dropdown */}
       <AnimatePresence>
@@ -1907,9 +2521,9 @@ export function AIChatPage() {
       {/* Toast notifications (top-right, auto-dismissing) */}
       <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
         <AnimatePresence>
-          {(localToasts ?? []).map((toast) => (
+          {(localToasts ?? []).map((toast, i) => (
             <motion.div
-              key={toast.id}
+              key={toast.id && String(toast.id).trim() ? String(toast.id) : `local-toast-${i}`}
               initial={{ opacity: 0, x: 100, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 100, scale: 0.95 }}
@@ -1931,11 +2545,11 @@ export function AIChatPage() {
         </AnimatePresence>
         {/* Server-side toasts (god-mode, from Redux store) */}
         <AnimatePresence>
-          {(serverToasts ?? []).map((toast) => {
+          {(serverToasts ?? []).map((toast, i) => {
             const isError = toast.kind === 'error' || toast.kind === 'failed';
             return (
               <motion.div
-                key={toast.id}
+                key={toast.id && String(toast.id).trim() ? String(toast.id) : `server-toast-${i}`}
                 initial={{ opacity: 0, x: 100, scale: 0.95 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 100, scale: 0.95 }}
@@ -2138,17 +2752,23 @@ export function AIChatPage() {
       {/* Mode Switch Modal (Agent -> Editor) */}
       <AnimatePresence>
         {showModeSwitchModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div 
+            onClick={() => setShowModeSwitchModal(false)}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 cursor-pointer"
+          >
             <motion.div
+              onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="w-full max-w-lg bg-[#181818] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 text-white"
+              className="w-full max-w-lg bg-[#181818] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 text-white cursor-default"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 flex items-center justify-center text-white font-bold text-lg shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                  M
-                </div>
+                <img
+                  src="/logo.png"
+                  alt="MCODE"
+                  className="w-10 h-10 rounded-xl object-contain drop-shadow-[0_0_16px_rgba(59,130,246,0.6)] flex-shrink-0"
+                />
                 <div>
                   <h3 className="text-base font-semibold text-white">Switch to AI Code Editor</h3>
                   <p className="text-xs text-white/50">Choose how you want to proceed into the editor</p>
@@ -2220,7 +2840,7 @@ export function AIChatPage() {
           <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md overflow-hidden">
             <SettingsPage
               onClose={() => useIDEStore.getState().setSettingsOpen(false)}
-              initialTab={settingsInitialTab || 'permissions'}
+              initialTab={settingsInitialTab || 'models'}
             />
           </div>
         )}
@@ -2273,6 +2893,213 @@ export function AIChatPage() {
         )}
       </AnimatePresence>
 
+      {/* WORKSPACE MODALS (Upload / ZIP / Folder / GitHub Clone) */}
+      <WorkspaceModals
+        isOpen={isModalsOpen}
+        onClose={() => setIsModalsOpen(false)}
+        onUploadZip={handleUploadZip}
+        onUploadFolder={handleUploadFolder}
+        onUploadDirectoryHandle={handleUploadDirectoryHandle}
+        onUploadDataTransferItems={handleUploadDataTransferItems}
+        onUploadSingleFile={handleUploadSingleFile}
+        onCloneGit={handleCloneGit}
+        onStartUploading={(text) => {
+          if (text) {
+            setIsUploading(true);
+            setUploadProgressText(text);
+          } else {
+            setIsUploading(false);
+            setUploadProgressText('');
+          }
+        }}
+      />
+
+      {/* COMMIT & PUSH MODAL */}
+      <AnimatePresence>
+        {showCommitModal && (
+          <div className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#181820] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Share className="w-5 h-5 text-emerald-400" />
+                  <h3 className="font-bold text-base">Push to Git</h3>
+                </div>
+                <button onClick={() => setShowCommitModal(false)} className="text-white/40 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-white/60 block mb-1">Commit Message</label>
+                  <input
+                    type="text"
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    placeholder="Initial commit"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-white/60 block mb-1">Target Branch</label>
+                  <div className="text-xs font-mono bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg text-blue-300">
+                    {activeBranch}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-white/60 block mb-1">GitHub Repo URL (Optional for zip projects)</label>
+                  <input
+                    type="text"
+                    value={githubRepoForPush}
+                    onChange={(e) => setGithubRepoForPush(e.target.value)}
+                    placeholder="https://github.com/username/repo"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setShowCommitModal(false)}
+                  className="px-4 py-2 text-xs text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePush}
+                  className="px-4 py-2 text-xs font-semibold text-black bg-emerald-400 hover:bg-emerald-300 rounded-lg transition flex items-center gap-1.5"
+                >
+                  <Share className="w-3.5 h-3.5" />
+                  Push Changes
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* CREATE BRANCH MODAL */}
+      <AnimatePresence>
+        {showBranchModal && (
+          <div className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#181820] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-white"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="w-5 h-5 text-blue-400" />
+                  <h3 className="font-bold text-base">Create New Branch</h3>
+                </div>
+                <button onClick={() => setShowBranchModal(false)} className="text-white/40 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs text-white/60 block mb-1">Branch Name</label>
+                <input
+                  type="text"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                  placeholder="feature/new-header"
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleCreateBranch();
+                  }}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setShowBranchModal(false)}
+                  className="px-4 py-2 text-xs text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateBranch}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Create & Checkout
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* TOAST NOTIFICATION STACK */}
+      <div className="fixed bottom-5 right-5 z-[400] flex flex-col gap-2 pointer-events-none">
+        {localToasts.map((t) => (
+          <motion.div
+            key={t.id}
+            initial={{ opacity: 0, y: 20, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className={`px-4 py-2.5 rounded-xl border shadow-xl text-xs font-medium flex items-center gap-2 pointer-events-auto ${
+              t.type === 'error'
+                ? 'bg-red-950/90 border-red-500/30 text-red-200'
+                : t.type === 'info'
+                ? 'bg-blue-950/90 border-blue-500/30 text-blue-200'
+                : 'bg-emerald-950/90 border-emerald-500/30 text-emerald-200'
+            }`}
+          >
+            {t.type === 'error' && <AlertCircle className="w-4 h-4 text-red-400" />}
+            {t.type === 'info' && <Loader2 className="w-4 h-4 animate-spin text-blue-400" />}
+            {t.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+            <span>{t.message}</span>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* GLOBAL HIGH-TECH ANIMATED UPLOAD OVERLAY */}
+      <AnimatePresence>
+        {isUploading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center space-y-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#121215] border border-purple-500/30 rounded-2xl p-8 max-w-md w-full shadow-[0_0_40px_rgba(168,85,247,0.25)] relative flex flex-col items-center gap-4 overflow-hidden"
+            >
+              <div className="relative flex items-center justify-center">
+                <div className="w-20 h-20 rounded-full border-2 border-purple-500/20 bg-purple-500/10 flex items-center justify-center animate-pulse">
+                  <Loader2 className="w-10 h-10 text-purple-400 animate-spin" />
+                </div>
+                <Sparkles className="w-5 h-5 text-purple-300 absolute -top-1 -right-1 animate-bounce" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white tracking-wide flex items-center justify-center gap-2">
+                  <UploadCloud className="w-5 h-5 text-purple-400 animate-pulse" />
+                  Uploading Project
+                </h3>
+                <p className="text-xs text-purple-300/90 font-mono font-medium px-3 py-1.5 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                  {uploadProgressText || 'Uploading and processing files...'}
+                </p>
+              </div>
+
+              <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/10 mt-2">
+                <div className="bg-gradient-to-r from-purple-500 via-blue-500 to-emerald-400 h-full rounded-full animate-pulse w-full"></div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React from "react";
 import { motion, type MotionStyle } from "framer-motion";
 import { MessageContent } from "./MessageContent";
 import { StepCard } from "../ide/StepCards";
+import { ThoughtBlock } from "./ThoughtBlock";
 import type { ChatMessageProps } from "../../types/chat";
 
 /**
@@ -27,7 +28,7 @@ export function ChatMessage({ msg, idx, size = "md", isStreaming, undo, isNormal
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -4 }}
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-        className={`flex justify-end ${size === "sm" ? "max-w-[90%]" : "max-w-[80%]"}`}
+        className={`flex items-start justify-end gap-2.5 ${size === "sm" ? "max-w-[90%]" : "max-w-[80%]"} ml-auto`}
       >
         <div
           className={
@@ -37,6 +38,9 @@ export function ChatMessage({ msg, idx, size = "md", isStreaming, undo, isNormal
           }
         >
           {msg.text}
+        </div>
+        <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex-shrink-0 flex items-center justify-center text-xs font-semibold text-emerald-400 mt-0.5 shadow-sm">
+          M
         </div>
       </motion.div>
     );
@@ -54,22 +58,25 @@ export function ChatMessage({ msg, idx, size = "md", isStreaming, undo, isNormal
       className="flex flex-col gap-2"
     >
       <div className="flex items-start gap-2.5">
-        {isNormalChat && showAvatar && msg.kind !== "tool" ? (
-          <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex-shrink-0 flex items-center justify-center text-xs font-semibold text-emerald-400 mt-0.5 shadow-sm">
+        {showAvatar && msg.kind !== "tool" ? (
+          <div className="w-5 h-5 rounded-full border border-white/10 bg-white/[0.03] flex-shrink-0 flex items-center justify-center text-[10px] font-medium text-white/60 mt-0.5 shadow-sm">
             M
           </div>
         ) : isNormalChat ? (
-          <div className="w-6 h-6 flex-shrink-0" />
+          <div className="w-5 h-5 flex-shrink-0" />
         ) : null}
         <div className="flex-1 min-w-0">
-          {msg.text && (
+          {((msg as any).thought || (msg as any).reasoning) && (
+            <ThoughtBlock content={(msg as any).thought || (msg as any).reasoning} done={!isStreaming} />
+          )}
+          {msg.text && msg.kind !== "tool" && (
             <div data-mcode-tool-stream-animate={showCursor ? "true" : undefined}>
               <MessageContent msg={msg} text={msg.text} size={size} isStreaming={showCursor}>
                 {showCursor && (
                   <motion.span
                     data-mcode-stream-marker-animate="true"
                     style={{ ["--mcode-stream-animation-delay"]: "0s" } as MotionStyle}
-                    className="inline-block w-1.5 h-3.5 ml-0.5 bg-emerald-400 align-middle"
+                    className="inline-block w-[1.5px] h-[14px] ml-0.5 bg-emerald-400 align-middle"
                     animate={{ opacity: [0.3, 1, 0.3] }}
                     transition={{ duration: 1, repeat: Infinity }}
                   />

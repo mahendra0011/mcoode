@@ -14,12 +14,17 @@ import {
   FileText,
   Boxes,
   Plus,
+  FilePlus,
+  FolderPlus,
+  RotateCw,
+  FolderMinus,
 } from "lucide-react";
 import { FileTree } from "./FileTree";
 import { useIDEStore } from "../../store/ideStore";
 import { ALL_LANGUAGES } from "../../lib/languagesData";
 import { LanguageIcon } from "./LanguageIcon";
 import { toast } from "sonner";
+import api from "../../lib/axios";
 
 interface OutlineSymbol {
   name: string;
@@ -107,7 +112,7 @@ export interface ExplorerPanelProps {
   projectName?: string;
 }
 
-export function ExplorerPanel({ workspaceId, projectName = "Folders" }: ExplorerPanelProps) {
+export function ExplorerPanel({ workspaceId, projectName = "cli" }: ExplorerPanelProps) {
   const openFiles = useIDEStore((s) => s.openFiles);
   const activePath = useIDEStore((s) => s.activePath);
   const setActivePath = useIDEStore((s) => s.setActivePath);
@@ -120,6 +125,7 @@ export function ExplorerPanel({ workspaceId, projectName = "Folders" }: Explorer
   const selectedLanguages = useIDEStore((s) => s.selectedLanguages);
   const toggleLanguage = useIDEStore((s) => s.toggleLanguage);
   const createLanguageFile = useIDEStore((s) => s.createLanguageFile);
+  const bumpRefresh = useIDEStore((s) => s.bumpRefresh);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAddLanguages, setShowAddLanguages] = useState(false);
@@ -152,6 +158,57 @@ export function ExplorerPanel({ workspaceId, projectName = "Folders" }: Explorer
     } catch (e) {
       console.warn("Failed to save explorer view preferences:", e);
     }
+  };
+
+  const handleNewFile = async () => {
+    if (!workspaceId) {
+      toast.info("Create or select a workspace to add files");
+      return;
+    }
+    const name = window.prompt("New File name (e.g. index.ts):");
+    if (!name || !name.trim()) return;
+    const filePath = name.trim();
+    try {
+      await api.post(`/api/v1/workspaces/${workspaceId}/file`, {
+        path: filePath,
+        content: "",
+      });
+      toast.success(`Created file "${filePath}"`);
+      useIDEStore.getState().addOpenFile(filePath);
+      bumpRefresh();
+    } catch (err: any) {
+      toast.error(`Failed to create file: ${err?.response?.data?.error?.message || err.message}`);
+    }
+  };
+
+  const handleNewFolder = async () => {
+    if (!workspaceId) {
+      toast.info("Create or select a workspace to add folders");
+      return;
+    }
+    const name = window.prompt("New Folder name (e.g. src/components):");
+    if (!name || !name.trim()) return;
+    const folderPath = name.trim();
+    try {
+      await api.post(`/api/v1/workspaces/${workspaceId}/file`, {
+        path: `${folderPath}/.keep`,
+        content: "",
+      });
+      toast.success(`Created folder "${folderPath}"`);
+      bumpRefresh();
+    } catch (err: any) {
+      toast.error(`Failed to create folder: ${err?.response?.data?.error?.message || err.message}`);
+    }
+  };
+
+  const handleRefresh = () => {
+    bumpRefresh();
+    toast.success("Refreshed explorer files");
+  };
+
+  const handleCollapseAll = () => {
+    document.dispatchEvent(new CustomEvent("filetree:collapse-all"));
+    toast.info("Collapsed all folders");
   };
 
   // Active file code for Outline
@@ -201,43 +258,87 @@ export function ExplorerPanel({ workspaceId, projectName = "Folders" }: Explorer
 
   return (
     <div className="flex flex-col h-full bg-[#121212] text-white/80 select-none text-xs w-full min-w-0 overflow-hidden">
-      {/* Explorer Main Header with "..." menu */}
-      <div className="p-3 border-b border-white/5 flex items-center justify-between relative">
-        <span className="font-semibold uppercase tracking-wider text-white/50 text-[11px]">
-          Explorer
+      {/* Explorer Main Header matching VS Code UI */}
+      <div className="px-3 py-2 border-b border-white/5 flex items-center justify-between relative bg-[#181818]/60">
+        <span className="font-semibold uppercase tracking-wider text-white/70 text-[11px] truncate max-w-[120px]">
+          {projectName || "EXPLORER"}
         </span>
-        <div className="relative">
+
+        {/* Header Action Buttons (Image 1) */}
+        <div className="flex items-center gap-0.5 text-white/50 relative">
+          <button
+            type="button"
+            onClick={handleNewFile}
+            className="p-1 rounded hover:text-white hover:bg-white/10 transition cursor-pointer"
+            title="New File..."
+          >
+            <FilePlus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleNewFolder}
+            className="p-1 rounded hover:text-white hover:bg-white/10 transition cursor-pointer"
+            title="New Folder..."
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="p-1 rounded hover:text-white hover:bg-white/10 transition cursor-pointer"
+            title="Refresh Explorer"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={handleCollapseAll}
+            className="p-1 rounded hover:text-white hover:bg-white/10 transition cursor-pointer"
+            title="Collapse All Folders"
+          >
+            <FolderMinus className="w-3.5 h-3.5" />
+          </button>
           <button
             type="button"
             onClick={() => setMenuOpen(!menuOpen)}
-            className="p-1 rounded text-white/40 hover:text-white hover:bg-white/10 transition"
+            className="p-1 rounded hover:text-white hover:bg-white/10 transition cursor-pointer"
             title="Views and More Actions..."
           >
             <MoreHorizontal className="w-3.5 h-3.5" />
           </button>
 
-          {/* Views Dropdown Menu */}
+          {/* Views Dropdown Menu with Checkmarks (Image 2) */}
           {menuOpen && (
             <div
-              className="absolute right-0 top-full mt-1 w-44 bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl py-1 z-50 text-xs flex flex-col"
+              className="absolute right-0 top-full mt-1.5 w-48 bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl py-1 z-50 text-xs flex flex-col"
               onMouseLeave={() => setMenuOpen(false)}
             >
               <div className="px-3 py-1 text-[10px] font-semibold text-white/40 uppercase tracking-wider border-b border-white/5">
-                Views
+                Toggle Explorer Views
               </div>
-              {["Open Editors", "Folders", "Outline", "Timeline", "NPM Scripts"].map((view) => (
-                <button
-                  key={view}
-                  type="button"
-                  onClick={() => toggleView(view)}
-                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-white/80 hover:text-white transition"
-                >
-                  <span className="w-3.5 flex items-center justify-center">
-                    {visibleViews[view] && <Check className="w-3.5 h-3.5 text-blue-400" />}
-                  </span>
-                  <span>{view}</span>
-                </button>
-              ))}
+              {[
+                { key: "Open Editors", label: "Open Editors" },
+                { key: "Folders", label: "Folders" },
+                { key: "Languages", label: "Languages" },
+                { key: "Outline", label: "Outline" },
+                { key: "Timeline", label: "Timeline" },
+                { key: "NPM Scripts", label: "NPM Scripts" },
+              ].map(({ key, label }) => {
+                const isVisible = visibleViews[key] !== false;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleView(key)}
+                    className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-white/10 text-left text-white/80 hover:text-white transition cursor-pointer"
+                  >
+                    <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                      {isVisible && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                    </span>
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

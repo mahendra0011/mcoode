@@ -119,6 +119,40 @@ export function workspaceRoutes({ secret }) {
     }
   });
 
+  // DELETE /workspaces/:id/file?path=... — delete a file or directory
+  router.delete('/:id/file', async (req, res, next) => {
+    try {
+      const { path } = req.query;
+      if (!path) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path query param required' } });
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+      const full = safeJoin(ws.diskPath, path);
+      const { rm } = await import('node:fs/promises');
+      await rm(full, { recursive: true, force: true });
+      res.json({ ok: true, deleted: path });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /workspaces/:id/rename-file — rename a file or directory
+  router.post('/:id/rename-file', async (req, res, next) => {
+    try {
+      const { oldPath, newPath } = req.body;
+      if (!oldPath || !newPath) return res.status(400).json({ error: { code: 'VALIDATION', message: 'oldPath and newPath required' } });
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+      const oldFull = safeJoin(ws.diskPath, oldPath);
+      const newFull = safeJoin(ws.diskPath, newPath);
+      const { rename, mkdir: mkDir } = await import('node:fs/promises');
+      await mkDir(join(newFull, '..'), { recursive: true });
+      await rename(oldFull, newFull);
+      res.json({ ok: true, oldPath, newPath });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // GET /workspaces/:id/export - export workspace as ZIP
   router.get('/:id/export', async (req, res, next) => {
     try {
@@ -238,21 +272,34 @@ export function workspaceRoutes({ secret }) {
     }
   });
 
-  // POST /workspaces/:id/upload - upload arbitrary files (images, docs, code) to workspace root
-  router.post('/:id/upload', upload.array('files'), async (req, res, next) => {
+  // POST /workspaces/:id/upload - upload arbitrary files or entire folder tree
+  router.post('/:id/upload', upload.array('files', 2000), async (req, res, next) => {
     try {
       const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       
-      const { copyFile } = await import('node:fs/promises');
+      const { copyFile, mkdir: mkDir } = await import('node:fs/promises');
       const uploadedFiles = [];
 
+      let relativePaths = [];
+      if (req.body.relativePaths) {
+        try {
+          relativePaths = typeof req.body.relativePaths === 'string' ? JSON.parse(req.body.relativePaths) : req.body.relativePaths;
+        } catch {
+          relativePaths = [];
+        }
+      }
+
       if (req.files && req.files.length > 0) {
-        for (const file of req.files) {
-          // For simplicity, we just copy them to the workspace root
-          const dest = safeJoin(ws.diskPath, file.originalname);
+        for (let i = 0; i < req.files.length; i++) {
+          const file = req.files[i];
+          const rawRelPath = relativePaths[i] || file.originalname;
+          // Strip top-level folder name if webkitRelativePath includes root folder prefix
+          const relPath = rawRelPath.includes('/') ? rawRelPath.split('/').slice(1).join('/') || rawRelPath : rawRelPath;
+          const dest = safeJoin(ws.diskPath, relPath);
+          await mkDir(join(dest, '..'), { recursive: true });
           await copyFile(file.path, dest);
-          uploadedFiles.push(file.originalname);
+          uploadedFiles.push(relPath);
         }
       }
 
@@ -265,9 +312,17 @@ export function workspaceRoutes({ secret }) {
   return router;
 }
 
-/** Walk a directory tree and return relative file paths (excludes node_modules, .git, dist, build, coverage). */
+const GLOBAL_SKIP_DIRS = new Set([
+  'node_modules', '.git', '.next', 'dist', 'build',
+  'coverage', '.cache', 'vendor', 'venv', '.venv', '__pycache__',
+  '.turbo', 'out', '.idea', '.vscode', 'tmp', 'temp',
+  'target', '.target', '.gradle', '.cargo', '.nuget', '.output',
+  'bower_components', 'jspm_packages', '.expo', '.serverless',
+  '.swc', 'obj', 'bin', '.yarn', '.pnpm-store'
+]);
+
+/** Walk a directory tree and return relative file paths (excludes node_modules, .git, etc.). */
 async function walkDir(dir, base = '') {
-  const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.svelte-kit']);
   const files = [];
   let entries;
   try {
@@ -276,7 +331,7 @@ async function walkDir(dir, base = '') {
     return files;
   }
   for (const entry of entries) {
-    if (SKIP.has(entry.name)) continue;
+    if (GLOBAL_SKIP_DIRS.has(entry.name)) continue;
     const full = join(dir, entry.name);
     const rel = base ? `${base}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
@@ -304,15 +359,32 @@ function safeJoin(root, p) {
   return join(rootResolved, ...filtered);
 }
 
-/** Extract a ZIP archive to a directory using unzipper. */
+/** Extract a ZIP archive to a directory using parallel 32-concurrency disk writes. */
 async function extractZipTo(zipPath, destDir) {
-  const { default: unzipper } = await import('unzipper');
-  await new Promise((resolve, reject) => {
-    createReadStream(zipPath)
-      .pipe(unzipper.Extract({ path: destDir }))
-      .on('close', resolve)
-      .on('error', reject);
-  });
+  const { Open } = await import('unzipper');
+  const directory = await Open.file(zipPath);
+  const CONCURRENCY = 32;
+  const entries = directory.files;
+
+  for (let i = 0; i < entries.length; i += CONCURRENCY) {
+    const chunk = entries.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      chunk.map(async (entry) => {
+        const normPath = entry.path.replace(/\\/g, '/');
+        const parts = normPath.split('/');
+        if (parts.some(p => GLOBAL_SKIP_DIRS.has(p))) return;
+
+        const fullPath = safeJoin(destDir, entry.path);
+        if (entry.type === 'Directory') {
+          await mkdir(fullPath, { recursive: true });
+        } else {
+          await mkdir(join(fullPath, '..'), { recursive: true });
+          const buffer = await entry.buffer();
+          await writeFile(fullPath, buffer);
+        }
+      })
+    );
+  }
 }
 
 /** Clone a git repo to a directory with optional branch selection. */

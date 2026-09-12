@@ -8,7 +8,7 @@ import { SUBAGENT_STATUS } from './events.js';
 
 export function normalizeTodo(raw, index) {
   const id = String(raw.id || `t${index + 1}`).trim();
-  const domain = ['frontend', 'backend', 'db', 'devops', 'test', 'docs']
+  const domain = ['frontend', 'backend', 'db', 'devops', 'test', 'docs', 'bugfix', 'planning']
     .includes(raw.domain) ? raw.domain : 'backend';
   const dependsOn = Array.isArray(raw.dependsOn)
     ? raw.dependsOn.map(String)
@@ -25,9 +25,11 @@ export function normalizeTodo(raw, index) {
     files,
     status: SUBAGENT_STATUS.PENDING,
     assignedModel: null,
+    wave: null,
     startedAt: null,
     finishedAt: null,
-    error: null
+    error: null,
+    completedFiles: new Set(),
   };
 }
 
