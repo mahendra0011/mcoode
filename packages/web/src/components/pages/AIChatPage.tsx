@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { McodeTurnMachineVisualization } from '../../components/mcode/McodeTurnMachineVisualization';
 import { Group as ResizablePanelGroup, Panel as ResizablePanel, Separator as ResizablePanelHandle, usePanelRef } from 'react-resizable-panels';
 import Link from 'next/link'; import { useRouter, useSearchParams } from 'next/navigation';
-import { useChatSocket } from '../../hooks/useChatSocket';
+import { useChatSocket, getSocket } from '../../hooks/useChatSocket';
 import api from '../../lib/axios';
 import { setMode, addMessage, clearChat, setGodMode, resetStreaming } from '../../store/chatSlice';
 import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../../lib/slashCommands';
@@ -631,6 +631,18 @@ export function AIChatPage() {
   /** Shared tail: zip the collected entries off the main thread, then upload with real
    *  network progress. Used by all three folder-upload entry points below so the
    *  performance-critical path only has to be fixed in one place. */
+  /** Shared tail: zip the collected entries off the main thread, then upload with real
+   *  network progress, then real server-side extraction progress over the socket
+   *  (backend emits 'workspace:upload-progress' into an 'upload:<id>' room — see
+   *  sockets.js + workspaces.js). Used by all three folder-upload entry points below
+   *  so the performance-critical path only has to be fixed in one place.
+   *
+   *  Percent bands so the bar is ALWAYS moving and never silently frozen:
+   *    0-10%  scan/discover files (caller-driven, before this function is called)
+   *    10-45% zip bundling (Web Worker)
+   *    45-85% network upload (axios onUploadProgress — real bytes sent)
+   *    85-100% server-side extraction (socket progress — real files written to disk)
+   */
   const zipAndUploadEntries = async (
     entries: ZipEntry[],
     folderName: string,
@@ -642,53 +654,76 @@ export function AIChatPage() {
       return;
     }
 
-    // Scan phase already happened by the time we get here → treat as 0-15%.
-    setUploadProgressPercent(15);
+    setUploadProgressPercent(10);
     setUploadProgressText(`Bundling ${entries.length} files (off main thread)...`);
 
-    // Zip phase: 15-55%. Runs in a Web Worker so the UI (this very overlay's animation,
-    // typing, tab switching, etc.) never freezes, no matter how large the project is.
     const zipBlob = await zipFilesOffMainThread(entries, (pct) => {
-      setUploadProgressPercent(15 + pct * 0.4);
+      setUploadProgressPercent(10 + pct * 0.35);
       setUploadProgressText(`Bundling '${folderName}' (${pct}%)...`);
     });
 
-    // Upload phase: 55-100%, driven by real bytes sent, not a guess.
-    setUploadProgressText(`Uploading & extracting '${folderName}' on server...`);
-    showToast(`Uploading project archive to server...`, 'info');
+    // Join a private room for this specific upload so the server can stream back
+    // real extraction progress instead of us guessing. Best-effort: if the socket
+    // isn't connected for some reason, the upload still completes fine — we just
+    // won't see the 85-100% band move until the response comes back.
+    const uploadId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    const socket = getSocket();
+    const onProgress = (payload: { phase?: string; extracted?: number; total?: number }) => {
+      if (payload?.phase === 'extracting' && payload.total) {
+        const pct = (payload.extracted || 0) / payload.total;
+        setUploadProgressPercent(85 + pct * 15);
+        setUploadProgressText(`Extracting ${payload.extracted}/${payload.total} files on server...`);
+      }
+    };
+    socket.emit('upload:join', { uploadId });
+    socket.on('workspace:upload-progress', onProgress);
 
-    const formData = new FormData();
-    formData.append('name', folderName);
-    formData.append('source', 'zip');
-    formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
+    try {
+      setUploadProgressText(`Uploading '${folderName}' to server...`);
+      showToast(`Uploading project archive to server...`, 'info');
 
-    const res = await api.post('/api/v1/workspaces', formData, {
-      timeout: WORKSPACE_UPLOAD_TIMEOUT_MS,
-      onUploadProgress: (evt: any) => {
-        if (evt.total) {
-          const pct = (evt.loaded / evt.total) * 100;
-          setUploadProgressPercent(55 + pct * 0.45);
-        }
-      },
-    });
+      const formData = new FormData();
+      formData.append('name', folderName);
+      formData.append('source', 'zip');
+      formData.append('uploadId', uploadId);
+      formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
 
-    if (res.status >= 400) {
-      const msg = res.data?.error?.message || `Upload failed (${res.status})`;
-      showToast(msg, 'error');
-      throw new Error(msg);
-    }
+      const res = await api.post('/api/v1/workspaces', formData, {
+        timeout: WORKSPACE_UPLOAD_TIMEOUT_MS,
+        onUploadProgress: (evt: any) => {
+          if (evt.total) {
+            const pct = (evt.loaded / evt.total) * 100;
+            setUploadProgressPercent(45 + pct * 0.4);
+            if (evt.loaded >= evt.total) {
+              // All bytes sent — server is now unzipping to disk. Show that explicitly
+              // instead of leaving the bar pinned with no explanation, which is what
+              // used to look like a random 5-20s freeze right at the end.
+              setUploadProgressText(`Uploaded — extracting '${folderName}' on server...`);
+            }
+          }
+        },
+      });
 
-    const data = res.data;
-    if (data.workspace) {
-      setUploadProgressPercent(100);
-      setWorkspaces(prev => [...prev, data.workspace]);
-      setActiveWorkspaceId(data.workspace._id);
-      bumpRefresh();
-      showToast(`Folder '${folderName}' (${entries.length} files) ${successVerb}!`);
-    } else {
-      const msg = data.error?.message || 'Upload failed — no workspace returned';
-      showToast(msg, 'error');
-      throw new Error(msg);
+      if (res.status >= 400) {
+        const msg = res.data?.error?.message || `Upload failed (${res.status})`;
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+
+      const data = res.data;
+      if (data.workspace) {
+        setUploadProgressPercent(100);
+        setWorkspaces(prev => [...prev, data.workspace]);
+        setActiveWorkspaceId(data.workspace._id);
+        bumpRefresh();
+        showToast(`Folder '${folderName}' (${entries.length} files) ${successVerb}!`);
+      } else {
+        const msg = data.error?.message || 'Upload failed — no workspace returned';
+        showToast(msg, 'error');
+        throw new Error(msg);
+      }
+    } finally {
+      socket.off('workspace:upload-progress', onProgress);
     }
   };
 
@@ -696,17 +731,22 @@ export function AIChatPage() {
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
-    setUploadProgressPercent(2);
+    setUploadProgressPercent(1);
 
     const firstFile = files[0];
     const rawPath = firstFile.webkitRelativePath || firstFile.name;
     const folderName = rawPath.includes('/') ? rawPath.split('/')[0] : 'Uploaded-Folder';
 
-    setUploadProgressText(`Scanning folder '${folderName}'...`);
+    setUploadProgressText(`Scanning folder '${folderName}' (${files.length} files)...`);
     showToast(`Scanning '${folderName}'...`, 'info');
 
     try {
       const entries: ZipEntry[] = [];
+      // Chunked with periodic yields: for folders with tens of thousands of files this
+      // loop alone could previously block the main thread (and freeze the overlay's own
+      // animation) for several seconds with zero visual feedback. Yielding every 1500
+      // files keeps the browser painting and the progress text/bar moving throughout.
+      const YIELD_EVERY = 1500;
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const relPath = file.webkitRelativePath || file.name;
@@ -717,6 +757,11 @@ export function AIChatPage() {
             ? normalized.substring(folderName.length + 1)
             : normalized;
           entries.push({ path: zipPath, file });
+        }
+        if (i > 0 && i % YIELD_EVERY === 0) {
+          setUploadProgressPercent(Math.min(10, (i / files.length) * 10));
+          setUploadProgressText(`Scanning '${folderName}' (${i}/${files.length})...`);
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
       }
 
@@ -737,7 +782,7 @@ export function AIChatPage() {
     const folderName = dirHandle.name || 'Uploaded-Folder';
 
     setIsUploading(true);
-    setUploadProgressPercent(2);
+    setUploadProgressPercent(1);
     setUploadProgressText(`Scanning '${folderName}' (skipping heavy cache/build dirs)...`);
     showToast(`Scanning '${folderName}'...`, 'info');
 
@@ -749,6 +794,7 @@ export function AIChatPage() {
       // project's folder tree took so long just to *scan*, before any zipping even began.
       type PendingFile = { handle: any; path: string };
       const pendingFiles: PendingFile[] = [];
+      let lastTextUpdate = 0;
 
       async function collect(handle: any, currentPath: string) {
         const children: { entry: any; relPath: string }[] = [];
@@ -764,6 +810,15 @@ export function AIChatPage() {
         await Promise.all(children.map(async ({ entry, relPath }) => {
           if (entry.kind === 'file') {
             pendingFiles.push({ handle: entry, path: relPath });
+            // Time-throttled (not count-throttled) so discovery of a folder with only
+            // a handful of very large subtrees still visibly updates at least a few
+            // times a second, instead of going quiet for however long one branch takes.
+            const now = Date.now();
+            if (now - lastTextUpdate > 200) {
+              lastTextUpdate = now;
+              setUploadProgressText(`Discovering files... (${pendingFiles.length} found)`);
+              setUploadProgressPercent((p) => Math.min(4, p + 0.2));
+            }
           } else if (entry.kind === 'directory') {
             await collect(entry, relPath);
           }
@@ -772,6 +827,7 @@ export function AIChatPage() {
 
       await collect(dirHandle, '');
       setUploadProgressText(`Found ${pendingFiles.length} files, reading in parallel...`);
+      setUploadProgressPercent(5);
 
       // Phase 2: actually read file contents with bounded concurrency (32 at a time,
       // matching the backend's extraction concurrency for consistency) instead of
@@ -788,7 +844,9 @@ export function AIChatPage() {
             // skip unreadable file, don't fail the whole upload
           }
         }));
-        setUploadProgressText(`Read ${Math.min(i + CONCURRENCY, pendingFiles.length)}/${pendingFiles.length} files...`);
+        const done = Math.min(i + CONCURRENCY, pendingFiles.length);
+        setUploadProgressPercent(5 + (done / Math.max(1, pendingFiles.length)) * 5);
+        setUploadProgressText(`Read ${done}/${pendingFiles.length} files...`);
       }
 
       await zipAndUploadEntries(entries, folderName, 'uploaded & extracted successfully');
@@ -807,13 +865,14 @@ export function AIChatPage() {
     if (!items || items.length === 0) return;
 
     setIsUploading(true);
-    setUploadProgressPercent(2);
+    setUploadProgressPercent(1);
     setUploadProgressText("Scanning dropped folder...");
     showToast("Scanning dropped folder...", "info");
 
     try {
       const entries: ZipEntry[] = [];
       let folderName = 'Dropped-Project';
+      let lastTextUpdate = 0;
 
       // Same fix as the directory-handle path: gather every sibling entry first, then
       // recurse/read them all CONCURRENTLY via Promise.all instead of a sequential
@@ -829,6 +888,12 @@ export function AIChatPage() {
           if (!file) return;
           const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
           entries.push({ path: filePath, file });
+          const now = Date.now();
+          if (now - lastTextUpdate > 200) {
+            lastTextUpdate = now;
+            setUploadProgressText(`Reading dropped files... (${entries.length} found)`);
+            setUploadProgressPercent((p) => Math.min(9, p + 0.2));
+          }
         } else if (entry.isDirectory) {
           if (!currentPath && entry.name) folderName = entry.name;
           const dirReader = entry.createReader();

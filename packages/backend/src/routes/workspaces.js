@@ -60,7 +60,7 @@ export function workspaceRoutes({ secret }) {
   // POST /workspaces — create from ZIP (multipart) or Git (JSON)
   router.post('/', handleZipfileUpload, async (req, res, next) => {
     try {
-      const { name, source, repoUrl, branch, branchName, zipFilename } = req.body;
+      const { name, source, repoUrl, branch, branchName, zipFilename, uploadId } = req.body;
       if (!name || !source) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'name and source are required' } });
       }
@@ -77,7 +77,7 @@ export function workspaceRoutes({ secret }) {
         if (!zipPath) {
           return res.status(400).json({ error: { code: 'NO_FILE', message: 'No ZIP file received — ensure Content-Type is multipart/form-data' } });
         }
-        await extractZipTo(zipPath, diskPath);
+        await extractZipTo(zipPath, diskPath, uploadId);
       } else if (source === 'git') {
         if (!repoUrl) {
           return res.status(400).json({ error: { code: 'VALIDATION', message: 'repoUrl required for git source' } });
@@ -393,13 +393,30 @@ function safeJoin(root, p) {
   return join(rootResolved, ...filtered);
 }
 
-/** Extract a ZIP archive to a directory using parallel 32-concurrency disk writes. */
-async function extractZipTo(zipPath, destDir) {
+/** Emit a workspace-upload progress event to whichever client joined this upload's
+ *  room (see 'upload:join' in sockets.js). Best-effort — if socket.io isn't attached
+ *  yet or the client didn't join, this is a silent no-op, upload still succeeds. */
+function emitUploadProgress(uploadId, payload) {
+  if (!uploadId) return;
+  const io = globalThis.__mcodeIo;
+  if (!io) return;
+  io.to(`upload:${uploadId}`).emit('workspace:upload-progress', payload);
+}
+
+/** Extract a ZIP archive to a directory using parallel 32-concurrency disk writes.
+ *  Reports { phase: 'extracting', extracted, total } after every chunk so the client
+ *  isn't left staring at a static "uploading..." message while the server is actually
+ *  still busy writing thousands of files to disk (this used to be a silent gap of
+ *  several seconds to tens of seconds for bigger projects). */
+async function extractZipTo(zipPath, destDir, uploadId) {
   const { Open } = await import('unzipper');
   const directory = await Open.file(zipPath);
   const CONCURRENCY = 32;
   const entries = directory.files;
 
+  emitUploadProgress(uploadId, { phase: 'extracting', extracted: 0, total: entries.length });
+
+  let extracted = 0;
   for (let i = 0; i < entries.length; i += CONCURRENCY) {
     const chunk = entries.slice(i, i + CONCURRENCY);
     await Promise.all(
@@ -418,6 +435,8 @@ async function extractZipTo(zipPath, destDir) {
         }
       })
     );
+    extracted = Math.min(i + CONCURRENCY, entries.length);
+    emitUploadProgress(uploadId, { phase: 'extracting', extracted, total: entries.length });
   }
 }
 
