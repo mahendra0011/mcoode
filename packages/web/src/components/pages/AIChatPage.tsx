@@ -710,7 +710,7 @@ export function AIChatPage() {
       // Fast async handle traversal skipping heavy dirs at directory handle level
       async function traverseDir(handle: any, currentPath: string) {
         for await (const entry of handle.values()) {
-          if (entry.kind === 'directory' && MASTER_IGNORE_DIRS.has(entry.name)) {
+          if (entry.kind === 'directory' && (MASTER_IGNORE_DIRS.has(entry.name) || MASTER_IGNORE_DIRS.has(entry.name.toLowerCase()))) {
             continue;
           }
 

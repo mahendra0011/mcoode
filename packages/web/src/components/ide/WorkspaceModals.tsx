@@ -44,7 +44,6 @@ export function WorkspaceModals({
   };
 
   const triggerFolderInput = () => {
-    if (onStartUploading) onStartUploading('⚡ Scanning project files (skipping heavy cache/build dirs)...');
     const input = document.createElement('input');
     input.type = 'file';
     (input as any).webkitdirectory = true;
@@ -54,54 +53,45 @@ export function WorkspaceModals({
       const files = (e.target as HTMLInputElement).files;
       if (files && files.length > 0) {
         onClose();
+        if (onStartUploading) {
+          onStartUploading('⚡ Scanning & bundling project files...');
+        }
         if (onUploadFolder) {
           onUploadFolder(files);
         }
-      } else {
-        if (onStartUploading) onStartUploading('');
       }
     };
     input.click();
   };
 
-  const handleTriggerFolderUpload = (e?: React.MouseEvent) => {
+  const handleTriggerFolderUpload = async (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    if (onStartUploading) {
-      onStartUploading('⚡ Scanning project files (skipping heavy cache/build dirs)...');
-    }
-    onClose();
-
     if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
       try {
-        (window as any).showDirectoryPicker({ mode: 'read' })
-          .then((dirHandle: any) => {
-            if (dirHandle) {
-              if (onUploadDirectoryHandle) {
-                onUploadDirectoryHandle(dirHandle);
-              }
-            } else {
-              if (onStartUploading) onStartUploading('');
-            }
-          })
-          .catch((err: any) => {
-            if (err?.name === 'AbortError') {
-              if (onStartUploading) onStartUploading('');
-              return;
-            }
-            console.warn('showDirectoryPicker error, triggering fallback input:', err);
-            triggerFolderInput();
-          });
+        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
+        if (dirHandle) {
+          onClose();
+          if (onStartUploading) {
+            onStartUploading(`⚡ Scanning '${dirHandle.name}' (skipping heavy cache/build dirs)...`);
+          }
+          if (onUploadDirectoryHandle) {
+            onUploadDirectoryHandle(dirHandle);
+          }
+        }
+        return;
       } catch (err: any) {
-        console.warn('showDirectoryPicker exception, triggering fallback input:', err);
-        triggerFolderInput();
+        if (err?.name === 'AbortError') {
+          return;
+        }
+        console.warn('showDirectoryPicker error, triggering fallback input:', err);
       }
-    } else {
-      triggerFolderInput();
     }
+
+    triggerFolderInput();
   };
 
   const handleTriggerSingleFileUpload = () => {
