@@ -328,12 +328,13 @@ export function workspaceRoutes({ secret }) {
             const rawRelPath = relativePaths[globalIdx] || file.originalname;
             // Strip top-level folder name if webkitRelativePath includes root folder prefix
             const relPath = rawRelPath.includes('/') ? rawRelPath.split('/').slice(1).join('/') || rawRelPath : rawRelPath;
+            if (isIgnoredExtractionPath(relPath.replace(/\\/g, '/'))) return null;
             const dest = safeJoin(ws.diskPath, relPath);
             await mkDir(join(dest, '..'), { recursive: true });
             await copyFile(file.path, dest);
             return relPath;
           }));
-          uploadedFiles.push(...chunkResults);
+          uploadedFiles.push(...chunkResults.filter(Boolean));
         }
       }
 
@@ -346,14 +347,64 @@ export function workspaceRoutes({ secret }) {
   return router;
 }
 
+// Kept in sync (by content) with MASTER_IGNORE_DIRS in packages/web/src/components/pages/AIChatPage.tsx.
+// This is the LAST line of defense: it runs on every extraction path, including a
+// user directly uploading a raw .zip (the "ZIP Archive" option), which never goes
+// through the frontend's folder-scan filtering at all.
 const GLOBAL_SKIP_DIRS = new Set([
   'node_modules', '.git', '.next', 'dist', 'build',
   'coverage', '.cache', 'vendor', 'venv', '.venv', '__pycache__',
   '.turbo', 'out', '.idea', '.vscode', 'tmp', 'temp',
   'target', '.target', '.gradle', '.cargo', '.nuget', '.output',
   'bower_components', 'jspm_packages', '.expo', '.serverless',
-  '.swc', 'obj', 'bin', '.yarn', '.pnpm-store'
+  '.swc', 'obj', 'bin', '.yarn', '.pnpm-store',
+  '.pytest_cache', '.mypy_cache', '.ruff_cache', '.htmlcov', 'htmlcov',
+  '.nox', '.tox', '.conda', '.eggs', '.nyc_output',
+  'cmake-build-debug', 'cmake-build-release', 'CMakeFiles', 'ipch', '.vs',
+  '.dart_tool', '.fvm', 'Pods', 'DerivedData', '.build', '.swiftpm',
+  'captures', '.externalNativeBuild', 'xcuserdata',
+  '.docker', '.vagrant', '.terraform', '.terragrunt-cache',
+  '.elasticbeanstalk', '.npm', '.pnpm', '.nvm', '.hg', '.svn',
+  '.vercel', '.firebase', '.angular', '.sass-cache', '.fleet', '.nova',
+  '.history', '.parcel-cache', '.nuxt', '.astro', '.vite', '.docusaurus',
+  '$RECYCLE.BIN', '.Trashes', '.AppleDouble', '.LSOverride', '.Spotlight-V100'
 ]);
+
+// Junk files that should never land in a workspace, regardless of which directory
+// they're in — matches MASTER_IGNORE_EXACT_FILES / MASTER_IGNORE_EXTENSIONS on the
+// frontend, so a raw .zip upload gets the exact same filtering a folder upload does.
+const GLOBAL_SKIP_EXACT_FILES = new Set([
+  '.DS_Store', 'Thumbs.db', 'desktop.ini', 'ehthumbs.db', 'npm-debug.log',
+  'yarn-debug.log', 'yarn-error.log', 'pnpm-debug.log', 'coverage.xml',
+  'lcov.info', '.pnp.cjs', '.pnp.loader.mjs'
+]);
+
+const GLOBAL_SKIP_EXTENSIONS = new Set([
+  'log', 'tmp', 'temp', 'bak', 'swp', 'swo',
+  'pyc', 'pyo', 'pyd',
+  'class', 'jar', 'war', 'ear',
+  'o', 'obj', 'dll', 'so', 'dylib', 'exe', 'a', 'lib',
+  'pdb', 'idb', 'ilk', 'suo', 'user'
+  // Note: zip/tar/gz/rar/7z are deliberately NOT skipped server-side — the frontend
+  // ignores those to avoid re-zipping archives during a folder scan, but a directly
+  // uploaded ZIP full of legitimate data files (e.g. sample assets) shouldn't have
+  // its own top-level files nuked based on extension alone.
+]);
+
+/** True if this path (a file OR a directory segment in it) should never be extracted. */
+function isIgnoredExtractionPath(normPath) {
+  const parts = normPath.split('/');
+  if (parts.some(p => GLOBAL_SKIP_DIRS.has(p))) return true;
+  const fileName = parts[parts.length - 1];
+  if (!fileName) return false;
+  if (GLOBAL_SKIP_EXACT_FILES.has(fileName)) return true;
+  const dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex > 0) {
+    const ext = fileName.substring(dotIndex + 1).toLowerCase();
+    if (GLOBAL_SKIP_EXTENSIONS.has(ext)) return true;
+  }
+  return false;
+}
 
 /** Walk a directory tree and return relative file paths (excludes node_modules, .git, etc.). */
 async function walkDir(dir, base = '') {
@@ -371,6 +422,9 @@ async function walkDir(dir, base = '') {
     if (entry.isDirectory()) {
       files.push(...await walkDir(full, rel));
     } else {
+      if (GLOBAL_SKIP_EXACT_FILES.has(entry.name)) continue;
+      const dotIndex = entry.name.lastIndexOf('.');
+      if (dotIndex > 0 && GLOBAL_SKIP_EXTENSIONS.has(entry.name.substring(dotIndex + 1).toLowerCase())) continue;
       files.push({ path: rel, name: entry.name });
     }
   }
@@ -412,8 +466,7 @@ async function extractZipTo(zipPath, destDir) {
     await Promise.all(
       chunk.map(async (entry) => {
         const normPath = entry.path.replace(/\\/g, '/');
-        const parts = normPath.split('/');
-        if (parts.some(p => GLOBAL_SKIP_DIRS.has(p))) return;
+        if (isIgnoredExtractionPath(normPath)) return;
 
         const fullPath = safeJoin(destDir, entry.path);
         if (entry.type === 'Directory') {

@@ -29,22 +29,26 @@ const MASTER_IGNORE_DIRS = new Set([
   '.cache-loader', '.storybook-out', 'storybook-static', '.wxt', '.docusaurus',
   'venv', '.venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',
   '.htmlcov', 'htmlcov', '.nox', '.tox', '.conda', 'env', '.env', 'ENV',
-  'pip-wheel-metadata', 'site-packages',
+  'pip-wheel-metadata', 'site-packages', '.eggs', '.nyc_output',
   'target', '.target', '.gradle', '.cargo', '.nuget', 'vendor', 'obj', 'bin',
   'cmake-build-debug', 'cmake-build-release', 'CMakeFiles', 'ipch', '.vs',
   'x64', 'x86', 'Debug', 'Release',
   '.dart_tool', '.fvm', '.flutter-plugins', '.flutter-plugins-dependencies',
   'Pods', 'DerivedData', '.build', '.swiftpm', 'captures', '.externalNativeBuild',
-  '.bundle', 'deps', '_build',
-  '.git', '.idea', '.vscode', 'tmp', 'temp', '.docker', '.vagrant',
+  'xcuserdata', '.bundle', 'deps', '_build',
+  '.git', '.idea', '.vscode', '.fleet', '.nova', '.history', 'tmp', 'temp',
+  '.docker', '.vagrant',
   '.terraform', '.terragrunt-cache', '.elasticbeanstalk', '.local', '.npm',
-  '.pnpm', '.nvm', '.hg', '.svn'
+  '.pnpm', '.nvm', '.hg', '.svn',
+  '.vercel', '.firebase', '.angular', '.sass-cache', '.metals', '.bloop',
+  '.ensime_cache', '$RECYCLE.BIN', '.Trashes', '.AppleDouble', '.LSOverride',
+  '.Spotlight-V100'
 ]);
 
 const MASTER_IGNORE_EXACT_FILES = new Set([
   '.DS_Store', 'Thumbs.db', 'desktop.ini', 'ehthumbs.db', 'npm-debug.log',
   'yarn-debug.log', 'yarn-error.log', 'pnpm-debug.log', 'coverage.xml',
-  'lcov.info'
+  'lcov.info', '.pnp.cjs', '.pnp.loader.mjs'
 ]);
 
 const MASTER_IGNORE_EXTENSIONS = new Set([
@@ -56,7 +60,7 @@ const MASTER_IGNORE_EXTENSIONS = new Set([
   'zip', 'tar', 'gz', 'rar', '7z', 'iso', 'dmg'
 ]);
 
-const FAST_SKIP_REGEX = /(\/|\\|^)(node_modules|\.git|\.next|dist|build|coverage|\.cache|vendor|venv|\.venv|__pycache__|\.turbo|out|\.idea|\.vscode|tmp|temp|target|\.target|\.gradle|\.cargo|\.nuget|\.output|bower_components|jspm_packages|\.expo|\.serverless|\.swc|obj|bin|\.yarn|\.pnpm-store)(\/|\\|$)/i;
+const FAST_SKIP_REGEX = /(\/|\\|^)(node_modules|\.git|\.next|dist|build|coverage|\.cache|vendor|venv|\.venv|__pycache__|\.turbo|out|\.idea|\.vscode|\.fleet|\.nova|\.history|tmp|temp|target|\.target|\.gradle|\.cargo|\.nuget|\.output|bower_components|jspm_packages|\.expo|\.serverless|\.swc|obj|bin|\.yarn|\.pnpm-store|\.vercel|\.firebase|\.angular|Pods|DerivedData|xcuserdata|\.dart_tool)(\/|\\|$)/i;
 
 function isIgnoredUploadPath(relPath: string): boolean {
   const normalized = relPath.replace(/\\/g, '/');
