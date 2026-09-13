@@ -6,6 +6,7 @@ node_modules/
 
 # Root-level Downloaded & Cached Extensions (Local VS Code extension packs)
 /extensions/
+packages/backend/data/
 *.vsix
 
 # Scratch & Temporary Testing Files
