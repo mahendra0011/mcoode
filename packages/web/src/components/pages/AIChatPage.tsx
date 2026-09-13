@@ -66,11 +66,11 @@ function isIgnoredUploadPath(relPath: string): boolean {
   const normalized = relPath.replace(/\\/g, '/');
   const parts = normalized.split('/');
   for (const part of parts) {
-    if (MASTER_IGNORE_DIRS.has(part)) return true;
+    if (MASTER_IGNORE_DIRS.has(part) || MASTER_IGNORE_DIRS.has(part.toLowerCase())) return true;
   }
   const fileName = parts[parts.length - 1];
   if (!fileName) return false;
-  if (MASTER_IGNORE_EXACT_FILES.has(fileName)) return true;
+  if (MASTER_IGNORE_EXACT_FILES.has(fileName) || MASTER_IGNORE_EXACT_FILES.has(fileName.toLowerCase())) return true;
   const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex > 0) {
     const ext = fileName.substring(dotIndex + 1).toLowerCase();
@@ -855,7 +855,7 @@ export function AIChatPage() {
       // recurse/read them all CONCURRENTLY via Promise.all instead of a sequential
       // `for (const subEntry of entries) { await readEntry(...) }` loop.
       const readEntry = async (entry: any, currentPath: string): Promise<void> => {
-        if (entry.isDirectory && MASTER_IGNORE_DIRS.has(entry.name)) return;
+        if (entry.isDirectory && (MASTER_IGNORE_DIRS.has(entry.name) || MASTER_IGNORE_DIRS.has(entry.name.toLowerCase()))) return;
 
         const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
         if (isIgnoredUploadPath(relPath)) return;

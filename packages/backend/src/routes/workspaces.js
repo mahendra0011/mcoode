@@ -97,6 +97,10 @@ export function workspaceRoutes({ secret }) {
       });
       res.status(201).json({ workspace: ws });
     } catch (err) {
+      // Log the REAL error to the server terminal — the browser only ever sees a
+      // generic 500 via the global error handler, which makes bugs like this
+      // impossible to diagnose from the client console alone.
+      console.error('[workspaces] POST / failed:', err);
       next(err);
     }
   });
@@ -394,10 +398,10 @@ const GLOBAL_SKIP_EXTENSIONS = new Set([
 /** True if this path (a file OR a directory segment in it) should never be extracted. */
 function isIgnoredExtractionPath(normPath) {
   const parts = normPath.split('/');
-  if (parts.some(p => GLOBAL_SKIP_DIRS.has(p))) return true;
+  if (parts.some(p => GLOBAL_SKIP_DIRS.has(p) || GLOBAL_SKIP_DIRS.has(p.toLowerCase()))) return true;
   const fileName = parts[parts.length - 1];
   if (!fileName) return false;
-  if (GLOBAL_SKIP_EXACT_FILES.has(fileName)) return true;
+  if (GLOBAL_SKIP_EXACT_FILES.has(fileName) || GLOBAL_SKIP_EXACT_FILES.has(fileName.toLowerCase())) return true;
   const dotIndex = fileName.lastIndexOf('.');
   if (dotIndex > 0) {
     const ext = fileName.substring(dotIndex + 1).toLowerCase();
@@ -416,13 +420,13 @@ async function walkDir(dir, base = '') {
     return files;
   }
   for (const entry of entries) {
-    if (GLOBAL_SKIP_DIRS.has(entry.name)) continue;
+    if (GLOBAL_SKIP_DIRS.has(entry.name) || GLOBAL_SKIP_DIRS.has(entry.name.toLowerCase())) continue;
     const full = join(dir, entry.name);
     const rel = base ? `${base}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
       files.push(...await walkDir(full, rel));
     } else {
-      if (GLOBAL_SKIP_EXACT_FILES.has(entry.name)) continue;
+      if (GLOBAL_SKIP_EXACT_FILES.has(entry.name) || GLOBAL_SKIP_EXACT_FILES.has(entry.name.toLowerCase())) continue;
       const dotIndex = entry.name.lastIndexOf('.');
       if (dotIndex > 0 && GLOBAL_SKIP_EXTENSIONS.has(entry.name.substring(dotIndex + 1).toLowerCase())) continue;
       files.push({ path: rel, name: entry.name });
