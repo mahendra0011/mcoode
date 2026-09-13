@@ -7,6 +7,7 @@ export type ThinkingIndicatorSize = 'sm' | 'md';
 export interface ThinkingIndicatorProps {
   size?: ThinkingIndicatorSize;
   showAvatar?: boolean;
+  label?: string;
 }
 
 /**
@@ -24,7 +25,7 @@ export interface ThinkingIndicatorProps {
  * When showAvatar is true, a circular "M" avatar is rendered
  * before the brain icon (used in agent mode).
  */
-export function ThinkingIndicator({ size = 'md', showAvatar = false }: ThinkingIndicatorProps) {
+export function ThinkingIndicator({ size = 'md', showAvatar = false, label }: ThinkingIndicatorProps) {
   const textSize = size === 'sm' ? 'text-[13px]' : 'text-[15px]';
 
   return (
@@ -45,7 +46,7 @@ export function ThinkingIndicator({ size = 'md', showAvatar = false }: ThinkingI
       )}
       <BrainCircuit className="w-4 h-4 shrink-0 text-white/40" />
       <span className="animated-gradient-text font-medium">
-        Thinking...
+        {label || 'Thinking...'}
       </span>
     </motion.div>
   );

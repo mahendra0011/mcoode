@@ -36,6 +36,19 @@ import {
   setWaveComplete,
   setIntegrationPass,
   setBuildComplete,
+  promptEnhancing,
+  promptEnhanced,
+  promptEnhancementResolved,
+  clarifyAsked,
+  clarifyAnswered,
+  codebaseReadingProgress,
+  codebaseReadingDone,
+  roleAssignmentsSet,
+  comparisonUpdated,
+  securityAuditUpdated,
+  playwrightAuditUpdated,
+  playwrightIssueAdded,
+  permissionAnswered,
   addToast,
   removeToast
 } from '../store/chatSlice';
@@ -295,6 +308,35 @@ export function useChatSocket(workspaceId: string | null = null) {
       }
     };
 
+    // Web God Mode handlers
+    const onPromptEnhancing = () => { dispatch(promptEnhancing()); };
+    const onPromptEnhanced = (payload: any) => { dispatch(promptEnhanced(payload)); };
+    const onClarifyAsk = (payload: any) => { dispatch(clarifyAsked(payload)); };
+    const onCodebaseReading = (payload: any) => { dispatch(codebaseReadingProgress(payload)); };
+    const onCodebaseReadComplete = () => { dispatch(codebaseReadingDone()); };
+    const onRolesAssigned = (payload: any) => {
+      dispatch(roleAssignmentsSet(payload?.assignments || (Array.isArray(payload) ? payload : [])));
+    };
+    const onComparisonUpdate = (payload: any) => {
+      if (payload?.scope === 'security') {
+        dispatch(securityAuditUpdated(payload));
+      } else {
+        dispatch(comparisonUpdated(payload));
+      }
+    };
+    const onPlaywrightStart = (payload: any) => {
+      dispatch(playwrightAuditUpdated({ active: true, pass: payload?.pass || 1, issues: [], clean: false }));
+    };
+    const onPlaywrightIssue = (payload: any) => {
+      dispatch(playwrightIssueAdded(payload));
+    };
+    const onPlaywrightPassComplete = (payload: any) => {
+      dispatch(playwrightAuditUpdated({ active: true, pass: payload?.pass, clean: !!payload?.cleanSoFar }));
+    };
+    const onPlaywrightDone = (payload: any) => {
+      dispatch(playwrightAuditUpdated({ active: true, clean: !!payload?.clean }));
+    };
+
     socket.on('connect', onConnect);
     socket.on('chat:ready', onChatReady);
     socket.on('chat:error', onChatError);
@@ -325,6 +367,19 @@ export function useChatSocket(workspaceId: string | null = null) {
     socket.on('integration:pass', onIntegrationPass);
     socket.on('build:complete', onBuildComplete);
     socket.on('toast', onToast);
+
+    // Web God Mode (Phases 0-10) socket subscriptions
+    socket.on('prompt:enhancing', onPromptEnhancing);
+    socket.on('prompt:enhanced', onPromptEnhanced);
+    socket.on('clarify:ask', onClarifyAsk);
+    socket.on('codebase:reading', onCodebaseReading);
+    socket.on('codebase:read-complete', onCodebaseReadComplete);
+    socket.on('roles:assigned', onRolesAssigned);
+    socket.on('comparison:update', onComparisonUpdate);
+    socket.on('playwright:start', onPlaywrightStart);
+    socket.on('playwright:issue', onPlaywrightIssue);
+    socket.on('playwright:pass-complete', onPlaywrightPassComplete);
+    socket.on('playwright:done', onPlaywrightDone);
 
     // Real Debugger events
     const onDebugStarted = (p: any) => {
@@ -411,6 +466,17 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off('integration:pass', onIntegrationPass);
       socket.off('build:complete', onBuildComplete);
       socket.off('toast', onToast);
+      socket.off('prompt:enhancing', onPromptEnhancing);
+      socket.off('prompt:enhanced', onPromptEnhanced);
+      socket.off('clarify:ask', onClarifyAsk);
+      socket.off('codebase:reading', onCodebaseReading);
+      socket.off('codebase:read-complete', onCodebaseReadComplete);
+      socket.off('roles:assigned', onRolesAssigned);
+      socket.off('comparison:update', onComparisonUpdate);
+      socket.off('playwright:start', onPlaywrightStart);
+      socket.off('playwright:issue', onPlaywrightIssue);
+      socket.off('playwright:pass-complete', onPlaywrightPassComplete);
+      socket.off('playwright:done', onPlaywrightDone);
       socket.off('debug:started', onDebugStarted);
       socket.off('debug:output', onDebugOutput);
       socket.off('debug:exited', onDebugExited);
@@ -448,7 +514,7 @@ export function useChatSocket(workspaceId: string | null = null) {
       socketRef.current.emit('chat:permission_answer', { requestId, answer });
     }
     // Clear the permission modal from Redux state now that we've answered
-    dispatch(clearPermission());
+    dispatch(permissionAnswered({ requestId, answer }));
   }, [dispatch]);
 
   const undo = useCallback((msg: { undoId?: string }) => {

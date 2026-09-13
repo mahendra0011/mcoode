@@ -9,7 +9,17 @@ interface TodoItem {
   status?: string;
 }
 export interface TodoCardProps {
-  plan?: { todos?: TodoItem[]; summary?: string };
+  plan?: {
+    todos?: TodoItem[];
+    summary?: string;
+    designSystem?: {
+      colors: Record<string, string>;
+      fonts: { heading: string; body: string; mono?: string };
+      spacingScale?: string;
+      componentStyle?: string;
+      tone?: string;
+    };
+  };
 }
 
 export function TodoCard({ plan }: TodoCardProps) {
@@ -26,6 +36,37 @@ export function TodoCard({ plan }: TodoCardProps) {
         <span className="text-xs font-semibold text-white/90">📋 Plan</span>
         <span className="text-xs text-white/50 truncate flex-1">{plan.summary}</span>
       </div>
+
+      {plan.designSystem && (
+        <div className="px-3 py-2.5 border-b border-white/5">
+          <div className="text-[10px] uppercase tracking-wider text-white/40 mb-2">Design System</div>
+          {plan.designSystem.colors && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {Object.entries(plan.designSystem.colors).map(([name, hex]) => (
+                <div key={name} className="flex items-center gap-1.5 bg-white/5 rounded-full pl-1 pr-2 py-0.5">
+                  <div className="w-3.5 h-3.5 rounded-full border border-white/20" style={{ background: hex }} />
+                  <span className="text-[10px] text-white/60">{name}</span>
+                  <span className="text-[9px] text-white/30 font-mono">{hex}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {plan.designSystem.fonts && (
+            <div className="flex gap-3 text-[11px] text-white/50">
+              {plan.designSystem.fonts.heading && (
+                <span>Heading: <span className="text-white/70">{plan.designSystem.fonts.heading}</span></span>
+              )}
+              {plan.designSystem.fonts.body && (
+                <span>Body: <span className="text-white/70">{plan.designSystem.fonts.body}</span></span>
+              )}
+            </div>
+          )}
+          {plan.designSystem.tone && (
+            <div className="text-[11px] text-white/40 mt-1 italic">"{plan.designSystem.tone}"</div>
+          )}
+        </div>
+      )}
+
       <div className="p-2 flex flex-col gap-1">
         {plan.todos.map((todo, idx) => {
           const isDone = todo.status === 'done';

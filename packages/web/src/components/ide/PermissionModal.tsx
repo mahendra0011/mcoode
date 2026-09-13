@@ -6,14 +6,17 @@ export interface PermissionModalProps {
   request?: PermissionRequest | null;
   onAnswer: (requestId: string, answer: string) => void;
 }
-interface PermissionRequest {
+export interface PermissionRequest {
   status: string;
-  command: string;
   requestId: string;
+  kind?: 'shell' | 'plan-approval' | 'security-audit' | 'playwright-audit';
+  command?: string;
+  planSummary?: string;
 }
 
 export function PermissionModal({ request, onAnswer }: PermissionModalProps) {
   const isVisible = request && request.status === 'running';
+  const kind = request?.kind || 'shell';
 
   return (
     <AnimatePresence>
@@ -31,10 +34,20 @@ export function PermissionModal({ request, onAnswer }: PermissionModalProps) {
         <AlertTriangle className="w-5 h-5 text-[#eab308] flex-shrink-0 mt-0.5" />
         <div className="flex flex-col gap-3 w-full">
           <div>
-            <span className="text-sm font-semibold text-[#eab308]">Run this command?</span>
-            <div className="mt-2 bg-black/40 p-2 rounded-lg border border-white/5 font-mono text-xs text-white/80 overflow-x-auto whitespace-pre">
-              {request!.command}
-            </div>
+            <span className="text-sm font-semibold text-[#eab308]">
+              {kind === 'shell' && 'Run this command?'}
+              {kind === 'plan-approval' && 'Approve this plan and start building?'}
+              {kind === 'security-audit' && 'Run security audit now?'}
+              {kind === 'playwright-audit' && 'Run Playwright self-testing now?'}
+            </span>
+            {kind === 'shell' && request!.command && (
+              <div className="mt-2 bg-black/40 p-2 rounded-lg border border-white/5 font-mono text-xs text-white/80 overflow-x-auto whitespace-pre">
+                {request!.command}
+              </div>
+            )}
+            {kind !== 'shell' && request!.planSummary && (
+              <div className="mt-2 text-xs text-white/60">{request!.planSummary}</div>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-1">
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}

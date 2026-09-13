@@ -13,13 +13,42 @@ import { CheckCircle2, XCircle, Loader2, Clock, Zap, BarChart3 } from 'lucide-re
  *   buildSummary   { done, total, failed, needsReview, elapsedSecs, cost, ... }
  *   godMode        boolean — show the dashboard only when true
  */
-const DOMAIN_COLORS: Record<string, string> = {
+export const DOMAIN_COLORS: Record<string, string> = {
+  general: 'text-white/60',
+  bugfix: 'text-red-400',
   frontend: 'text-blue-400',
   backend: 'text-purple-400',
-  db: 'text-amber-400',
+  animation: 'text-pink-400',
+  testing: 'text-teal-400',
+  security: 'text-orange-400',
+  database: 'text-amber-400',
   devops: 'text-green-400',
-  test: 'text-teal-400',
-  docs: 'text-gray-400',
+  mobile: 'text-cyan-400',
+  'ai-ml': 'text-fuchsia-400',
+  'system-design': 'text-indigo-400',
+  'real-world': 'text-lime-400',
+};
+
+export const DOMAIN_BG: Record<string, string> = {
+  general: 'bg-white/10',
+  bugfix: 'bg-red-500/10',
+  frontend: 'bg-blue-500/10',
+  backend: 'bg-purple-500/10',
+  animation: 'bg-pink-500/10',
+  testing: 'bg-teal-500/10',
+  security: 'bg-orange-500/10',
+  database: 'bg-amber-500/10',
+  devops: 'bg-green-500/10',
+  mobile: 'bg-cyan-500/10',
+  'ai-ml': 'bg-fuchsia-500/10',
+  'system-design': 'bg-indigo-500/10',
+  'real-world': 'bg-lime-500/10',
+};
+
+export const DOMAIN_ABBREV: Record<string, string> = {
+  'system-design': 'sysdes',
+  'real-world': 'rlwrld',
+  'ai-ml': 'ai-ml',
 };
 
 const STATUS_ICON = {
@@ -44,22 +73,38 @@ interface Subagent {
   message?: string;
   progress?: number;
 }
-interface BuildSummary {
+export interface BuildSummary {
   done: number;
   total: number;
   failed: number;
   needsReview: number;
   elapsedSecs?: number;
   cost?: number;
+  verificationPasses?: number;
+  verificationComplete?: boolean;
+  securityPassed?: boolean;
+  securityChecks?: { done: number; total: number };
+  playwrightClean?: boolean;
+  playwrightIssuesRemaining?: number;
+  modelsByDomain?: { domain: string; model: string; calls: number; cost: number }[];
 }
 export interface WaveProgressProps {
   waves?: Wave[];
   subagents?: Record<string, Subagent>;
   buildSummary?: BuildSummary | null;
   godMode?: boolean;
+  projectTier?: string | null;
+  concurrency?: number;
 }
 
-export function WaveProgress({ waves = [], subagents = {}, buildSummary = null, godMode = false }: WaveProgressProps) {
+export function WaveProgress({
+  waves = [],
+  subagents = {},
+  buildSummary = null,
+  godMode = false,
+  projectTier = null,
+  concurrency = 0,
+}: WaveProgressProps) {
   if (!godMode) return null;
 
   const activeWave = waves.find((w) => w.status === 'running');
@@ -82,11 +127,18 @@ export function WaveProgress({ waves = [], subagents = {}, buildSummary = null, 
               God Mode — Parallel Build
             </span>
           </div>
-          {activeWave && (
-            <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
-              Wave {activeWave.wave} active
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {projectTier && (
+              <span className="text-[10px] text-white/30">
+                {projectTier} project · {concurrency} parallel
+              </span>
+            )}
+            {activeWave && (
+              <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                Wave {activeWave.wave} active
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Waves list */}
@@ -135,7 +187,7 @@ export function WaveProgress({ waves = [], subagents = {}, buildSummary = null, 
                           <div key={s.todoId} className="flex items-center gap-2 text-[11px]">
                             {STATUS_ICON[s.status] || STATUS_ICON.pending}
                             <span className={DOMAIN_COLORS[s.domain] || 'text-white/40'}>
-                              [{s.domain?.slice(0, 6) || 'unknown'}]
+                              [{DOMAIN_ABBREV[s.domain] || s.domain?.slice(0, 6) || 'unknown'}]
                             </span>
                             <span className="text-white/60 truncate max-w-[180px]">
                               {s.message || 'working...'}
@@ -174,6 +226,41 @@ export function WaveProgress({ waves = [], subagents = {}, buildSummary = null, 
                   {buildSummary.cost && buildSummary.cost > 0 && <span>${Number(buildSummary.cost).toFixed(2)}</span>}
                 </div>
               </div>
+
+              {(buildSummary.verificationComplete !== undefined || buildSummary.securityPassed !== undefined || buildSummary.playwrightClean !== undefined) && (
+                <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-white/5 text-[11px]">
+                  {buildSummary.verificationComplete !== undefined && (
+                    <span className={buildSummary.verificationComplete ? 'text-emerald-400' : 'text-amber-400'}>
+                      {buildSummary.verificationComplete ? '✓' : '○'} verification ({buildSummary.verificationPasses || 0} pass{buildSummary.verificationPasses !== 1 ? 'es' : ''})
+                    </span>
+                  )}
+                  {buildSummary.securityPassed !== undefined && (
+                    <span className={buildSummary.securityPassed ? 'text-emerald-400' : 'text-red-400'}>
+                      {buildSummary.securityPassed ? '✓' : '✗'} security ({buildSummary.securityChecks?.done ?? 0}/{buildSummary.securityChecks?.total ?? 0})
+                    </span>
+                  )}
+                  {buildSummary.playwrightClean !== undefined && (
+                    <span className={buildSummary.playwrightClean ? 'text-emerald-400' : 'text-amber-400'}>
+                      {buildSummary.playwrightClean ? '✓' : '⚠'} playwright{!buildSummary.playwrightClean && ` (${buildSummary.playwrightIssuesRemaining ?? 0} open)`}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Model usage breakdown — collapsible */}
+              {buildSummary.modelsByDomain && buildSummary.modelsByDomain.length > 0 && (
+                <details className="mt-1.5">
+                  <summary className="text-[10px] text-white/30 cursor-pointer hover:text-white/50">model usage ▾</summary>
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    {buildSummary.modelsByDomain.map((m) => (
+                      <div key={m.domain} className="flex justify-between text-[10px] text-white/40">
+                        <span>{m.domain}</span>
+                        <span className="font-mono">{m.model} · {m.calls}× · ${Number(m.cost || 0).toFixed(3)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
             </motion.div>
           )}
         </div>

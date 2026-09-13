@@ -28,6 +28,8 @@ export interface TestCase {
   status: "idle" | "running" | "passed" | "failed";
   error?: string;
   durationMs?: number;
+  source?: 'user' | 'god-mode';
+  todoId?: string;
 }
 
 /**
@@ -224,6 +226,33 @@ export function TestingPanel({
       return merged;
     });
   }, [discoveredTests, defaultTests, propTests]);
+
+  // Listen for god-mode auto-generated tests from socket
+  useEffect(() => {
+    const socket = getSocket();
+    const onTestsGenerated = (data: any) => {
+      const generatedList = data?.tests || (Array.isArray(data) ? data : []);
+      if (generatedList.length > 0) {
+        setTestSuite((prev) => {
+          const mapped: TestCase[] = generatedList.map((t: any) => ({
+            id: t.id || `god-mode-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: t.name || 'Auto Test',
+            fileId: t.fileId || 'tests/auto.test.js',
+            fn: () => {},
+            status: 'idle' as const,
+            source: 'god-mode' as const,
+            todoId: t.todoId,
+          }));
+          return [...prev, ...mapped];
+        });
+        toast.success(`${generatedList.length} tests generated — see Testing panel`);
+      }
+    };
+    socket.on('tests:generated', onTestsGenerated);
+    return () => {
+      socket.off('tests:generated', onTestsGenerated);
+    };
+  }, []);
 
   const jumpToFile = useCallback(
     (fileId: string) => {
@@ -500,6 +529,11 @@ defineTest("handles failure gracefully", () => {
                             <span className="text-white/90 group-hover:text-white truncate text-[11px]">
                               {t.name}
                             </span>
+                            {t.source === 'god-mode' && (
+                              <span className="flex items-center gap-1 text-[9px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                <Sparkles className="w-2.5 h-2.5" /> auto
+                              </span>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-1.5 flex-shrink-0">

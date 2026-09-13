@@ -34,8 +34,42 @@ type Mode = 'chat' | 'agent';
 
 export interface Model { ref?: string; id?: string; provider?: string; name?: string }
 export interface TodoItem { id: string | number; status: string; [k: string]: unknown }
-export interface Plan { summary?: string; todos?: TodoItem[] | null }
-export interface PermissionRequest { requestId?: string; [k: string]: unknown }
+export interface Plan {
+  summary?: string;
+  todos?: TodoItem[] | null;
+  designSystem?: {
+    colors: Record<string, string>;
+    fonts: { heading: string; body: string; mono?: string };
+    spacingScale?: string;
+    componentStyle?: string;
+    tone?: string;
+  };
+}
+export interface PermissionRequest {
+  requestId?: string;
+  status?: string;
+  kind?: 'shell' | 'plan-approval' | 'security-audit' | 'playwright-audit';
+  command?: string;
+  planSummary?: string;
+  [k: string]: unknown;
+}
+export interface RoleAssignment {
+  domain: string;
+  model: string;
+  provider: string;
+  todoCount: number;
+}
+export interface ComparisonRow {
+  id: string;
+  text: string;
+  state: 'done' | 'incomplete' | 'checking';
+}
+export interface PlaywrightIssue {
+  description: string;
+  severity: 'low' | 'medium' | 'high';
+  screenshotUrl?: string;
+  route?: string;
+}
 export interface Toast { id: string; kind?: string; text?: string }
 export interface Wave { wave: number; total: number; completed: number; status: string; subagentIds?: string[] }
 export interface Subagent {
@@ -76,6 +110,19 @@ interface ChatState {
   buildIntegration?: unknown;
   toasts: Toast[];
   _turnDone: boolean;
+
+  // WEB God Mode (Phases 0-11)
+  enhancedPrompt: { original: string; enhanced: string; accepted: boolean; pending: boolean } | null;
+  clarifyQuestions: { question: string; options: string[]; answer: string | null }[];
+  permissionMode: 'ask' | 'full';
+  codebaseReading: { active: boolean; filesRead: number; totalFiles: number; readers: number; currentAreas: string[] } | null;
+  projectTier: 'scratch' | 'small' | 'medium' | 'large' | 'xlarge' | null;
+  concurrency: number;
+  comparisonRows: ComparisonRow[];
+  verificationPass: number;
+  securityAudit: { rows: ComparisonRow[]; pass: number } | null;
+  playwrightAudit: { active: boolean; pass: number; issues: PlaywrightIssue[]; clean: boolean } | null;
+  roleAssignments: RoleAssignment[];
 }
 
 const initialState: ChatState = {
@@ -95,6 +142,19 @@ const initialState: ChatState = {
   buildSummary: null,
   toasts: [],
   _turnDone: false,
+
+  // WEB God Mode initial state
+  enhancedPrompt: null,
+  clarifyQuestions: [],
+  permissionMode: 'ask',
+  codebaseReading: null,
+  projectTier: null,
+  concurrency: 0,
+  comparisonRows: [],
+  verificationPass: 0,
+  securityAudit: null,
+  playwrightAudit: null,
+  roleAssignments: [],
 };
 
 const chatSlice = createSlice({
@@ -392,6 +452,15 @@ const chatSlice = createSlice({
     clearPermission: (state) => {
       state.permissionRequest = null;
     },
+    permissionAnswered: (state, action) => {
+      const { requestId, answer } = action.payload || {};
+      if (!requestId || state.permissionRequest?.requestId === requestId) {
+        if (answer === 'always' && state.permissionRequest?.kind === 'plan-approval') {
+          state.permissionMode = 'full';
+        }
+        state.permissionRequest = null;
+      }
+    },
     resetStreaming: (state) => {
       state.isStreaming = false;
       state._turnDone = true;
@@ -440,6 +509,17 @@ const chatSlice = createSlice({
       state.isStreaming = false;
       state._turnDone = false;
       state.keysError = null;
+      state.waves = [];
+      state.subagents = {};
+      state.buildSummary = null;
+      state.enhancedPrompt = null;
+      state.clarifyQuestions = [];
+      state.codebaseReading = null;
+      state.roleAssignments = [];
+      state.comparisonRows = [];
+      state.verificationPass = 0;
+      state.securityAudit = null;
+      state.playwrightAudit = null;
     },
 
     // ── God-mode reducers ───────────────────────────────────────────
@@ -530,11 +610,14 @@ const chatSlice = createSlice({
     },
     setWaveStart: (state, action) => {
       const p = action.payload || {};
+      if (p.projectTier !== undefined) state.projectTier = p.projectTier;
+      if (p.concurrency !== undefined) state.concurrency = p.concurrency;
       state.waves.push({
         wave: p.wave,
         total: p.total || 0,
         completed: 0,
-        status: 'running'
+        status: 'running',
+        subagentIds: p.subagentIds
       });
     },
     setWaveComplete: (state, action) => {
@@ -552,6 +635,71 @@ const chatSlice = createSlice({
       state.buildSummary = action.payload;
       state.isStreaming = false;
       state.godMode = false;
+    },
+    promptEnhancing: (state) => {
+      state.enhancedPrompt = { original: '', enhanced: '', accepted: false, pending: true };
+    },
+    promptEnhanced: (state, action) => {
+      state.enhancedPrompt = { ...action.payload, accepted: false, pending: false };
+    },
+    promptEnhancementResolved: (state, action) => {
+      if (state.enhancedPrompt) {
+        state.enhancedPrompt.accepted = !!action.payload;
+        state.enhancedPrompt.pending = false;
+      }
+    },
+    clarifyAsked: (state, action) => {
+      state.clarifyQuestions.push({ ...action.payload, answer: null });
+    },
+    clarifyAnswered: (state, action) => {
+      const q = state.clarifyQuestions.find((c) => c.question === action.payload.question);
+      if (q) q.answer = action.payload.answer;
+    },
+    codebaseReadingProgress: (state, action) => {
+      const p = action.payload || {};
+      state.codebaseReading = {
+        active: true,
+        filesRead: p.filesRead || 0,
+        totalFiles: p.totalFiles || 0,
+        readers: p.readers || 1,
+        currentAreas: p.currentAreas || []
+      };
+    },
+    codebaseReadingDone: (state) => {
+      if (state.codebaseReading) {
+        state.codebaseReading.active = false;
+      }
+    },
+    roleAssignmentsSet: (state, action) => {
+      state.roleAssignments = action.payload || [];
+    },
+    comparisonUpdated: (state, action) => {
+      const p = action.payload || {};
+      state.comparisonRows = p.rows || [];
+      state.verificationPass = p.pass || 1;
+    },
+    securityAuditUpdated: (state, action) => {
+      const p = action.payload || {};
+      state.securityAudit = {
+        rows: p.rows || [],
+        pass: p.pass || 1
+      };
+    },
+    playwrightAuditUpdated: (state, action) => {
+      const p = action.payload || {};
+      state.playwrightAudit = {
+        active: p.active !== undefined ? p.active : (state.playwrightAudit?.active ?? true),
+        pass: p.pass !== undefined ? p.pass : (state.playwrightAudit?.pass ?? 1),
+        issues: p.issues !== undefined ? p.issues : (state.playwrightAudit?.issues ?? []),
+        clean: p.clean !== undefined ? p.clean : (state.playwrightAudit?.clean ?? false)
+      };
+    },
+    playwrightIssueAdded: (state, action) => {
+      if (!state.playwrightAudit) {
+        state.playwrightAudit = { active: true, pass: 1, issues: [], clean: false };
+      }
+      state.playwrightAudit.issues.push(action.payload);
+      state.playwrightAudit.clean = false;
     },
     addToast: (state, action) => {
       const { id, kind = 'info', text } = action.payload || {};
@@ -576,6 +724,7 @@ export const {
   toolCallStarted,
   permissionRequested,
   clearPermission,
+  permissionAnswered,
   setUndoResult,
   setPlan,
   updateTodo,
@@ -598,6 +747,18 @@ export const {
   setWaveComplete,
   setIntegrationPass,
   setBuildComplete,
+  promptEnhancing,
+  promptEnhanced,
+  promptEnhancementResolved,
+  clarifyAsked,
+  clarifyAnswered,
+  codebaseReadingProgress,
+  codebaseReadingDone,
+  roleAssignmentsSet,
+  comparisonUpdated,
+  securityAuditUpdated,
+  playwrightAuditUpdated,
+  playwrightIssueAdded,
   addToast,
   removeToast
 } = chatSlice.actions;
