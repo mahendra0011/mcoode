@@ -239,57 +239,22 @@ export function ExplorerPanel({ workspaceId, projectName = "cli" }: ExplorerPane
     }
   };
 
-  const handleNewFile = async () => {
+  const handleNewFile = () => {
     if (!workspaceId) {
       toast.info("Create or select a workspace to add files");
       return;
     }
-    const name = window.prompt("New File name (e.g. index.ts):");
-    if (!name || !name.trim()) return;
-    const filePath = name.trim();
-    try {
-      try {
-        await api.post(`/api/v1/workspaces/${workspaceId}/file`, {
-          path: filePath,
-          content: "",
-        });
-      } catch {
-        await api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(filePath)}`, {
-          content: "",
-        });
-      }
-      toast.success(`Created file "${filePath}"`);
-      useIDEStore.getState().addOpenFile(filePath);
-      bumpRefresh();
-    } catch (err: any) {
-      toast.error(`Failed to create file: ${err?.response?.data?.error?.message || err.message}`);
-    }
+    // Trigger VS Code style inline file creation in the FileTree
+    document.dispatchEvent(new CustomEvent("filetree:new-file", { detail: { parentPath: "" } }));
   };
 
-  const handleNewFolder = async () => {
+  const handleNewFolder = () => {
     if (!workspaceId) {
       toast.info("Create or select a workspace to add folders");
       return;
     }
-    const name = window.prompt("New Folder name (e.g. src/components):");
-    if (!name || !name.trim()) return;
-    const folderPath = name.trim();
-    try {
-      try {
-        await api.post(`/api/v1/workspaces/${workspaceId}/folder`, {
-          path: folderPath,
-        });
-      } catch {
-        await api.post(`/api/v1/workspaces/${workspaceId}/file`, {
-          path: `${folderPath}/.keep`,
-          content: "",
-        });
-      }
-      toast.success(`Created folder "${folderPath}"`);
-      bumpRefresh();
-    } catch (err: any) {
-      toast.error(`Failed to create folder: ${err?.response?.data?.error?.message || err.message}`);
-    }
+    // Trigger VS Code style inline folder creation in the FileTree
+    document.dispatchEvent(new CustomEvent("filetree:new-folder", { detail: { parentPath: "" } }));
   };
 
   const handleRefresh = () => {

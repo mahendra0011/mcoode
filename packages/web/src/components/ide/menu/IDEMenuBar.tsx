@@ -228,14 +228,7 @@ export function IDEMenuBar({
         {
           label: "New File...",
           action: () => {
-            const name = prompt("Enter file name:", "untitled.txt");
-            if (!name) return;
-            store.addOpenFile(name);
-            store.setActivePath(name);
-            if (!store.fileContentsCache[name]) {
-              store.setFileContent(name, "");
-              store.setSavedContent(name, "");
-            }
+            document.dispatchEvent(new CustomEvent("filetree:new-file", { detail: { parentPath: "" } }));
           },
         },
         {
