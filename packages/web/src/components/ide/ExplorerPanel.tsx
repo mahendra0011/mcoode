@@ -248,10 +248,16 @@ export function ExplorerPanel({ workspaceId, projectName = "cli" }: ExplorerPane
     if (!name || !name.trim()) return;
     const filePath = name.trim();
     try {
-      await api.post(`/api/v1/workspaces/${workspaceId}/file`, {
-        path: filePath,
-        content: "",
-      });
+      try {
+        await api.post(`/api/v1/workspaces/${workspaceId}/file`, {
+          path: filePath,
+          content: "",
+        });
+      } catch {
+        await api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(filePath)}`, {
+          content: "",
+        });
+      }
       toast.success(`Created file "${filePath}"`);
       useIDEStore.getState().addOpenFile(filePath);
       bumpRefresh();
@@ -269,10 +275,16 @@ export function ExplorerPanel({ workspaceId, projectName = "cli" }: ExplorerPane
     if (!name || !name.trim()) return;
     const folderPath = name.trim();
     try {
-      await api.post(`/api/v1/workspaces/${workspaceId}/file`, {
-        path: `${folderPath}/.keep`,
-        content: "",
-      });
+      try {
+        await api.post(`/api/v1/workspaces/${workspaceId}/folder`, {
+          path: folderPath,
+        });
+      } catch {
+        await api.post(`/api/v1/workspaces/${workspaceId}/file`, {
+          path: `${folderPath}/.keep`,
+          content: "",
+        });
+      }
       toast.success(`Created folder "${folderPath}"`);
       bumpRefresh();
     } catch (err: any) {
