@@ -65,34 +65,59 @@ export function WorkspaceModals({
     input.style.left = '-9999px';
     document.body.appendChild(input);
 
+    let hasFiles = false;
+    let cleaningUp = false;
     const cleanup = () => {
-      input.remove();
+      if (cleaningUp) return;
+      cleaningUp = true;
+      setTimeout(() => {
+        try {
+          input.remove();
+        } catch {}
+      }, 2000);
     };
 
+    // Close modal and show upload animation IMMEDIATELY on click!
+    // In Brave/Chromium, when uploading large folders (10,000+ files with node_modules),
+    // the browser takes 15-20 seconds in C++ after the user confirms the prompt before
+    // firing `change`. Starting the animation right here guarantees the user sees the
+    // high-tech spinning loader and progress screen from second 0 instead of a frozen screen.
+    onClose();
+    if (onStartUploading) {
+      onStartUploading('⚡ Reading folder... (Click "Upload" on browser prompt if shown)');
+    }
+
     input.onchange = (e: Event) => {
+      hasFiles = true;
       const files = (e.target as HTMLInputElement).files;
-      // Fire the loading animation and close the modal SYNCHRONOUSLY, in the same
-      // tick as the change event — before any async work — so the user sees the
-      // "processing" overlay instantly instead of a frozen modal.
-      if (onStartUploading) {
-        onStartUploading(
-          files && files.length > 0
-            ? '⚡ Zipping your folder...'
-            : undefined
-        );
-      }
-      onClose();
-      if (files && files.length > 0 && onUploadFolder) {
-        onUploadFolder(files);
+      if (files && files.length > 0) {
+        if (onStartUploading) {
+          onStartUploading(`⚡ Processing ${files.length} files...`);
+        }
+        if (onUploadFolder) {
+          onUploadFolder(files);
+        }
+      } else {
+        if (onStartUploading) onStartUploading(undefined);
       }
       cleanup();
     };
 
-    // If the user opens the picker and cancels, the browser never fires `change`.
-    // `cancel` is supported in modern Chromium/Firefox; for the rest we clean up on
-    // window focus returning (best-effort, doesn't block anything if it doesn't fire).
-    (input as any).oncancel = cleanup;
-    window.addEventListener('focus', cleanup, { once: true });
+    // If user cancelled without picking a folder, reset after checking files
+    const handleFocus = () => {
+      setTimeout(() => {
+        if (!hasFiles && (!input.files || input.files.length === 0)) {
+          if (onStartUploading) onStartUploading(undefined);
+          cleanup();
+        }
+      }, 4000);
+    };
+
+    (input as any).oncancel = () => {
+      if (onStartUploading) onStartUploading(undefined);
+      cleanup();
+    };
+    window.addEventListener('focus', handleFocus, { once: true });
 
     input.click();
   };
@@ -103,24 +128,19 @@ export function WorkspaceModals({
       e.stopPropagation();
     }
 
-    // Preferred path: FileSystemDirectoryHandle. We call this SYNCHRONOUSLY at the
-    // top of the click handler (no await before it) so the browser still counts it as
-    // a direct response to the user gesture. The big win over the plain <input> below:
-    // we control the traversal ourselves (see handleUploadDirectoryHandle in
-    // AIChatPage.tsx), so we can skip descending into node_modules/.git/dist/etc.
-    // entirely — the browser never has to enumerate those files at all. The plain
-    // <input webkitdirectory> fallback, by contrast, forces the OS/browser to fully
-    // walk and materialize a File object for EVERY file in the tree — including
-    // ignored ones — before it can even fire `change`, which is what made big
-    // projects feel frozen for several seconds with nothing on screen.
+    // Preferred path: FileSystemDirectoryHandle.
+    // Call showDirectoryPicker() directly WITHOUT { mode: 'read' },
+    // because in Chrome/Edge passing 'mode' throws a TypeError ("mode is not a valid member"),
+    // which previously caused it to immediately fail and fall back to the slow <input webkitdirectory>.
+    // With showDirectoryPicker(), we control traversal in JS and skip node_modules/.git/dist
+    // entirely — the browser doesn't have to enumerate 13,000+ files upfront.
     if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
       try {
-        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
-        // Fire the overlay + close the modal in the very next microtask, before any
-        // further async traversal work starts, so the animation appears instantly.
+        const dirHandle = await (window as any).showDirectoryPicker();
+        // Fire the overlay + close the modal immediately so the animation appears instantly (<1s).
         onClose();
         if (onStartUploading) {
-          onStartUploading(`⚡ Scanning '${dirHandle.name}' (skipping node_modules/.git/build/etc.)...`);
+          onStartUploading(`⚡ Scanning '${dirHandle.name}' (skipping heavy cache/build dirs)...`);
         }
         if (onUploadDirectoryHandle) {
           onUploadDirectoryHandle(dirHandle);
@@ -263,7 +283,8 @@ export function WorkspaceModals({
                 <FolderUp className="w-5 h-5 text-emerald-400" />
               </div>
               <span className="text-sm font-semibold text-white/90">Upload Folder</span>
-              <span className="text-xs text-white/40 mt-0.5">Drag & drop or click to browse</span>
+              <span className="text-xs text-emerald-400/90 mt-0.5 font-medium">⚡ Drag & drop folder here (Instant 1s, 0 prompts)</span>
+              <span className="text-[11px] text-white/40 mt-0.5">or click to browse from disk</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">

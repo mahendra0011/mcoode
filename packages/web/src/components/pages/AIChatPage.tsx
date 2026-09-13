@@ -856,14 +856,43 @@ export function AIChatPage() {
     showToast(`Scanning '${folderName}'...`, 'info');
 
     try {
-      // Phase 1: walk the directory tree, collecting {handle, path} for every file.
-      // Sibling entries and subdirectories are all walked CONCURRENTLY (Promise.all)
-      // instead of one-at-a-time — this was previously a fully sequential
-      // `for await ... await traverseDir(...)` walk, which is the main reason a big
-      // project's folder tree took so long just to *scan*, before any zipping even began.
-      type PendingFile = { handle: any; path: string };
-      const pendingFiles: PendingFile[] = [];
+      // Reverted from a chunked-parallel-HTTP-request approach: in practice, many
+      // small requests (auth check + DB lookup + CORS + logging middleware EACH time)
+      // cost more in fixed per-request overhead than they save, especially for a
+      // large file count. A single zip upload pays that overhead exactly once.
+      //
+      // Single-pass collect+read (not two separate full tree walks) with a global
+      // concurrency cap, plus a time-based yield so the browser can actually paint
+      // the progress overlay instead of starving on back-to-back microtasks.
+      const entries: ZipEntry[] = [];
+      let filesSeen = 0;
       let lastTextUpdate = 0;
+      let lastYield = Date.now();
+      let inFlight = 0;
+      const CONCURRENCY = 64;
+      const waiters: Array<() => void> = [];
+
+      const yieldToRenderIfDue = async () => {
+        const now = Date.now();
+        if (now - lastYield > 80) {
+          lastYield = now;
+          await new Promise((r) => setTimeout(r, 0));
+        }
+      };
+
+      const acquireSlot = async () => {
+        if (inFlight >= CONCURRENCY) {
+          await new Promise<void>((r) => { waiters.push(r); });
+        }
+        inFlight++;
+      };
+      const releaseSlot = () => {
+        inFlight--;
+        const next = waiters.shift();
+        if (next) next();
+      };
+
+      const readTasks: Promise<void>[] = [];
 
       async function collect(handle: any, currentPath: string) {
         const children: { entry: any; relPath: string }[] = [];
@@ -874,49 +903,38 @@ export function AIChatPage() {
           const relPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
           if (isIgnoredUploadPath(relPath)) continue;
           children.push({ entry, relPath });
+          await yieldToRenderIfDue();
         }
 
         await Promise.all(children.map(async ({ entry, relPath }) => {
-          if (entry.kind === 'file') {
-            pendingFiles.push({ handle: entry, path: relPath });
-            // Time-throttled (not count-throttled) so discovery of a folder with only
-            // a handful of very large subtrees still visibly updates at least a few
-            // times a second, instead of going quiet for however long one branch takes.
-            const now = Date.now();
-            if (now - lastTextUpdate > 200) {
-              lastTextUpdate = now;
-              setUploadProgressText(`Discovering files... (${pendingFiles.length} found)`);
-              setUploadProgressPercent((p) => Math.min(4, p + 0.2));
-            }
-          } else if (entry.kind === 'directory') {
+          if (entry.kind === 'directory') {
             await collect(entry, relPath);
+            return;
           }
+          readTasks.push((async () => {
+            await acquireSlot();
+            try {
+              const file = await entry.getFile();
+              entries.push({ path: relPath, file });
+            } catch {
+              // skip unreadable file, don't fail the whole upload
+            } finally {
+              filesSeen++;
+              const now = Date.now();
+              if (now - lastTextUpdate > 150) {
+                lastTextUpdate = now;
+                setUploadProgressText(`Scanning & reading '${folderName}'... (${filesSeen} files)`);
+                setUploadProgressPercent((p) => Math.min(15, p + 0.15));
+              }
+              releaseSlot();
+              await yieldToRenderIfDue();
+            }
+          })());
         }));
       }
 
       await collect(dirHandle, '');
-      setUploadProgressText(`Found ${pendingFiles.length} files, reading in parallel...`);
-      setUploadProgressPercent(5);
-
-      // Phase 2: actually read file contents with bounded concurrency (32 at a time,
-      // matching the backend's extraction concurrency for consistency) instead of
-      // reading one file, awaiting it, then moving to the next.
-      const entries: ZipEntry[] = [];
-      const CONCURRENCY = 32;
-      for (let i = 0; i < pendingFiles.length; i += CONCURRENCY) {
-        const chunk = pendingFiles.slice(i, i + CONCURRENCY);
-        await Promise.all(chunk.map(async ({ handle, path }) => {
-          try {
-            const file = await handle.getFile();
-            entries.push({ path, file });
-          } catch {
-            // skip unreadable file, don't fail the whole upload
-          }
-        }));
-        const done = Math.min(i + CONCURRENCY, pendingFiles.length);
-        setUploadProgressPercent(5 + (done / Math.max(1, pendingFiles.length)) * 5);
-        setUploadProgressText(`Read ${done}/${pendingFiles.length} files...`);
-      }
+      await Promise.all(readTasks);
 
       await zipAndUploadEntries(entries, folderName, 'uploaded & extracted successfully');
     } catch (err: any) {
