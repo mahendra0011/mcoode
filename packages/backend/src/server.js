@@ -115,7 +115,8 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     },
     credentials: true,
   }));
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.text({ limit: '50mb', type: ['text/*', 'application/octet-stream'] }));
   app.use(pinoHttp({ logger }));
   app.use('/api/v1', rateLimit({
     windowMs: 60_000,

@@ -645,8 +645,11 @@ export const useIDEStore = create<IDEState>()(
     {
       name: 'mcode-ide-settings',
       storage: createJSONStorage(() => localStorage),
-      // Only persist actual preferences, not transient editor/session state
+      // Persist user preferences and open editor tabs across reloads
       partialize: (state) => ({
+        activeTab: state.activeTab,
+        openFiles: state.openFiles,
+        activePath: state.activePath,
         wordWrap: state.wordWrap,
         autoSaveEnabled: state.autoSaveEnabled,
         columnSelection: state.columnSelection,

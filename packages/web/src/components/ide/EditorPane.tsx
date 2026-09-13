@@ -329,7 +329,7 @@ export function EditorPane({
     const content = fileContents[activePath] ?? useIDEStore.getState().fileContentsCache[activePath] ?? '';
 
     if (workspaceId) {
-      api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, content)
+      api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, { content })
         .then(res => {
           if (res.status >= 400) throw new Error('Save failed');
           setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
@@ -354,7 +354,7 @@ export function EditorPane({
       dirty.forEach((path) => {
         const content = fileContents[path] ?? useIDEStore.getState().fileContentsCache[path] ?? '';
         if (workspaceId) {
-          api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`, content)
+          api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`, { content })
             .then(() => {
               setDirty(prev => { const next = new Set(prev); next.delete(path); return next; });
               setSavedContent(path, content);

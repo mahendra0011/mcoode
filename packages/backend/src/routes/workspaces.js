@@ -47,10 +47,17 @@ export function workspaceRoutes({ secret }) {
   const router = Router();
   router.use(authMiddleware({ secret }));
 
-  // GET /workspaces — list user's workspaces
+  // GET /workspaces — list user's workspaces (sorted newest first)
   router.get('/', async (req, res, next) => {
     try {
       const workspaces = await db().workspace.find({ userId: req.userId });
+      if (Array.isArray(workspaces)) {
+        workspaces.sort((a, b) => {
+          const timeA = new Date(a.createdAt || a.updatedAt || 0).getTime();
+          const timeB = new Date(b.createdAt || b.updatedAt || 0).getTime();
+          return timeB - timeA;
+        });
+      }
       res.json({ workspaces });
     } catch (err) {
       next(err);
@@ -144,7 +151,9 @@ export function workspaceRoutes({ secret }) {
   // GET /workspaces/:id/files — recursive file listing
   router.get('/:id/files', async (req, res, next) => {
     try {
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      if (!ws) ws = await db().workspace.findById(req.params.id);
+      if (!ws) ws = await db().workspace.findOne({ _id: req.params.id });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const files = await walkDir(ws.diskPath);
       res.json({ files });
@@ -158,7 +167,9 @@ export function workspaceRoutes({ secret }) {
     try {
       const { path } = req.query;
       if (!path) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path query param required' } });
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      if (!ws) ws = await db().workspace.findById(req.params.id);
+      if (!ws) ws = await db().workspace.findOne({ _id: req.params.id });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const full = safeJoin(ws.diskPath, path);
       const content = await readFile(full, 'utf8');
@@ -173,7 +184,14 @@ export function workspaceRoutes({ secret }) {
   router.post('/:id/file', async (req, res, next) => {
     try {
       const filePath = req.body?.path || req.query?.path;
-      const content = req.body?.content !== undefined ? req.body.content : '';
+      let content = '';
+      if (typeof req.body === 'string') {
+        content = req.body;
+      } else if (req.body && typeof req.body.content === 'string') {
+        content = req.body.content;
+      } else if (req.body && req.body.content !== undefined) {
+        content = String(req.body.content);
+      }
       if (!filePath) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path is required' } });
 
       let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
@@ -183,7 +201,12 @@ export function workspaceRoutes({ secret }) {
 
       const full = safeJoin(ws.diskPath, filePath);
       await mkdir(join(full, '..'), { recursive: true });
-      await writeFile(full, content || '', 'utf8');
+      await writeFile(full, content, 'utf8');
+
+      try {
+        await db().workspace.updateOne({ _id: ws._id }, { updatedAt: new Date() });
+      } catch {}
+
       res.status(201).json({ ok: true, path: filePath });
     } catch (err) {
       next(err);
@@ -217,7 +240,14 @@ export function workspaceRoutes({ secret }) {
   router.put('/:id/file', async (req, res, next) => {
     try {
       const pathParam = req.query.path || req.body?.path;
-      const content = req.body?.content !== undefined ? req.body.content : '';
+      let content = '';
+      if (typeof req.body === 'string') {
+        content = req.body;
+      } else if (req.body && typeof req.body.content === 'string') {
+        content = req.body.content;
+      } else if (req.body && req.body.content !== undefined) {
+        content = String(req.body.content);
+      }
       if (!pathParam) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path query param required' } });
 
       let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
@@ -227,7 +257,12 @@ export function workspaceRoutes({ secret }) {
 
       const full = safeJoin(ws.diskPath, pathParam);
       await mkdir(join(full, '..'), { recursive: true });
-      await writeFile(full, content || '', 'utf8');
+      await writeFile(full, content, 'utf8');
+
+      try {
+        await db().workspace.updateOne({ _id: ws._id }, { updatedAt: new Date() });
+      } catch {}
+
       res.json({ ok: true, path: pathParam });
     } catch (err) {
       next(err);

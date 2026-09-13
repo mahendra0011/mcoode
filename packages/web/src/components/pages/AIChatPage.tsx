@@ -147,8 +147,22 @@ export function AIChatPage() {
 
   // IDE State — declare BEFORE useChatSocket so there's no TDZ
   const [workspaces, setWorkspaces] = useState<any[]>([]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('mcode_active_workspace_id') || null;
+    }
+    return null;
+  });
   const [activeTab, setActiveTab] = useState('Chat');
+
+  // Persist active workspace to localStorage so refreshes always restore the active project
+  useEffect(() => {
+    if (activeWorkspaceId && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('mcode_active_workspace_id', activeWorkspaceId);
+      } catch {}
+    }
+  }, [activeWorkspaceId]);
 
   const { messages, keysError, isStreaming, mode, plan, permissionRequest, models, selectedModel, godMode, waves, subagents, buildSummary, toasts: serverToasts } = useAppSelector(state => state.chat);
   const { send, interrupt, answerPermission, undo, sendTerminalCommand, reloadModels } = useChatSocket(activeWorkspaceId);
@@ -525,9 +539,15 @@ export function AIChatPage() {
     api.get('/api/v1/workspaces', { timeout: 15000 })
       .then(res => res.data)
       .then(data => {
-        if (data.workspaces) {
+        if (data.workspaces && data.workspaces.length > 0) {
           setWorkspaces(data.workspaces);
-          if (data.workspaces.length > 0) setActiveWorkspaceId(data.workspaces[0]._id);
+          const savedId = typeof window !== 'undefined' ? localStorage.getItem('mcode_active_workspace_id') : null;
+          const matched = savedId ? data.workspaces.find((w: any) => w._id === savedId) : null;
+          if (matched) {
+            setActiveWorkspaceId(matched._id);
+          } else {
+            setActiveWorkspaceId(data.workspaces[0]._id);
+          }
         }
       })
       .catch(err => {
@@ -619,15 +639,12 @@ export function AIChatPage() {
       const data = res.data;
       if (data.workspace) {
         setWorkspaces(prev => {
-          const idx = prev.findIndex(w => w._id === data.workspace._id);
-          if (idx >= 0) {
-            const next = [...prev];
-            next[idx] = data.workspace;
-            return next;
-          }
-          return [...prev, data.workspace];
+          const filtered = prev.filter(w => w._id !== data.workspace._id);
+          return [data.workspace, ...filtered];
         });
         setActiveWorkspaceId(data.workspace._id);
+        try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch {}
+        useIDEStore.setState({ openFiles: [], activePath: null });
         useIDEStore.getState().setActiveActivityBar('explorer');
         useIDEStore.getState().setSidebarOpen(true);
         leftPanelRef.current?.expand();
@@ -771,15 +788,12 @@ export function AIChatPage() {
     if (data.workspace) {
       setUploadProgressPercent(100);
       setWorkspaces(prev => {
-        const idx = prev.findIndex(w => w._id === data.workspace._id);
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = data.workspace;
-          return next;
-        }
-        return [...prev, data.workspace];
+        const filtered = prev.filter(w => w._id !== data.workspace._id);
+        return [data.workspace, ...filtered];
       });
       setActiveWorkspaceId(data.workspace._id);
+      try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch {}
+      useIDEStore.setState({ openFiles: [], activePath: null });
       useIDEStore.getState().setActiveActivityBar('explorer');
       useIDEStore.getState().setSidebarOpen(true);
       leftPanelRef.current?.expand();
@@ -1039,8 +1053,10 @@ export function AIChatPage() {
       formData.append('files', file);
       const uploadRes = await api.post(`/api/v1/workspaces/${targetId}/upload`, formData);
       if (uploadRes.data?.ok) {
-        setWorkspaces(prev => [...prev, wsData.workspace]);
+        setWorkspaces(prev => [wsData.workspace, ...prev.filter(w => w._id !== targetId)]);
         setActiveWorkspaceId(targetId);
+        try { localStorage.setItem('mcode_active_workspace_id', targetId); } catch {}
+        useIDEStore.setState({ openFiles: [file.name], activePath: file.name });
         bumpRefresh();
         showToast(`File '${file.name}' uploaded successfully!`);
       } else {
@@ -1069,15 +1085,12 @@ export function AIChatPage() {
       const data = res.data;
       if (data.workspace) {
         setWorkspaces(prev => {
-          const idx = prev.findIndex(w => w._id === data.workspace._id);
-          if (idx >= 0) {
-            const next = [...prev];
-            next[idx] = data.workspace;
-            return next;
-          }
-          return [...prev, data.workspace];
+          const filtered = prev.filter(w => w._id !== data.workspace._id);
+          return [data.workspace, ...filtered];
         });
         setActiveWorkspaceId(data.workspace._id);
+        try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch {}
+        useIDEStore.setState({ openFiles: [], activePath: null });
         useIDEStore.getState().setActiveActivityBar('explorer');
         useIDEStore.getState().setSidebarOpen(true);
         leftPanelRef.current?.expand();
@@ -2332,7 +2345,11 @@ export function AIChatPage() {
                       workspaceId={activeWorkspaceId as string}
                       workspaces={workspaces}
                       onSelectWorkspace={(id) => {
+                        if (id !== activeWorkspaceId) {
+                          useIDEStore.setState({ openFiles: [], activePath: null });
+                        }
                         setActiveWorkspaceId(id);
+                        try { localStorage.setItem('mcode_active_workspace_id', id); } catch {}
                         useIDEStore.getState().setActiveActivityBar('explorer');
                         useIDEStore.getState().setSidebarOpen(true);
                         leftPanelRef.current?.expand();
