@@ -87,19 +87,44 @@ export function workspaceRoutes({ secret }) {
         await cloneRepo(repoUrl, diskPath, { branch: branchResult, branchName });
       }
 
-      const ws = await db().workspace.create({
-        userId: req.userId,
-        name,
-        diskPath,
-        gitUrl,
-        branch: branchResult,
-        status: 'active'
-      });
+      // If a workspace with the same name already exists for this user,
+      // update its files/diskPath and metadata seamlessly instead of failing with a duplicate key error.
+      const existing = await db().workspace.findOne({ userId: req.userId, name });
+      let ws;
+      if (existing) {
+        if (existing.diskPath && existing.diskPath !== diskPath) {
+          try {
+            const { rm } = await import('node:fs/promises');
+            await rm(existing.diskPath, { recursive: true, force: true });
+          } catch {}
+        }
+        await db().workspace.findByIdAndUpdate(existing._id, {
+          diskPath,
+          gitUrl,
+          branch: branchResult,
+          status: 'active'
+        });
+        ws = await db().workspace.findById(existing._id) || { ...existing, diskPath, gitUrl, branch: branchResult, status: 'active' };
+      } else {
+        ws = await db().workspace.create({
+          userId: req.userId,
+          name,
+          diskPath,
+          gitUrl,
+          branch: branchResult,
+          status: 'active'
+        });
+      }
       res.status(201).json({ workspace: ws });
     } catch (err) {
-      // Log the REAL error to the server terminal — the browser only ever sees a
-      // generic 500 via the global error handler, which makes bugs like this
-      // impossible to diagnose from the client console alone.
+      if (err.code === 11000) {
+        return res.status(409).json({
+          error: {
+            code: 'DUPLICATE',
+            message: `A workspace named "${req.body.name}" already exists. Please choose a different name.`
+          }
+        });
+      }
       console.error('[workspaces] POST / failed:', err);
       next(err);
     }

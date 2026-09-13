@@ -76,7 +76,7 @@ const copyPath = async (path: string) => {
 };
 
 const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(level === 0);
   const addOpenFile = useIDEStore((s) => s.addOpenFile);
   const closeFile = useIDEStore((s) => s.closeFile);
   const bumpRefresh = useIDEStore((s) => s.bumpRefresh);
@@ -291,7 +291,7 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
             className={`flex items-center gap-1.5 py-1 px-2 cursor-pointer transition select-none hover:bg-white/10 ${
               isActive ? "bg-white/10 text-white" : "text-white/70"
             }`}
-            style={{ paddingLeft: `${level * 16 + 48}px` }}
+            style={{ paddingLeft: `${level * 14 + 10}px` }}
             onClick={() => addOpenFile(node.path)}
           >
             {getFileIcon(node.name)}
@@ -311,7 +311,7 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className="flex items-center gap-1 py-1 px-2 cursor-pointer text-white/80 hover:bg-white/5 transition select-none"
-            style={{ paddingLeft: `${level * 16 + 48}px` }}
+            style={{ paddingLeft: `${level * 14 + 10}px` }}
             onClick={() => setIsOpen(!isOpen)}
           >
             <span className="text-white/40">
@@ -409,7 +409,8 @@ export function FileTree({ workspaceId }: FileTreeProps) {
   // Convert flat array [{path, name}] to a nested tree (folders first).
   const tree: TreeNodeData = { name: "root", path: "", children: [] };
   for (const file of files) {
-    const parts = file.path.split("/");
+    const normPath = (file.path || "").replace(/\\/g, "/");
+    const parts = normPath.split("/");
     let current = tree;
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];

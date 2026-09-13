@@ -184,18 +184,18 @@ export function AIChatPage() {
   }, []);
 
   useEffect(() => {
-    if (isSidebarOpen && activeActivityBar !== 'extensions' && !zenMode) {
-      leftPanelRef.current?.expand();
-    } else {
-      leftPanelRef.current?.collapse();
-    }
-  }, [isSidebarOpen, activeActivityBar, zenMode, leftPanelRef]);
-
-  useEffect(() => {
     if (activeTab === 'AI Code Editor') {
       useIDEStore.getState().setSecondarySideBarVisible(true);
     }
-  }, [activeTab]);
+    if (isSidebarOpen && activeActivityBar !== 'extensions' && !zenMode) {
+      const timer = setTimeout(() => {
+        leftPanelRef.current?.expand();
+      }, 50);
+      return () => clearTimeout(timer);
+    } else {
+      leftPanelRef.current?.collapse();
+    }
+  }, [activeTab, isSidebarOpen, activeActivityBar, zenMode, leftPanelRef]);
 
   useEffect(() => {
     setRunTerminalCommandFn(sendTerminalCommand);
@@ -612,8 +612,19 @@ export function AIChatPage() {
       }
       const data = res.data;
       if (data.workspace) {
-        setWorkspaces([...workspaces, data.workspace]);
+        setWorkspaces(prev => {
+          const idx = prev.findIndex(w => w._id === data.workspace._id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = data.workspace;
+            return next;
+          }
+          return [...prev, data.workspace];
+        });
         setActiveWorkspaceId(data.workspace._id);
+        useIDEStore.getState().setActiveActivityBar('explorer');
+        useIDEStore.getState().setSidebarOpen(true);
+        leftPanelRef.current?.expand();
         bumpRefresh();
         showToast('Project uploaded successfully');
       } else {
@@ -672,27 +683,77 @@ export function AIChatPage() {
     setUploadProgressText(`Uploading & extracting '${folderName}' on server...`);
     showToast(`Uploading project archive to server...`, 'info');
 
-    const formData = new FormData();
-    formData.append('name', folderName);
-    formData.append('source', 'zip');
-    formData.append('zipfile', new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' }));
+    // A dev-server restart (nodemon / `node --watch` reloading on a source-file save)
+    // landing mid-upload kills the TCP connection with a bare "Network Error" —
+    // no HTTP status at all, so it isn't something the server can respond to gracefully.
+    // One silent retry after a short pause covers this without bothering the user;
+    // if the second attempt also has no server to talk to, we surface the real error.
+    const postWorkspace = (wsName: string) => {
+      const fd = new FormData();
+      fd.append('name', wsName);
+      fd.append('source', 'zip');
+      fd.append('zipfile', new File([zipBlob], `${wsName}.zip`, { type: 'application/zip' }));
+      return api.post('/api/v1/workspaces', fd, {
+        timeout: WORKSPACE_UPLOAD_TIMEOUT_MS,
+        onUploadProgress: (evt: any) => {
+          if (evt.total) {
+            const pct = (evt.loaded / evt.total) * 100;
+            setUploadProgressPercent(55 + pct * 0.44);
+            // Once network bytes are fully sent, the server still has to unzip everything
+            // to disk before it responds. Without this, the bar sat frozen at 100% for
+            // several seconds and looked hung. Cap at 99% and relabel so it's clear
+            // something is still happening.
+            if (pct >= 100) {
+              setUploadProgressText(`Extracting '${wsName}' on server...`);
+            }
+          }
+        },
+      });
+    };
 
-    const res = await api.post('/api/v1/workspaces', formData, {
-      timeout: WORKSPACE_UPLOAD_TIMEOUT_MS,
-      onUploadProgress: (evt: any) => {
-        if (evt.total) {
-          const pct = (evt.loaded / evt.total) * 100;
-          setUploadProgressPercent(55 + pct * 0.44);
-          // Once network bytes are fully sent, the server still has to unzip everything
-          // to disk before it responds. Without this, the bar sat frozen at 100% for
-          // several seconds and looked hung. Cap at 99% and relabel so it's clear
-          // something is still happening.
-          if (pct >= 100) {
-            setUploadProgressText(`Extracting '${folderName}' on server...`);
+    // Try the upload, auto-renaming on duplicate (409) up to MAX_RENAME_ATTEMPTS
+    // so re-uploading the same folder "just works" → "EventO" → "EventO-2" → "EventO-3" etc.
+    const MAX_RENAME_ATTEMPTS = 5;
+    let uploadName = folderName;
+    let res;
+
+    for (let attempt = 0; attempt <= MAX_RENAME_ATTEMPTS; attempt++) {
+      try {
+        res = await postWorkspace(uploadName);
+        break; // success
+      } catch (err: any) {
+        const status = err?.response?.status;
+        const isNetworkError = !err?.response;
+
+        if (isNetworkError && attempt === 0) {
+          // Dev-server restart — one silent retry
+          setUploadProgressText(`Server restarted — retrying '${uploadName}' upload...`);
+          await new Promise((r) => setTimeout(r, 1500));
+          try {
+            res = await postWorkspace(uploadName);
+            break;
+          } catch (retryErr: any) {
+            if (retryErr?.response?.status !== 409) throw retryErr;
+            // fall through to duplicate handling below
           }
         }
-      },
-    });
+
+        if (status === 409 && attempt < MAX_RENAME_ATTEMPTS) {
+          // Workspace name already exists — auto-rename and retry
+          uploadName = `${folderName}-${attempt + 2}`;
+          setUploadProgressText(`Name taken — trying '${uploadName}'...`);
+          showToast(`"${attempt === 0 ? folderName : `${folderName}-${attempt + 1}`}" already exists, trying "${uploadName}"...`, 'info');
+          continue;
+        }
+
+        throw err;
+      }
+    }
+
+    if (!res) {
+      showToast(`Could not create workspace — name "${folderName}" is taken and auto-rename failed`, 'error');
+      return;
+    }
 
     if (res.status >= 400) {
       const msg = res.data?.error?.message || `Upload failed (${res.status})`;
@@ -703,10 +764,22 @@ export function AIChatPage() {
     const data = res.data;
     if (data.workspace) {
       setUploadProgressPercent(100);
-      setWorkspaces(prev => [...prev, data.workspace]);
+      setWorkspaces(prev => {
+        const idx = prev.findIndex(w => w._id === data.workspace._id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = data.workspace;
+          return next;
+        }
+        return [...prev, data.workspace];
+      });
       setActiveWorkspaceId(data.workspace._id);
+      useIDEStore.getState().setActiveActivityBar('explorer');
+      useIDEStore.getState().setSidebarOpen(true);
+      leftPanelRef.current?.expand();
       bumpRefresh();
-      showToast(`Folder '${folderName}' (${entries.length} files) ${successVerb}!`);
+      const nameNote = uploadName !== folderName ? ` (saved as "${uploadName}")` : '';
+      showToast(`Folder '${folderName}' (${entries.length} files) ${successVerb}${nameNote}!`);
     } else {
       const msg = data.error?.message || 'Upload failed — no workspace returned';
       showToast(msg, 'error');
@@ -727,8 +800,18 @@ export function AIChatPage() {
     setUploadProgressText(`Scanning folder '${folderName}'...`);
     showToast(`Scanning '${folderName}'...`, 'info');
 
+    // Yield to the event loop so React can paint the upload overlay BEFORE
+    // the potentially heavy file-scanning loop begins — otherwise the UI
+    // looks frozen for several seconds on large projects (8k+ files).
+    await new Promise((r) => setTimeout(r, 0));
+
     try {
       const entries: ZipEntry[] = [];
+
+      // Process files in chunks, yielding to the event loop between chunks so
+      // React can render the upload overlay immediately instead of appearing
+      // frozen for ~10 seconds while scanning thousands of files.
+      const SCAN_CHUNK = 500;
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const relPath = file.webkitRelativePath || file.name;
@@ -740,7 +823,16 @@ export function AIChatPage() {
             : normalized;
           entries.push({ path: zipPath, file });
         }
+        // Every SCAN_CHUNK files, yield to the event loop so React can paint
+        if (i > 0 && i % SCAN_CHUNK === 0) {
+          setUploadProgressText(`Scanning '${folderName}'... (${i}/${files.length} checked, ${entries.length} kept)`);
+          setUploadProgressPercent(2 + (i / files.length) * 10);
+          await new Promise((r) => setTimeout(r, 0));
+        }
       }
+
+      setUploadProgressText(`Scan complete — ${entries.length} files to upload`);
+      setUploadProgressPercent(12);
 
       await zipAndUploadEntries(entries, folderName, 'uploaded & extracted successfully');
     } catch (err: any) {
@@ -952,8 +1044,19 @@ export function AIChatPage() {
       }
       const data = res.data;
       if (data.workspace) {
-        setWorkspaces([...workspaces, data.workspace]);
+        setWorkspaces(prev => {
+          const idx = prev.findIndex(w => w._id === data.workspace._id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = data.workspace;
+            return next;
+          }
+          return [...prev, data.workspace];
+        });
         setActiveWorkspaceId(data.workspace._id);
+        useIDEStore.getState().setActiveActivityBar('explorer');
+        useIDEStore.getState().setSidebarOpen(true);
+        leftPanelRef.current?.expand();
         bumpRefresh();
         showToast('Project cloned successfully');
       } else {
@@ -2166,7 +2269,13 @@ export function AIChatPage() {
                     <EditorPane
                       workspaceId={activeWorkspaceId as string}
                       workspaces={workspaces}
-                      onSelectWorkspace={(id) => setActiveWorkspaceId(id)}
+                      onSelectWorkspace={(id) => {
+                        setActiveWorkspaceId(id);
+                        useIDEStore.getState().setActiveActivityBar('explorer');
+                        useIDEStore.getState().setSidebarOpen(true);
+                        leftPanelRef.current?.expand();
+                        bumpRefresh();
+                      }}
                       onOpenFolder={() => setIsModalsOpen(true)}
                       onCloneRepo={() => setIsModalsOpen(true)}
                     />
