@@ -68,7 +68,11 @@ function Dropdown({
   );
 }
 
+const SearchContext = React.createContext<string>("");
+
 function SectionHeader({ children }: { children: React.ReactNode }) {
+  const searchQuery = React.useContext(SearchContext);
+  if (searchQuery && searchQuery.trim()) return null;
   return <h3 className="text-[13px] font-bold text-[#569cd6] mt-6 mb-3 first:mt-0 tracking-wide">{children}</h3>;
 }
 
@@ -83,6 +87,13 @@ function SettingRow({
   description?: string;
   children: React.ReactNode;
 }) {
+  const searchQuery = React.useContext(SearchContext);
+  if (searchQuery && searchQuery.trim()) {
+    const q = searchQuery.toLowerCase().trim();
+    const matches = label.toLowerCase().includes(q) || (description && description.toLowerCase().includes(q));
+    if (!matches) return null;
+  }
+
   return (
     <div className="flex items-start justify-between gap-4 py-3 px-3 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition rounded-sm group">
       <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -206,7 +217,8 @@ export function GeneralSettingsModal() {
           </aside>
 
           {/* Panel Content */}
-          <main className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+          <SearchContext.Provider value={searchQuery}>
+            <main className="flex-1 p-6 overflow-y-auto custom-scrollbar">
             {activeTab === "editor" && (
               <>
                 <h2 className="text-[18px] font-bold text-white mb-1">Editor Layout & Behavior</h2>
@@ -483,7 +495,8 @@ export function GeneralSettingsModal() {
                 </SettingRow>
               </>
             )}
-          </main>
+            </main>
+          </SearchContext.Provider>
         </div>
       </div>
     </div>,

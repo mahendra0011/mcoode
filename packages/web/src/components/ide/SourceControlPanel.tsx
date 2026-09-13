@@ -72,6 +72,9 @@ export function SourceControlPanel() {
   const commitHistory = useIDEStore((s) => s.commitHistory);
   const commitChanges = useIDEStore((s) => s.commitChanges);
   const addOpenFile = useIDEStore((s) => s.addOpenFile);
+  const bumpRefresh = useIDEStore((s) => s.bumpRefresh);
+  const sourceControlView = useIDEStore((s) => s.sourceControlView);
+  const setSourceControlView = useIDEStore((s) => s.setSourceControlView);
 
   // Compute diff against last commit snapshot
   const changes = useMemo(() => {
@@ -168,13 +171,51 @@ export function SourceControlPanel() {
 
   const handleMenuAction = (label: string) => {
     setMenuOpen(false);
-    toast.info(`Git: ${label}`);
     const runCmd = useIDEStore.getState().runTerminalCommandFn;
-    if (runCmd) {
-      if (label === "Pull") runCmd("git pull");
-      else if (label === "Push") runCmd("git push");
-      else if (label === "Fetch") runCmd("git fetch");
-      else if (label === "Show Git Output") runCmd("git status");
+
+    if (label === "View as Tree" || label === "View as List") {
+      const next = sourceControlView === "tree" ? "list" : "tree";
+      setSourceControlView(next);
+      toast.info(`Source control view: ${next}`);
+      return;
+    }
+    if (label === "View & Sort") {
+      toast.info("Sorted changed files");
+      return;
+    }
+
+    if (!runCmd) {
+      toast.info(`Git: ${label}`);
+      return;
+    }
+
+    if (label === "Pull") {
+      runCmd("git pull");
+    } else if (label === "Push") {
+      runCmd("git push");
+    } else if (label === "Fetch") {
+      runCmd("git fetch");
+    } else if (label === "Show Git Output") {
+      runCmd("git status");
+    } else if (label === "Commit All Changes") {
+      const msg = window.prompt("Enter commit message for all changes:", message || "update");
+      if (msg) {
+        runCmd(`git commit -am "${msg.replace(/"/g, '\\"')}"`);
+      }
+    } else if (label === "Stash All Changes") {
+      runCmd("git stash push -u");
+    } else if (label === "Tags") {
+      runCmd("git tag");
+    } else if (label === "Clone") {
+      const repo = window.prompt("Enter Git repository URL to clone:");
+      if (repo) {
+        runCmd(`git clone ${repo.trim()}`);
+      }
+    } else if (label === "Checkout to...") {
+      const branch = window.prompt("Enter branch or tag name to checkout:");
+      if (branch) {
+        runCmd(`git checkout ${branch.trim()}`);
+      }
     }
   };
 
@@ -201,21 +242,24 @@ export function SourceControlPanel() {
               className="absolute right-2 top-full mt-1 w-48 bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl py-1 z-50 text-xs flex flex-col"
               onMouseLeave={() => setMenuOpen(false)}
             >
-              {CONTEXT_MENU_ITEMS.map((item, idx) =>
-                item.divider ? (
+              {CONTEXT_MENU_ITEMS.map((item, idx) => {
+                const label = item.label === "View as Tree"
+                  ? (sourceControlView === "tree" ? "View as List" : "View as Tree")
+                  : item.label;
+                return item.divider ? (
                   <div key={idx} className="my-1 border-t border-white/10" />
                 ) : (
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => handleMenuAction(item.label || "")}
+                    onClick={() => handleMenuAction(label || "")}
                     className="flex items-center gap-2 px-3 py-1.5 hover:bg-white/10 text-left text-white/80 hover:text-white transition"
                   >
                     {item.icon && <item.icon className="w-3 h-3 text-white/40" />}
-                    <span>{item.label}</span>
+                    <span>{label}</span>
                   </button>
-                )
-              )}
+                );
+              })}
             </div>
           )}
         </div>
@@ -255,7 +299,12 @@ export function SourceControlPanel() {
               </button>
               <button
                 type="button"
-                onClick={() => toast.info("Refreshed changes")}
+                onClick={() => {
+                  bumpRefresh();
+                  const runCmd = useIDEStore.getState().runTerminalCommandFn;
+                  if (runCmd) runCmd("git status -s");
+                  toast.info("Refreshed changes");
+                }}
                 className="p-1 rounded text-white/40 hover:text-white transition"
                 title="Refresh Changes"
               >
@@ -333,7 +382,7 @@ export function SourceControlPanel() {
                           className="truncate text-white/80 group-hover:text-white font-mono text-[11px]"
                           title={c.path}
                         >
-                          {c.fileName}
+                          {sourceControlView === "tree" ? c.path : c.fileName}
                         </span>
                       </div>
                       <span
@@ -374,7 +423,12 @@ export function SourceControlPanel() {
               <span>Auto</span>
               <button
                 type="button"
-                onClick={() => toast.info("Graph refreshed")}
+                onClick={() => {
+                  bumpRefresh();
+                  const runCmd = useIDEStore.getState().runTerminalCommandFn;
+                  if (runCmd) runCmd("git log -n 10 --oneline --graph");
+                  toast.info("Graph refreshed");
+                }}
                 className="p-0.5 hover:text-white transition"
                 title="Refresh Graph"
               >

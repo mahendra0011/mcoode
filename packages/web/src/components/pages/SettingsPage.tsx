@@ -634,16 +634,22 @@ function MemoryTab() {
           icon={RotateCcw}
           label="Workspace Checkpoints & Rewind"
           description="Enable workspace checkpoints (undo/redo file changes, restore workspace state across turn steps)."
-          checked={true}
-          onChange={() => toast.info('Workspace rewind checkpointing is active in CLI config')}
+          checked={Boolean(agent.checkpointsEnabled ?? true)}
+          onChange={(v) => {
+            updateAgent('checkpointsEnabled', v);
+            api.put('/api/v1/settings', { rewindCheckpointing: v }).catch(() => {});
+          }}
         />
 
         <SettingToggle
           icon={Sliders}
           label="Conversation Compaction"
           description="Enable conversation compaction (automatically summarizes older turn history to reduce context window usage)."
-          checked={true}
-          onChange={() => toast.info('Conversation compaction is active in CLI config')}
+          checked={Boolean(agent.conversationCompaction ?? true)}
+          onChange={(v) => {
+            updateAgent('conversationCompaction', v);
+            api.put('/api/v1/settings', { conversationCompaction: v }).catch(() => {});
+          }}
         />
       </div>
 
@@ -835,9 +841,15 @@ function PermissionsTab({
   onUpdate: (patch: any) => void;
   saving: boolean;
 }) {
-  const [permMode, setPermMode] = useState<'plan' | 'build' | 'edit' | 'yolo'>('build');
-  const [autoApproveHighRisk, setAutoApproveHighRisk] = useState(false);
-  const [networkTimeout, setNetworkTimeout] = useState(180000);
+  const [permMode, setPermMode] = useState<'plan' | 'build' | 'edit' | 'yolo'>(settings.permissionMode || 'build');
+  const [autoApproveHighRisk, setAutoApproveHighRisk] = useState(Boolean(settings.autoApproveHighRisk));
+  const [networkTimeout, setNetworkTimeout] = useState(settings.networkTimeout || 180000);
+
+  useEffect(() => {
+    if (settings.permissionMode) setPermMode(settings.permissionMode);
+    if (settings.autoApproveHighRisk !== undefined) setAutoApproveHighRisk(Boolean(settings.autoApproveHighRisk));
+    if (settings.networkTimeout !== undefined) setNetworkTimeout(settings.networkTimeout);
+  }, [settings.permissionMode, settings.autoApproveHighRisk, settings.networkTimeout]);
 
   return (
     <div className="space-y-8">
@@ -871,6 +883,7 @@ function PermissionsTab({
                 type="button"
                 onClick={() => {
                   setPermMode(mode.id as any);
+                  onUpdate({ permissionMode: mode.id });
                   toast.success(`Permission mode set to ${mode.label}`);
                 }}
                 className={`p-3.5 rounded-xl border text-left transition cursor-pointer ${
@@ -912,8 +925,10 @@ function PermissionsTab({
             role="switch"
             aria-checked={autoApproveHighRisk}
             onClick={() => {
-              setAutoApproveHighRisk(!autoApproveHighRisk);
-              toast.info(`Auto-approve high risk tools: ${!autoApproveHighRisk}`);
+              const next = !autoApproveHighRisk;
+              setAutoApproveHighRisk(next);
+              onUpdate({ autoApproveHighRisk: next });
+              toast.info(`Auto-approve high risk tools: ${next}`);
             }}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer flex-shrink-0 ${
               autoApproveHighRisk ? 'bg-amber-500' : 'bg-[#3a3a3f]'
@@ -1045,7 +1060,11 @@ function PermissionsTab({
           max={600000}
           step={15000}
           value={networkTimeout}
-          onChange={(e) => setNetworkTimeout(Number(e.target.value))}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            setNetworkTimeout(val);
+            onUpdate({ networkTimeout: val });
+          }}
           className="w-full accent-emerald-500 cursor-pointer"
         />
       </div>
@@ -1528,12 +1547,22 @@ function GodModeTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: a
 
         {/* Skip tests */}
         <div className="border-t border-white/5 pt-4">
-          <label className="flex items-center gap-3 cursor-pointer">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => updateGod({ skipTests: !god.skipTests })}
+            onKeyDown={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                updateGod({ skipTests: !god.skipTests });
+              }
+            }}
+            className="flex items-center gap-3 cursor-pointer group"
+          >
             <div
-              className={`w-10 h-6 rounded-full relative transition-colors duration-200 ${
+              className={`w-10 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0 ${
                 god.skipTests ? 'bg-amber-500' : 'bg-white/10'
               }`}
-              onClick={() => updateGod({ skipTests: !god.skipTests })}
             >
               <div
                 className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${
@@ -1544,11 +1573,11 @@ function GodModeTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: a
             <div className="flex items-start gap-2.5">
               <TestTube className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
               <div>
-                <span className="text-sm text-white font-medium">Skip tests by default</span>
+                <span className="text-sm text-white font-medium group-hover:text-white transition">Skip tests by default</span>
                 <p className="text-xs text-white/40">God-mode builds will skip the test phase unless explicitly requested.</p>
               </div>
             </div>
-          </label>
+          </div>
           {god.skipTests && (
             <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mt-3">
               <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
@@ -1604,12 +1633,22 @@ function WatchTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: any
         </div>
 
         <div className="border-t border-white/5 pt-4">
-          <label className="flex items-center gap-3 cursor-pointer">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => updateWatch({ autoFix: !watch.autoFix })}
+            onKeyDown={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                updateWatch({ autoFix: !watch.autoFix });
+              }
+            }}
+            className="flex items-center gap-3 cursor-pointer group"
+          >
             <div
-              className={`w-10 h-6 rounded-full relative transition-colors duration-200 ${
+              className={`w-10 h-6 rounded-full relative transition-colors duration-200 flex-shrink-0 ${
                 watch.autoFix ? 'bg-emerald-500' : 'bg-white/10'
               }`}
-              onClick={() => updateWatch({ autoFix: !watch.autoFix })}
             >
               <div
                 className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-200 ${
@@ -1620,11 +1659,11 @@ function WatchTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: any
             <div className="flex items-start gap-2.5">
               <Sparkles className="w-4 h-4 text-[#3ecf8e] mt-0.5 flex-shrink-0" />
               <div>
-                <span className="text-sm text-white font-medium">Auto-fix on detection loop</span>
+                <span className="text-sm text-white font-medium group-hover:text-white transition">Auto-fix on detection loop</span>
                 <p className="text-xs text-white/40">Automatically attempt to fix syntax errors and linter issues detected by the watch daemon.</p>
               </div>
             </div>
-          </label>
+          </div>
         </div>
       </div>
     </div>
@@ -1789,7 +1828,7 @@ function UsageTab() {
       const days = timeRange === 'Last 7 days' ? 7 : 30;
       const to = new Date();
       const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
-      const res = await api.get(`/api/v1/usage/stats?from=${from.toISOString()}&href=${to.toISOString()}`, {
+      const res = await api.get(`/api/v1/usage/stats?from=${from.toISOString()}&to=${to.toISOString()}`, {
         timeout: 10000,
       });
       if (res.data?.ok) setStats(res.data.stats);
@@ -1935,11 +1974,144 @@ function UsageTab() {
   );
 }
 
+/* ─────────────────── CHANGE PASSWORD MODAL ─────────────────── */
+
+function ChangePasswordModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword) {
+      toast.error('Please fill in all password fields');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters long');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api.post('/api/v1/auth/change-password', {
+        currentPassword,
+        newPassword,
+      });
+      toast.success('Password changed successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error?.message || err?.message || 'Failed to change password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md bg-[#16171d] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Key className="w-4 h-4 text-[#3ecf8e]" />
+            <h3 className="text-base font-semibold text-white">Change Password</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <div>
+            <label className="block text-xs font-medium text-white/70 mb-1.5">Current Password</label>
+            <input
+              type={showPass ? 'text' : 'password'}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              className="w-full bg-[#111216] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/20 outline-none focus:border-[#3ecf8e] transition"
+              placeholder="Enter current password"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-white/70 mb-1.5">New Password</label>
+            <input
+              type={showPass ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              className="w-full bg-[#111216] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/20 outline-none focus:border-[#3ecf8e] transition"
+              placeholder="Enter new password (min 6 chars)"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-white/70 mb-1.5">Confirm New Password</label>
+            <input
+              type={showPass ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              className="w-full bg-[#111216] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-white/20 outline-none focus:border-[#3ecf8e] transition"
+              placeholder="Confirm new password"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={() => setShowPass(!showPass)}
+              className="text-[11px] text-white/50 hover:text-white flex items-center gap-1.5 transition"
+            >
+              {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              <span>{showPass ? 'Hide passwords' : 'Show passwords'}</span>
+            </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 text-xs rounded-xl font-medium bg-[#3ecf8e] hover:bg-[#3ecf8e]/90 text-black flex items-center gap-1.5 transition disabled:opacity-50"
+            >
+              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>Update Password</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────────── TAB 18: ACCOUNT TAB ─────────────────── */
 
 function AccountTab() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordModalOpen, setPasswordModalOpen] = useState(false);
 
   useEffect(() => {
     api
@@ -1961,6 +2133,11 @@ function AccountTab() {
 
   return (
     <div className="space-y-8">
+      <ChangePasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+      />
+
       <div>
         <h2 className="text-lg font-semibold text-white mb-1">Account & Security</h2>
         <p className="text-sm text-white/40">Manage your profile credentials, authentication tokens, and preferences.</p>
@@ -1999,7 +2176,7 @@ function AccountTab() {
           <div className="space-y-3">
             <button
               type="button"
-              onClick={() => toast.info('Password management available in Cloud Console')}
+              onClick={() => setPasswordModalOpen(true)}
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#0e0e0e] border border-white/5 text-[13px] text-white/80 hover:bg-white/5 transition cursor-pointer"
             >
               <div className="flex items-center gap-2.5">
@@ -2010,7 +2187,7 @@ function AccountTab() {
             </button>
             <button
               type="button"
-              onClick={() => toast.info('Two-Factor Authentication is active for this workspace')}
+              onClick={() => toast.info('Two-Factor Authentication is managed by your organization identity provider (OAuth / SSO).')}
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#0e0e0e] border border-white/5 text-[13px] text-white/80 hover:bg-white/5 transition cursor-pointer"
             >
               <div className="flex items-center gap-2.5">
@@ -2100,6 +2277,16 @@ function ConnectionsTab() {
     connectOAuth(url);
   };
 
+  const handleDisconnectGithub = async () => {
+    try {
+      await api.post('/api/v1/github/disconnect');
+      setGithubStatus({ connected: false });
+      toast.success('Disconnected from GitHub');
+    } catch (e) {
+      toast.error('Failed to disconnect GitHub');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -2138,7 +2325,8 @@ function ConnectionsTab() {
           {githubStatus.connected ? (
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-[13px] border border-emerald-500/20 transition cursor-pointer flex items-center gap-1.5"
+              onClick={handleDisconnectGithub}
+              className="px-4 py-2 rounded-lg bg-emerald-500/10 hover:bg-red-500/10 text-emerald-400 hover:text-red-400 text-[13px] border border-emerald-500/20 hover:border-red-500/20 transition cursor-pointer flex items-center gap-1.5"
             >
               <X className="w-3.5 h-3.5" />
               <span>Disconnect</span>
@@ -2199,7 +2387,15 @@ export function SettingsPage({
     api
       .get('/api/v1/settings', { timeout: 5000 })
       .then((res) => {
-        if (res.data?.settings) setSettings(res.data.settings);
+        if (res.data?.settings) {
+          setSettings(res.data.settings);
+          if (res.data.settings.rewindCheckpointing !== undefined) {
+            useSettingsStore.getState().updateAgentSetting('checkpointsEnabled', res.data.settings.rewindCheckpointing);
+          }
+          if (res.data.settings.conversationCompaction !== undefined) {
+            useSettingsStore.getState().updateAgentSetting('conversationCompaction', res.data.settings.conversationCompaction);
+          }
+        }
       })
       .catch(console.error);
   }, []);
@@ -2212,6 +2408,9 @@ export function SettingsPage({
       await api.put('/api/v1/settings/permissions', {
         allowShellAll: updated.allowShellAll,
         requireEditApproval: updated.requireEditApproval,
+        permissionMode: updated.permissionMode,
+        autoApproveHighRisk: updated.autoApproveHighRisk,
+        networkTimeout: updated.networkTimeout,
       });
       toast.success('Permissions updated');
     } catch (e) {

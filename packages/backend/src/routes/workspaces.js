@@ -85,6 +85,17 @@ export function workspaceRoutes({ secret }) {
         gitUrl = repoUrl;
         branchResult = branch;
         await cloneRepo(repoUrl, diskPath, { branch: branchResult, branchName });
+      } else if (source === 'duplicate') {
+        const files = Array.isArray(req.body.files) ? req.body.files : [];
+        const { writeFile } = await import('node:fs/promises');
+        const { dirname } = await import('node:path');
+        for (const f of files) {
+          if (f && f.path) {
+            const target = safeJoin(diskPath, f.path);
+            await mkdir(dirname(target), { recursive: true });
+            await writeFile(target, f.content || '', 'utf8');
+          }
+        }
       }
 
       // If a workspace with the same name already exists for this user,
@@ -204,6 +215,28 @@ export function workspaceRoutes({ secret }) {
       await mkDir(join(newFull, '..'), { recursive: true });
       await rename(oldFull, newFull);
       res.json({ ok: true, oldPath, newPath });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /workspaces/:id/ports/:port/check — check if a port is open/listening
+  router.get('/:id/ports/:port/check', async (req, res, next) => {
+    try {
+      const net = await import('node:net');
+      const port = Number(req.params.port);
+      if (isNaN(port) || port <= 0 || port > 65535) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'Invalid port' } });
+      }
+      const isOpen = await new Promise((resolve) => {
+        const socket = net.createConnection({ port, host: '127.0.0.1' }, () => {
+          socket.end();
+          resolve(true);
+        });
+        socket.on('error', () => resolve(false));
+        socket.setTimeout(1000, () => { socket.destroy(); resolve(false); });
+      });
+      res.json({ port, open: isOpen });
     } catch (err) {
       next(err);
     }

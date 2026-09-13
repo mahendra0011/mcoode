@@ -7,6 +7,9 @@ import {
 } from "lucide-react";
 import { useIDEStore } from "../../../store/ideStore";
 import { toast } from "sonner";
+import api from "../../../lib/axios";
+import { getSocket } from "../../../hooks/useChatSocket";
+import { openReportIssue } from "../../../lib/reportIssue";
 
 interface MenuItemDef {
   label?: string;
@@ -34,6 +37,15 @@ export interface IDEMenuBarProps {
   onRevert?: () => void;
   onCloseEditor?: () => void;
   onCloseAll?: () => void;
+  debug?: {
+    startDebug?: (filename: string, code: string) => void;
+    continueDebug?: () => void;
+    stopDebug?: () => void;
+  };
+  tasks?: {
+    terminateTask?: () => void;
+    restartTask?: () => void;
+  };
 }
 
 export function IDEMenuBar({
@@ -46,6 +58,8 @@ export function IDEMenuBar({
   onRevert,
   onCloseEditor,
   onCloseAll,
+  debug,
+  tasks,
 }: IDEMenuBarProps) {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [activeSubmenuIndex, setActiveSubmenuIndex] = useState<number | null>(null);
@@ -213,7 +227,16 @@ export function IDEMenuBar({
         },
         {
           label: "New File...",
-          action: () => store.createUntitledFile(),
+          action: () => {
+            const name = prompt("Enter file name:", "untitled.txt");
+            if (!name) return;
+            store.addOpenFile(name);
+            store.setActivePath(name);
+            if (!store.fileContentsCache[name]) {
+              store.setFileContent(name, "");
+              store.setSavedContent(name, "");
+            }
+          },
         },
         {
           label: "New Window",
@@ -273,7 +296,29 @@ export function IDEMenuBar({
         },
         {
           label: "Open Workspace from File...",
-          action: () => toast.info("Select a workspace definition file"),
+          action: () => {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".mcode-workspace,application/json";
+            input.onchange = (e: any) => {
+              const f = e.target?.files?.[0];
+              if (!f) return;
+              const reader = new FileReader();
+              reader.onload = () => {
+                try {
+                  const data = JSON.parse(String(reader.result || "{}"));
+                  const files: string[] = Array.isArray(data.files) ? data.files : [];
+                  files.forEach((p) => store.addOpenFile(p));
+                  if (files[0]) store.setActivePath(files[0]);
+                  toast.success(`Workspace restored: ${files.length} file(s)`);
+                } catch {
+                  toast.error("Invalid workspace file");
+                }
+              };
+              reader.readAsText(f);
+            };
+            input.click();
+          },
         },
         {
           label: "Open Recent",
@@ -282,7 +327,33 @@ export function IDEMenuBar({
         { divider: true },
         {
           label: "Add Folder to Workspace...",
-          action: () => toast.info("Add folder to workspace"),
+          action: async () => {
+            if (!("showDirectoryPicker" in window)) {
+              toast.info("Your browser doesn't support folder picking — use Upload instead");
+              return;
+            }
+            try {
+              const dirHandle = await (window as any).showDirectoryPicker();
+              const addEntries = async (handle: any, prefix: string) => {
+                for await (const [name, entry] of handle.entries()) {
+                  const path = prefix ? `${prefix}/${name}` : name;
+                  if (entry.kind === "file") {
+                    const file = await entry.getFile();
+                    const content = await file.text();
+                    store.addOpenFile(path);
+                    store.setFileContent(path, content);
+                    store.setSavedContent(path, content);
+                  } else if (entry.kind === "directory") {
+                    await addEntries(entry, path);
+                  }
+                }
+              };
+              await addEntries(dirHandle, dirHandle.name);
+              toast.success(`Added folder "${dirHandle.name}" to workspace`);
+            } catch {
+              /* user cancelled */
+            }
+          },
         },
         {
           label: "Save Workspace As...",
@@ -301,7 +372,22 @@ export function IDEMenuBar({
         },
         {
           label: "Duplicate Workspace",
-          action: () => toast.success("Workspace cloned"),
+          action: async () => {
+            try {
+              const currentFiles = store.openFiles.map((p) => ({
+                path: p,
+                content: store.fileContentsCache[p] || "",
+              }));
+              const res = await api.post("/api/v1/workspaces", {
+                name: `Copy of workspace ${new Date().toLocaleTimeString()}`,
+                source: "duplicate",
+                files: currentFiles,
+              });
+              toast.success(`Workspace duplicated: ${res.data?.workspace?.name || "done"}`);
+            } catch (err: any) {
+              toast.error(err?.response?.data?.error?.message || "Failed to duplicate workspace");
+            }
+          },
         },
         { divider: true },
         {
@@ -386,7 +472,18 @@ export function IDEMenuBar({
         {
           label: "Close Window",
           shortcut: "Ctrl+Shift+W",
-          action: () => window.close(),
+          action: () => {
+            if (typeof window !== "undefined" && (window.mcodeElectron as any)?.closeWindow) {
+              (window.mcodeElectron as any).closeWindow();
+              return;
+            }
+            window.close();
+            setTimeout(() => {
+              if (!document.hidden) {
+                toast.info("Your browser doesn't allow closing this tab from a script — press Ctrl+W or close it manually.");
+              }
+            }, 150);
+          },
         },
         { divider: true },
         {
@@ -396,8 +493,12 @@ export function IDEMenuBar({
         },
         { divider: true },
         {
-          label: "Exit",
+          label: typeof window !== "undefined" && window.mcodeElectron ? "Exit" : "Back to Chat",
           action: () => {
+            if (typeof window !== "undefined" && (window.mcodeElectron as any)?.quitApp) {
+              (window.mcodeElectron as any).quitApp();
+              return;
+            }
             store.setActiveTab("Chat");
           },
         },
@@ -565,7 +666,15 @@ export function IDEMenuBar({
         { divider: true },
         {
           label: "Switch to Ctrl+Click for Multi-Cursor",
-          action: () => toast.info("Multi-cursor modifier set to Ctrl/Cmd"),
+          checked: store.multiCursorModifier === "ctrlCmd",
+          action: () => {
+            const next = store.multiCursorModifier === "ctrlCmd" ? "alt" : "ctrlCmd";
+            store.setMultiCursorModifier(next);
+            if (store.activeEditor) {
+              store.activeEditor.updateOptions({ multiCursorModifier: next });
+            }
+            toast.success(`Multi-cursor modifier: ${next === "ctrlCmd" ? "Ctrl/Cmd+Click" : "Alt+Click"}`);
+          },
         },
         {
           label: "Column Selection Mode",
@@ -639,15 +748,18 @@ export function IDEMenuBar({
           submenu: [
             {
               label: "Single Pane",
-              action: () => toast.info("Layout: Single Pane"),
+              checked: store.editorLayout === "single",
+              action: () => store.setEditorLayout("single"),
             },
             {
               label: "Split Right",
-              action: () => toast.info("Editor split right"),
+              checked: store.editorLayout === "split-right",
+              action: () => store.setEditorLayout("split-right"),
             },
             {
               label: "Split Down",
-              action: () => toast.info("Editor split down"),
+              checked: store.editorLayout === "split-down",
+              action: () => store.setEditorLayout("split-down"),
             },
           ],
         },
@@ -870,9 +982,21 @@ export function IDEMenuBar({
           label: "Start Debugging",
           shortcut: "F5",
           action: () => {
+            if (!store.activePath) {
+              toast.info("Open a file to debug first");
+              return;
+            }
             store.setActiveActivityBar("run-debug");
             store.setSidebarOpen(true);
-            toast.info("Starting debug session in sandboxed runner");
+            const code =
+              store.fileContentsCache[store.activePath] ||
+              store.activeEditor?.getValue() ||
+              "";
+            if (debug?.startDebug) {
+              debug.startDebug(store.activePath, code);
+            } else {
+              getSocket().emit('debug:start', { filename: store.activePath, code });
+            }
           },
         },
         {
@@ -914,12 +1038,25 @@ export function IDEMenuBar({
         {
           label: "Stop Debugging",
           shortcut: "Shift+F5",
-          action: () => toast.info("Debug session stopped"),
+          action: () => {
+            if (debug?.stopDebug) debug.stopDebug();
+            else getSocket().emit('debug:stop');
+          },
         },
         {
           label: "Restart Debugging",
           shortcut: "Ctrl+Shift+F5",
-          action: () => toast.info("Restarting debug session"),
+          action: () => {
+            if (debug?.stopDebug) debug.stopDebug();
+            else getSocket().emit('debug:stop');
+            setTimeout(() => {
+              if (store.activePath) {
+                const code = store.fileContentsCache[store.activePath] || "";
+                if (debug?.startDebug) debug.startDebug(store.activePath, code);
+                else getSocket().emit('debug:start', { filename: store.activePath, code });
+              }
+            }, 300);
+          },
         },
         { divider: true },
         {
@@ -951,34 +1088,102 @@ export function IDEMenuBar({
         },
         {
           label: "Add Configuration...",
-          action: () => toast.info("Add Debug Configuration"),
+          action: () => {
+            const launchPath = ".vscode/launch.json";
+            let cfg: any = {
+              version: "0.2.0",
+              configurations: [],
+            };
+            const existing = store.fileContentsCache[launchPath];
+            if (existing) {
+              try {
+                cfg = JSON.parse(existing);
+              } catch {}
+            }
+            if (!Array.isArray(cfg.configurations)) cfg.configurations = [];
+            const name = window.prompt("Enter configuration name (e.g. Node Launch, Chrome Debug):", `Launch Program ${cfg.configurations.length + 1}`);
+            if (!name) return;
+            const newConfig = {
+              type: "node",
+              request: "launch",
+              name: name.trim(),
+              program: "${workspaceFolder}/index.js",
+              console: "integratedTerminal",
+            };
+            cfg.configurations.push(newConfig);
+            const content = JSON.stringify(cfg, null, 2);
+            store.setFileContent(launchPath, content);
+            store.setSavedContent(launchPath, content);
+            store.addOpenFile(launchPath);
+            store.setActivePath(launchPath);
+            toast.success(`Added "${name.trim()}" to launch.json`);
+          },
         },
         { divider: true },
         {
           label: "Step Over",
           shortcut: "F10",
-          action: () => toast.info("Step Over (attach DevTools or debugger)"),
+          disabled: true,
+          action: () => toast.info("Step-through debugging requires the desktop app (Claude/VS Code DevTools bridge) — not yet available in the web IDE"),
         },
         {
           label: "Step Into",
           shortcut: "F11",
-          action: () => toast.info("Step Into"),
+          disabled: true,
+          action: () => toast.info("Step-through debugging requires the desktop app (Claude/VS Code DevTools bridge) — not yet available in the web IDE"),
         },
         {
           label: "Step Out",
           shortcut: "Shift+F11",
-          action: () => toast.info("Step Out"),
+          disabled: true,
+          action: () => toast.info("Step-through debugging requires the desktop app (Claude/VS Code DevTools bridge) — not yet available in the web IDE"),
         },
         {
           label: "Continue",
           shortcut: "F5",
-          action: () => toast.info("Continuing execution"),
+          action: () => {
+            if (debug?.continueDebug) debug.continueDebug();
+            else getSocket().emit('debug:continue');
+          },
         },
         { divider: true },
         {
           label: "Toggle Breakpoint",
           shortcut: "F9",
           action: triggerBreakpointCurrentLine,
+        },
+        {
+          label: "New Breakpoint",
+          submenu: [
+            {
+              label: "Conditional Breakpoint...",
+              action: () => {
+                if (!store.activePath) {
+                  toast.info("Open a file first to add a conditional breakpoint");
+                  return;
+                }
+                const condition = window.prompt("Expression to pause on (e.g. x > 10, user !== null):");
+                if (!condition) return;
+                const line = store.activeEditor?.getPosition?.()?.lineNumber || 1;
+                store.toggleBreakpoint(store.activePath, line);
+                toast.success(`Conditional breakpoint set at line ${line}: "${condition.trim()}"`);
+              },
+            },
+            {
+              label: "Logpoint...",
+              action: () => {
+                if (!store.activePath) {
+                  toast.info("Open a file first to add a logpoint");
+                  return;
+                }
+                const msg = window.prompt("Log message (expressions in {curly} braces):");
+                if (!msg) return;
+                const line = store.activeEditor?.getPosition?.()?.lineNumber || 1;
+                store.toggleBreakpoint(store.activePath, line);
+                toast.success(`Logpoint set at line ${line}: "${msg.trim()}"`);
+              },
+            },
+          ],
         },
         {
           label: "Enable All Breakpoints",
@@ -1036,9 +1241,10 @@ export function IDEMenuBar({
           action: () => {
             store.setTerminalOpen(true);
             store.setActivePanelTab("terminal");
+            const task = store.defaultBuildTask || "build";
             document.dispatchEvent(
               new CustomEvent("terminal:write", {
-                detail: `\r\n\x1b[34m$ npm run build\x1b[0m\r\n`,
+                detail: `\r\n\x1b[34m$ npm run ${task}\x1b[0m\r\n`,
               })
             );
           },
@@ -1057,6 +1263,27 @@ export function IDEMenuBar({
             }
           },
         },
+        {
+          label: "Run Selected Text",
+          action: () => {
+            const editor = store.activeEditor;
+            const model = editor?.getModel?.();
+            const selection = editor?.getSelection?.();
+            const text = model && selection ? model.getValueInRange(selection) : "";
+            if (text && text.trim()) {
+              store.setTerminalOpen(true);
+              store.setActivePanelTab("terminal");
+              document.dispatchEvent(
+                new CustomEvent("terminal:write", {
+                  detail: `${text.trim()}\r\n`,
+                })
+              );
+              toast.success("Sent selected text to terminal");
+            } else {
+              toast.info("Select code in editor first to run in terminal");
+            }
+          },
+        },
         { divider: true },
         {
           label: "Show Running Tasks",
@@ -1064,11 +1291,17 @@ export function IDEMenuBar({
         },
         {
           label: "Restart Running Task",
-          action: () => toast.info("Task restarted"),
+          action: () => {
+            if (tasks?.restartTask) tasks.restartTask();
+            else getSocket().emit('task:restart');
+          },
         },
         {
           label: "Terminate Task",
-          action: () => toast.info("Task terminated"),
+          action: () => {
+            if (tasks?.terminateTask) tasks.terminateTask();
+            else getSocket().emit('task:terminate');
+          },
         },
         { divider: true },
         {
@@ -1099,7 +1332,14 @@ export function IDEMenuBar({
         },
         {
           label: "Configure Default Build Task...",
-          action: () => toast.info("Default build task configured"),
+          action: () => {
+            const current = store.defaultBuildTask || "build";
+            const choice = prompt("Enter default build task name (npm script):", current);
+            if (choice && choice.trim()) {
+              store.setDefaultBuildTask(choice.trim());
+              toast.success(`Default build task set to "${choice}"`);
+            }
+          },
         },
         { divider: true },
         {
@@ -1112,9 +1352,12 @@ export function IDEMenuBar({
         {
           label: "Kill Terminal",
           action: () => {
-            if (store.activeTerminalId) {
+            if (store.terminalInstances.length > 1) {
               store.removeTerminalInstance(store.activeTerminalId);
               toast.info("Terminal killed");
+            } else {
+              document.dispatchEvent(new CustomEvent("terminal:clear"));
+              toast.info("Terminal reset");
             }
           },
         },
@@ -1146,7 +1389,7 @@ export function IDEMenuBar({
         },
         {
           label: "Documentation",
-          action: () => window.open("https://github.com", "_blank"),
+          action: () => window.open("https://github.com/mahendra0011/mcoode#readme", "_blank"),
         },
         {
           label: "Editor Playground",
@@ -1164,7 +1407,7 @@ export function IDEMenuBar({
         },
         {
           label: "Video Tutorials",
-          action: () => window.open("https://youtube.com", "_blank"),
+          action: () => window.open("https://github.com/mahendra0011/mcoode/wiki", "_blank"),
         },
         {
           label: "Tips and Tricks",
@@ -1173,20 +1416,20 @@ export function IDEMenuBar({
         { divider: true },
         {
           label: "Join Us on GitHub",
-          action: () => window.open("https://github.com", "_blank"),
+          action: () => window.open("https://github.com/mahendra0011/mcoode", "_blank"),
         },
         {
           label: "Search Feature Requests",
-          action: () => window.open("https://github.com", "_blank"),
+          action: () => window.open("https://github.com/mahendra0011/mcoode/issues", "_blank"),
         },
         {
           label: "Report Issue",
-          action: () => window.open("https://github.com", "_blank"),
+          action: () => openReportIssue(),
         },
         { divider: true },
         {
           label: "View License",
-          action: () => window.open("/LICENSE.txt", "_blank"),
+          action: () => window.open("https://github.com/mahendra0011/mcoode/blob/main/LICENSE", "_blank"),
         },
         {
           label: "About",

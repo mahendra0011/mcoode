@@ -33,6 +33,7 @@ import {
 import type { ChatMessage } from '../../types/chat';
 import { useIDEStore, type PanelTab } from '../../store/ideStore';
 import { getSocket } from '../../hooks/useChatSocket';
+import api from '../../lib/axios';
 import { toast } from 'sonner';
 
 /**
@@ -49,8 +50,10 @@ export interface ProblemEntry {
   message: string;
   file: string;
   line: number;
-  column: number;
+  column?: number;
+  col?: number;
   source?: string;
+  ruleId?: string;
 }
 
 export interface OutputChannel {
@@ -68,6 +71,7 @@ export interface ForwardedPort {
 }
 
 export interface BottomPanelProps {
+  workspaceId?: string | null;
   messages: ChatMessage[];
   onCommand?: (cmd: string) => void;
   onInterrupt?: () => void;
@@ -139,6 +143,7 @@ const DEFAULT_PORTS: ForwardedPort[] = [
 ];
 
 export function BottomPanel({
+  workspaceId,
   messages,
   onCommand,
   onInterrupt,
@@ -381,7 +386,7 @@ export function BottomPanel({
     const text = problems
       .map(
         (p) =>
-          `[${p.severity.toUpperCase()}] ${p.file}:${p.line}:${p.column} - ${p.message} (${p.source || 'linter'})`
+          `[${p.severity.toUpperCase()}] ${p.file}:${p.line}:${p.column ?? p.col ?? 1} - ${p.message} (${p.source || 'linter'})`
       )
       .join('\n');
     navigator.clipboard.writeText(text).then(() => {
@@ -395,25 +400,40 @@ export function BottomPanel({
     );
   }, [activeChannelId]);
 
-  const handleForwardPort = useCallback(() => {
+  const handleForwardPort = useCallback(async () => {
     const portNum = parseInt(newPortNumber, 10);
     if (isNaN(portNum) || portNum <= 0 || portNum > 65535) {
       toast.error('Please enter a valid port number (1-65535)');
       return;
     }
+
+    let isListening = true;
+    if (workspaceId) {
+      try {
+        const res = await api.get(`/api/v1/workspaces/${workspaceId}/ports/${portNum}/check`);
+        isListening = res.data?.listening ?? true;
+      } catch {
+        // Continue gracefully
+      }
+    }
+
     const newPort: ForwardedPort = {
       port: portNum,
       label: newPortLabel.trim() || `port-${portNum}`,
       visibility: 'private',
-      process: 'custom',
+      process: isListening ? 'active' : 'idle',
       localUrl: `http://localhost:${portNum}`,
     };
     setPortList((prev) => [...prev.filter((p) => p.port !== portNum), newPort]);
     setNewPortNumber('');
     setNewPortLabel('');
     setIsAddingPort(false);
-    toast.success(`Forwarded port ${portNum}`);
-  }, [newPortNumber, newPortLabel]);
+    if (isListening) {
+      toast.success(`Port ${portNum} forwarded and active`);
+    } else {
+      toast.info(`Port ${portNum} forwarded (no process listening yet)`);
+    }
+  }, [newPortNumber, newPortLabel, workspaceId]);
 
   const [panelHeight, setPanelHeight] = useState<number>(() => {
     if (typeof window !== 'undefined') {
@@ -1161,6 +1181,9 @@ function RecentListModal({ title, icon, items, emptyText, onSelect, onClose }: R
 // ---------------------------------------------------------------------
 function ProblemsView({ problems }: { problems: ProblemEntry[] }) {
   const [filterQuery, setFilterQuery] = useState('');
+  const setTargetJump = useIDEStore((s) => s.setTargetJump);
+  const addOpenFile = useIDEStore((s) => s.addOpenFile);
+  const setActivePath = useIDEStore((s) => s.setActivePath);
 
   const filtered = problems.filter(
     (p) =>
@@ -1204,7 +1227,14 @@ function ProblemsView({ problems }: { problems: ProblemEntry[] }) {
             {entries.map((p) => (
               <div
                 key={p.id}
-                className="flex items-start gap-2 px-6 py-1 hover:bg-white/5 cursor-pointer rounded transition-colors"
+                onClick={() => {
+                  if (p.file) {
+                    addOpenFile(p.file);
+                    setActivePath(p.file);
+                    if (p.line) setTargetJump({ path: p.file, line: p.line });
+                  }
+                }}
+                className="flex items-start gap-2 px-6 py-1 hover:bg-white/5 cursor-pointer rounded transition-colors group"
               >
                 {p.severity === 'error' && (
                   <AlertCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0" />
@@ -1215,9 +1245,9 @@ function ProblemsView({ problems }: { problems: ProblemEntry[] }) {
                 {p.severity === 'info' && (
                   <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
                 )}
-                <span className="text-white/80 flex-1">{p.message}</span>
-                <span className="text-white/30 flex-shrink-0 font-mono text-[11px]">
-                  [Ln {p.line}, Col {p.column}] {p.source && `(${p.source})`}
+                <span className="text-white/80 flex-1 group-hover:text-white transition-colors">{p.message}</span>
+                <span className="text-white/30 flex-shrink-0 font-mono text-[11px] group-hover:text-white/60">
+                  [Ln {p.line}, Col {p.column ?? p.col ?? 1}] {p.source && `(${p.source})`}
                 </span>
               </div>
             ))}

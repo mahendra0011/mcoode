@@ -32,16 +32,95 @@ interface OutlineSymbol {
   line: number;
 }
 
-function extractOutline(code: string): OutlineSymbol[] {
+function extractOutline(code: string, filePath = ""): OutlineSymbol[] {
   if (!code) return [];
   const symbols: OutlineSymbol[] = [];
   const lines = code.split("\n");
+  const ext = filePath.split(".").pop()?.toLowerCase() || "";
 
   lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("#") && ext !== "md" && ext !== "markdown") {
+      // In python, check if it's a comment or code
+      if (ext === "py" && trimmed.startsWith("#")) return;
+    }
+
+    // 1. Python
+    if (ext === "py") {
+      const pyClass = line.match(/^class\s+([a-zA-Z0-9_]+)/);
+      const pyDef = line.match(/^\s*(?:async\s+)?def\s+([a-zA-Z0-9_]+)/);
+      if (pyClass) {
+        symbols.push({ name: pyClass[1], kind: "class", line: idx + 1 });
+        return;
+      }
+      if (pyDef) {
+        symbols.push({ name: pyDef[1], kind: "function", line: idx + 1 });
+        return;
+      }
+    }
+
+    // 2. Go
+    if (ext === "go") {
+      const goFunc = line.match(/^func\s+(?:\([^)]+\)\s+)?([a-zA-Z0-9_]+)/);
+      const goStruct = line.match(/^type\s+([a-zA-Z0-9_]+)\s+struct/);
+      const goIface = line.match(/^type\s+([a-zA-Z0-9_]+)\s+interface/);
+      if (goFunc) {
+        symbols.push({ name: goFunc[1], kind: "function", line: idx + 1 });
+        return;
+      }
+      if (goStruct) {
+        symbols.push({ name: goStruct[1], kind: "class", line: idx + 1 });
+        return;
+      }
+      if (goIface) {
+        symbols.push({ name: goIface[1], kind: "interface", line: idx + 1 });
+        return;
+      }
+    }
+
+    // 3. Rust
+    if (ext === "rs") {
+      const rsFn = line.match(/(?:pub(?:\([^)]+\))?\s+)?(?:async\s+)?fn\s+([a-zA-Z0-9_]+)/);
+      const rsStruct = line.match(/(?:pub(?:\([^)]+\))?\s+)?struct\s+([a-zA-Z0-9_]+)/);
+      const rsEnum = line.match(/(?:pub(?:\([^)]+\))?\s+)?enum\s+([a-zA-Z0-9_]+)/);
+      const rsTrait = line.match(/(?:pub(?:\([^)]+\))?\s+)?trait\s+([a-zA-Z0-9_]+)/);
+      const rsImpl = line.match(/^impl(?:<[^>]+>)?\s+(?:[a-zA-Z0-9_:]+\s+for\s+)?([a-zA-Z0-9_:]+)/);
+      if (rsFn) {
+        symbols.push({ name: rsFn[1], kind: "function", line: idx + 1 });
+        return;
+      }
+      if (rsStruct) {
+        symbols.push({ name: rsStruct[1], kind: "class", line: idx + 1 });
+        return;
+      }
+      if (rsEnum) {
+        symbols.push({ name: rsEnum[1], kind: "class", line: idx + 1 });
+        return;
+      }
+      if (rsTrait) {
+        symbols.push({ name: rsTrait[1], kind: "interface", line: idx + 1 });
+        return;
+      }
+      if (rsImpl) {
+        symbols.push({ name: `impl ${rsImpl[1]}`, kind: "class", line: idx + 1 });
+        return;
+      }
+    }
+
+    // 4. Markdown headings
+    if (ext === "md" || ext === "markdown") {
+      const heading = line.match(/^(#{1,6})\s+(.+)/);
+      if (heading) {
+        symbols.push({ name: `${heading[1]} ${heading[2].trim()}`, kind: "variable", line: idx + 1 });
+        return;
+      }
+    }
+
+    // 5. JavaScript / TypeScript / General
     const fn = line.match(/(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z0-9_$]+)/);
     const cls = line.match(/(?:export\s+)?class\s+([a-zA-Z0-9_$]+)/);
-    const iface = line.match(/(?:export\s+)?interface\s+([a-zA-Z0-9_$]+)/);
-    const constFn = line.match(/(?:export\s+)?const\s+([a-zA-Z0-9_$]+)\s*=\s*(?:\([^)]*\)|[a-zA-Z0-9_$]+)\s*=>/);
+    const iface = line.match(/(?:export\s+)?(?:interface|type)\s+([a-zA-Z0-9_$]+)/);
+    const constFn = line.match(/(?:export\s+)?const\s+([a-zA-Z0-9_$]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z0-9_$]+)\s*=>/);
     const regularConst = line.match(/(?:export\s+)?const\s+([a-zA-Z0-9_$]+)\s*=/);
 
     if (fn) symbols.push({ name: fn[1], kind: "function", line: idx + 1 });
@@ -213,7 +292,7 @@ export function ExplorerPanel({ workspaceId, projectName = "cli" }: ExplorerPane
 
   // Active file code for Outline
   const activeCode = activePath ? fileContentsCache[activePath] || "" : "";
-  const outlineSymbols = useMemo(() => extractOutline(activeCode), [activeCode]);
+  const outlineSymbols = useMemo(() => extractOutline(activeCode, activePath || ""), [activeCode, activePath]);
 
   // Active file timeline
   const activeTimeline = activePath ? timelines[activePath] || [] : [];

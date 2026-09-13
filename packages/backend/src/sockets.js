@@ -11,12 +11,17 @@ import pty from 'node-pty';
 import { runSmart } from './piston-client.js';
 import { ensureProjectContainer, execInContainer, stopProjectContainer, getContainerPort } from './docker-runner.js';
 import { connectSSH, sendToSSH, disconnectSSH } from './ssh-manager.js';
+import { spawn } from 'node:child_process';
 
 // Per-socket chat sessions (web clients only)
 const chatSessions = new Map();
 
 // Per-socket PTY terminal sessions: Map<socketId, Map<terminalId, ptyProcess>>
 const ptySessionsMap = new Map();
+
+// Per-socket debug sessions & project processes
+const activeDebugSessions = new Map(); // socket.id -> { child, port }
+const activeProjectProcesses = new Map(); // socket.id -> child process
 
 /**
  * Detect available shells on the current OS.
@@ -295,6 +300,56 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
     });
 
+    // ── Real Node Inspector Debugging Session ─────────────────────────
+    socket.on('debug:start', async (payload = {}) => {
+      const { filename, code } = payload;
+      if (!filename || code === undefined) {
+        return socket.emit('debug:error', { message: 'filename and code are required' });
+      }
+      try {
+        const session = chatSessions.get(socket.id);
+        const workspace = session?.workspacePath || os.tmpdir();
+        const { writeFile, mkdir } = await import('node:fs/promises');
+        const { dirname, join } = await import('node:path');
+        const filePath = join(workspace, filename);
+        await mkdir(dirname(filePath), { recursive: true });
+        await writeFile(filePath, code, 'utf8');
+
+        const port = 9229 + Math.floor(Math.random() * 1000);
+        const child = spawn(process.execPath, [`--inspect-brk=${port}`, filePath], {
+          cwd: workspace,
+        });
+        activeDebugSessions.set(socket.id, { child, port });
+
+        child.stdout.on('data', (d) => socket.emit('debug:output', { stream: 'stdout', data: d.toString() }));
+        child.stderr.on('data', (d) => socket.emit('debug:output', { stream: 'stderr', data: d.toString() }));
+        child.on('exit', (code) => {
+          socket.emit('debug:exited', { code: code ?? 0 });
+          activeDebugSessions.delete(socket.id);
+        });
+
+        socket.emit('debug:started', { port });
+      } catch (err) {
+        socket.emit('debug:error', { message: err.message });
+      }
+    });
+
+    socket.on('debug:continue', () => {
+      const session = activeDebugSessions.get(socket.id);
+      if (session && session.child) {
+        session.child.kill('SIGCONT');
+      }
+    });
+
+    socket.on('debug:stop', () => {
+      const session = activeDebugSessions.get(socket.id);
+      if (session && session.child) {
+        session.child.kill('SIGTERM');
+        activeDebugSessions.delete(socket.id);
+      }
+      socket.emit('debug:stopped');
+    });
+
     // ── Full Project Execution (Docker → Host fallback) ────────────────
     socket.on('project:run', async (payload = {}) => {
       const session = chatSessions.get(socket.id);
@@ -344,12 +399,16 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
           socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[34m$ npm start\x1b[0m\r\n' });
           const start = execa('npm', ['start'], { cwd: projectPath, reject: false, env: { ...process.env, FORCE_COLOR: '1' } });
+          activeProjectProcesses.set(socket.id, start);
           start.stdout?.on('data', streamChunk);
           start.stderr?.on('data', streamChunk);
           // Don't await — npm start usually runs a long-lived server
           start.then(() => {
+            activeProjectProcesses.delete(socket.id);
             socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Process exited]\x1b[0m\r\n' });
-          }).catch(() => {});
+          }).catch(() => {
+            activeProjectProcesses.delete(socket.id);
+          });
 
           // Give the server a moment to start, then notify
           setTimeout(() => {
@@ -369,11 +428,15 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
           const entryFile = files.includes('app.py') ? 'app.py' : 'main.py';
           socket.emit('chat:shell_stream', { chunk: `\r\n\x1b[34m$ python ${entryFile}\x1b[0m\r\n` });
           const py = execa('python', [entryFile], { cwd: projectPath, reject: false });
+          activeProjectProcesses.set(socket.id, py);
           py.stdout?.on('data', streamChunk);
           py.stderr?.on('data', streamChunk);
           py.then(() => {
+            activeProjectProcesses.delete(socket.id);
             socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Process exited]\x1b[0m\r\n' });
-          }).catch(() => {});
+          }).catch(() => {
+            activeProjectProcesses.delete(socket.id);
+          });
 
           setTimeout(() => {
             socket.emit('project:run-ready', { previewUrl: 'http://localhost:5000' });
@@ -383,11 +446,15 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
           // Go project
           socket.emit('chat:shell_stream', { chunk: '\x1b[34m$ go run .\x1b[0m\r\n' });
           const goRun = execa('go', ['run', '.'], { cwd: projectPath, reject: false });
+          activeProjectProcesses.set(socket.id, goRun);
           goRun.stdout?.on('data', streamChunk);
           goRun.stderr?.on('data', streamChunk);
           goRun.then(() => {
+            activeProjectProcesses.delete(socket.id);
             socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Process exited]\x1b[0m\r\n' });
-          }).catch(() => {});
+          }).catch(() => {
+            activeProjectProcesses.delete(socket.id);
+          });
 
           setTimeout(() => {
             socket.emit('project:run-ready', { previewUrl: 'http://localhost:8080' });
@@ -399,6 +466,26 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       } catch (err) {
         socket.emit('project:run-error', { error: `Host execution failed: ${err.message}` });
       }
+    });
+
+    socket.on('task:terminate', () => {
+      const child = activeProjectProcesses.get(socket.id);
+      if (child) {
+        child.kill('SIGTERM');
+        activeProjectProcesses.delete(socket.id);
+        socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Task terminated]\x1b[0m\r\n' });
+      } else {
+        socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[No running task]\x1b[0m\r\n' });
+      }
+    });
+
+    socket.on('task:restart', () => {
+      const child = activeProjectProcesses.get(socket.id);
+      if (child) {
+        child.kill('SIGTERM');
+        activeProjectProcesses.delete(socket.id);
+      }
+      socket.emit('project:run', {});
     });
 
     // Direct terminal command execution — attempts container execution first,

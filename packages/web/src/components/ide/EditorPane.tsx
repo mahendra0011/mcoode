@@ -18,10 +18,17 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import api from '../../lib/axios';
+import editorApi from '../../lib/extensions/editorApi';
 import { useIDEStore } from '../../store/ideStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { getSocket } from '../../hooks/useChatSocket';
-import editorApi from '../../lib/extensions/editorApi';
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from '@radix-ui/react-context-menu';
 import { WelcomeTab } from './menu/WelcomeTab';
 import { EditorContextMenu } from './EditorContextMenu';
 import { toast } from 'sonner';
@@ -68,6 +75,21 @@ export function EditorPane({
   const wordWrap = useIDEStore((s) => s.wordWrap);
   const columnSelection = useIDEStore((s) => s.columnSelection);
   const autoSaveEnabled = useIDEStore((s) => s.autoSaveEnabled);
+  const editorLayout = useIDEStore((s) => s.editorLayout);
+  const setEditorLayout = useIDEStore((s) => s.setEditorLayout);
+
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    }
+    if (moreMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [moreMenuOpen]);
 
   const editorSettings = useSettingsStore((s) => s.editor);
   const advancedEditor = useSettingsStore((s) => s.advancedEditor);
@@ -103,13 +125,24 @@ export function EditorPane({
     }
   }, [colorTheme]);
 
+  useEffect(() => {
+    const unsub = editorApi.subscribeTheme((newTheme) => {
+      setEditorTheme(newTheme);
+      if (monacoRef.current) {
+        monacoRef.current.editor.setTheme(newTheme);
+      }
+    });
+    return unsub;
+  }, []);
+
   const targetJump = useIDEStore((s) => s.targetJump);
   const setTargetJump = useIDEStore((s) => s.setTargetJump);
   const setFileContent = useIDEStore((s) => s.setFileContent);
   const setSavedContent = useIDEStore((s) => s.setSavedContent);
   const breakpoints = useIDEStore((s) => s.breakpoints);
-  const toggleBreakpoint = useIDEStore((s) => s.toggleBreakpoint);
   const recordTimeline = useIDEStore((s) => s.recordTimeline);
+  const expandPathAncestors = useIDEStore((s) => s.expandPathAncestors);
+  const setActiveActivityBar = useIDEStore((s) => s.setActiveActivityBar);
 
   const editorRef = React.useRef<any>(null);
   const monacoRef = React.useRef<any>(null);
@@ -118,6 +151,7 @@ export function EditorPane({
   const handleEditorDidMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    editorApi.attachEditor(editor, monaco);
     useIDEStore.getState().setActiveEditor(editor, monaco);
 
     // Custom right-click context menu (matching Screenshot 3)
@@ -194,10 +228,14 @@ export function EditorPane({
       },
     };
 
-    monaco.languages.registerDocumentFormattingEditProvider('javascript', formatProvider);
-    monaco.languages.registerDocumentFormattingEditProvider('typescript', formatProvider);
-    monaco.languages.registerDocumentFormattingEditProvider('json', formatProvider);
-    monaco.languages.registerDocumentFormattingEditProvider('html', formatProvider);
+    const formatLanguages = ['javascript', 'typescript', 'json', 'html', 'css', 'scss', 'markdown', 'sql', 'python', 'cpp', 'c', 'yaml', 'xml'];
+    formatLanguages.forEach((lang) => {
+      try {
+        monaco.languages.registerDocumentFormattingEditProvider(lang, formatProvider);
+      } catch (e) {
+        // provider already registered or language not loaded yet
+      }
+    });
   }, []);
 
   // Update editor options reactively when monacoOptions or columnSelection change
@@ -275,6 +313,9 @@ export function EditorPane({
     setFileContents(prev => ({ ...prev, [activePath]: str }));
     setFileContent(activePath, str);
     setDirty(prev => new Set(prev).add(activePath));
+    try {
+      localStorage.setItem(`mcode_draft_${activePath}`, str);
+    } catch {}
   }, [activePath, setFileContent]);
 
   // Handle Save (Cmd+S)
@@ -285,7 +326,7 @@ export function EditorPane({
         editorRef.current.getAction('editor.action.formatDocument')?.run();
       } catch {}
     }
-    const content = fileContents[activePath] || '';
+    const content = fileContents[activePath] ?? useIDEStore.getState().fileContentsCache[activePath] ?? '';
 
     if (workspaceId) {
       api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(activePath)}`, content)
@@ -294,37 +335,54 @@ export function EditorPane({
           setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
           setSavedContent(activePath, content);
           recordTimeline(activePath, 'Saved', content);
+          try { localStorage.removeItem(`mcode_draft_${activePath}`); } catch {}
         })
         .catch(err => console.error(err));
     } else {
       setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
       setSavedContent(activePath, content);
       recordTimeline(activePath, 'Saved', content);
+      try { localStorage.removeItem(`mcode_draft_${activePath}`); } catch {}
     }
   }, [workspaceId, activePath, fileContents, formatOnSave, recordTimeline, setSavedContent]);
 
-  // Auto-Save interval
+  // Auto-Save interval & progress persistence
   useEffect(() => {
     const isAutoSave = autoSave || autoSaveEnabled;
     if (!isAutoSave || dirty.size === 0) return;
     const interval = setInterval(() => {
       dirty.forEach((path) => {
-        const content = fileContents[path] || '';
+        const content = fileContents[path] ?? useIDEStore.getState().fileContentsCache[path] ?? '';
         if (workspaceId) {
           api.put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`, content)
             .then(() => {
               setDirty(prev => { const next = new Set(prev); next.delete(path); return next; });
               setSavedContent(path, content);
+              try { localStorage.removeItem(`mcode_draft_${path}`); } catch {}
             })
             .catch(() => {});
         } else {
           setDirty(prev => { const next = new Set(prev); next.delete(path); return next; });
           setSavedContent(path, content);
+          try { localStorage.removeItem(`mcode_draft_${path}`); } catch {}
         }
       });
-    }, autoSaveDelay || 1500);
+    }, autoSaveDelay || 1000);
     return () => clearInterval(interval);
   }, [autoSave, autoSaveEnabled, autoSaveDelay, dirty, fileContents, workspaceId, setSavedContent]);
+
+  // Flush unsaved draft progress on window beforeunload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (dirty.size === 0) return;
+      dirty.forEach((path) => {
+        const content = fileContents[path] ?? useIDEStore.getState().fileContentsCache[path] ?? '';
+        try { localStorage.setItem(`mcode_draft_${path}`, content); } catch {}
+      });
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty, fileContents]);
 
   // Listen for file:changed events from the agent
   useEffect(() => {
@@ -512,39 +570,154 @@ export function EditorPane({
             const isActive = !isWelcomeActive && activePath === path;
             const isDirty = dirty.has(path);
             return (
-              <motion.div
-                key={path}
-                initial={{ opacity: 0, x: -5 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -5 }}
-                transition={{ delay: i * 0.04 + 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                onClick={() => {
-                  setActivePath(path);
-                }}
-                className={`flex items-center gap-2 px-3.5 h-full text-xs cursor-pointer whitespace-nowrap border-r border-[#252525] transition-colors ${
-                  isActive
-                    ? 'bg-[#1e1e1e] border-t-2 border-[#0078d4] font-medium text-white'
-                    : 'text-white/50 hover:bg-white/5 border-t-2 border-transparent'
-                }`}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
-              >
-                {getFileIcon(name)} {name}
-                {isDirty && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Unsaved changes" />
-                )}
-                <motion.span
-                  className="text-white/30 ml-2 hover:text-white cursor-pointer px-1 rounded hover:bg-white/10 text-sm leading-none"
-                  whileHover={{ scale: 1.15 }}
-                  onClick={(e: React.MouseEvent) => {
-                    e.stopPropagation();
-                    if (isDirty && !window.confirm('This file has unsaved changes. Close anyway?')) return;
-                    closeFile(path);
-                  }}
-                >
-                  ×
-                </motion.span>
-              </motion.div>
+              <ContextMenu key={path}>
+                <ContextMenuTrigger asChild>
+                  <motion.div
+                    initial={{ opacity: 0, x: -5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -5 }}
+                    transition={{ delay: i * 0.04 + 0.1, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                    onClick={() => {
+                      setActivePath(path);
+                    }}
+                    className={`flex items-center gap-2 px-3.5 h-full text-xs cursor-pointer whitespace-nowrap border-r border-[#252525] transition-colors ${
+                      isActive
+                        ? 'bg-[#1e1e1e] border-t-2 border-[#0078d4] font-medium text-white'
+                        : 'text-white/50 hover:bg-white/5 border-t-2 border-transparent'
+                    }`}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                  >
+                    {getFileIcon(name)} {name}
+                    {isDirty && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="Unsaved changes" />
+                    )}
+                    <motion.span
+                      className="text-white/30 ml-2 hover:text-white cursor-pointer px-1 rounded hover:bg-white/10 text-sm leading-none"
+                      whileHover={{ scale: 1.15 }}
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        if (isDirty && !window.confirm('This file has unsaved changes. Close anyway?')) return;
+                        closeFile(path);
+                      }}
+                    >
+                      ×
+                    </motion.span>
+                  </motion.div>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="min-w-[210px] bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl p-1 text-xs text-white/90 z-50 select-none animate-in fade-in-80 duration-100">
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => closeFile(path)}
+                  >
+                    <span>Close</span>
+                    <span className="text-[10px] text-white/40 font-mono">Ctrl+W</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      openFiles.forEach((p) => {
+                        if (p !== path) closeFile(p);
+                      });
+                    }}
+                  >
+                    <span>Close Others</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      const idx = openFiles.indexOf(path);
+                      if (idx !== -1) {
+                        openFiles.slice(idx + 1).forEach((p) => closeFile(p));
+                      }
+                    }}
+                  >
+                    <span>Close to the Right</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      openFiles.forEach((p) => {
+                        if (!dirty.has(p)) closeFile(p);
+                      });
+                    }}
+                  >
+                    <span>Close Saved</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      openFiles.forEach((p) => closeFile(p));
+                    }}
+                  >
+                    <span>Close All</span>
+                    <span className="text-[10px] text-white/40 font-mono">Ctrl+K Ctrl+W</span>
+                  </ContextMenuItem>
+
+                  <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      setEditorLayout('split-right');
+                      setActivePath(path);
+                    }}
+                  >
+                    <span>Split Right</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      setEditorLayout('split-down');
+                      setActivePath(path);
+                    }}
+                  >
+                    <span>Split Down</span>
+                  </ContextMenuItem>
+
+                  <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      navigator.clipboard.writeText(path);
+                      toast.success('Path copied to clipboard');
+                    }}
+                  >
+                    <span>Copy Path</span>
+                    <span className="text-[10px] text-white/40 font-mono">Shift+Alt+C</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      navigator.clipboard.writeText(name);
+                      toast.success('File name copied to clipboard');
+                    }}
+                  >
+                    <span>Copy Relative Path</span>
+                  </ContextMenuItem>
+
+                  <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+                  <ContextMenuItem
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                    onSelect={() => {
+                      setActiveActivityBar('explorer');
+                      expandPathAncestors(path);
+                      setTimeout(() => {
+                        const el = document.querySelector(`[data-tree-path="${CSS.escape(path)}"]`);
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          el.classList.add('ring-2', 'ring-cyan-500');
+                          setTimeout(() => el.classList.remove('ring-2', 'ring-cyan-500'), 2000);
+                        }
+                      }, 100);
+                    }}
+                  >
+                    <span>Reveal in Side Bar</span>
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             );
           })}
         </motion.div>
@@ -669,21 +842,68 @@ export function EditorPane({
 
             {/* Split Editor */}
             <button
-              onClick={() => toast.info('Split Editor layout')}
-              className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition"
+              onClick={() => setEditorLayout(editorLayout === 'single' ? 'split-right' : 'single')}
+              className={`p-1.5 rounded hover:bg-white/10 transition ${
+                editorLayout !== 'single' ? 'text-[#0078d4]' : 'text-white/40 hover:text-white'
+              }`}
               title="Split Editor Right"
             >
               <SplitSquareHorizontal className="w-3.5 h-3.5" />
             </button>
 
             {/* More Actions */}
-            <button
-              onClick={() => toast.info('Editor actions')}
-              className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition"
-              title="More Actions..."
-            >
-              <MoreHorizontal className="w-3.5 h-3.5" />
-            </button>
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                onClick={() => setMoreMenuOpen((v) => !v)}
+                className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white transition cursor-pointer"
+                title="More Actions..."
+              >
+                <MoreHorizontal className="w-3.5 h-3.5" />
+              </button>
+              {moreMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-56 bg-[#1e1e1e] border border-white/10 rounded-md shadow-2xl py-1 z-50 text-xs text-white/90">
+                  <button
+                    className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-white/10 transition text-left cursor-pointer"
+                    onClick={() => {
+                      useSettingsStore.getState().updateEditorSetting('formatOnSave', !editorSettings.formatOnSave);
+                    }}
+                  >
+                    <span>Format On Save</span>
+                    {editorSettings.formatOnSave && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                  </button>
+                  <button
+                    className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-white/10 transition text-left cursor-pointer"
+                    onClick={() => {
+                      useIDEStore.getState().toggleWordWrap();
+                    }}
+                  >
+                    <span>Word Wrap</span>
+                    {wordWrap && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                  </button>
+                  <button
+                    className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-white/10 transition text-left cursor-pointer"
+                    onClick={() => {
+                      useSettingsStore.getState().updateEditorSetting('minimap', !editorSettings.minimap);
+                    }}
+                  >
+                    <span>Minimap</span>
+                    {editorSettings.minimap && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                  </button>
+                  <div className="h-px bg-white/10 my-1" />
+                  <button
+                    className="w-full text-left px-3 py-1.5 hover:bg-white/10 transition cursor-pointer"
+                    onClick={() => {
+                      if (editorRef.current) {
+                        editorRef.current.getAction('editor.action.formatDocument')?.run();
+                      }
+                      setMoreMenuOpen(false);
+                    }}
+                  >
+                    Format Document Now
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -717,45 +937,77 @@ export function EditorPane({
       ) : openFiles.length === 0 ? (
         <div className="flex-1 flex items-center justify-center bg-[#181818]" />
       ) : (
-        <div className="flex-1 relative">
-          <AnimatePresence>
-            {loading && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                className="absolute inset-0 flex items-center justify-center bg-[#181818]/50 z-10 text-white/50 text-xs"
-              >
-                Loading...
-              </motion.div>
+        <div
+          className={
+            editorLayout === 'split-right'
+              ? 'flex-1 flex flex-row h-full w-full relative'
+              : editorLayout === 'split-down'
+              ? 'flex-1 flex flex-col h-full w-full relative'
+              : 'flex-1 relative h-full w-full'
+          }
+        >
+          <div className={editorLayout !== 'single' ? 'flex-1 h-full w-full relative border-r border-[#252525]' : 'h-full w-full relative'}>
+            <AnimatePresence>
+              {loading && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                  className="absolute inset-0 flex items-center justify-center bg-[#181818]/50 z-10 text-white/50 text-xs"
+                >
+                  Loading...
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {activePath && (
+              <Editor
+                height="100%"
+                theme={editorTheme}
+                onMount={handleEditorDidMount}
+                path={activePath}
+                language={getLanguage(activePath)}
+                value={fileContents[activePath] || ''}
+                onChange={handleEditorChange}
+                options={{
+                  ...monacoOptions,
+                  contextmenu: false,
+                  columnSelection,
+                  padding: { top: 16 },
+                }}
+              />
             )}
-          </AnimatePresence>
-          {activePath && (
-            <Editor
-              height="100%"
-              theme={editorTheme}
-              onMount={handleEditorDidMount}
-              path={activePath}
-              language={getLanguage(activePath)}
-              value={fileContents[activePath] || ''}
-              onChange={handleEditorChange}
-              options={{
-                ...monacoOptions,
-                contextmenu: false,
-                columnSelection,
-                padding: { top: 16 },
-              }}
-            />
-          )}
-          {contextMenu?.visible && (
-            <EditorContextMenu
-              x={contextMenu.x}
-              y={contextMenu.y}
-              onClose={() => setContextMenu(null)}
-              editor={editorRef.current}
-              monaco={monacoRef.current}
-            />
+            {contextMenu?.visible && (
+              <EditorContextMenu
+                x={contextMenu.x}
+                y={contextMenu.y}
+                onClose={() => setContextMenu(null)}
+                editor={editorRef.current}
+                monaco={monacoRef.current}
+              />
+            )}
+          </div>
+          {editorLayout !== 'single' && (
+            <div className="flex-1 h-full w-full relative bg-[#181818]">
+              {(() => {
+                const secondaryPath = openFiles.find((p) => p !== activePath) || activePath;
+                if (!secondaryPath) return null;
+                return (
+                  <Editor
+                    height="100%"
+                    theme={editorTheme}
+                    path={`secondary_${secondaryPath}`}
+                    language={getLanguage(secondaryPath)}
+                    value={fileContents[secondaryPath] || ''}
+                    options={{
+                      ...monacoOptions,
+                      readOnly: false,
+                      padding: { top: 16 },
+                    }}
+                  />
+                );
+              })()}
+            </div>
           )}
         </div>
       )}

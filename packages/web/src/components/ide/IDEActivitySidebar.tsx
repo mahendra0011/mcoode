@@ -35,6 +35,8 @@ import { useIDEStore } from "../../store/ideStore";
 import api from "../../lib/axios";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useI18n } from "../../lib/i18n";
+import { openReportIssue } from "../../lib/reportIssue";
 
 /** Lucide icon is a React component accepting SVG props. */
 type LucideIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -146,6 +148,7 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
   const setWelcomeOpen = useIDEStore((s) => s.setWelcomeOpen);
   const setActivePath = useIDEStore((s) => s.setActivePath);
   const openSettings = useIDEStore((s) => s.openSettings);
+  const { lang, setLang } = useI18n();
 
   const isSidebarOpen = useIDEStore((s) => s.isSidebarOpen);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
@@ -338,22 +341,25 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
                     type="button"
                     onClick={() => {
                       closeAccountMenu();
+                      setLang("en");
                       toast.success("UI language: English (US)");
                     }}
                     className="px-3 py-1.5 text-left text-white hover:bg-white/10 transition flex items-center justify-between cursor-pointer"
                   >
                     <span>English (US)</span>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    {lang === "en" && <Check className="w-3.5 h-3.5 text-emerald-400" />}
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       closeAccountMenu();
+                      setLang("hi");
                       toast.success("UI language: Hindi (हिंदी)");
                     }}
-                    className="px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                    className="px-3 py-1.5 text-left text-white/80 hover:text-white hover:bg-white/10 transition flex items-center justify-between cursor-pointer"
                   >
                     <span>Hindi (हिंदी)</span>
+                    {lang === "hi" && <Check className="w-3.5 h-3.5 text-emerald-400" />}
                   </button>
                 </div>
               )}
@@ -555,9 +561,32 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
             {/* Check for Updates */}
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 closeSettingsMenu();
-                toast.info("You're on the latest version!");
+                toast.loading("Checking for updates...", { id: "update-check" });
+                try {
+                  const res = await fetch("https://api.github.com/repos/mahendra0011/mcoode/releases/latest", {
+                    headers: { Accept: "application/vnd.github.v3+json" },
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    const latest = (data.tag_name || "").replace(/^v/, "");
+                    const current = "0.1.0";
+                    if (latest && latest !== current) {
+                      toast.success(`Update available: v${latest}`, {
+                        id: "update-check",
+                        action: {
+                          label: "View Release",
+                          onClick: () => window.open(data.html_url, "_blank"),
+                        },
+                      });
+                      return;
+                    }
+                  }
+                  toast.success("You're on the latest version (v0.1.0)!", { id: "update-check" });
+                } catch {
+                  toast.info("You're on the latest version (v0.1.0)!", { id: "update-check" });
+                }
               }}
               className="w-full px-3 py-1.5 text-left text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >
@@ -581,7 +610,7 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
               type="button"
               onClick={() => {
                 closeSettingsMenu();
-                toast.info("Report Issue feature coming soon!");
+                openReportIssue();
               }}
               className="w-full px-3 py-1.5 text-left text-[13px] text-white/80 hover:text-white hover:bg-white/10 transition cursor-pointer"
             >

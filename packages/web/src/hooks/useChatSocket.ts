@@ -4,6 +4,7 @@ import { io, type Socket } from 'socket.io-client';
 import { getToken } from '../lib/api';
 import api from '../lib/axios';
 import { useIDEStore } from '../store/ideStore';
+import { useSettingsStore } from '../store/settingsStore';
 import {
   setStatus,
   chatReady,
@@ -82,8 +83,17 @@ export function useChatSocket(workspaceId: string | null = null) {
   const selectedModelRef = useRef(selectedModel);
   selectedModelRef.current = selectedModel;
 
-  // Stream chunk buffer — accumulates rapid-fire deltas and flushes as a
-  // single batched dispatch every 16ms to reduce React re-renders.
+  const streamSpeed = useSettingsStore((s) => s.ai.streamSpeed);
+  const streamSpeedRef = useRef(streamSpeed);
+  streamSpeedRef.current = streamSpeed;
+
+  const FLUSH_INTERVAL_MS: Record<string, number> = {
+    fast: 16,       // ~60fps, near-instant deltas
+    normal: 40,     // ~25fps
+    balanced: 100,  // lower CPU, chunkier updates
+  };
+
+  // Stream chunk buffer — accumulates rapid-fire deltas and flushes based on streamSpeed
   const streamBufferRef = useRef('');
   const streamTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guard: once chat:done fires, ignore any stray/late chat:stream events
@@ -170,11 +180,12 @@ export function useChatSocket(workspaceId: string | null = null) {
       if (payload && payload.text) {
         streamBufferRef.current += payload.text;
         if (!streamTimerRef.current) {
+          const interval = FLUSH_INTERVAL_MS[streamSpeedRef.current] ?? 16;
           streamTimerRef.current = setTimeout(() => {
             dispatch(streamUpdate(streamBufferRef.current));
             streamBufferRef.current = '';
             streamTimerRef.current = null;
-          }, 16);
+          }, interval);
         }
       }
     };
@@ -315,6 +326,22 @@ export function useChatSocket(workspaceId: string | null = null) {
     socket.on('build:complete', onBuildComplete);
     socket.on('toast', onToast);
 
+    // Real Debugger events
+    const onDebugStarted = (p: any) => {
+      dispatch(addToast({ id: Date.now().toString(), kind: 'ok', text: `Debugger listening on port ${p?.port || '9229'}` }));
+    };
+    const onDebugOutput = (p: any) => {
+      document.dispatchEvent(new CustomEvent('terminal:write', { detail: p?.data || '' }));
+    };
+    const onDebugExited = (p: any) => {
+      dispatch(addToast({ id: Date.now().toString(), kind: p?.code === 0 ? 'ok' : 'error', text: `Debug process exited (${p?.code ?? 0})` }));
+    };
+
+    socket.on('debug:started', onDebugStarted);
+    socket.on('debug:output', onDebugOutput);
+    socket.on('debug:exited', onDebugExited);
+    socket.on('debug:error', onChatError);
+
     // Load available models on mount (only if authenticated)
     if (getToken()) {
       reloadModels();
@@ -384,6 +411,10 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off('integration:pass', onIntegrationPass);
       socket.off('build:complete', onBuildComplete);
       socket.off('toast', onToast);
+      socket.off('debug:started', onDebugStarted);
+      socket.off('debug:output', onDebugOutput);
+      socket.off('debug:exited', onDebugExited);
+      socket.off('debug:error', onChatError);
       window.removeEventListener('mcode:reload-models', reloadHandler);
       window.removeEventListener('storage', storageHandler);
     };
@@ -447,6 +478,36 @@ export function useChatSocket(workspaceId: string | null = null) {
     }
   }, []);
 
+  const startDebug = useCallback((filename: string, code: string) => {
+    if (socketRef.current) {
+      socketRef.current.emit('debug:start', { filename, code });
+    }
+  }, []);
+
+  const continueDebug = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit('debug:continue');
+    }
+  }, []);
+
+  const stopDebug = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit('debug:stop');
+    }
+  }, []);
+
+  const terminateTask = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit('task:terminate');
+    }
+  }, []);
+
+  const restartTask = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit('task:restart');
+    }
+  }, []);
+
   return {
     send,
     interrupt,
@@ -455,6 +516,11 @@ export function useChatSocket(workspaceId: string | null = null) {
     sendTerminalCommand,
     runFile,
     runProject,
+    startDebug,
+    continueDebug,
+    stopDebug,
+    terminateTask,
+    restartTask,
     reloadModels,
     fetchKeys,
     fetchGithubStatus

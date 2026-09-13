@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import { ALL_LANGUAGES } from "../lib/languagesData";
 
 export type ActiveTab = "Chat" | "AI Code Editor";
@@ -113,6 +114,33 @@ interface IDEState {
   activePanelTab: PanelTab;
   setActivePanelTab: (tab: PanelTab) => void;
 
+  // Editor Layout & Multi-Cursor Modifier
+  multiCursorModifier: 'alt' | 'ctrlCmd';
+  setMultiCursorModifier: (modifier: 'alt' | 'ctrlCmd') => void;
+  editorLayout: 'single' | 'split-right' | 'split-down';
+  setEditorLayout: (layout: 'single' | 'split-right' | 'split-down') => void;
+  defaultBuildTask: string;
+  setDefaultBuildTask: (task: string) => void;
+
+  // File Compare & Search & Timeline
+  compareLeft: string | null;
+  setCompareLeft: (path: string | null) => void;
+  diffPair: { original: string; modified: string } | null;
+  setDiffPair: (diff: { original: string; modified: string } | null) => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  timelineFile: string | null;
+  setTimelineFile: (path: string | null) => void;
+  expandedPaths: Record<string, boolean>;
+  setPathExpanded: (path: string, expanded: boolean) => void;
+  expandPathAncestors: (path: string) => void;
+
+  // Source Control View & Sort
+  sourceControlView: 'list' | 'tree';
+  setSourceControlView: (view: 'list' | 'tree') => void;
+  sourceControlSortMenuOpen: boolean;
+  setSourceControlSortMenuOpen: (open: boolean) => void;
+
   // Navigation History (Go Back / Go Forward)
   navHistory: NavPoint[];
   navPointer: number;
@@ -217,9 +245,11 @@ const getInitialSelectedLanguages = (): string[] => {
 /**
  * Central UI state for the VS Code-style IDE surfaces.
  */
-export const useIDEStore = create<IDEState>()((set, get) => ({
-  activeTab: "Chat",
-  setActiveTab: (activeTab) => set({ activeTab }),
+export const useIDEStore = create<IDEState>()(
+  persist(
+    (set, get) => ({
+      activeTab: "Chat",
+      setActiveTab: (activeTab) => set({ activeTab }),
 
   activeActivityBar: "explorer",
   setActiveActivityBar: (activeActivityBar) =>
@@ -291,7 +321,7 @@ export const useIDEStore = create<IDEState>()((set, get) => ({
       savedContents: { ...s.savedContents, [path]: content },
     })),
 
-  autoSaveEnabled: false,
+  autoSaveEnabled: true,
   toggleAutoSave: () => set((s) => ({ autoSaveEnabled: !s.autoSaveEnabled })),
   setAutoSaveEnabled: (autoSaveEnabled) => set({ autoSaveEnabled }),
 
@@ -570,6 +600,71 @@ export const useIDEStore = create<IDEState>()((set, get) => ({
 
   runTerminalCommandFn: null,
   setRunTerminalCommandFn: (runTerminalCommandFn) => set({ runTerminalCommandFn }),
-}));
+
+  multiCursorModifier: 'alt',
+  setMultiCursorModifier: (multiCursorModifier) => set({ multiCursorModifier }),
+
+  editorLayout: 'single',
+  setEditorLayout: (editorLayout) => set({ editorLayout }),
+
+  defaultBuildTask: 'build',
+  setDefaultBuildTask: (defaultBuildTask) => set({ defaultBuildTask }),
+
+  compareLeft: null,
+  setCompareLeft: (compareLeft) => set({ compareLeft }),
+
+  diffPair: null,
+  setDiffPair: (diffPair) => set({ diffPair }),
+
+  searchQuery: '',
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
+
+  timelineFile: null,
+  setTimelineFile: (timelineFile) => set({ timelineFile }),
+
+  expandedPaths: {},
+  setPathExpanded: (path, expanded) =>
+    set((s) => ({ expandedPaths: { ...s.expandedPaths, [path]: expanded } })),
+  expandPathAncestors: (path) => {
+    const parts = path.replace(/\\/g, '/').split('/');
+    const toExpand: Record<string, boolean> = {};
+    let cur = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      cur = cur ? `${cur}/${parts[i]}` : parts[i];
+      toExpand[cur] = true;
+    }
+    set((s) => ({ expandedPaths: { ...s.expandedPaths, ...toExpand } }));
+  },
+
+  sourceControlView: 'list',
+  setSourceControlView: (sourceControlView) => set({ sourceControlView }),
+
+  sourceControlSortMenuOpen: false,
+  setSourceControlSortMenuOpen: (sourceControlSortMenuOpen) => set({ sourceControlSortMenuOpen }),
+    }),
+    {
+      name: 'mcode-ide-settings',
+      storage: createJSONStorage(() => localStorage),
+      // Only persist actual preferences, not transient editor/session state
+      partialize: (state) => ({
+        wordWrap: state.wordWrap,
+        autoSaveEnabled: state.autoSaveEnabled,
+        columnSelection: state.columnSelection,
+        multiCursorModifier: state.multiCursorModifier,
+        editorLayout: state.editorLayout,
+        menuBarVisible: state.menuBarVisible,
+        statusBarVisible: state.statusBarVisible,
+        selectedLanguages: state.selectedLanguages,
+        defaultBuildTask: state.defaultBuildTask,
+        sourceControlView: state.sourceControlView,
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (state && state.autoSaveEnabled === undefined) {
+          state.autoSaveEnabled = true;
+        }
+      },
+    }
+  )
+);
 
 export default useIDEStore;

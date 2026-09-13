@@ -9,6 +9,7 @@ import { Toaster } from "sonner";
 import { CommandPalette } from "../components/ui/CommandPalette";
 import { GlobalShortcuts } from "../components/ui/GlobalShortcuts";
 import { ShortcutsDialog } from "../components/ui/ShortcutsDialog";
+import { I18nProvider } from "../lib/i18n";
 
 // Replicates the theme-accent load that lived in the vite-era App.jsx.
 const THEMES: Record<string, string> = {
@@ -48,15 +49,17 @@ export default function Providers({ children }: { children: ReactNode }) {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        {/* Global toast host (sonner) — available to all routes */}
-        <Toaster position="top-right" closeButton richColors />
-        {/* Global VS Code-style keyboard shortcuts */}
-        <GlobalShortcuts />
-        {/* Cmd/Ctrl+/ cheat sheet */}
-        <ShortcutsDialog />
-        {/* Global Cmd+K command palette */}
-        <CommandPalette />
-        {children}
+        <I18nProvider>
+          {/* Global toast host (sonner) — available to all routes */}
+          <Toaster position="top-right" closeButton richColors />
+          {/* Global VS Code-style keyboard shortcuts */}
+          <GlobalShortcuts />
+          {/* Cmd/Ctrl+/ cheat sheet */}
+          <ShortcutsDialog />
+          {/* Global Cmd+K command palette */}
+          <CommandPalette />
+          {children}
+        </I18nProvider>
       </QueryClientProvider>
     </Provider>
   );

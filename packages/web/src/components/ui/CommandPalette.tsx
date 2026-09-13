@@ -10,7 +10,7 @@ import {
   CommandGroup,
 } from "cmdk";
 import { useIDEStore } from "../../store/ideStore";
-import { MessageSquare, Code, Terminal, Settings } from "lucide-react";
+import { MessageSquare, Code, Terminal, Settings, Zap, Sliders, Settings2 } from "lucide-react";
 
 interface NavItem {
   label: string;
@@ -50,6 +50,49 @@ export function CommandPalette() {
     <CommandDialog open={open} onOpenChange={setOpen}>
       <CommandInput placeholder="Type a command or search…" />
       <CommandList>
+        <CommandGroup heading="Preferences & Settings">
+          <CommandItem
+            onSelect={() => {
+              setOpen(false);
+              useIDEStore.getState().openSettings('models');
+            }}
+            className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer"
+          >
+            <Settings className="w-4 h-4 text-emerald-400" />
+            <span>Preferences: Open Platform Settings</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              setOpen(false);
+              useIDEStore.getState().setQuickSettingsOpen(true);
+            }}
+            className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer"
+          >
+            <Zap className="w-4 h-4 text-emerald-400" />
+            <span>Preferences: AI Quick Settings</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              setOpen(false);
+              useIDEStore.getState().setAdvancedSettingsOpen(true);
+            }}
+            className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer"
+          >
+            <Sliders className="w-4 h-4 text-blue-400" />
+            <span>Preferences: Advanced Monaco & Diff Settings</span>
+          </CommandItem>
+          <CommandItem
+            onSelect={() => {
+              setOpen(false);
+              useIDEStore.getState().setGeneralSettingsOpen(true);
+            }}
+            className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer"
+          >
+            <Settings2 className="w-4 h-4 text-purple-400" />
+            <span>Preferences: Mcode IDE General Settings</span>
+          </CommandItem>
+        </CommandGroup>
+
         <CommandGroup heading="Navigate">
           {NAV_ITEMS.map((n) => (
             <CommandItem

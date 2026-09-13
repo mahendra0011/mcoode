@@ -18,9 +18,18 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
   const [active, setActive] = useState<Record<string, boolean>>({});
   const [catalog, setCatalog] = useState<any[]>(staticCatalog);
 
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { "All categories": catalog.length };
+    catalog.forEach((ext) => {
+      if (ext.category) {
+        counts[ext.category] = (counts[ext.category] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [catalog]);
+
   // Live search from Open VSX
   useEffect(() => {
-    // Only search if not empty, otherwise show static
     if (!query && activeCategory === "All categories") {
       setCatalog(staticCatalog);
       return;
@@ -28,11 +37,16 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
     const catQuery = activeCategory !== "All categories" ? `&category=${encodeURIComponent(activeCategory)}` : "";
     api.get(`/api/v1/extensions/search?q=${encodeURIComponent(query)}${catQuery}`)
       .then((res) => {
-        if (res.data.extensions) {
-          setCatalog(res.data.extensions);
+        if (res.data?.extensions && res.data.extensions.length > 0) {
+          const map = new Map<string, any>();
+          staticCatalog.forEach((e) => map.set(e.id, e));
+          res.data.extensions.forEach((e: any) => map.set(e.id, e));
+          setCatalog(Array.from(map.values()));
         }
       })
-      .catch(console.error);
+      .catch(() => {
+        // Fall back to static catalog
+      });
   }, [query, activeCategory]);
 
   // restore previously activated extensions on mount
@@ -66,8 +80,25 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
     }
   }
 
+  const [visibleCount, setVisibleCount] = useState(60);
+
   const filtered = useMemo(() => {
     let list = catalog;
+
+    if (activeCategory && activeCategory !== "All categories") {
+      list = list.filter((ext) => ext.category === activeCategory);
+    }
+
+    if (query && query.trim()) {
+      const q = query.trim().toLowerCase();
+      list = list.filter(
+        (ext) =>
+          ext.name.toLowerCase().includes(q) ||
+          ext.description?.toLowerCase().includes(q) ||
+          ext.publisher?.toLowerCase().includes(q) ||
+          ext.id.toLowerCase().includes(q)
+      );
+    }
 
     switch (sortBy) {
       case "Downloads":
@@ -81,26 +112,37 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
         break;
     }
     return list;
-  }, [query, activeCategory, sortBy]);
+  }, [catalog, query, activeCategory, sortBy]);
+
+  const displayed = useMemo(() => {
+    return filtered.slice(0, visibleCount);
+  }, [filtered, visibleCount]);
 
   return (
     <div style={styles.page}>
       {/* Sidebar */}
       <aside style={styles.sidebar}>
         <div style={styles.sidebarLabel}>CATEGORIES</div>
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => setActiveCategory(cat)}
-            style={{
-              ...styles.sidebarItem,
-              ...(activeCategory === cat ? styles.sidebarItemActive : {}),
-            }}
-          >
-            {cat}
-          </button>
-        ))}
+        {categories.map((cat) => {
+          const count = categoryCounts[cat] || 0;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(cat)}
+              style={{
+                ...styles.sidebarItem,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                ...(activeCategory === cat ? styles.sidebarItemActive : {}),
+              }}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat}</span>
+              <span style={{ fontSize: 11, opacity: 0.5, marginLeft: 8 }}>{count}</span>
+            </button>
+          );
+        })}
       </aside>
 
       {/* Main content */}
@@ -133,7 +175,7 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
         />
 
         <div style={styles.grid}>
-          {filtered.map((ext) => (
+          {displayed.map((ext) => (
             <div key={ext.id} style={styles.card}>
               <div style={{ ...styles.icon, background: ext.iconBg }}>{ext.icon}</div>
               <div style={styles.cardName}>{ext.name}</div>
@@ -163,6 +205,28 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
             <div style={{ color: "#8a8a8a", padding: 24 }}>No extensions match your search.</div>
           )}
         </div>
+
+        {visibleCount < filtered.length && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+            <button
+              type="button"
+              onClick={() => setVisibleCount((prev) => prev + 60)}
+              style={{
+                padding: '10px 24px',
+                borderRadius: 8,
+                background: '#252526',
+                border: '1px solid #3c3c3c',
+                color: '#cccccc',
+                fontSize: 13,
+                cursor: 'pointer',
+                fontWeight: 500,
+                transition: 'all 0.15s ease',
+              }}
+            >
+              Load More Extensions ({filtered.length - visibleCount} remaining)
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

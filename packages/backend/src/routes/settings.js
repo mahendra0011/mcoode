@@ -36,11 +36,16 @@ export function settingsRoutes({ secret }) {
   const DEFAULTS = {
     allowShellAll: false,
     requireEditApproval: false,
+    permissionMode: 'build',
+    autoApproveHighRisk: false,
+    networkTimeout: 180000,
     modelOverrides: {},
     accentColor: 'emerald',
     networkWhitelist: [],
     watchDefaults: { intervalMs: 30000, autoFix: false },
     godModeDefaults: { concurrency: 3, deployTarget: '', skipTests: false },
+    rewindCheckpointing: false,
+    conversationCompaction: false,
   };
 
   // GET /api/v1/settings -> Fetch user settings
@@ -59,7 +64,19 @@ export function settingsRoutes({ secret }) {
   // PUT /api/v1/settings -> Generic update (merges any allowed keys)
   r.put('/', async (req, res) => {
     try {
-      const allowed = ['accentColor', 'networkWhitelist', 'watchDefaults', 'godModeDefaults'];
+      const allowed = [
+        'accentColor',
+        'networkWhitelist',
+        'watchDefaults',
+        'godModeDefaults',
+        'permissionMode',
+        'autoApproveHighRisk',
+        'networkTimeout',
+        'allowShellAll',
+        'requireEditApproval',
+        'rewindCheckpointing',
+        'conversationCompaction'
+      ];
       const patch = {};
       for (const k of allowed) {
         if (req.body[k] !== undefined) patch[k] = req.body[k];
@@ -87,26 +104,26 @@ export function settingsRoutes({ secret }) {
     }
   });
 
-  // PUT /api/v1/settings/permissions -> Update allowShellAll and requireEditApproval
+  // PUT /api/v1/settings/permissions -> Update permission settings
   r.put('/permissions', async (req, res) => {
     try {
-      const { allowShellAll, requireEditApproval } = req.body;
+      const { allowShellAll, requireEditApproval, permissionMode, autoApproveHighRisk, networkTimeout } = req.body;
       let settings = await db().userSettings.findOne({ userId: req.userId });
+      const patch = {};
+      if (allowShellAll !== undefined) patch.allowShellAll = Boolean(allowShellAll);
+      if (requireEditApproval !== undefined) patch.requireEditApproval = Boolean(requireEditApproval);
+      if (permissionMode !== undefined) patch.permissionMode = permissionMode;
+      if (autoApproveHighRisk !== undefined) patch.autoApproveHighRisk = Boolean(autoApproveHighRisk);
+      if (networkTimeout !== undefined) patch.networkTimeout = Number(networkTimeout);
+
       if (!settings) {
         settings = await db().userSettings.create({
           userId: req.userId,
           ...DEFAULTS,
-          allowShellAll: Boolean(allowShellAll),
-          requireEditApproval: Boolean(requireEditApproval),
+          ...patch
         });
       } else {
-        await db().userSettings.updateOne(
-          { userId: req.userId },
-          { 
-            allowShellAll: allowShellAll !== undefined ? Boolean(allowShellAll) : settings.allowShellAll,
-            requireEditApproval: requireEditApproval !== undefined ? Boolean(requireEditApproval) : settings.requireEditApproval
-          }
-        );
+        await db().userSettings.updateOne({ userId: req.userId }, patch);
         settings = await db().userSettings.findOne({ userId: req.userId });
       }
       res.json({ ok: true, settings: { ...DEFAULTS, ...settings } });

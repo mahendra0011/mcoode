@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Settings, ToggleLeft, ToggleRight, Sliders, Globe,
   Shield, Clock, Database, Terminal, Save, RefreshCw,
   Info, AlertTriangle, CheckCircle2
 } from 'lucide-react';
+import { useSettingsStore } from '../../store/settingsStore';
+import { toast } from 'sonner';
 
 /**
  * mcodeSettingsTab — Reference for all mcode setting.json keys
@@ -14,11 +16,33 @@ import {
  * from the mcode Knowledge Base, Section 2.
  */
 export function McodeSettingsTab() {
+  const system = useSettingsStore((s) => s.system);
+  const updateSystem = useSettingsStore((s) => s.updateSystemSetting);
+  const agent = useSettingsStore((s) => s.agent);
+  const updateAgent = useSettingsStore((s) => s.updateAgentSetting);
+  const data = useSettingsStore((s) => s.data);
+  const updateData = useSettingsStore((s) => s.updateDataSetting);
+
+  const [cliProviders, setCliProviders] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('mcode_cli_providers') || 'glm,anthropic,openai';
+    }
+    return 'glm,anthropic,openai';
+  });
+
+  const handleCliProvidersChange = (val: string) => {
+    setCliProviders(val);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mcode_cli_providers', val);
+    }
+    toast.success('Updated CLI providers');
+  };
+
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-lg font-semibold text-white mb-1">mcode Settings</h2>
-        <p className="text-sm text-white/40">Reference for mcode's setting.json preferences and CLI config schema defaults.</p>
+        <p className="text-sm text-white/40">Live interactive preferences synchronized with ZCode & Mcode unified configuration.</p>
       </div>
 
       {/* Setting.json Keys */}
@@ -29,20 +53,108 @@ export function McodeSettingsTab() {
       >
         <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider mb-4">setting.json — User Settings</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <SettingToggle name="closeToTrayOnWindows" defaultVal={true} desc="Keep app in system tray on Windows" />
-          <SettingToggle name="taskAutoArchiveEnabled" defaultVal={false} desc="Auto-archive completed tasks" />
-          <SettingToggle name="terminalInheritSystemProfile" defaultVal={true} desc="Terminal inherits system profile" />
-          <SettingToggle name="askUserQuestionAutoResolutionEnabled" defaultVal={true} desc="Auto-resolve user question prompts" />
-          <SettingToggle name="repoSnapshotIndexingEnabled" defaultVal={false} desc="Snapshot full repo for indexing" />
-          <SettingToggle name="instantGrepIndexingEnabled" defaultVal={false} desc="Instant grep file indexing" />
-          <SettingToggle name="nativeSearchEnhancementsEnabled" defaultVal={true} desc="Native search enhancements" />
-          <SettingToggle name="memoryEnabled" defaultVal={false} desc="Project memory system" />
+          <SettingToggle
+            name="closeToTrayOnWindows"
+            checked={system.closeToTrayOnWindows}
+            onChange={(v) => {
+              updateSystem('closeToTrayOnWindows', v);
+              toast.info(`closeToTrayOnWindows: ${v}`);
+            }}
+            desc="Keep app in system tray on Windows"
+          />
+          <SettingToggle
+            name="taskAutoArchiveEnabled"
+            checked={agent.autoArchive}
+            onChange={(v) => {
+              updateAgent('autoArchive', v);
+              toast.info(`taskAutoArchiveEnabled: ${v}`);
+            }}
+            desc="Auto-archive completed tasks"
+          />
+          <SettingToggle
+            name="terminalInheritSystemProfile"
+            checked={system.terminalInheritProfile}
+            onChange={(v) => {
+              updateSystem('terminalInheritProfile', v);
+              toast.info(`terminalInheritSystemProfile: ${v}`);
+            }}
+            desc="Terminal inherits system profile"
+          />
+          <SettingToggle
+            name="askUserQuestionAutoResolutionEnabled"
+            checked={agent.askUserQuestionAutoResolution}
+            onChange={(v) => {
+              updateAgent('askUserQuestionAutoResolution', v);
+              toast.info(`askUserQuestionAutoResolutionEnabled: ${v}`);
+            }}
+            desc="Auto-resolve user question prompts"
+          />
+          <SettingToggle
+            name="repoSnapshotIndexingEnabled"
+            checked={data.repoSnapshotIndexing}
+            onChange={(v) => {
+              updateData('repoSnapshotIndexing', v);
+              toast.info(`repoSnapshotIndexingEnabled: ${v}`);
+            }}
+            desc="Snapshot full repo for indexing"
+          />
+          <SettingToggle
+            name="instantGrepIndexingEnabled"
+            checked={data.instantGrepIndexing}
+            onChange={(v) => {
+              updateData('instantGrepIndexing', v);
+              toast.info(`instantGrepIndexingEnabled: ${v}`);
+            }}
+            desc="Instant grep file indexing"
+          />
+          <SettingToggle
+            name="nativeSearchEnhancementsEnabled"
+            checked={data.nativeSearchEnhancements}
+            onChange={(v) => {
+              updateData('nativeSearchEnhancements', v);
+              toast.info(`nativeSearchEnhancementsEnabled: ${v}`);
+            }}
+            desc="Native search enhancements"
+          />
+          <SettingToggle
+            name="memoryEnabled"
+            checked={agent.workspaceMemory}
+            onChange={(v) => {
+              updateAgent('workspaceMemory', v);
+              toast.info(`memoryEnabled: ${v}`);
+            }}
+            desc="Project memory system"
+          />
         </div>
 
         <div className="mt-4 space-y-3">
-          <SettingSelect name="locale" defaultValue="en-US" options={['en-US', 'en-GB', 'ja', 'ko', 'zh-CN', 'zh-TW']} desc="UI locale" />
-          <SettingSelect name="mcodeInteractionBehavior" defaultValue="queue" options={['queue', 'inline', 'modal']} desc="User interaction behavior mode" />
-          <SettingInput name="enabledBuiltinAgentCliProviders" defaultValue="glm" desc="Enabled built-in agent CLI providers (comma-separated)" />
+          <SettingSelect
+            name="locale"
+            value={system.locale}
+            onChange={(v) => {
+              updateSystem('locale', v);
+              toast.success(`UI locale set to ${v}`);
+            }}
+            options={['en-US', 'en-GB', 'ja', 'ko', 'zh-CN', 'zh-TW']}
+            desc="UI locale"
+          />
+          <SettingSelect
+            name="mcodeInteractionBehavior"
+            value={agent.interactionBehavior.toLowerCase()}
+            onChange={(v) => {
+              const formatted = (v.charAt(0).toUpperCase() + v.slice(1)) as any;
+              updateAgent('interactionBehavior', formatted);
+              toast.success(`Interaction behavior: ${formatted}`);
+            }}
+            options={['queue', 'inline', 'modal']}
+            desc="User interaction behavior mode"
+          />
+          <SettingInput
+            name="enabledBuiltinAgentCliProviders"
+            value={cliProviders}
+            onChange={handleCliProvidersChange}
+            desc="Enabled built-in agent CLI providers (comma-separated)"
+          />
         </div>
       </motion.div>
 
@@ -151,62 +263,107 @@ export function McodeSettingsTab() {
   );
 }
 
-function SettingToggle({ name, defaultVal, desc }: { name: string; defaultVal: boolean; desc: string }) {
-  const [enabled, setEnabled] = useState(defaultVal);
+function SettingToggle({
+  name,
+  checked,
+  onChange,
+  desc,
+}: {
+  name: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  desc: string;
+}) {
   return (
-    <motion.label className="flex items-center justify-between bg-[#0e0e0e] border border-white/5 rounded-lg px-3 py-2.5 cursor-pointer group">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onChange(!checked)}
+      onKeyDown={(e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          onChange(!checked);
+        }
+      }}
+      className="flex items-center justify-between bg-[#0e0e0e] border border-white/5 hover:border-white/15 rounded-lg px-3 py-2.5 cursor-pointer group transition"
+    >
       <div className="flex-1 min-w-0">
-        <code className="text-xs text-white/60 font-mono">{name}</code>
+        <code className="text-xs text-white/70 group-hover:text-white font-mono transition">{name}</code>
         <p className="text-xs text-white/40 mt-0.5 truncate">{desc}</p>
       </div>
-      <motion.div
-        animate={{ backgroundColor: enabled ? '#10b981' : '#374151' }}
-        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-        className="relative w-10 h-6 rounded-full flex-shrink-0 ml-3 cursor-pointer"
-        onClick={() => setEnabled(!enabled)}
+      <div
+        className={`relative w-10 h-6 rounded-full flex-shrink-0 ml-3 transition-colors duration-200 ${
+          checked ? 'bg-[#10b981]' : 'bg-[#374151]'
+        }`}
       >
-        <motion.div
-          animate={{ x: enabled ? 4 : 0 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-          className="absolute top-1 w-4 h-4 rounded-full bg-white shadow"
+        <div
+          className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+            checked ? 'translate-x-5' : 'translate-x-1'
+          }`}
         />
-      </motion.div>
-    </motion.label>
+      </div>
+    </div>
   );
 }
 
-function SettingSelect({ name, defaultValue, options, desc }: {
-  name: string; defaultValue: string; options: string[]; desc: string;
+function SettingSelect({
+  name,
+  value,
+  onChange,
+  options,
+  desc,
+}: {
+  name: string;
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+  desc: string;
 }) {
   return (
-    <motion.div className="flex items-center justify-between bg-[#0e0e0e] border border-white/5 rounded-lg px-3 py-2.5">
+    <div className="flex items-center justify-between bg-[#0e0e0e] border border-white/5 rounded-lg px-3 py-2.5">
       <div className="flex-1 min-w-0">
-        <code className="text-xs text-white/60 font-mono">{name}</code>
+        <code className="text-xs text-white/70 font-mono">{name}</code>
         <p className="text-xs text-white/40 mt-0.5">{desc}</p>
       </div>
       <select
-        defaultValue={defaultValue}
-        className="ml-3 px-2 py-1 bg-[#121212] border border-white/5 rounded-lg text-xs text-white/80 outline-none focus:border-white/10"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="ml-3 px-2 py-1 bg-[#121212] border border-white/10 rounded-lg text-xs text-white/80 outline-none focus:border-emerald-500 cursor-pointer"
       >
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
       </select>
-    </motion.div>
+    </div>
   );
 }
 
-function SettingInput({ name, defaultValue, desc }: { name: string; defaultValue: string; desc: string }) {
+function SettingInput({
+  name,
+  value,
+  onChange,
+  desc,
+}: {
+  name: string;
+  value: string;
+  onChange: (val: string) => void;
+  desc: string;
+}) {
   return (
-    <motion.div className="flex items-center justify-between bg-[#0e0e0e] border border-white/5 rounded-lg px-3 py-2.5">
+    <div className="flex items-center justify-between bg-[#0e0e0e] border border-white/5 rounded-lg px-3 py-2.5">
       <div className="flex-1 min-w-0">
-        <code className="text-xs text-white/60 font-mono">{name}</code>
+        <code className="text-xs text-white/70 font-mono">{name}</code>
         <p className="text-xs text-white/40 mt-0.5">{desc}</p>
       </div>
       <input
         type="text"
-        defaultValue={defaultValue}
-        className="ml-3 px-2 py-1 bg-[#121212] border border-white/5 rounded-lg text-xs text-white/60 font-mono outline-none focus:border-white/10 w-40"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="ml-3 px-2 py-1 bg-[#121212] border border-white/10 rounded-lg text-xs text-white/80 font-mono outline-none focus:border-emerald-500 w-48"
       />
-    </motion.div>
+    </div>
   );
 }
 

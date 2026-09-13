@@ -17,6 +17,13 @@ import {
 } from "lucide-react";
 import { useIDEStore } from "../../store/ideStore";
 import { toast } from "sonner";
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@radix-ui/react-context-menu";
 
 export interface SearchResult {
   path: string;
@@ -58,6 +65,7 @@ export function SearchPanel() {
   const [excludeFilter, setExcludeFilter] = useState("");
   const [allCollapsed, setAllCollapsed] = useState(false);
   const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
+  const [dismissedMatches, setDismissedMatches] = useState<Record<string, boolean>>({});
 
   const [options, setOptions] = useState<SearchOptions>({
     matchCase: false,
@@ -83,6 +91,13 @@ export function SearchPanel() {
   const setTargetJump = useIDEStore((s) => s.setTargetJump);
   const setFileContent = useIDEStore((s) => s.setFileContent);
   const recordTimeline = useIDEStore((s) => s.recordTimeline);
+  const globalSearchQuery = useIDEStore((s) => s.searchQuery);
+
+  useEffect(() => {
+    if (globalSearchQuery) {
+      setQuery(globalSearchQuery);
+    }
+  }, [globalSearchQuery]);
 
   const toggleOption = (key: keyof SearchOptions) => {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -134,9 +149,9 @@ export function SearchPanel() {
       });
     }
 
-    return matches;
+    return matches.filter((m) => !dismissedMatches[`${m.path}:${m.line}:${m.matchStart}`]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, options, includeFilter, excludeFilter, fileContentsCache, refreshCount]);
+  }, [query, options, includeFilter, excludeFilter, fileContentsCache, refreshCount, dismissedMatches]);
 
   // Group by file path
   const grouped = useMemo(() => {
@@ -460,24 +475,79 @@ export function SearchPanel() {
                       const matched = m.lineText.slice(m.matchStart, m.matchEnd);
                       const after = m.lineText.slice(m.matchEnd);
 
+                      const key = `${m.path}:${m.line}:${m.matchStart}`;
                       return (
-                        <button
-                          key={`${m.line}-${i}`}
-                          type="button"
-                          onClick={() => handleJump(m.path, m.line)}
-                          className="flex items-start gap-2 text-left py-1 px-1.5 rounded hover:bg-white/10 text-white/70 hover:text-white transition group"
-                        >
-                          <span className="text-[10px] font-mono text-blue-400/80 w-6 text-right flex-shrink-0 pt-0.5">
-                            {m.line}
-                          </span>
-                          <div className="font-mono text-xs truncate flex-1 leading-snug">
-                            <span>{before.trimStart()}</span>
-                            <mark className="task-search-result-highlight bg-yellow-500/40 text-yellow-200 px-0.5 rounded-sm">
-                              {matched}
-                            </mark>
-                            <span>{after}</span>
-                          </div>
-                        </button>
+                        <ContextMenu key={`${m.line}-${i}`}>
+                          <ContextMenuTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => handleJump(m.path, m.line)}
+                              className="flex items-start gap-2 text-left py-1 px-1.5 rounded hover:bg-white/10 text-white/70 hover:text-white transition group w-full"
+                            >
+                              <span className="text-[10px] font-mono text-blue-400/80 w-6 text-right flex-shrink-0 pt-0.5">
+                                {m.line}
+                              </span>
+                              <div className="font-mono text-xs truncate flex-1 leading-snug">
+                                <span>{before.trimStart()}</span>
+                                <mark className="task-search-result-highlight bg-yellow-500/40 text-yellow-200 px-0.5 rounded-sm">
+                                  {matched}
+                                </mark>
+                                <span>{after}</span>
+                              </div>
+                            </button>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent className="min-w-[190px] bg-[#1e1e1e] border border-white/10 rounded-lg shadow-2xl p-1 text-xs text-white/90 z-50 select-none animate-in fade-in-80 duration-100">
+                            <ContextMenuItem
+                              className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                              onSelect={() => {
+                                useIDEStore.getState().setEditorLayout("split-right");
+                                addOpenFile(m.path);
+                                useIDEStore.getState().setActivePath(m.path);
+                                setTargetJump({ path: m.path, line: m.line });
+                              }}
+                            >
+                              <span>Open to the Side</span>
+                            </ContextMenuItem>
+                            <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+                            <ContextMenuItem
+                              className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                              onSelect={() => {
+                                navigator.clipboard.writeText(matched);
+                                toast.success("Match copied to clipboard");
+                              }}
+                            >
+                              <span>Copy Match</span>
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                              onSelect={() => {
+                                navigator.clipboard.writeText(m.path);
+                                toast.success("Path copied to clipboard");
+                              }}
+                            >
+                              <span>Copy Path</span>
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+                              onSelect={() => {
+                                navigator.clipboard.writeText(`${m.path}:${m.line}`);
+                                toast.success("Location copied");
+                              }}
+                            >
+                              <span>Copy Location ({m.line})</span>
+                            </ContextMenuItem>
+                            <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+                            <ContextMenuItem
+                              className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-rose-900/50 hover:text-rose-200 text-rose-300 cursor-pointer outline-none transition-colors"
+                              onSelect={() => {
+                                setDismissedMatches((prev) => ({ ...prev, [key]: true }));
+                                toast.info("Match dismissed");
+                              }}
+                            >
+                              <span>Dismiss Match</span>
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
                       );
                     })}
                   </div>

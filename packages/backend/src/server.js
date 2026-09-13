@@ -161,6 +161,24 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/languages', languageRoutes());
   app.use('/api/v1/android', androidRoutes());
 
+  app.get('/api/v1/version', (_req, res) => {
+    let pkgVersion = '0.1.0';
+    try {
+      pkgVersion = require('../package.json').version || '0.1.0';
+    } catch {
+      try {
+        pkgVersion = require('../../package.json').version || '0.1.0';
+      } catch {}
+    }
+    res.json({
+      version: pkgVersion,
+      name: 'mcode',
+      latestTag: `v${pkgVersion}`,
+      platform: process.platform,
+      arch: process.arch,
+    });
+  });
+
   // ─── Error handler ──────────────────────────────────────────────────────────
   // Consistent { error: { code, message } } shape
   // DB hiccups during auth return 503 (not 401) so clients retry instead of logging out.

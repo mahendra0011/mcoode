@@ -7,7 +7,7 @@ import {
   UploadCloud, FolderUp, Download, GitBranch, Share, Loader2, Slash, Zap,
   AlertCircle, AlertTriangle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut, Hash, Minimize2, ListFilter, Archive,
   PanelLeft, PanelBottom, PanelRight, LayoutGrid, Bell, BellDot,
-  Workflow, Monitor, MousePointerClick, Cpu, Paperclip, BrainCircuit
+  Workflow, Monitor, MousePointerClick, Cpu, Paperclip, BrainCircuit, Cloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { McodeTurnMachineVisualization } from '../../components/mcode/McodeTurnMachineVisualization';
@@ -170,13 +170,19 @@ export function AIChatPage() {
   const secondarySideBarVisible = useIDEStore((s) => s.secondarySideBarVisible);
   const isSettingsOpen = useIDEStore((s) => s.isSettingsOpen);
   const settingsInitialTab = useIDEStore((s) => s.settingsInitialTab);
+  const autoSaveEnabled = useIDEStore((s) => s.autoSaveEnabled);
+  const toggleAutoSave = useIDEStore((s) => s.toggleAutoSave);
   const leftPanelRef = usePanelRef();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === ',') {
         e.preventDefault();
-        useIDEStore.getState().openSettings('models');
+        if (e.shiftKey) {
+          useIDEStore.getState().setQuickSettingsOpen(true);
+        } else {
+          useIDEStore.getState().openSettings('models');
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1485,6 +1491,44 @@ export function AIChatPage() {
             </motion.button>
           </div>
 
+          {/* Auto Save Toggle Group — defaults to ON to preserve user progress */}
+          <div className="flex items-center gap-1 bg-[#13131a] p-1 rounded-xl border border-white/10 shadow-sm">
+            <motion.button
+              type="button"
+              onClick={() => {
+                toggleAutoSave();
+                const nextState = !autoSaveEnabled;
+                if (nextState) {
+                  toast.success("Auto Save enabled — all progress is automatically saved", { id: "autosave-status" });
+                } else {
+                  toast.info("Auto Save disabled", { id: "autosave-status" });
+                }
+              }}
+              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                autoSaveEnabled
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
+                  : 'bg-white/5 text-white/40 border border-white/5 hover:text-white/70 hover:bg-white/10'
+              }`}
+              title={autoSaveEnabled ? "Auto Save is ON (All files and progress save automatically)" : "Auto Save is OFF (Click to turn on)"}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <span className="relative flex h-2 w-2">
+                {autoSaveEnabled && (
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                )}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${autoSaveEnabled ? 'bg-emerald-400' : 'bg-white/30'}`}></span>
+              </span>
+              <Cloud className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Auto Save</span>
+              <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded tracking-wider ${
+                autoSaveEnabled ? 'bg-emerald-500/30 text-emerald-300' : 'bg-white/10 text-white/40'
+              }`}>
+                {autoSaveEnabled ? 'ON' : 'OFF'}
+              </span>
+            </motion.button>
+          </div>
+
           {/* Integrations & Views Group */}
           {activeTab === 'AI Code Editor' && (
             <motion.button
@@ -2299,6 +2343,7 @@ export function AIChatPage() {
                     />
                     {isTerminalOpen && !zenMode && (
                       <BottomPanel
+                        workspaceId={activeWorkspaceId}
                         messages={messages}
                         onCommand={sendTerminalCommand}
                         onInterrupt={interrupt}

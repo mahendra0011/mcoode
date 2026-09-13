@@ -93,6 +93,8 @@ export interface SystemSettings {
 
 export interface AgentArchitectureSettings {
   workspaceMemory: boolean;
+  checkpointsEnabled: boolean;
+  conversationCompaction: boolean;
   keepModelIO: boolean;
   showReasoning: boolean;
   showTodos: boolean;
@@ -181,7 +183,7 @@ export const useSettingsStore = create<SettingsState>()(
         lineNumbers: true,
         minimap: false,
         formatOnSave: false,
-        autoSave: false,
+        autoSave: true,
       },
       advancedEditor: {
         cursorBlinking: 'blink',
@@ -233,6 +235,8 @@ export const useSettingsStore = create<SettingsState>()(
       },
       agent: {
         workspaceMemory: true,
+        checkpointsEnabled: true,
+        conversationCompaction: true,
         keepModelIO: false,
         showReasoning: false,
         showTodos: true,

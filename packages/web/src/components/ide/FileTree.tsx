@@ -81,7 +81,23 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
   const closeFile = useIDEStore((s) => s.closeFile);
   const bumpRefresh = useIDEStore((s) => s.bumpRefresh);
   const activePath = useIDEStore((s) => s.activePath);
+  const setActivePath = useIDEStore((s) => s.setActivePath);
+  const setEditorLayout = useIDEStore((s) => s.setEditorLayout);
+  const compareLeft = useIDEStore((s) => s.compareLeft);
+  const setCompareLeft = useIDEStore((s) => s.setCompareLeft);
+  const setDiffPair = useIDEStore((s) => s.setDiffPair);
+  const setActiveActivityBar = useIDEStore((s) => s.setActiveActivityBar);
+  const setSearchQuery = useIDEStore((s) => s.setSearchQuery);
+  const setTimelineFile = useIDEStore((s) => s.setTimelineFile);
+  const expandedPaths = useIDEStore((s) => s.expandedPaths);
+  const expandPathAncestors = useIDEStore((s) => s.expandPathAncestors);
   const isDir = !!node.children?.length;
+
+  useEffect(() => {
+    if (expandedPaths[node.path]) {
+      setIsOpen(true);
+    }
+  }, [expandedPaths, node.path]);
 
   useEffect(() => {
     const handleCollapse = () => setIsOpen(false);
@@ -135,8 +151,9 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
       <ContextMenuItem
         className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
         onSelect={() => {
+          setEditorLayout("split-right");
           addOpenFile(node.path);
-          toast.info(`Opened ${node.name} to the side`);
+          setActivePath(node.path);
         }}
       >
         <span>Open to the Side</span>
@@ -152,7 +169,17 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
 
       <ContextMenuItem
         className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
-        onSelect={() => toast.info(`Revealed ${node.name} in File Explorer`)}
+        onSelect={() => {
+          expandPathAncestors(node.path);
+          setTimeout(() => {
+            const el = document.querySelector(`[data-tree-path="${CSS.escape(node.path)}"]`);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.classList.add("ring-2", "ring-cyan-500");
+              setTimeout(() => el.classList.remove("ring-2", "ring-cyan-500"), 2000);
+            }
+          }, 100);
+        }}
       >
         <span>Reveal in File Explorer</span>
         <span className="text-[10px] text-white/40 font-mono tracking-tighter">Shift+Alt+R</span>
@@ -180,15 +207,24 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
           <ContextMenuItem
             className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
             onSelect={() => {
-              navigator.clipboard.writeText(node.path);
-              toast.success("Link copied to clipboard");
+              const link = `${window.location.origin}/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(node.path)}`;
+              navigator.clipboard.writeText(link);
+              toast.success("File link copied to clipboard");
             }}
           >
             <span>Copy Link</span>
           </ContextMenuItem>
           <ContextMenuItem
             className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
-            onSelect={() => toast.info(`Shared ${node.name}`)}
+            onSelect={() => {
+              const link = `${window.location.origin}/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(node.path)}`;
+              if (navigator.share) {
+                navigator.share({ title: node.name, url: link }).catch(() => {});
+              } else {
+                navigator.clipboard.writeText(link);
+                toast.success("File link copied to clipboard");
+              }
+            }}
           >
             <span>Share File</span>
           </ContextMenuItem>
@@ -197,23 +233,50 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
 
       <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
 
-      <ContextMenuItem
-        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
-        onSelect={() => toast.info(`Selected ${node.name} for compare`)}
-      >
-        <span>Select for Compare</span>
-      </ContextMenuItem>
+      {compareLeft && compareLeft !== node.path ? (
+        <ContextMenuItem
+          className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+          onSelect={() => {
+            setDiffPair({ original: compareLeft, modified: node.path });
+            setEditorLayout("split-right");
+            addOpenFile(compareLeft);
+            addOpenFile(node.path);
+            setActivePath(node.path);
+            setCompareLeft(null);
+          }}
+        >
+          <span>Compare with Selected ({compareLeft.split("/").pop()})</span>
+        </ContextMenuItem>
+      ) : (
+        <ContextMenuItem
+          className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+          onSelect={() => {
+            setCompareLeft(node.path);
+            toast.info(`Selected ${node.name} for compare`);
+          }}
+        >
+          <span>Select for Compare</span>
+        </ContextMenuItem>
+      )}
 
       <ContextMenuItem
         className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
-        onSelect={() => toast.info(`Searching references for ${node.name}`)}
+        onSelect={() => {
+          setActiveActivityBar("search");
+          setSearchQuery(node.name);
+        }}
       >
         <span>Find File References</span>
       </ContextMenuItem>
 
       <ContextMenuItem
         className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
-        onSelect={() => toast.info(`Timeline opened for ${node.name}`)}
+        onSelect={() => {
+          setActiveActivityBar("explorer");
+          setActivePath(node.path);
+          setTimelineFile(node.path);
+          toast.info(`Timeline opened for ${node.name}`);
+        }}
       >
         <span>Open Timeline</span>
       </ContextMenuItem>
@@ -286,6 +349,7 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <motion.div
+            data-tree-path={node.path}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={`flex items-center gap-1.5 py-1 px-2 cursor-pointer transition select-none hover:bg-white/10 ${
@@ -308,6 +372,7 @@ const TreeNode = ({ node, level = 0, workspaceId, onRefresh }: TreeNodeProps) =>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <motion.div
+            data-tree-path={node.path}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className="flex items-center gap-1 py-1 px-2 cursor-pointer text-white/80 hover:bg-white/5 transition select-none"
