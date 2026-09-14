@@ -51,6 +51,10 @@ import {
   permissionAnswered,
   watchStatusUpdated,
   watchActivityReceived,
+  // Bug check mode
+  bugcheckTierStarted,
+  bugcheckTierDone,
+  bugcheckDone,
   addToast,
   removeToast
 } from '../store/chatSlice';
@@ -355,6 +359,31 @@ export function useChatSocket(workspaceId: string | null = null) {
       dispatch(watchStatusUpdated(payload));
     };
 
+    // Bugcheck mode handlers (doc 44)
+    const onBugcheckTierStart = (payload: any) => {
+      dispatch(bugcheckTierStarted(payload));
+    };
+    const onBugcheckTierDone = (payload: any) => {
+      dispatch(bugcheckTierDone(payload));
+      const findings = payload?.findings || [];
+      const crashCount = findings.filter((f: any) => f.canCrashServer).length;
+      if (crashCount > 0) {
+        dispatch(addToast({
+          id: Date.now().toString(),
+          kind: 'warn',
+          text: `Bug Check: ${crashCount} crash-risk finding${crashCount !== 1 ? 's' : ''} detected`,
+        }));
+      }
+    };
+    const onBugcheckDone = (payload: any) => {
+      dispatch(bugcheckDone(payload));
+      dispatch(addToast({
+        id: Date.now().toString(),
+        kind: 'ok',
+        text: `Bug Check complete — ${payload?.totalFindings ?? 0} total finding${(payload?.totalFindings ?? 0) !== 1 ? 's' : ''}`,
+      }));
+    };
+
     socket.on('connect', onConnect);
     socket.on('chat:ready', onChatReady);
     socket.on('chat:error', onChatError);
@@ -402,6 +431,11 @@ export function useChatSocket(workspaceId: string | null = null) {
     // Watch mode socket subscriptions (docs 38-40)
     socket.on('watch:activity', onWatchActivity);
     socket.on('watch:status', onWatchStatus);
+
+    // Bug check mode socket subscriptions (doc 44)
+    socket.on('bugcheck:tier-start', onBugcheckTierStart);
+    socket.on('bugcheck:tier-done', onBugcheckTierDone);
+    socket.on('bugcheck:done', onBugcheckDone);
 
     // Real Debugger events
     const onDebugStarted = (p: any) => {
@@ -501,6 +535,9 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off('playwright:done', onPlaywrightDone);
       socket.off('watch:activity', onWatchActivity);
       socket.off('watch:status', onWatchStatus);
+      socket.off('bugcheck:tier-start', onBugcheckTierStart);
+      socket.off('bugcheck:tier-done', onBugcheckTierDone);
+      socket.off('bugcheck:done', onBugcheckDone);
       socket.off('debug:started', onDebugStarted);
       socket.off('debug:output', onDebugOutput);
       socket.off('debug:exited', onDebugExited);

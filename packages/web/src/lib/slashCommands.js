@@ -11,6 +11,7 @@ export const WEB_SLASH_COMMANDS = [
   { cmd: 'model', desc: 'Switch AI model', icon: '🤖' },
   { cmd: 'god', desc: 'Enter god-mode parallel build', icon: '⚡' },
   { cmd: 'watch', desc: 'Toggle watch daemon', icon: '👁' },
+  { cmd: 'bugcheck', desc: 'Run bug check (static analysis + AI review)', icon: '🐛' },
   { cmd: 'debug', desc: 'Toggle debug mode', icon: '🐛' },
   { cmd: 'export', desc: 'Export session', icon: '📄' },
 ];
@@ -93,6 +94,17 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
         const status = state.watchMode ? 'active' : 'inactive';
         dispatch(addMessage({ kind: 'system', text: `👁 Watch: ${status}` }));
         return true;
+      }
+      return true;
+    }
+
+    case 'bugcheck': {
+      dispatch(addMessage({ kind: 'system', text: '🐛 Running bug check — static analysis first, AI review after...' }));
+      const noAI = rest.includes('--no-ai');
+      if (state.runBugcheck) {
+        state.runBugcheck(noAI);
+      } else {
+        socket?.emit?.('bugcheck:start', { noAI });
       }
       return true;
     }

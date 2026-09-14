@@ -7,7 +7,7 @@ import {
   UploadCloud, FolderUp, Download, GitBranch, Share, Loader2, Slash, Zap,
   AlertCircle, AlertTriangle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut, Hash, Minimize2, ListFilter, Archive,
   PanelLeft, PanelBottom, PanelRight, LayoutGrid, Bell, BellDot,
-  Workflow, Monitor, MousePointerClick, Cpu, Paperclip, BrainCircuit, Cloud
+  Workflow, Monitor, MousePointerClick, Cpu, Paperclip, BrainCircuit, Cloud, Bug
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { McodeTurnMachineVisualization } from '../../components/mcode/McodeTurnMachineVisualization';
@@ -15,7 +15,7 @@ import { Group as ResizablePanelGroup, Panel as ResizablePanel, Separator as Res
 import Link from 'next/link'; import { useRouter, useSearchParams } from 'next/navigation';
 import { useChatSocket, getSocket } from '../../hooks/useChatSocket';
 import api from '../../lib/axios';
-import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhancementResolved, clarifyAnswered, watchStatusUpdated } from '../../store/chatSlice';
+import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhancementResolved, clarifyAnswered, watchStatusUpdated, bugcheckStarted } from '../../store/chatSlice';
 import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../../lib/slashCommands';
 import { zipFilesOffMainThread, WORKSPACE_UPLOAD_TIMEOUT_MS, type ZipEntry } from '../../lib/zipInWorker';
 
@@ -140,6 +140,7 @@ import { ComparisonTable } from '../../components/ide/ComparisonTable';
 import { PlaywrightAuditPanel } from '../../components/ide/PlaywrightAuditPanel';
 import { WatchStatusBadge } from '../../components/ide/WatchStatusBadge';
 import { WatchActivityFeed } from '../../components/ide/WatchActivityFeed';
+import { BugcheckReport } from '../../components/ide/BugcheckReport';
 import { ThinkingIndicator } from '../../components/chat/ThinkingIndicator';
 import { ChatMessage } from '../../components/chat/ChatMessage';
 import { SpinnerBlock } from '../../components/chat/SpinnerBlock';
@@ -198,6 +199,8 @@ export function AIChatPage() {
     playwrightAudit,
     roleAssignments,
     watch,
+    problems,
+    bugcheck,
   } = useAppSelector(state => state.chat);
   const { send, interrupt, answerPermission, undo, sendTerminalCommand, reloadModels } = useChatSocket(activeWorkspaceId);
   const [prompt, setPrompt] = useState('');
@@ -439,6 +442,19 @@ export function AIChatPage() {
 		const [uploadProgressPercent, setUploadProgressPercent] = useState(0);
 		const watchMode = watch?.active ?? false;
 		const [debugMode, setDebugMode] = useState(false);
+
+		const runBugcheck = useCallback((noAI = false) => {
+			if (!activeWorkspaceId) {
+				toast.error('Please select or open a project first');
+				return;
+			}
+			dispatch(bugcheckStarted());
+			const socket = getSocket();
+			socket?.emit('bugcheck:start', { projectId: activeWorkspaceId, noAI });
+			useIDEStore.getState().setActivePanelTab('problems');
+			useIDEStore.getState().setTerminalOpen(true);
+			toast.info('Running bug check — static analysis first, AI review after...');
+		}, [activeWorkspaceId, dispatch]);
 
 		// Sync initial watch status when workspace loads or changes
 		useEffect(() => {
@@ -1292,6 +1308,7 @@ export function AIChatPage() {
       const handled = handleSlashCommand(prompt, dispatch, { send, undo }, {
         setPrompt,
         toggleWatchMode,
+        runBugcheck,
         switchToAssistantTab,
         watchMode,
         debugMode,
@@ -1620,6 +1637,19 @@ export function AIChatPage() {
               useIDEStore.getState().setTerminalOpen(true);
             }}
           />
+
+          {/* Bug Check Toolbar Button (doc 44) */}
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => runBugcheck()}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white/90 cursor-pointer transition-all"
+            title="Run Bug Check (Static analysis + AI review)"
+          >
+            <Bug className="w-3 h-3 text-red-400" />
+            <span>Bug Check</span>
+          </motion.button>
 
           {/* Integrations & Views Group */}
           {activeTab === 'AI Code Editor' && (
@@ -2223,6 +2253,14 @@ export function AIChatPage() {
                         clean={playwrightAudit.clean ?? false}
                       />
                     )}
+                    {bugcheck && (bugcheck.running || bugcheck.deepFindings?.length > 0 || bugcheck.tierStatus?.some((t) => t.done)) && (
+                      <BugcheckReport
+                        findings={bugcheck.deepFindings}
+                        reportUrl={bugcheck.reportUrl || undefined}
+                        running={bugcheck.running}
+                        tierStatus={bugcheck.tierStatus}
+                      />
+                    )}
                     <PermissionModal request={permissionRequest as any} onAnswer={answerPermission} />
                     <AnimatePresence>
                     {messages.map((msg, idx) => {
@@ -2491,6 +2529,7 @@ export function AIChatPage() {
                       <BottomPanel
                         workspaceId={activeWorkspaceId}
                         messages={messages}
+                        problems={problems}
                         onCommand={sendTerminalCommand}
                         onInterrupt={interrupt}
                         defaultTab="terminal"
@@ -2605,6 +2644,14 @@ export function AIChatPage() {
                         maxPasses={5}
                         issues={playwrightAudit.issues ?? []}
                         clean={playwrightAudit.clean ?? false}
+                      />
+                    )}
+                    {bugcheck && (bugcheck.running || bugcheck.deepFindings?.length > 0 || bugcheck.tierStatus?.some((t) => t.done)) && (
+                      <BugcheckReport
+                        findings={bugcheck.deepFindings}
+                        reportUrl={bugcheck.reportUrl || undefined}
+                        running={bugcheck.running}
+                        tierStatus={bugcheck.tierStatus}
                       />
                     )}
                     <PermissionModal request={permissionRequest as any} onAnswer={answerPermission} />

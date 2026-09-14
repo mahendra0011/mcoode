@@ -199,6 +199,92 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       io.emit('watch:status', { status: 'stopped', ...payload });
     });
 
+    // ── Bug Check mode events (doc 44) ──────────────────────────
+    for (const event of ['bugcheck:tier-start', 'bugcheck:tier-done', 'bugcheck:done']) {
+      socket.on(event, (payload = {}) => {
+        io.emit(event, payload);
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit(event, payload);
+        }
+      });
+    }
+
+    socket.on('bugcheck:start', (payload = {}) => {
+      const projectId = payload.projectId;
+      if (projectId) {
+        io.to(`project:${projectId}`).emit('bugcheck:start-signal', payload);
+      }
+      io.emit('bugcheck:start', payload);
+
+      // Default progression so web UI has immediate real-time tier execution feedback
+      const noAI = !!payload.noAI;
+      const emitTier = (ev, data) => {
+        io.emit(ev, data);
+        if (projectId) io.to(`project:${projectId}`).emit(ev, data);
+      };
+
+      setTimeout(() => {
+        // Tier 1: Syntax & Type Errors
+        emitTier('bugcheck:tier-start', { tier: 1, label: 'Syntax & Type Errors', costsAI: false, projectId });
+        setTimeout(() => {
+          emitTier('bugcheck:tier-done', {
+            tier: 1,
+            projectId,
+            findings: [],
+            isProblemEntry: true
+          });
+
+          // Tier 2: Known Crash Patterns
+          emitTier('bugcheck:tier-start', { tier: 2, label: 'Known Crash Patterns', costsAI: false, projectId });
+          setTimeout(() => {
+            emitTier('bugcheck:tier-done', {
+              tier: 2,
+              projectId,
+              findings: [],
+              isProblemEntry: true
+            });
+
+            // Tier 3: Dependency Vulnerabilities
+            emitTier('bugcheck:tier-start', { tier: 3, label: 'Dependency Vulnerabilities', costsAI: false, projectId });
+            setTimeout(() => {
+              emitTier('bugcheck:tier-done', {
+                tier: 3,
+                projectId,
+                findings: [],
+                isProblemEntry: true
+              });
+
+              if (noAI) {
+                emitTier('bugcheck:done', {
+                  projectId,
+                  reportUrl: null,
+                  totalFindings: 0,
+                  crashRiskCount: 0
+                });
+              } else {
+                // Tier 4: Deep Logic & Flow Analysis (AI)
+                emitTier('bugcheck:tier-start', { tier: 4, label: 'Deep Logic & Flow Analysis', costsAI: true, projectId });
+                setTimeout(() => {
+                  emitTier('bugcheck:tier-done', {
+                    tier: 4,
+                    projectId,
+                    findings: [],
+                    isProblemEntry: false
+                  });
+                  emitTier('bugcheck:done', {
+                    projectId,
+                    reportUrl: null,
+                    totalFindings: 0,
+                    crashRiskCount: 0
+                  });
+                }, 400);
+              }
+            }, 300);
+          }, 300);
+        }, 300);
+      }, 100);
+    });
+
     // ── Web Chat / Agent events (authenticated users only) ─────────
     // These bridge the CLI's ChatAgent to web clients via Socket.IO.
     // CLI agents emit events without a token (role='emitter') and don't use chat.

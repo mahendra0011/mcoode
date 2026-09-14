@@ -1,5 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import type { ChatMessage } from '../types/chat';
+import type { ProblemEntry } from '../components/ide/BottomPanel';
 
 function safeHostname(url: string | null | undefined): string {
   try {
@@ -77,6 +78,50 @@ export interface WatchActivityItem {
   timestamp: string;
   domain?: string;
 }
+export interface BugcheckFinding {
+  file: string;
+  line?: number;
+  column?: number;
+  tier?: number;
+  severity?: 'critical' | 'high' | 'medium' | 'low' | 'error' | 'warning' | 'info' | string;
+  msg?: string;
+  issue?: string;
+  source?: string;
+  category?: string;
+  canCrashServer?: boolean;
+}
+export function toProblemEntries(findings: BugcheckFinding[]): ProblemEntry[] {
+  return (findings || []).map((f, idx) => ({
+    id: `bugcheck-${f.file}-${f.line || 0}-${f.tier || idx}`,
+    severity: (f.severity === 'high' || f.severity === 'critical' || f.severity === 'error') ? 'error'
+             : (f.severity === 'medium' || f.severity === 'warning') ? 'warning' : 'info',
+    message: f.msg || f.issue || 'Issue detected',
+    file: f.file,
+    line: f.line || 0,
+    column: f.column,
+    source: f.source || 'static-analysis',
+    ruleId: f.category || (f.canCrashServer ? 'crash-risk' : undefined),
+    canCrashServer: f.canCrashServer,
+  }));
+}
+export interface DeepFinding {
+  file: string;
+  line?: number;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  category: string;
+  issue: string;
+  explanation?: string;
+  canCrashServer?: boolean;
+  flow?: string;
+  files?: string[];
+}
+export interface BugcheckTierStatus {
+  tier: number;
+  label: string;
+  done: boolean;
+  count: number;
+  costsAI: boolean;
+}
 export interface Toast { id: string; kind?: string; text?: string }
 export interface Wave { wave: number; total: number; completed: number; status: string; subagentIds?: string[] }
 export interface Subagent {
@@ -138,6 +183,15 @@ interface ChatState {
     fixesApplied: number;
     lastActivity: WatchActivityItem[];
   };
+
+  // WEB Bug Check Mode (doc 44)
+  problems: ProblemEntry[];
+  bugcheck: {
+    running: boolean;
+    tierStatus: BugcheckTierStatus[];
+    deepFindings: DeepFinding[];
+    reportUrl: string | null;
+  };
 }
 
 const initialState: ChatState = {
@@ -177,6 +231,20 @@ const initialState: ChatState = {
     scansRun: 0,
     fixesApplied: 0,
     lastActivity: [],
+  },
+
+  // WEB Bug Check Mode initial state
+  problems: [],
+  bugcheck: {
+    running: false,
+    tierStatus: [
+      { tier: 1, label: 'Syntax & Type Errors', done: false, count: 0, costsAI: false },
+      { tier: 2, label: 'Known Crash Patterns', done: false, count: 0, costsAI: false },
+      { tier: 3, label: 'Dependency Vulnerabilities', done: false, count: 0, costsAI: false },
+      { tier: 4, label: 'Deep Logic & Flow Analysis', done: false, count: 0, costsAI: true },
+    ],
+    deepFindings: [],
+    reportUrl: null,
   },
 };
 
@@ -746,6 +814,67 @@ const chatSlice = createSlice({
     },
     removeToast: (state, action) => {
       state.toasts = state.toasts.filter((t) => t.id !== action.payload);
+    },
+    // WEB Bug Check Mode reducers (doc 44)
+    problemsAppended: (state, action) => {
+      const newItems: ProblemEntry[] = Array.isArray(action.payload) ? action.payload : [action.payload];
+      const existingIds = new Set(state.problems.map((p) => p.id));
+      for (const item of newItems) {
+        if (!existingIds.has(item.id)) {
+          state.problems.push(item);
+          existingIds.add(item.id);
+        }
+      }
+    },
+    problemsCleared: (state) => {
+      state.problems = [];
+    },
+    bugcheckStarted: (state) => {
+      state.bugcheck.running = true;
+      state.bugcheck.deepFindings = [];
+      state.bugcheck.reportUrl = null;
+      state.bugcheck.tierStatus = [
+        { tier: 1, label: 'Syntax & Type Errors', done: false, count: 0, costsAI: false },
+        { tier: 2, label: 'Known Crash Patterns', done: false, count: 0, costsAI: false },
+        { tier: 3, label: 'Dependency Vulnerabilities', done: false, count: 0, costsAI: false },
+        { tier: 4, label: 'Deep Logic & Flow Analysis', done: false, count: 0, costsAI: true },
+      ];
+      state.problems = state.problems.filter((p) => !p.id.startsWith('bugcheck-'));
+    },
+    bugcheckTierStarted: (state, action) => {
+      const { tier, label, costsAI } = action.payload || {};
+      const t = state.bugcheck.tierStatus.find((item) => item.tier === tier);
+      if (t) {
+        if (label) t.label = label;
+        if (costsAI !== undefined) t.costsAI = costsAI;
+      }
+    },
+    bugcheckTierDone: (state, action) => {
+      const { tier, findings = [], isProblemEntry } = action.payload || {};
+      const count = findings.length;
+      const t = state.bugcheck.tierStatus.find((item) => item.tier === tier);
+      if (t) {
+        t.done = true;
+        t.count = count;
+      }
+      if (tier <= 3 || isProblemEntry) {
+        const problemEntries = toProblemEntries(findings);
+        const existingIds = new Set(state.problems.map((p) => p.id));
+        for (const pe of problemEntries) {
+          if (!existingIds.has(pe.id)) {
+            state.problems.push(pe);
+            existingIds.add(pe.id);
+          }
+        }
+      } else {
+        state.bugcheck.deepFindings = [...state.bugcheck.deepFindings, ...findings];
+      }
+    },
+    bugcheckDone: (state, action) => {
+      state.bugcheck.running = false;
+      if (action.payload?.reportUrl) {
+        state.bugcheck.reportUrl = action.payload.reportUrl;
+      }
     }
   }
 });
@@ -801,6 +930,13 @@ export const {
   // Watch mode
   watchStatusUpdated,
   watchActivityReceived,
+  // Bug check mode (doc 44)
+  problemsAppended,
+  problemsCleared,
+  bugcheckStarted,
+  bugcheckTierStarted,
+  bugcheckTierDone,
+  bugcheckDone,
   addToast,
   removeToast
 } = chatSlice.actions;

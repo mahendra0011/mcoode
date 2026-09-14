@@ -57,6 +57,7 @@ export interface ProblemEntry {
   col?: number;
   source?: string;
   ruleId?: string;
+  canCrashServer?: boolean;
 }
 
 export interface OutputChannel {
@@ -171,6 +172,8 @@ export function BottomPanel({
     setStoreActiveTab(tab);
   };
   const watch = useAppSelector((s) => s.chat.watch);
+  const reduxProblems = useAppSelector((s) => s.chat.problems);
+  const effectiveProblems = problems && problems.length > 0 ? problems : (reduxProblems || []);
 
   const [isMaximized, setIsMaximized] = useState(false);
   const [terminalListOpen, setTerminalListOpen] = useState(false);
@@ -211,9 +214,9 @@ export function BottomPanel({
   const terminalPanelRef = useRef<MultiTerminalPanelHandle | null>(null);
 
   const problemCounts = {
-    error: problems.filter((p) => p.severity === 'error').length,
-    warning: problems.filter((p) => p.severity === 'warning').length,
-    info: problems.filter((p) => p.severity === 'info').length,
+    error: effectiveProblems.filter((p) => p.severity === 'error').length,
+    warning: effectiveProblems.filter((p) => p.severity === 'warning').length,
+    info: effectiveProblems.filter((p) => p.severity === 'info').length,
   };
 
   const handleSessionsChange = useCallback(
@@ -733,7 +736,7 @@ export function BottomPanel({
       {/* Body */}
       <div className="flex-1 flex min-h-0 w-full overflow-hidden">
         <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
-          {activeTab === 'problems' && <ProblemsView problems={problems} />}
+          {activeTab === 'problems' && <ProblemsView problems={effectiveProblems} />}
           {activeTab === 'output' && (
             <OutputView
               channels={channelsList}
@@ -1254,7 +1257,14 @@ function ProblemsView({ problems }: { problems: ProblemEntry[] }) {
                 {p.severity === 'info' && (
                   <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
                 )}
-                <span className="text-white/80 flex-1 group-hover:text-white transition-colors">{p.message}</span>
+                <span className="text-white/80 flex-1 group-hover:text-white transition-colors">
+                  {p.message}
+                  {p.canCrashServer && (
+                    <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold">
+                      crash risk
+                    </span>
+                  )}
+                </span>
                 <span className="text-white/30 flex-shrink-0 font-mono text-[11px] group-hover:text-white/60">
                   [Ln {p.line}, Col {p.column ?? p.col ?? 1}] {p.source && `(${p.source})`}
                 </span>
