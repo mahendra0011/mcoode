@@ -15,7 +15,7 @@ import { Group as ResizablePanelGroup, Panel as ResizablePanel, Separator as Res
 import Link from 'next/link'; import { useRouter, useSearchParams } from 'next/navigation';
 import { useChatSocket, getSocket } from '../../hooks/useChatSocket';
 import api from '../../lib/axios';
-import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhancementResolved, clarifyAnswered } from '../../store/chatSlice';
+import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhancementResolved, clarifyAnswered, watchStatusUpdated } from '../../store/chatSlice';
 import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../../lib/slashCommands';
 import { zipFilesOffMainThread, WORKSPACE_UPLOAD_TIMEOUT_MS, type ZipEntry } from '../../lib/zipInWorker';
 
@@ -138,6 +138,8 @@ import { RoleAssignmentTable } from '../../components/ide/RoleAssignmentTable';
 import { CodebaseReadingCard } from '../../components/ide/CodebaseReadingCard';
 import { ComparisonTable } from '../../components/ide/ComparisonTable';
 import { PlaywrightAuditPanel } from '../../components/ide/PlaywrightAuditPanel';
+import { WatchStatusBadge } from '../../components/ide/WatchStatusBadge';
+import { WatchActivityFeed } from '../../components/ide/WatchActivityFeed';
 import { ThinkingIndicator } from '../../components/chat/ThinkingIndicator';
 import { ChatMessage } from '../../components/chat/ChatMessage';
 import { SpinnerBlock } from '../../components/chat/SpinnerBlock';
@@ -195,6 +197,7 @@ export function AIChatPage() {
     securityAudit,
     playwrightAudit,
     roleAssignments,
+    watch,
   } = useAppSelector(state => state.chat);
   const { send, interrupt, answerPermission, undo, sendTerminalCommand, reloadModels } = useChatSocket(activeWorkspaceId);
   const [prompt, setPrompt] = useState('');
@@ -434,8 +437,43 @@ export function AIChatPage() {
 		const [isUploading, setIsUploading] = useState(false);
 		const [uploadProgressText, setUploadProgressText] = useState('');
 		const [uploadProgressPercent, setUploadProgressPercent] = useState(0);
-		const [watchMode, setWatchMode] = useState(false);
+		const watchMode = watch?.active ?? false;
 		const [debugMode, setDebugMode] = useState(false);
+
+		// Sync initial watch status when workspace loads or changes
+		useEffect(() => {
+			if (!activeWorkspaceId) return;
+			api.get(`/api/v1/watch/${activeWorkspaceId}/status`)
+				.then((res) => {
+					if (res?.data) {
+						dispatch(watchStatusUpdated(res.data));
+					}
+				})
+				.catch(() => {});
+		}, [activeWorkspaceId, dispatch]);
+
+		const toggleWatchMode = useCallback(async () => {
+			if (!activeWorkspaceId) {
+				toast.error('Please select or open a project first');
+				return;
+			}
+			const socket = getSocket();
+			if (watch?.active) {
+				try {
+					await api.post(`/api/v1/watch/${activeWorkspaceId}/stop`);
+				} catch {}
+				socket?.emit('watch:stop', { projectId: activeWorkspaceId });
+				dispatch(watchStatusUpdated({ status: 'stopped' }));
+				toast.info('Watch daemon stopped');
+			} else {
+				try {
+					await api.post(`/api/v1/watch/${activeWorkspaceId}/start`);
+				} catch {}
+				socket?.emit('watch:start', { projectId: activeWorkspaceId });
+				dispatch(watchStatusUpdated({ status: 'running' }));
+				toast.success('Watch daemon active — watching project changes');
+			}
+		}, [activeWorkspaceId, watch?.active, dispatch]);
 
 		// Modal for commit message (replaces window.prompt)
 			const [showCommitModal, setShowCommitModal] = useState(false);
@@ -445,7 +483,6 @@ export function AIChatPage() {
 		const [showBranchModal, setShowBranchModal] = useState(false);
 		const [branchName, setBranchName] = useState('');
 
-	const toggleWatchMode = () => setWatchMode(!watchMode);
 	const toggleDebug = () => setDebugMode(!debugMode);
 
 		// Toast notifications (replaces native alert())
@@ -1572,6 +1609,17 @@ export function AIChatPage() {
               </span>
             </motion.button>
           </div>
+
+          {/* Watch Status Badge (docs 38-40) */}
+          <WatchStatusBadge
+            active={watch.active}
+            scansRun={watch.scansRun}
+            fixesApplied={watch.fixesApplied}
+            onClick={() => {
+              useIDEStore.getState().setActivePanelTab('watch');
+              useIDEStore.getState().setTerminalOpen(true);
+            }}
+          />
 
           {/* Integrations & Views Group */}
           {activeTab === 'AI Code Editor' && (

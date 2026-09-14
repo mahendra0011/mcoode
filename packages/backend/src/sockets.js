@@ -154,21 +154,50 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         }
       });
     }
-    for (const event of ['watch:scan', 'watch:fix', 'watch:status']) {
+    for (const event of ['watch:scan', 'watch:fix', 'watch:status', 'watch:activity']) {
       socket.on(event, (payload = {}) => {
         io.emit(event, payload);
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit(event, payload);
+        }
         // persist watch activity to Mongo (best-effort)
-        if (event === 'watch:fix' && payload.file) {
-          db().watchActivity.create({
+        if ((event === 'watch:fix' || event === 'watch:activity') && payload.file) {
+          const item = {
             projectId: payload.projectId || 'unknown',
             file: payload.file,
-            outcome: payload.outcome || 'no-issues',
+            outcome: payload.outcome || 'fixed',
             detail: payload.detail || '',
-            timestamp: new Date()
-          }).catch(() => {});
+            domain: payload.domain,
+            timestamp: payload.timestamp || new Date()
+          };
+          if (event === 'watch:fix') {
+            io.emit('watch:activity', item);
+            if (payload.projectId) {
+              io.to(`project:${payload.projectId}`).emit('watch:activity', item);
+            }
+          }
+          db().watchActivity.create(item).catch(() => {});
         }
       });
     }
+
+    socket.on('watch:start', (payload = {}) => {
+      const projectId = payload.projectId;
+      if (projectId) {
+        io.to(`project:${projectId}`).emit('watch:start-signal', payload);
+        io.to(`project:${projectId}`).emit('watch:status', { status: 'running', projectId });
+      }
+      io.emit('watch:status', { status: 'running', ...payload });
+    });
+
+    socket.on('watch:stop', (payload = {}) => {
+      const projectId = payload.projectId;
+      if (projectId) {
+        io.to(`project:${projectId}`).emit('watch:stop-signal', payload);
+        io.to(`project:${projectId}`).emit('watch:status', { status: 'stopped', projectId });
+      }
+      io.emit('watch:status', { status: 'stopped', ...payload });
+    });
 
     // ── Web Chat / Agent events (authenticated users only) ─────────
     // These bridge the CLI's ChatAgent to web clients via Socket.IO.

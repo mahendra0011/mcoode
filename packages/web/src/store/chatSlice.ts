@@ -70,6 +70,13 @@ export interface PlaywrightIssue {
   screenshotUrl?: string;
   route?: string;
 }
+export interface WatchActivityItem {
+  file: string;
+  outcome: 'fixed' | 'needs-review' | 'skipped' | 'routing' | string;
+  detail: string;
+  timestamp: string;
+  domain?: string;
+}
 export interface Toast { id: string; kind?: string; text?: string }
 export interface Wave { wave: number; total: number; completed: number; status: string; subagentIds?: string[] }
 export interface Subagent {
@@ -123,6 +130,14 @@ interface ChatState {
   securityAudit: { rows: ComparisonRow[]; pass: number } | null;
   playwrightAudit: { active: boolean; pass: number; issues: PlaywrightIssue[]; clean: boolean } | null;
   roleAssignments: RoleAssignment[];
+
+  // WEB Watch Mode (docs 38-40)
+  watch: {
+    active: boolean;
+    scansRun: number;
+    fixesApplied: number;
+    lastActivity: WatchActivityItem[];
+  };
 }
 
 const initialState: ChatState = {
@@ -155,6 +170,14 @@ const initialState: ChatState = {
   securityAudit: null,
   playwrightAudit: null,
   roleAssignments: [],
+
+  // WEB Watch Mode initial state
+  watch: {
+    active: false,
+    scansRun: 0,
+    fixesApplied: 0,
+    lastActivity: [],
+  },
 };
 
 const chatSlice = createSlice({
@@ -701,6 +724,22 @@ const chatSlice = createSlice({
       state.playwrightAudit.issues.push(action.payload);
       state.playwrightAudit.clean = false;
     },
+    // WEB Watch Mode reducers (docs 38-40)
+    watchStatusUpdated: (state, action) => {
+      const p = action.payload || {};
+      state.watch.active = p.status === 'running';
+      if (p.scansRun !== undefined) state.watch.scansRun = p.scansRun;
+      if (p.fixesApplied !== undefined) state.watch.fixesApplied = p.fixesApplied;
+    },
+    watchActivityReceived: (state, action) => {
+      const item = action.payload;
+      if (item) {
+        state.watch.lastActivity = [item, ...state.watch.lastActivity].slice(0, 20);
+        if (item.outcome === 'fixed') {
+          state.watch.fixesApplied = (state.watch.fixesApplied || 0) + 1;
+        }
+      }
+    },
     addToast: (state, action) => {
       const { id, kind = 'info', text } = action.payload || {};
       state.toasts.push({ id: id || Date.now().toString(), kind, text });
@@ -759,6 +798,9 @@ export const {
   securityAuditUpdated,
   playwrightAuditUpdated,
   playwrightIssueAdded,
+  // Watch mode
+  watchStatusUpdated,
+  watchActivityReceived,
   addToast,
   removeToast
 } = chatSlice.actions;

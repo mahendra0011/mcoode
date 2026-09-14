@@ -24,6 +24,7 @@ import {
   CornerDownLeft,
   Folder,
   Settings,
+  Eye,
 } from 'lucide-react';
 import {
   MultiTerminalPanel,
@@ -32,6 +33,8 @@ import {
 } from './MultiTerminalPanel';
 import type { ChatMessage } from '../../types/chat';
 import { useIDEStore, type PanelTab } from '../../store/ideStore';
+import { useAppSelector } from '../../store';
+import { WatchActivityFeed } from './WatchActivityFeed';
 import { getSocket } from '../../hooks/useChatSocket';
 import api from '../../lib/axios';
 import { toast } from 'sonner';
@@ -89,6 +92,7 @@ const ALL_TABS: { id: PanelTab; label: string; icon: React.ComponentType<{ class
   { id: 'debugConsole', label: 'Debug Console', icon: Bug },
   { id: 'terminal', label: 'Terminal', icon: TerminalIcon },
   { id: 'ports', label: 'Ports', icon: Globe },
+  { id: 'watch', label: 'Watch Activity', icon: Eye },
 ];
 
 const SHELL_TYPES: { id: TerminalSessionMeta['shellType']; label: string }[] = [
@@ -166,6 +170,7 @@ export function BottomPanel({
   const setActiveTab = (tab: PanelTab) => {
     setStoreActiveTab(tab);
   };
+  const watch = useAppSelector((s) => s.chat.watch);
 
   const [isMaximized, setIsMaximized] = useState(false);
   const [terminalListOpen, setTerminalListOpen] = useState(false);
@@ -188,6 +193,7 @@ export function BottomPanel({
     debugConsole: true,
     terminal: true,
     ports: true,
+    watch: true,
   });
   const [showIcons, setShowIcons] = useState(true);
 
@@ -757,6 +763,9 @@ export function BottomPanel({
               onForwardPort={handleForwardPort}
               onCancelAddPort={() => setIsAddingPort(false)}
             />
+          )}
+          {activeTab === 'watch' && (
+            <WatchActivityFeed projectId={workspaceId} live={watch.lastActivity} />
           )}
         </div>
 

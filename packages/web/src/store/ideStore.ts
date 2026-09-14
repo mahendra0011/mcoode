@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { ALL_LANGUAGES } from "../lib/languagesData";
 
 export type ActiveTab = "Chat" | "AI Code Editor";
-export type PanelTab = "problems" | "output" | "debugConsole" | "terminal" | "ports";
+export type PanelTab = "problems" | "output" | "debugConsole" | "terminal" | "ports" | "watch";
 
 export interface NavPoint {
   path: string;

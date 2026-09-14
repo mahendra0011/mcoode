@@ -49,6 +49,8 @@ import {
   playwrightAuditUpdated,
   playwrightIssueAdded,
   permissionAnswered,
+  watchStatusUpdated,
+  watchActivityReceived,
   addToast,
   removeToast
 } from '../store/chatSlice';
@@ -337,6 +339,22 @@ export function useChatSocket(workspaceId: string | null = null) {
       dispatch(playwrightAuditUpdated({ active: true, clean: !!payload?.clean }));
     };
 
+    // Watch mode handlers (docs 38-40)
+    const onWatchActivity = (payload: any) => {
+      dispatch(watchActivityReceived(payload));
+      if (payload?.outcome === 'fixed' || payload?.outcome === 'needs-review') {
+        const fileStr = payload.file ? `${payload.file}: ` : '';
+        dispatch(addToast({
+          id: Date.now().toString(),
+          kind: payload.outcome === 'fixed' ? 'ok' : 'warn',
+          text: `Watch: ${fileStr}${payload.detail || payload.outcome}`,
+        }));
+      }
+    };
+    const onWatchStatus = (payload: any) => {
+      dispatch(watchStatusUpdated(payload));
+    };
+
     socket.on('connect', onConnect);
     socket.on('chat:ready', onChatReady);
     socket.on('chat:error', onChatError);
@@ -380,6 +398,10 @@ export function useChatSocket(workspaceId: string | null = null) {
     socket.on('playwright:issue', onPlaywrightIssue);
     socket.on('playwright:pass-complete', onPlaywrightPassComplete);
     socket.on('playwright:done', onPlaywrightDone);
+
+    // Watch mode socket subscriptions (docs 38-40)
+    socket.on('watch:activity', onWatchActivity);
+    socket.on('watch:status', onWatchStatus);
 
     // Real Debugger events
     const onDebugStarted = (p: any) => {
@@ -477,6 +499,8 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off('playwright:issue', onPlaywrightIssue);
       socket.off('playwright:pass-complete', onPlaywrightPassComplete);
       socket.off('playwright:done', onPlaywrightDone);
+      socket.off('watch:activity', onWatchActivity);
+      socket.off('watch:status', onWatchStatus);
       socket.off('debug:started', onDebugStarted);
       socket.off('debug:output', onDebugOutput);
       socket.off('debug:exited', onDebugExited);
