@@ -16,7 +16,7 @@ import Link from 'next/link'; import { useRouter, useSearchParams } from 'next/n
 import { useChatSocket, getSocket } from '../../hooks/useChatSocket';
 import api from '../../lib/axios';
 import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhancementResolved, clarifyAnswered, watchStatusUpdated, bugcheckStarted } from '../../store/chatSlice';
-import { handleSlashCommand, isSlashCommand, WEB_SLASH_COMMANDS } from '../../lib/slashCommands';
+import { handleSlashCommand, isSlashCommand, getAvailableSlashCommands } from '../../lib/slashCommands';
 import { zipFilesOffMainThread, WORKSPACE_UPLOAD_TIMEOUT_MS, type ZipEntry } from '../../lib/zipInWorker';
 
 // Moved out of the component (was previously re-created on every single render, since it
@@ -138,8 +138,6 @@ import { RoleAssignmentTable } from '../../components/ide/RoleAssignmentTable';
 import { CodebaseReadingCard } from '../../components/ide/CodebaseReadingCard';
 import { ComparisonTable } from '../../components/ide/ComparisonTable';
 import { PlaywrightAuditPanel } from '../../components/ide/PlaywrightAuditPanel';
-import { WatchStatusBadge } from '../../components/ide/WatchStatusBadge';
-import { WatchActivityFeed } from '../../components/ide/WatchActivityFeed';
 import { BugcheckReport } from '../../components/ide/BugcheckReport';
 import { ThinkingIndicator } from '../../components/chat/ThinkingIndicator';
 import { ChatMessage } from '../../components/chat/ChatMessage';
@@ -468,13 +466,18 @@ export function AIChatPage() {
 				.catch(() => {});
 		}, [activeWorkspaceId, dispatch]);
 
-		const toggleWatchMode = useCallback(async () => {
+		const toggleWatchMode = useCallback(async (forcedState?: boolean) => {
 			if (!activeWorkspaceId) {
 				toast.error('Please select or open a project first');
 				return;
 			}
+			const shouldEnable = forcedState !== undefined ? forcedState : !watch?.active;
+			if (forcedState !== undefined && shouldEnable === !!watch?.active) {
+				toast.info(`Watch daemon is already ${watch?.active ? 'running' : 'stopped'}`);
+				return;
+			}
 			const socket = getSocket();
-			if (watch?.active) {
+			if (!shouldEnable) {
 				try {
 					await api.post(`/api/v1/watch/${activeWorkspaceId}/stop`);
 				} catch {}
@@ -1310,6 +1313,8 @@ export function AIChatPage() {
         toggleWatchMode,
         runBugcheck,
         switchToAssistantTab,
+        activeTab,
+        setGodMode: (val: boolean) => dispatch(setGodMode(val)),
         watchMode,
         debugMode,
         toggleDebug,
@@ -1626,30 +1631,6 @@ export function AIChatPage() {
               </span>
             </motion.button>
           </div>
-
-          {/* Watch Status Badge (docs 38-40) */}
-          <WatchStatusBadge
-            active={watch.active}
-            scansRun={watch.scansRun}
-            fixesApplied={watch.fixesApplied}
-            onClick={() => {
-              useIDEStore.getState().setActivePanelTab('watch');
-              useIDEStore.getState().setTerminalOpen(true);
-            }}
-          />
-
-          {/* Bug Check Toolbar Button (doc 44) */}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => runBugcheck()}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white/90 cursor-pointer transition-all"
-            title="Run Bug Check (Static analysis + AI review)"
-          >
-            <Bug className="w-3 h-3 text-red-400" />
-            <span>Bug Check</span>
-          </motion.button>
 
           {/* Integrations & Views Group */}
           {activeTab === 'AI Code Editor' && (
@@ -2088,7 +2069,7 @@ export function AIChatPage() {
                           >
                             {(() => {
                               const cmd = prompt.slice(1).toLowerCase();
-                              const filtered = WEB_SLASH_COMMANDS.filter(c => c.cmd.includes(cmd));
+                              const filtered = getAvailableSlashCommands(activeTab).filter(c => c.cmd.includes(cmd));
                               return filtered.length > 0 ? filtered.map((c, i) => (
                                 <motion.button
                                   key={c.cmd}
@@ -2194,74 +2175,78 @@ export function AIChatPage() {
                         {keysError}
                       </motion.div>
                     )}
-                    {enhancedPrompt?.pending && (
-                      <ThinkingIndicator label="expanding your prompt..." />
+                    {activeTab === 'AI Code Assistant' && (
+                      <>
+                        {enhancedPrompt?.pending && (
+                          <ThinkingIndicator label="expanding your prompt..." />
+                        )}
+                        {enhancedPrompt && !enhancedPrompt.pending && !enhancedPrompt.accepted && enhancedPrompt.enhanced && (
+                          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                            className="w-full mb-4 bg-[#111] rounded-xl border border-white/10 p-4">
+                            <div className="text-xs text-white/50 mb-2">Your prompt looks short — expanded it:</div>
+                            <div className="text-sm text-white/80 bg-black/30 rounded-lg p-3">{enhancedPrompt.enhanced}</div>
+                            <div className="flex gap-2 mt-3">
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                                onClick={() => { dispatch(promptEnhancementResolved(true)); send(enhancedPrompt.enhanced); }}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium">
+                                Use expanded version
+                              </motion.button>
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                                onClick={() => { dispatch(promptEnhancementResolved(false)); send(enhancedPrompt.original); }}
+                                className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 text-xs font-medium">
+                                Keep original
+                              </motion.button>
+                            </div>
+                          </motion.div>
+                        )}
+                        {clarifyQuestions && clarifyQuestions.map((q) => (
+                          <ClarifyCard key={q.question} question={q} onAnswer={(question, answer) => {
+                            dispatch(clarifyAnswered({ question, answer }));
+                            const socket = getSocket();
+                            if (socket && socket.connected) {
+                              socket.emit('clarify:answer', { question, answer });
+                            }
+                          }} />
+                        ))}
+                        <CodebaseReadingCard state={codebaseReading} />
+                        <RoleAssignmentTable assignments={roleAssignments} />
+                        <TodoCard plan={plan as any} />
+                        {godMode && (
+                          <WaveProgress
+                            waves={waves as any}
+                            subagents={subagents as any}
+                            buildSummary={buildSummary as any}
+                            godMode={godMode}
+                            projectTier={projectTier}
+                            concurrency={concurrency}
+                          />
+                        )}
+                        {comparisonRows && comparisonRows.length > 0 && (
+                          <ComparisonTable rows={comparisonRows} pass={verificationPass} maxPasses={8} title="Verification" />
+                        )}
+                        {securityAudit && securityAudit.rows && securityAudit.rows.length > 0 && (
+                          <ComparisonTable rows={securityAudit.rows} pass={securityAudit.pass} maxPasses={5} title="Security Audit" />
+                        )}
+                        {playwrightAudit && (
+                          <PlaywrightAuditPanel
+                            active={playwrightAudit.active}
+                            pass={playwrightAudit.pass ?? 1}
+                            maxPasses={5}
+                            issues={playwrightAudit.issues ?? []}
+                            clean={playwrightAudit.clean ?? false}
+                          />
+                        )}
+                        {bugcheck && (bugcheck.running || bugcheck.deepFindings?.length > 0 || bugcheck.tierStatus?.some((t) => t.done)) && (
+                          <BugcheckReport
+                            findings={bugcheck.deepFindings}
+                            reportUrl={bugcheck.reportUrl || undefined}
+                            running={bugcheck.running}
+                            tierStatus={bugcheck.tierStatus}
+                          />
+                        )}
+                        <PermissionModal request={permissionRequest as any} onAnswer={answerPermission} />
+                      </>
                     )}
-                    {enhancedPrompt && !enhancedPrompt.pending && !enhancedPrompt.accepted && enhancedPrompt.enhanced && (
-                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                        className="w-full mb-4 bg-[#111] rounded-xl border border-white/10 p-4">
-                        <div className="text-xs text-white/50 mb-2">Your prompt looks short — expanded it:</div>
-                        <div className="text-sm text-white/80 bg-black/30 rounded-lg p-3">{enhancedPrompt.enhanced}</div>
-                        <div className="flex gap-2 mt-3">
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                            onClick={() => { dispatch(promptEnhancementResolved(true)); send(enhancedPrompt.enhanced); }}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium">
-                            Use expanded version
-                          </motion.button>
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                            onClick={() => { dispatch(promptEnhancementResolved(false)); send(enhancedPrompt.original); }}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 text-xs font-medium">
-                            Keep original
-                          </motion.button>
-                        </div>
-                      </motion.div>
-                    )}
-                    {clarifyQuestions && clarifyQuestions.map((q) => (
-                      <ClarifyCard key={q.question} question={q} onAnswer={(question, answer) => {
-                        dispatch(clarifyAnswered({ question, answer }));
-                        const socket = getSocket();
-                        if (socket && socket.connected) {
-                          socket.emit('clarify:answer', { question, answer });
-                        }
-                      }} />
-                    ))}
-                    <CodebaseReadingCard state={codebaseReading} />
-                    <RoleAssignmentTable assignments={roleAssignments} />
-                    <TodoCard plan={plan as any} />
-                    {godMode && (
-                      <WaveProgress
-                        waves={waves as any}
-                        subagents={subagents as any}
-                        buildSummary={buildSummary as any}
-                        godMode={godMode}
-                        projectTier={projectTier}
-                        concurrency={concurrency}
-                      />
-                    )}
-                    {comparisonRows && comparisonRows.length > 0 && (
-                      <ComparisonTable rows={comparisonRows} pass={verificationPass} maxPasses={8} title="Verification" />
-                    )}
-                    {securityAudit && securityAudit.rows && securityAudit.rows.length > 0 && (
-                      <ComparisonTable rows={securityAudit.rows} pass={securityAudit.pass} maxPasses={5} title="Security Audit" />
-                    )}
-                    {playwrightAudit && (
-                      <PlaywrightAuditPanel
-                        active={playwrightAudit.active}
-                        pass={playwrightAudit.pass ?? 1}
-                        maxPasses={5}
-                        issues={playwrightAudit.issues ?? []}
-                        clean={playwrightAudit.clean ?? false}
-                      />
-                    )}
-                    {bugcheck && (bugcheck.running || bugcheck.deepFindings?.length > 0 || bugcheck.tierStatus?.some((t) => t.done)) && (
-                      <BugcheckReport
-                        findings={bugcheck.deepFindings}
-                        reportUrl={bugcheck.reportUrl || undefined}
-                        running={bugcheck.running}
-                        tierStatus={bugcheck.tierStatus}
-                      />
-                    )}
-                    <PermissionModal request={permissionRequest as any} onAnswer={answerPermission} />
                     <AnimatePresence>
                     {messages.map((msg, idx) => {
                       const prevMsg = idx > 0 ? messages[idx - 1] : null;
@@ -2366,7 +2351,7 @@ export function AIChatPage() {
                             >
                               {(() => {
                                 const cmd = prompt.slice(1).toLowerCase();
-                                const filtered = WEB_SLASH_COMMANDS.filter(c => c.cmd.includes(cmd));
+                                const filtered = getAvailableSlashCommands(activeTab).filter(c => c.cmd.includes(cmd));
                                 return filtered.length > 0 ? filtered.map((c, i) => (
                                   <motion.button
                                     key={c.cmd}
@@ -2739,7 +2724,7 @@ export function AIChatPage() {
                             >
                               {(() => {
                                 const cmd = prompt.slice(1).toLowerCase();
-                                const filtered = WEB_SLASH_COMMANDS.filter(c => c.cmd.includes(cmd));
+                                const filtered = getAvailableSlashCommands(activeTab).filter(c => c.cmd.includes(cmd));
                                 return filtered.length > 0 ? filtered.map((c, i) => (
                                   <motion.button
                                     key={c.cmd}

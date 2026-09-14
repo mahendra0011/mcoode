@@ -69,19 +69,6 @@ export function SparkleButton({ setPrompt, advancedMode, watchMode, onToggleWatc
                 {s}
               </motion.button>
             ))}
-            {advancedMode && (
-              <motion.button
-                key="watch"
-                onClick={() => { onToggleWatch?.(); setOpen(false); }}
-                className="w-full text-left text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 px-3 py-2 rounded-lg transition flex items-center gap-2"
-                initial={{ opacity: 0, x: -4 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: SUGGESTIONS.length * 0.04, duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-              >
-                {watchMode ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                {watchMode ? 'Stop watching' : 'Watch this project'}
-              </motion.button>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
