@@ -154,13 +154,18 @@ export function AIChatPage() {
 
   // IDE State — declare BEFORE useChatSocket so there's no TDZ
   const [workspaces, setWorkspaces] = useState<any[]>([]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('mcode_active_workspace_id') || null;
-    }
-    return null;
-  });
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Chat');
+
+  // Restore saved active workspace on client mount to prevent SSR hydration mismatch
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('mcode_active_workspace_id');
+      if (saved) {
+        setActiveWorkspaceId(saved);
+      }
+    } catch {}
+  }, []);
 
   // Persist active workspace to localStorage so refreshes always restore the active project
   useEffect(() => {
@@ -2024,9 +2029,9 @@ export function AIChatPage() {
                     
                     {/* Top Action Bar (Upload & Git Branch) */}
                     <div className="flex items-center gap-3 px-1 pb-1">
-                      <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
+                      <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
                         {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
-                        <span>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
+                        <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
                         <ChevronDown className="w-3 h-3 opacity-50"/>
                       </motion.button>
                       <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
@@ -2310,9 +2315,9 @@ export function AIChatPage() {
                       
                       {/* Top Action Bar (Upload & Git Branch) */}
                       <div className="flex items-center gap-3 px-1 pb-1">
-                        <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
+                        <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
                           {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
-                          <span>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
+                          <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
                           <ChevronDown className="w-3 h-3 opacity-50"/>
                         </motion.button>
                         <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
@@ -2685,9 +2690,9 @@ export function AIChatPage() {
                         <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2" ref={commandPickerRef}>
                           {/* Top Action Bar (Upload & Git Branch) */}
                           <div className="flex items-center gap-3 px-1 pb-1">
-                            <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
+                            <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
                               {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
-                              <span>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}</span>
+                              <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}</span>
                               <ChevronDown className="w-3 h-3 opacity-50"/>
                             </motion.button>
                             <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
