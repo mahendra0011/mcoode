@@ -2518,6 +2518,7 @@ export function AIChatPage() {
                     {isTerminalOpen && !zenMode && (
                       <BottomPanel
                         workspaceId={activeWorkspaceId}
+                        cwd={workspaces.find((w) => w._id === activeWorkspaceId)?.diskPath}
                         messages={messages}
                         problems={problems}
                         onCommand={sendTerminalCommand}

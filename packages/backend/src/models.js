@@ -77,7 +77,8 @@ const watchActivitySchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
   file: String,
   outcome: String,
-  detail: String
+  detail: String,
+  domain: String
 });
 watchActivitySchema.index({ projectId: 1, timestamp: -1 });
 

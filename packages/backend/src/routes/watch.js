@@ -26,7 +26,7 @@ export function watchRoutes({ secret }) {
       if (!project) {
         project = await projects.create({ _id: req.params.projectId, userId: req.userId, status: 'running', scansRun: 0, fixesApplied: 0 });
       } else {
-        project = await projects.findByIdAndUpdate(project._id, { status: 'running' });
+        project = await projects.findByIdAndUpdate(project._id, { status: 'running' }, { new: true });
       }
       const io = req.app.get('io');
       io?.to(`project:${req.params.projectId}`).emit('watch:start-signal', { projectId: req.params.projectId });
@@ -43,7 +43,7 @@ export function watchRoutes({ secret }) {
       const projects = db().watchProject;
       const project = await projects.findOne({ _id: req.params.projectId, userId: req.userId });
       if (!project) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'project not found' } });
-      const updated = await projects.findByIdAndUpdate(project._id, { status: 'stopped' });
+      const updated = await projects.findByIdAndUpdate(project._id, { status: 'stopped' }, { new: true });
       // notify any connected CLI/web via socket room and global io
       const io = req.app.get('io');
       io?.to(`project:${req.params.projectId}`).emit('watch:stop-signal', { projectId: req.params.projectId });
@@ -60,7 +60,10 @@ export function watchRoutes({ secret }) {
       const { page = 1, limit = 20, outcome } = req.query;
       const query = { projectId: req.params.projectId };
       if (outcome) query.outcome = outcome;
-      const items = await db().watchActivity.find(query, { timestamp: -1 });
+      // NOTE: MemoryModel.find(query, sort) but mongoose Model.find(query, projection) —
+      // sorting in JS keeps both storage modes correct.
+      const all = await db().watchActivity.find(query);
+      const items = all.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       const start = (Number(page) - 1) * Number(limit);
       res.json({ items: items.slice(start, start + Number(limit)), total: items.length });
     } catch (err) {

@@ -4,11 +4,9 @@ import { authMiddleware } from '../auth.js';
 import { db } from '../db.js';
 import { join } from 'node:path';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync, symlinkSync, rmSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-
-import { mkdirSync } from 'node:fs';
 
 const WORKSPACE_ROOT = join(homedir(), 'mcode-workspaces');
 const UPLOADS_DIR = join(homedir(), '.mcode', 'uploads');
@@ -18,6 +16,18 @@ try {
   mkdirSync(WORKSPACE_ROOT, { recursive: true });
   mkdirSync(UPLOADS_DIR, { recursive: true });
 } catch {}
+
+function ensureNamedJunction(name, diskPath) {
+  if (!name || !diskPath) return;
+  try {
+    const sanitized = String(name).trim().replace(/[\\/:*?"<>|]/g, '-');
+    if (!sanitized) return;
+    const linkPath = join(WORKSPACE_ROOT, sanitized);
+    if (!existsSync(linkPath) && existsSync(diskPath)) {
+      symlinkSync(diskPath, linkPath, 'junction');
+    }
+  } catch {}
+}
 
 // 50MB was too tight for "upload whole project" — any real project with a few images,
 // fonts, or a lockfile-heavy zip would silently fail this limit mid-upload, which is
@@ -52,6 +62,11 @@ export function workspaceRoutes({ secret }) {
     try {
       const workspaces = await db().workspace.find({ userId: req.userId });
       if (Array.isArray(workspaces)) {
+        for (const ws of workspaces) {
+          if (ws?.name && ws?.diskPath) {
+            ensureNamedJunction(ws.name, ws.diskPath);
+          }
+        }
         workspaces.sort((a, b) => {
           const timeA = new Date(a.createdAt || a.updatedAt || 0).getTime();
           const timeB = new Date(b.createdAt || b.updatedAt || 0).getTime();
@@ -133,6 +148,7 @@ export function workspaceRoutes({ secret }) {
           status: 'active'
         });
       }
+      ensureNamedJunction(ws?.name, ws?.diskPath);
       res.status(201).json({ workspace: ws });
     } catch (err) {
       if (err.code === 11000) {

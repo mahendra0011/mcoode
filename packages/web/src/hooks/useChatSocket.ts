@@ -344,14 +344,22 @@ export function useChatSocket(workspaceId: string | null = null) {
     };
 
     // Watch mode handlers (docs 38-40)
+    // CLI/backend outcome vocabulary (auto-fixed / no-issues) → web display vocabulary
+    const WATCH_OUTCOME_ALIASES: Record<string, string> = {
+      'auto-fixed': 'fixed',
+      'no-issues': 'skipped',
+    };
     const onWatchActivity = (payload: any) => {
-      dispatch(watchActivityReceived(payload));
-      if (payload?.outcome === 'fixed' || payload?.outcome === 'needs-review') {
-        const fileStr = payload.file ? `${payload.file}: ` : '';
+      const normalized = payload
+        ? { ...payload, outcome: WATCH_OUTCOME_ALIASES[payload.outcome] || payload.outcome }
+        : payload;
+      dispatch(watchActivityReceived(normalized));
+      if (normalized?.outcome === 'fixed' || normalized?.outcome === 'needs-review') {
+        const fileStr = normalized.file ? `${normalized.file}: ` : '';
         dispatch(addToast({
           id: Date.now().toString(),
-          kind: payload.outcome === 'fixed' ? 'ok' : 'warn',
-          text: `Watch: ${fileStr}${payload.detail || payload.outcome}`,
+          kind: normalized.outcome === 'fixed' ? 'ok' : 'warn',
+          text: `Watch: ${fileStr}${normalized.detail || normalized.outcome}`,
         }));
       }
     };

@@ -656,12 +656,29 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     });
 
     async function spawnPtySession(payload = {}) {
-      const { id, shellType = 'powershell', cols = 80, rows = 24, cwd } = payload;
+      const { id, shellType = 'powershell', cols = 80, rows = 24, cwd, workspaceId } = payload;
       if (!id) return null;
 
       let targetCwd = cwd;
+      if (!targetCwd && workspaceId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(workspaceId) });
+          if (ws?.diskPath) {
+            targetCwd = ws.diskPath;
+          }
+        } catch {}
+      }
       if (!targetCwd) {
         targetCwd = await getDefaultWorkspacePath(socket);
+      }
+      if (targetCwd) {
+        try {
+          const { existsSync } = await import('node:fs');
+          if (!existsSync(targetCwd)) {
+            const { mkdir } = await import('node:fs/promises');
+            await mkdir(targetCwd, { recursive: true });
+          }
+        } catch {}
       }
 
       // Determine shell executable

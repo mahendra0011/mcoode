@@ -68,6 +68,8 @@ export interface MultiTerminalPanelProps {
   onInterrupt?: () => void;
   hideOwnHeader?: boolean;
   onSessionsChange?: (sessions: TerminalSessionMeta[], activeId: string) => void;
+  workspaceId?: string | null;
+  cwd?: string | null;
 }
 
 const COMMON_COMMANDS = [
@@ -98,7 +100,7 @@ const COMMON_COMMANDS = [
 
 export const MultiTerminalPanel = React.forwardRef<MultiTerminalPanelHandle, MultiTerminalPanelProps>(
   function MultiTerminalPanel(
-    { messages, onCommand, onInterrupt, hideOwnHeader, onSessionsChange },
+    { messages, onCommand, onInterrupt, hideOwnHeader, onSessionsChange, workspaceId, cwd },
     ref
   ) {
     const [sessions, setSessions] = useState<TerminalSession[]>(() => {
@@ -137,6 +139,18 @@ export const MultiTerminalPanel = React.forwardRef<MultiTerminalPanelHandle, Mul
 
     const activeSession = sessions.find((s) => s.id === activeId) ?? sessions[0];
     const visibleIds = [activeId, ...splitIds].filter((id, i, arr) => arr.indexOf(id) === i);
+
+    // If active workspace/cwd changes while terminal is running, cd into the new directory
+    const prevCwdRef = useRef<string | null | undefined>(cwd);
+    useEffect(() => {
+      if (cwd && activeId && prevCwdRef.current !== cwd) {
+        getSocket().emit('terminal:input', {
+          id: activeId,
+          data: `cd "${cwd}"\r`,
+        });
+      }
+      prevCwdRef.current = cwd;
+    }, [cwd, activeId]);
 
     // Tab management
     function newTerminal(shellType: TerminalSessionMeta['shellType'] = DEFAULT_SHELL) {
@@ -390,6 +404,8 @@ export const MultiTerminalPanel = React.forwardRef<MultiTerminalPanelHandle, Mul
                     onPushHistory={(cmd) => pushHistory(id, cmd)}
                     onSplit={() => toggleSplit(id)}
                     onKill={() => killTerminal(id)}
+                    workspaceId={workspaceId}
+                    cwd={cwd}
                   />
                 </div>
               </React.Fragment>
@@ -414,6 +430,8 @@ interface TerminalInstanceProps {
   onPushHistory: (cmd: string) => void;
   onSplit?: () => void;
   onKill?: () => void;
+  workspaceId?: string | null;
+  cwd?: string | null;
 }
 
 const PROMPT = '\x1b[38;2;45;214;119m➜\x1b[0m \x1b[38;2;96;165;250mmcode\x1b[0m \x1b[90m$\x1b[0m ';
@@ -428,6 +446,8 @@ function TerminalInstance({
   onPushHistory,
   onSplit,
   onKill,
+  workspaceId,
+  cwd,
 }: TerminalInstanceProps) {
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
@@ -513,6 +533,11 @@ function TerminalInstance({
 
     const socket = getSocket();
 
+    const cwdRef = useRef(cwd);
+    cwdRef.current = cwd;
+    const workspaceIdRef = useRef(workspaceId);
+    workspaceIdRef.current = workspaceId;
+
     // Spawn PTY session on backend
     const spawnTerminal = () => {
       socket.emit('terminal:spawn', {
@@ -520,6 +545,8 @@ function TerminalInstance({
         shellType: session.shellType,
         cols: term.cols || 80,
         rows: term.rows || 24,
+        workspaceId: workspaceIdRef.current || undefined,
+        cwd: cwdRef.current || undefined,
       });
     };
 
@@ -539,8 +566,18 @@ function TerminalInstance({
       socket.emit('terminal:input', { id: session.id, data });
     });
 
-    // Custom key event handler: Allow Ctrl+C copy if text is selected, Ctrl+F search
+    // Custom key event handler: Allow Tab autocompletion, Ctrl+C copy if text is selected, Ctrl+F search
     term.attachCustomKeyEventHandler((e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (e.type === 'keydown') {
+          socket.emit('terminal:input', {
+            id: session.id,
+            data: e.shiftKey ? '\x1b[Z' : '\t',
+          });
+        }
+        return false;
+      }
       if (e.type === 'keydown') {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
           e.preventDefault();

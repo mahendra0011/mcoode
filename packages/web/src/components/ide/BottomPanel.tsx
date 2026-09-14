@@ -76,6 +76,7 @@ export interface ForwardedPort {
 
 export interface BottomPanelProps {
   workspaceId?: string | null;
+  cwd?: string | null;
   messages: ChatMessage[];
   onCommand?: (cmd: string) => void;
   onInterrupt?: () => void;
@@ -149,6 +150,7 @@ const DEFAULT_PORTS: ForwardedPort[] = [
 
 export function BottomPanel({
   workspaceId,
+  cwd,
   messages,
   onCommand,
   onInterrupt,
@@ -748,6 +750,8 @@ export function BottomPanel({
           {activeTab === 'terminal' && (
             <MultiTerminalPanel
               ref={terminalPanelRef}
+              workspaceId={workspaceId}
+              cwd={cwd}
               messages={messages}
               onCommand={onCommand}
               onInterrupt={onInterrupt}
