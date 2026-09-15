@@ -54,7 +54,7 @@ export const DOMAIN_ABBREV: Record<string, string> = {
 const STATUS_ICON = {
   done: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />,
   failed: <XCircle className="w-3.5 h-3.5 text-red-400" />,
-  running: <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />,
+  running: <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />,
   pending: <Clock className="w-3.5 h-3.5 text-white/30" />,
   needs_review: <Clock className="w-3.5 h-3.5 text-amber-400" />,
 };
