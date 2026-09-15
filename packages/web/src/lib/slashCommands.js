@@ -50,19 +50,19 @@ export const SLASH_CATEGORIES = [
 ];
 
 export const WEB_SLASH_COMMANDS = [
-  // 🎯 Modes (EXACTLY the 12 modes requested by user)
-  { cmd: 'god', name: 'God Mode', desc: 'Parallel multi-agent autonomous builds', icon: '⚡', category: 'modes' },
-  { cmd: 'watch', name: 'Watch Mode', desc: 'Background daemon for continuous error detection & auto-healing', icon: '👁', category: 'modes' },
-  { cmd: 'plan', name: 'Plan Mode', desc: 'Structured task breakdown & execution planning', icon: '📋', category: 'modes' },
-  { cmd: 'review', name: 'Review Mode', desc: 'Deep review of uncommitted diffs, PRs, and files', icon: '📝', category: 'modes' },
-  { cmd: 'explain', name: 'Explain Mode', desc: 'Interactive code, architecture, and logic explanation', icon: '💡', category: 'modes' },
-  { cmd: 'migrate', name: 'Migrate Mode', desc: 'Refactoring & migration with behavioral equivalence check', icon: '🔄', category: 'modes' },
-  { cmd: 'audit', name: 'Audit Mode', desc: '360° health audit: security, perf, a11y, dependencies, quality', icon: '📊', category: 'modes' },
-  { cmd: 'pair', name: 'Pair Mode', desc: 'Monaco inline AI completions & pair programming assistant', icon: '👥', category: 'modes' },
-  { cmd: 'bugcheck', name: 'Bug Check Mode', desc: 'Deterministic static analysis + AI-powered bug scanning', icon: '🐛', category: 'modes' },
-  { cmd: 'security-check', name: 'Security Mockup Mode', desc: '17 industry security controls & vulnerability scan', icon: '🛡️', category: 'modes' },
-  { cmd: 'test', name: 'Test Mode', desc: 'Self-healing autonomous test generation & validation', icon: '🧪', category: 'modes' },
-  { cmd: 'clean', name: 'Clean Mode', desc: 'Dead code removal + AI bloat detection (Doc 55)', icon: '✂️', category: 'modes' },
+  // 🎯 Modes (EXACTLY the 12 modes requested by user with full details)
+  { cmd: 'god', name: 'God Mode', desc: 'Parallel multi-agent autonomous builds — spawns specialized workers to build frontend, backend, and tests concurrently', icon: '⚡', category: 'modes' },
+  { cmd: 'watch', name: 'Watch Mode', desc: 'Continuous background daemon for real-time error detection and auto-healing file edits as you save', icon: '👁', category: 'modes' },
+  { cmd: 'plan', name: 'Plan Mode', desc: 'Structured task breakdown & execution planning — generates actionable step-by-step milestones before code is touched', icon: '📋', category: 'modes' },
+  { cmd: 'review', name: 'Review Mode', desc: 'Deep review of uncommitted diffs, PRs, and files — detects logic errors, regressions, and quality flaws', icon: '📝', category: 'modes' },
+  { cmd: 'explain', name: 'Explain Mode', desc: 'Interactive code, architecture, and logic walkthroughs — ask questions about functions, files, or overall design', icon: '💡', category: 'modes' },
+  { cmd: 'migrate', name: 'Migrate Mode', desc: 'Structural refactoring & framework migration with behavioral equivalence snapshots to guarantee zero regressions', icon: '🔄', category: 'modes' },
+  { cmd: 'audit', name: 'Audit Mode', desc: '360° health audit across security vulnerabilities, bundle performance, accessibility, dependencies, and code quality', icon: '📊', category: 'modes' },
+  { cmd: 'pair', name: 'Pair Mode', desc: 'Monaco inline AI completions & pair programming assistant — real-time multi-line suggestions while typing', icon: '👥', category: 'modes' },
+  { cmd: 'bugcheck', name: 'Bug Check Mode', desc: 'Deterministic static analysis + AI review — combines AST linters and deep semantic inspection to catch bugs early', icon: '🐛', category: 'modes' },
+  { cmd: 'security-check', name: 'Security Mockup Mode', desc: '17 industry controls scan — inspects API headers, injection risks, authentication, exposed secrets, and dependencies', icon: '🛡️', category: 'modes' },
+  { cmd: 'test', name: 'Test Mode', desc: 'Autonomous self-healing testing agent — writes, executes, and automatically repairs unit, integration, and e2e tests', icon: '🧪', category: 'modes' },
+  { cmd: 'clean', name: 'Clean Mode', desc: 'Dead code removal + AI bloat detection (Doc 55) — detects unused dependencies, duplicate files, and overengineered rewrites', icon: '✂️', category: 'modes' },
 
   // 🛠️ Code & Dev (4 actionable commands)
   { cmd: 'diff', name: 'Diff Inspector', desc: 'Show pending file diffs & uncommitted changes', icon: '📝', category: 'code' },
