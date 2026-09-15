@@ -120,6 +120,11 @@ export const DEFAULT_CONFIG = Object.freeze({
     budgetPerRunUsd: 2.0,
     freeProvidersPreferred: true
   },
+  clean: {
+    bloatSizeThresholdLines: 30,
+    maxEquivalencePasses: 5,
+    autoDetectOnGodModeComplete: false
+  },
   networkWhitelist: null, // null = allow all; set to array of domains (supports *.glob)
   backend: {
     url: 'http://localhost:3100'

@@ -568,6 +568,123 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
     });
 
+    // ── Clean Mode (doc 55) — Dead code & AI bloat detection + removal ──
+    for (const event of ['clean:scan-start', 'clean:tier1-done', 'clean:tier2-done', 'clean:findings', 'clean:status', 'clean:pass-result', 'clean:done']) {
+      socket.on(event, (payload = {}) => {
+        io.emit(event, payload);
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit(event, payload);
+        }
+      });
+    }
+
+    socket.on('clean:scan', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      if (!projectPath && payload.projectId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
+          if (ws?.diskPath) projectPath = ws.diskPath;
+        } catch {}
+      }
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
+      try {
+        const { findDeadCode, findBloat } = await import('mcode-cli/clean');
+        socket.emit('clean:scan-start', { projectPath });
+        if (payload.projectId) io.to(`project:${payload.projectId}`).emit('clean:scan-start', { projectPath });
+
+        const tier1Findings = await findDeadCode(projectPath);
+        socket.emit('clean:tier1-done', { findings: tier1Findings });
+        if (payload.projectId) io.to(`project:${payload.projectId}`).emit('clean:tier1-done', { findings: tier1Findings });
+
+        let tier2Findings = [];
+        if (!payload.deadCodeOnly) {
+          try {
+            tier2Findings = await findBloat(projectPath, {
+              projectPath,
+              thresholdLines: payload.thresholdLines || 30,
+              router: session?.router || null
+            });
+          } catch (err) {
+            console.warn('[clean:scan] tier 2 warning:', err.message);
+          }
+        }
+        socket.emit('clean:tier2-done', { findings: tier2Findings });
+        if (payload.projectId) io.to(`project:${payload.projectId}`).emit('clean:tier2-done', { findings: tier2Findings });
+
+        const allFindings = [...tier1Findings, ...tier2Findings];
+        const totalLinesRemovable = allFindings.reduce((sum, f) => {
+          const diff = Math.max(0, (f.currentLines || 1) - (f.estimatedCleanLines || 0));
+          return sum + diff;
+        }, 0);
+
+        socket.emit('clean:findings', { findings: allFindings, totalLinesRemovable });
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit('clean:findings', { findings: allFindings, totalLinesRemovable });
+        }
+      } catch (err) {
+        socket.emit('chat:error', { message: `Clean scan failed: ${err.message}` });
+        socket.emit('clean:findings', { findings: [], totalLinesRemovable: 0, error: err.message });
+      }
+    });
+
+    socket.on('clean:run', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      if (!projectPath && payload.projectId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
+          if (ws?.diskPath) projectPath = ws.diskPath;
+        } catch {}
+      }
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
+      try {
+        const { runClean } = await import('mcode-cli/clean');
+        const { EventEmitter } = await import('node:events');
+        const bus = new EventEmitter();
+
+        bus.on('CLEAN_STATUS', (evt) => {
+          socket.emit('clean:status', evt);
+          if (payload.projectId) io.to(`project:${payload.projectId}`).emit('clean:status', evt);
+        });
+
+        bus.on('CLEAN_ITEM_DONE', (evt) => {
+          socket.emit('clean:item-done', evt);
+          if (payload.projectId) io.to(`project:${payload.projectId}`).emit('clean:item-done', evt);
+        });
+
+        bus.on('CLEAN_PASS_RESULT', (evt) => {
+          socket.emit('clean:pass-result', evt);
+          if (payload.projectId) io.to(`project:${payload.projectId}`).emit('clean:pass-result', evt);
+        });
+
+        bus.on('CLEAN_COMPLETE', (evt) => {
+          socket.emit('clean:done', evt);
+          if (payload.projectId) io.to(`project:${payload.projectId}`).emit('clean:done', evt);
+        });
+
+        const result = await runClean(projectPath, {
+          selectedFindings: payload.selectedFindings || [],
+          bus,
+          router: session?.router || null
+        });
+
+        socket.emit('clean:done', result);
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit('clean:done', result);
+        }
+      } catch (err) {
+        socket.emit('chat:error', { message: `Clean execution failed: ${err.message}` });
+        socket.emit('clean:done', { ok: false, error: err.message });
+      }
+    });
+
     // ── Web Chat / Agent events (authenticated users only) ─────────
     // These bridge the CLI's ChatAgent to web clients via Socket.IO.
     // CLI agents emit events without a token (role='emitter') and don't use chat.

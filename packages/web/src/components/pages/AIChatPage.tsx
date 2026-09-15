@@ -2278,6 +2278,18 @@ export function AIChatPage() {
                         {/* Middle Group: Sparkle, Slash, God (Separated) */}
                         <div className="flex items-center gap-2 ml-auto mr-6">
                           <SparkleButton prompt={prompt} setPrompt={setPrompt} />
+                          {activeTab !== 'Chat' && (
+                            <motion.button
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              type="button"
+                              onClick={() => runCleanMode()}
+                              className="h-8 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-xs text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer"
+                              title="Clean Mode: dead code + AI-bloat removal"
+                            >
+                              {isCleanScanning ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Scissors className="w-3.5 h-3.5 text-amber-400" />} Clean
+                            </motion.button>
+                          )}
                           {activeTab === 'AI Code Assistant' && (
                             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
                               <Slash className="w-4 h-4" />

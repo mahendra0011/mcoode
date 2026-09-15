@@ -65,6 +65,14 @@ export async function godCommand({ prompt, yes, stack, deployTarget, noTests, co
     results: summary
   });
 
+  if (merged.clean?.autoDetectOnGodModeComplete) {
+    try {
+      const { cleanCommand } = await import('./clean.js');
+      info('\n[clean] running post-god-mode bloat & dead code detection...');
+      await cleanCommand({ dryRun: true, thresholdLines: merged.clean?.bloatSizeThresholdLines || 30 });
+    } catch {}
+  }
+
   if (watchAfter) {
     info('\u25c9 watch daemon started — continuous monitoring active (mcode watch-stop to end)');
   }

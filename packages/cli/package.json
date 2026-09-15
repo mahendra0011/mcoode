@@ -23,7 +23,8 @@
     "./review": "./src/core/review/index.js",
     "./explain": "./src/core/explain/index.js",
     "./migrate": "./src/core/migrate/index.js",
-    "./audit-mode": "./src/core/audit/index.js"
+    "./audit-mode": "./src/core/audit/index.js",
+    "./clean": "./src/core/clean/index.js"
   },
   "bin": {
     "mcode": "bin/mcode.mjs"
