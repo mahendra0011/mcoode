@@ -39,9 +39,9 @@ export function McodeStartupOverlay() {
         >
           <motion.div
             className="startup-logo"
-            initial={{ scale: 0.3, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ scale: 0.72, opacity: 0 }}
+            animate={{ scale: [0.72, 1.045, 0.985, 1.008, 1], opacity: 1 }}
+            transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1], times: [0, 0.38, 0.58, 0.76, 1] }}
           >
             <div className="relative flex items-center justify-center">
               <div
