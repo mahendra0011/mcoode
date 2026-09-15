@@ -34,7 +34,7 @@ export function SpinnerBlock({
   }, [active]);
 
   const colorClasses = {
-    emerald: 'text-emerald-400',
+    emerald: 'text-[var(--mcode-green,#3ecf8e)]',
     blue: 'text-blue-400',
     amber: 'text-amber-400',
     white: 'text-white/50',
