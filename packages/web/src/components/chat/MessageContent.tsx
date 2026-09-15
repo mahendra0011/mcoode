@@ -208,7 +208,7 @@ export function MessageContent({ msg, text, size = "md", isStreaming = false, ch
               <button
                 type="button"
                 onClick={() => openInEditor(rawText)}
-                className="text-cyan-400 hover:underline font-mono text-[11px] bg-white/[0.06] px-1.5 py-0.5 rounded cursor-pointer inline-flex items-center"
+                className="text-[var(--mcode-accent,#6c8cff)] hover:underline font-mono text-[11px] bg-white/[0.06] px-1.5 py-0.5 rounded cursor-pointer inline-flex items-center"
                 title={`Open ${rawText} in editor`}
               >
                 {codeChildren}

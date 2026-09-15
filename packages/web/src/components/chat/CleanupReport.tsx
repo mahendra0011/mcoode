@@ -135,8 +135,8 @@ export const CleanupReport: React.FC<CleanupReportProps> = ({
 
       {/* In-progress status message */}
       {isCleaning && (
-        <div className="p-3 bg-blue-500/10 border-b border-blue-500/20 flex items-center gap-2.5 text-blue-300 text-xs">
-          <Loader2 className="w-4 h-4 animate-spin text-blue-400 shrink-0" />
+        <div className="p-3 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center gap-2.5 text-emerald-300 text-xs">
+          <Loader2 className="w-4 h-4 animate-spin text-emerald-400 shrink-0" />
           <span>{statusMessage || 'snapshotting current behavior & cleaning selected items...'}</span>
         </div>
       )}
