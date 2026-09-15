@@ -550,58 +550,20 @@ export function AIChatPage() {
     }));
 
     try {
-      const res = await api.post('/api/v1/clean/scan', { projectPath: '.' }).catch(() => null);
-      if (res?.data?.findings && Array.isArray(res.data.findings)) {
-        setCleanReportData(res.data.findings);
-      } else {
-        // High quality demonstration findings if backend offline
-        setCleanReportData([
-          {
-            id: 'unused-dep-moment',
-            category: 'unused-dependency',
-            file: 'package.json',
-            issue: '"moment" in package.json is installed but never imported anywhere',
-            currentLines: 1,
-            estimatedCleanLines: 0,
-            costsAI: false,
-          },
-          {
-            id: 'dup-validateEmail',
-            category: 'duplicate-logic',
-            file: 'src/lib/validators.ts',
-            startLine: 12,
-            endLine: 28,
-            issue: 'validateEmail() logic duplicated 3x across auth, signup, and profile',
-            currentLines: 48,
-            estimatedCleanLines: 12,
-            costsAI: false,
-          },
-          {
-            id: 'bloat-processor',
-            category: 'bloat',
-            file: 'src/core/OrderProcessor.ts',
-            startLine: 45,
-            endLine: 385,
-            issue: 'OrderProcessor class: 340 lines for what could be a 40-line function',
-            currentLines: 340,
-            estimatedCleanLines: 38,
-            costsAI: true,
-          },
-          {
-            id: 'dead-alt-fetchUser',
-            category: 'dead-alternate',
-            file: 'src/services/userService.ts',
-            startLine: 110,
-            endLine: 145,
-            issue: 'Old fetchUser() implementation still present alongside new path',
-            currentLines: 35,
-            estimatedCleanLines: 0,
-            costsAI: true,
-          },
-        ]);
+      const res = await api.post('/api/v1/clean/scan', { projectPath: '.' });
+      if (!res?.data?.ok) {
+        throw new Error(res?.data?.error || 'Clean scan failed');
       }
-    } catch {
-      showToast('Clean scan completed', 'info');
+      setCleanReportData(res.data.findings || []);
+      if (!res.data.findings || res.data.findings.length === 0) {
+        showToast('Clean scan complete — no issues found', 'success');
+        dispatch(addMessage({ kind: 'system', text: '✅ Clean Mode: no dead code or AI-bloat findings in this project.' }));
+      }
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.message || 'Clean scan failed';
+      showToast(message, 'error');
+      dispatch(addMessage({ kind: 'error', text: `Clean Mode scan failed: ${message}` }));
+      setCleanReportData([]);
     } finally {
       setIsCleanScanning(false);
     }
@@ -612,23 +574,40 @@ export function AIChatPage() {
     setCleanStatusMessage('snapshotting current behavior (baseline tests)...');
 
     try {
-      await new Promise((r) => setTimeout(r, 600));
-      setCleanStatusMessage(`cleaning ${selectedIds.length} items with equivalence verification...`);
-      await new Promise((r) => setTimeout(r, 900));
+      const selectedFindings = (cleanReportData || []).filter((f: any) => selectedIds.includes(f.id));
 
-      const cleanedLines = cleanReportData
-        ?.filter((f: any) => selectedIds.includes(f.id))
-        ?.reduce((acc: number, f: any) => acc + Math.max(0, (f.currentLines || 1) - (f.estimatedCleanLines || 0)), 0) || 385;
+      setCleanStatusMessage(`cleaning ${selectedFindings.length} items with equivalence verification...`);
+      const res = await api.post('/api/v1/clean/execute', {
+        projectPath: '.',
+        selectedFindings,
+      });
 
-      setCleanNetRemoved(cleanedLines);
+      if (!res?.data?.ok) {
+        throw new Error(res?.data?.error || 'Clean execute failed');
+      }
+
+      const { netLinesRemoved = 0, equivalence } = res.data;
+      const isEquivalent = equivalence?.equivalent !== false;
+
+      setCleanNetRemoved(netLinesRemoved);
       setCleanComplete(true);
-      showToast(`Cleaned ${selectedIds.length} items — removed ~${cleanedLines} lines net!`, 'success');
-      dispatch(addMessage({
-        kind: 'system',
-        text: `✨ Clean Mode Complete: removed ${cleanedLines} lines net, 0 behavior changes verified against baseline tests.`
-      }));
+
+      if (isEquivalent) {
+        showToast(`Cleaned ${selectedFindings.length} items — removed ~${netLinesRemoved} lines net!`, 'success');
+        dispatch(addMessage({
+          kind: 'system',
+          text: `✨ Clean Mode Complete: removed ${netLinesRemoved} lines net, behavior verified equivalent against ${equivalence?.passesNeeded ? `${equivalence.passesNeeded} verification pass(es)` : 'baseline tests'}.`
+        }));
+      } else {
+        showToast(`Cleanup applied but equivalence check flagged differences — review before committing`, 'error');
+        dispatch(addMessage({
+          kind: 'system',
+          text: `⚠️ Clean Mode: applied ${selectedFindings.length} changes (~${netLinesRemoved} lines removed), but behavioral equivalence could NOT be fully verified (${equivalence?.reason || 'see report'}). Review the diff before trusting this.`
+        }));
+      }
     } catch (err: any) {
-      showToast(err?.message || 'Clean failed', 'error');
+      showToast(err?.response?.data?.error || err?.message || 'Clean failed', 'error');
+      dispatch(addMessage({ kind: 'error', text: `Clean Mode failed: ${err?.response?.data?.error || err?.message || 'unknown error'}` }));
     } finally {
       setIsCleaningItems(false);
     }
