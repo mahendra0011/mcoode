@@ -43,9 +43,14 @@ export function McodeStartupOverlay() {
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
           >
-            <div className="relative group flex items-center justify-center">
-              <div className="absolute -inset-1.5 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 rounded-3xl blur-xl opacity-70"></div>
-              <div className="relative w-28 h-28 rounded-3xl p-2 bg-[#09090b] border border-white/20 shadow-[0_0_40px_rgba(59,130,246,0.5)] overflow-hidden flex items-center justify-center">
+            <div className="relative flex items-center justify-center">
+              <div
+                className="relative w-24 h-24 rounded-3xl flex items-center justify-center overflow-hidden"
+                style={{
+                  background: 'linear-gradient(180deg, #000000 0%, #151718 100%)',
+                  boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.2)',
+                }}
+              >
                 <img
                   src="/logo.png"
                   alt="MCODE"

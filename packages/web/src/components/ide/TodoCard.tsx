@@ -1,12 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Circle } from 'lucide-react';
+import { Circle, XCircle, AlertTriangle } from 'lucide-react';
 
 interface TodoItem {
   id?: string | number;
   title?: string;
   description?: string;
   status?: string;
+  error?: string;
 }
 export interface TodoCardProps {
   plan?: {
@@ -71,9 +72,22 @@ export function TodoCard({ plan }: TodoCardProps) {
         {plan.todos.map((todo, idx) => {
           const isDone = todo.status === 'done';
           const isRunning = todo.status === 'in_progress';
+          const isFailed = todo.status === 'failed';
+          const isNeedsReview = todo.status === 'needs_review';
+
+          let borderClass = 'hover:bg-white/5';
+          if (isFailed) {
+            borderClass = 'border border-red-500/30 bg-red-500/5';
+          } else if (isNeedsReview) {
+            borderClass = 'border border-amber-500/30 bg-amber-500/5';
+          }
 
           return (
-            <div key={todo.id != null && String(todo.id).trim() ? String(todo.id) : `todo-item-${idx}`} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+            <div
+              key={todo.id != null && String(todo.id).trim() ? String(todo.id) : `todo-item-${idx}`}
+              className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${borderClass}`}
+              title={isFailed && todo.error ? todo.error : undefined}
+            >
               <div className="mt-0.5 flex-shrink-0">
                 {isDone ? (
                   <motion.div
@@ -113,16 +127,39 @@ export function TodoCard({ plan }: TodoCardProps) {
                     }}
                     className="w-4 h-4 rounded-full bg-blue-400"
                   />
+                ) : isFailed ? (
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                  >
+                    <XCircle className="w-4 h-4 text-red-400" />
+                  </motion.div>
+                ) : isNeedsReview ? (
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                  >
+                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  </motion.div>
                 ) : (
                   <Circle className="w-4 h-4 text-white/20" />
                 )}
               </div>
-              <div className="flex flex-col min-w-0">
-                <span className={`text-sm font-medium ${isDone ? 'text-white/40 line-through' : 'text-white/80'}`}>
-                  {todo.title}
-                </span>
-                <span className="text-[11px] text-white/40 truncate">
-                  {todo.description}
+              <div className="flex flex-col min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${isDone ? 'text-white/40 line-through' : isFailed ? 'text-red-300' : 'text-white/80'}`}>
+                    {todo.title}
+                  </span>
+                  {isNeedsReview && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                      Needs review
+                    </span>
+                  )}
+                </div>
+                <span className={`text-[11px] truncate ${isFailed ? 'text-red-400/80 font-mono' : 'text-white/40'}`}>
+                  {isFailed && todo.error ? `Error: ${todo.error}` : todo.description}
                 </span>
               </div>
             </div>

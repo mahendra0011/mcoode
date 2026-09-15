@@ -22,7 +22,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body className="m-0 bg-[#0c0c0c] text-white antialiased overflow-x-hidden">
         <Providers>{children}</Providers>
         <McodeStartupOverlay />
