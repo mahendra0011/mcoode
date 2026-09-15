@@ -8,6 +8,24 @@ export interface ComparisonRow {
   state: 'done' | 'incomplete' | 'checking';
 }
 
+export interface EquivalenceCheck {
+  feature: string;
+  regressed?: boolean;
+  reason?: string;
+}
+
+/**
+ * Maps migration equivalence results into rows suitable for ComparisonTable.
+ * A 'regressed' row maps to 'incomplete' (✗), and 'unchanged' maps to 'done' (✓).
+ */
+export function toComparisonRows(equivalenceResults: EquivalenceCheck[]): ComparisonRow[] {
+  return equivalenceResults.map((r) => ({
+    id: r.feature,
+    text: r.reason || r.feature,
+    state: r.regressed ? 'incomplete' : 'done'
+  }));
+}
+
 export function ComparisonTable({
   rows,
   pass,

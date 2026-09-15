@@ -31,7 +31,7 @@ function sanitizeToolArgs(args: any): any {
 }
 
 type Status = 'idle' | 'connecting' | 'ready' | 'error';
-type Mode = 'chat' | 'agent';
+type Mode = 'chat' | 'agent' | 'plan' | 'explain' | 'review';
 
 export interface Model { ref?: string; id?: string; provider?: string; name?: string }
 export interface TodoItem { id: string | number; status: string; [k: string]: unknown }
@@ -49,9 +49,10 @@ export interface Plan {
 export interface PermissionRequest {
   requestId?: string;
   status?: string;
-  kind?: 'shell' | 'plan-approval' | 'security-audit' | 'playwright-audit';
+  kind?: 'shell' | 'plan-approval' | 'security-audit' | 'playwright-audit' | 'security-fix';
   command?: string;
   planSummary?: string;
+  count?: number;
   [k: string]: unknown;
 }
 export interface RoleAssignment {
@@ -192,6 +193,54 @@ interface ChatState {
     deepFindings: DeepFinding[];
     reportUrl: string | null;
   };
+
+  // WEB Security Checkup Mode (doc 47)
+  securityCheckup: {
+    running: boolean;
+    findings: import('../components/ide/SecurityChecklistCard').SecurityFinding[];
+    passed: Array<{ id: string; category: string; label: string }>;
+    reportUrl: string | null;
+    fixing: boolean;
+    fixResults: any[] | null;
+  };
+
+  // WEB Test Mode (doc 48) — autonomous self-healing testing agent
+  testMode: {
+    selecting: boolean;
+    running: boolean;
+    types: string[];
+    inventoryCount: number;
+    features: import('../components/ide/AutonomousTestPanel').TestFeatureStatus[];
+    traditional: import('../components/ide/AutonomousTestPanel').TestTraditional[];
+    summary: import('../components/ide/AutonomousTestPanel').TestModeSummary | null;
+    reportUrl: string | null;
+    targetUrl: string | null;
+  };
+
+  // WEB Review Mode (doc 49)
+  reviewFindings: import('../components/ide/ReviewFindingsCard').ReviewFinding[];
+  reviewRunning: boolean;
+
+  // WEB Migrate Mode (doc 51)
+  migration: {
+    running: boolean;
+    stage: string;
+    pass: number;
+    maxPasses: number;
+    equivalenceRows: ComparisonRow[];
+    equivalent: boolean | null;
+    summary: any | null;
+  };
+
+  // WEB Audit Mode (doc 52)
+  audit: {
+    running: boolean;
+    grades: Record<string, string>;
+    overallGrade: string;
+    results: Record<string, any>;
+    reportUrl: string | null;
+    pdfUrl: string | null;
+  } | null;
 }
 
 const initialState: ChatState = {
@@ -246,6 +295,45 @@ const initialState: ChatState = {
     deepFindings: [],
     reportUrl: null,
   },
+
+  // WEB Security Checkup Mode initial state (doc 47)
+  securityCheckup: {
+    running: false,
+    findings: [],
+    passed: [],
+    reportUrl: null,
+    fixing: false,
+    fixResults: null,
+  },
+
+  // WEB Test Mode initial state (doc 48)
+  testMode: {
+    selecting: false,
+    running: false,
+    types: [],
+    inventoryCount: 0,
+    features: [],
+    traditional: [],
+    summary: null,
+    reportUrl: null,
+    targetUrl: null,
+  },
+
+  // WEB Review Mode initial state (doc 49)
+  reviewFindings: [],
+  reviewRunning: false,
+
+  // WEB Migrate Mode initial state (doc 51)
+  migration: {
+    running: false,
+    stage: 'idle',
+    pass: 1,
+    maxPasses: 5,
+    equivalenceRows: [],
+    equivalent: null,
+    summary: null,
+  },
+  audit: null,
 };
 
 const chatSlice = createSlice({
@@ -875,6 +963,196 @@ const chatSlice = createSlice({
       if (action.payload?.reportUrl) {
         state.bugcheck.reportUrl = action.payload.reportUrl;
       }
+    },
+    // WEB Security Checkup Mode reducers (doc 47)
+    securityCheckStarted: (state) => {
+      state.securityCheckup.running = true;
+      state.securityCheckup.findings = [];
+      state.securityCheckup.passed = [];
+      state.securityCheckup.reportUrl = null;
+      state.securityCheckup.fixResults = null;
+    },
+    securityCheckDone: (state, action) => {
+      state.securityCheckup.running = false;
+      state.securityCheckup.findings = action.payload?.findings || [];
+      state.securityCheckup.passed = action.payload?.passed || [];
+      state.securityCheckup.reportUrl = action.payload?.reportUrl || null;
+    },
+    securityFixStarted: (state) => {
+      state.securityCheckup.fixing = true;
+    },
+    securityFixDone: (state, action) => {
+      state.securityCheckup.fixing = false;
+      state.securityCheckup.fixResults = action.payload?.results || null;
+      if (action.payload?.updatedFindings) {
+        state.securityCheckup.findings = action.payload.updatedFindings;
+      }
+      if (action.payload?.reportUrl) {
+        state.securityCheckup.reportUrl = action.payload.reportUrl;
+      }
+    },
+    securityCheckDismissed: (state) => {
+      state.securityCheckup.findings = [];
+      state.securityCheckup.running = false;
+    },
+    // WEB Test Mode reducers (doc 48)
+    testModeSelectorOpened: (state) => {
+      state.testMode.selecting = true;
+    },
+    testModeSelectorClosed: (state) => {
+      state.testMode.selecting = false;
+    },
+    testModeStarted: (state, action) => {
+      state.testMode.selecting = false;
+      state.testMode.running = true;
+      state.testMode.types = action.payload?.types || [];
+      state.testMode.inventoryCount = 0;
+      state.testMode.features = [];
+      state.testMode.traditional = [];
+      state.testMode.summary = null;
+      state.testMode.reportUrl = null;
+      state.testMode.targetUrl = action.payload?.targetUrl || null;
+    },
+    testInventorySet: (state, action) => {
+      const features = action.payload?.features || [];
+      state.testMode.inventoryCount = features.length;
+      state.testMode.features = features.map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        route: f.route,
+        status: 'pending',
+        selfHealed: 0,
+        steps: [],
+      }));
+    },
+    testFeatureUpdate: (state, action) => {
+      const p = action.payload || {};
+      const featureId = String(p.featureId || '');
+      const byId = (f: any) => String(f.id) === featureId;
+      // ensure the feature exists (inventory may not have listed it)
+      if (featureId && !state.testMode.features.some(byId)) {
+        state.testMode.features.push({
+          id: featureId,
+          name: p.feature || featureId,
+          route: p.route,
+          status: 'running',
+          selfHealed: 0,
+          steps: [],
+        });
+      }
+      const feature = state.testMode.features.find(byId);
+      if (!feature) return;
+      if (p.status) feature.status = p.status;
+      if (p.selfHealed !== undefined) feature.selfHealed = p.selfHealed;
+      if (p.error !== undefined) feature.error = p.error;
+      if (p.desc) {
+        feature.steps = [...(feature.steps || []), { desc: p.desc, status: p.stepStatus || 'ok' }];
+      }
+    },
+    testTraditionalUpdate: (state, action) => {
+      const p = action.payload || {};
+      const existing = state.testMode.traditional.find((t) => t.kind === p.kind);
+      if (existing) {
+        Object.assign(existing, p);
+      } else {
+        state.testMode.traditional.push(p);
+      }
+    },
+    testModeSummary: (state, action) => {
+      state.testMode.running = false;
+      state.testMode.summary = action.payload || null;
+      if (action.payload?.reportFileName) {
+        state.testMode.reportUrl = `/api/v1/workspaces/report/${action.payload.reportFileName}`;
+      }
+      // Sync final per-feature statuses from the authoritative summary
+      const finalFeatures = action.payload?.autonomous || [];
+      for (const r of finalFeatures) {
+        const feature = state.testMode.features.find((f: any) => String(f.id) === String(r.featureId) || f.name === r.feature);
+        if (feature) {
+          feature.status = r.status;
+          feature.selfHealed = r.selfHealed || feature.selfHealed;
+          if (r.error) feature.error = r.error;
+        }
+      }
+    },
+    testModeReset: (state) => {
+      state.testMode.selecting = false;
+      state.testMode.running = false;
+      state.testMode.features = [];
+      state.testMode.traditional = [];
+      state.testMode.summary = null;
+      state.testMode.reportUrl = null;
+      state.testMode.inventoryCount = 0;
+    },
+    // WEB Review Mode reducers (doc 49)
+    reviewStarted: (state) => {
+      state.reviewRunning = true;
+      state.reviewFindings = [];
+    },
+    reviewDone: (state, action) => {
+      state.reviewRunning = false;
+      state.reviewFindings = action.payload?.findings || [];
+    },
+    reviewDismissed: (state) => {
+      state.reviewRunning = false;
+      state.reviewFindings = [];
+    },
+    // WEB Migrate Mode reducers (doc 51)
+    migrationStarted: (state) => {
+      state.migration.running = true;
+      state.migration.stage = 'starting';
+      state.migration.equivalenceRows = [];
+      state.migration.equivalent = null;
+      state.migration.pass = 1;
+      state.migration.summary = null;
+    },
+    migrationStatusUpdated: (state, action) => {
+      if (action.payload.stage) state.migration.stage = action.payload.stage;
+      if (action.payload.pass) state.migration.pass = action.payload.pass;
+      if (action.payload.maxPasses) state.migration.maxPasses = action.payload.maxPasses;
+    },
+    migrationPassResult: (state, action) => {
+      if (action.payload.pass) state.migration.pass = action.payload.pass;
+      if (action.payload.maxPasses) state.migration.maxPasses = action.payload.maxPasses;
+      if (Array.isArray(action.payload.rows)) {
+        state.migration.equivalenceRows = action.payload.rows;
+      }
+    },
+    migrationDone: (state, action) => {
+      state.migration.running = false;
+      state.migration.stage = 'done';
+      state.migration.equivalent = action.payload?.equivalent ?? null;
+      state.migration.summary = action.payload || null;
+    },
+    migrationDismissed: (state) => {
+      state.migration.running = false;
+      state.migration.stage = 'idle';
+      state.migration.equivalenceRows = [];
+      state.migration.equivalent = null;
+    },
+    // WEB Audit Mode reducers (doc 52)
+    auditStarted: (state) => {
+      state.audit = {
+        running: true,
+        grades: {},
+        overallGrade: '',
+        results: {},
+        reportUrl: null,
+        pdfUrl: null
+      };
+    },
+    auditDone: (state, action) => {
+      state.audit = {
+        running: false,
+        grades: action.payload?.grades || {},
+        overallGrade: action.payload?.overallGrade || 'A',
+        results: action.payload?.results || {},
+        reportUrl: action.payload?.reportUrl || null,
+        pdfUrl: action.payload?.pdfUrl || null
+      };
+    },
+    auditDismissed: (state) => {
+      state.audit = null;
     }
   }
 });
@@ -937,6 +1215,35 @@ export const {
   bugcheckTierStarted,
   bugcheckTierDone,
   bugcheckDone,
+  // Security checkup mode (doc 47)
+  securityCheckStarted,
+  securityCheckDone,
+  securityFixStarted,
+  securityFixDone,
+  securityCheckDismissed,
+  // Test mode (doc 48)
+  testModeSelectorOpened,
+  testModeSelectorClosed,
+  testModeStarted,
+  testInventorySet,
+  testFeatureUpdate,
+  testTraditionalUpdate,
+  testModeSummary,
+  testModeReset,
+  // Review mode (doc 49)
+  reviewStarted,
+  reviewDone,
+  reviewDismissed,
+  // Migrate mode (doc 51)
+  migrationStarted,
+  migrationStatusUpdated,
+  migrationPassResult,
+  migrationDone,
+  migrationDismissed,
+  // Audit mode (doc 52)
+  auditStarted,
+  auditDone,
+  auditDismissed,
   addToast,
   removeToast
 } = chatSlice.actions;

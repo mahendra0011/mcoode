@@ -172,6 +172,25 @@ function ToolCallAccordion({ content, toolName, isStreaming }: { content: string
  * MessageContent — renders messages as Markdown with syntax highlighting.
  * Uses Claude and Perplexity style web search/fetch widgets and cleans all raw tags.
  */
+import { useIDEStore } from "../../store/ideStore";
+
+function isLikelyFilePath(text: string): boolean {
+  if (typeof text !== "string") return false;
+  const trimmed = text.trim();
+  if (trimmed.length < 3 || trimmed.length > 120 || trimmed.includes("\n") || trimmed.includes(" ")) return false;
+  return (
+    /\b[\w.-]+\.(?:js|jsx|ts|tsx|json|md|css|html|py|go|rs|yml|yaml|sh|sql)\b/i.test(trimmed) ||
+    /(?:^|[\\/])[\w.-]+\/[\w.-]+/i.test(trimmed)
+  );
+}
+
+function openInEditor(filePath: string) {
+  const clean = filePath.replace(/^[./\\]+/, "").trim();
+  useIDEStore.getState().addOpenFile(clean);
+  useIDEStore.getState().setActivePath(clean);
+  useIDEStore.getState().setWelcomeOpen(false);
+}
+
 export function MessageContent({ msg, text, size = "md", isStreaming = false, children }: MessageContentProps) {
   const [copied, setCopied] = useState(false);
   const textSize = size === "sm" ? "text-[13px]" : "text-[15px]";
@@ -183,6 +202,20 @@ export function MessageContent({ msg, text, size = "md", isStreaming = false, ch
         const isInline = inline || !match;
 
         if (isInline) {
+          const rawText = String(codeChildren || "").trim();
+          if (isLikelyFilePath(rawText)) {
+            return (
+              <button
+                type="button"
+                onClick={() => openInEditor(rawText)}
+                className="text-cyan-400 hover:underline font-mono text-[11px] bg-white/[0.06] px-1.5 py-0.5 rounded cursor-pointer inline-flex items-center"
+                title={`Open ${rawText} in editor`}
+              >
+                {codeChildren}
+              </button>
+            );
+          }
+
           return (
             <code
               className="px-1.5 py-0.5 rounded bg-white/[0.06] text-emerald-300 font-mono text-[0.88em] whitespace-pre-wrap"

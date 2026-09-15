@@ -14,7 +14,7 @@ describe('ModelRouter with only the mock provider', () => {
   });
 
   it('picks mock:mock for any domain', async () => {
-    for (const domain of ['frontend', 'backend', 'db', 'devops', 'test', 'docs', 'bugfix', 'planning']) {
+    for (const domain of ['frontend', 'backend', 'db', 'devops', 'test', 'docs', 'bugfix', 'planning', 'reviewer', 'migration']) {
       const picked = await router.pick(domain);
       expect(picked.provider.id).toBe('mock');
       expect(picked.model.id).toBe('mock');

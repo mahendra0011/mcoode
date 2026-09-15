@@ -11,7 +11,8 @@ import { access } from 'node:fs/promises';
 // Shebangs can't pass flags reliably (esp. on Windows), so re-spawn once with
 // the flag if missing. If the current Node.js is too old, search for a
 // compatible binary at common locations before giving up.
-const needsRespan = !process.execArgv.includes('--experimental-ffi') && !process.env.MCCODE_FFI_RESPAWNED;
+const isCliSubcommand = process.argv.slice(2).some(arg => !arg.startsWith('-') || arg === '--help' || arg === '-h');
+const needsRespan = !isCliSubcommand && (process.argv.length <= 2) && !process.execArgv.includes('--experimental-ffi') && !process.env.MCCODE_FFI_RESPAWNED;
 
 function majorVersion() {
   const [major] = process.versions.node.split('.').map(Number);

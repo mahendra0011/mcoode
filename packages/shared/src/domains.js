@@ -6,7 +6,9 @@ export const TASK_DOMAINS = Object.freeze([
   'devops',
   'test',
   'docs',
-  'bugfix'
+  'bugfix',
+  'reviewer',
+  'migration'
 ]);
 
 /** Hex colors shared 1:1 between terminal UI and web app. */
@@ -18,7 +20,9 @@ export const DOMAIN_COLORS = Object.freeze({
   devops: '#6b7280',
   test: '#2dd4bf',
   docs: '#4ade80',
-  bugfix: '#ff6b6b'
+  bugfix: '#ff6b6b',
+  reviewer: '#38bdf8',
+  migration: '#f59e0b'
 });
 
 export const DOMAIN_TAGS = Object.freeze({
@@ -29,7 +33,9 @@ export const DOMAIN_TAGS = Object.freeze({
   devops: 'devops',
   test: 'test',
   docs: 'docs',
-  bugfix: 'bugfix'
+  bugfix: 'bugfix',
+  reviewer: 'reviewer',
+  migration: 'migration'
 });
 
 /** Default model preferences per task type. Entries are tried top-down.
@@ -83,6 +89,18 @@ export const DEFAULT_ROUTING = Object.freeze({
     'deepseek:deepseek-v4-flash-0731',
     'groq:llama-3.3-70b-versatile',
     'anthropic:claude-haiku-4-5',
+    'mock:mock'
+  ],
+  reviewer: [
+    'anthropic:claude-sonnet-5',
+    'openai:gpt-5.5',
+    'deepseek:deepseek-v4-pro',
+    'mock:mock'
+  ],
+  migration: [
+    'anthropic:claude-sonnet-5',
+    'openai:gpt-5.5',
+    'deepseek:deepseek-v4-pro',
     'mock:mock'
   ]
 });

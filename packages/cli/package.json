@@ -16,7 +16,14 @@
     "./audit": "./src/core/audit.js",
     "./watch-daemon": "./src/core/watch-daemon.js",
     "./subagent-manager": "./src/core/subagent-manager.js",
-    "./techstack": "./src/core/techstack.js"
+    "./techstack": "./src/core/techstack.js",
+    "./security-checkup": "./src/core/security-checkup/index.js",
+    "./checklist": "./src/core/security-checkup/checklist.js",
+    "./test-mode": "./src/core/test-mode/index.js",
+    "./review": "./src/core/review/index.js",
+    "./explain": "./src/core/explain/index.js",
+    "./migrate": "./src/core/migrate/index.js",
+    "./audit-mode": "./src/core/audit/index.js"
   },
   "bin": {
     "mcode": "bin/mcode.mjs"
@@ -49,6 +56,7 @@
     "execa": "^9.5.2",
     "gradient-string": "^3.0.0",
     "playwright": "^1.62.1",
+    "pdfkit": "^0.15.2",
     "react": "^19.2.0",
     "simple-git": "^3.27.0",
     "socket.io-client": "^4.8.1"

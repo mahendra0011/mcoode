@@ -94,11 +94,21 @@ export async function run(argv) {
 
   program
     .command('test')
-    .description('run the test script')
-    .option('--changed', 'only test files changed since the last commit', false)
+    .description('test mode: autonomous self-healing testing agent (asks what to test first)')
+    .option('--changed', 'legacy: only run npm test on files changed since the last commit', false)
+    .option('--npm', 'legacy: run the project\'s own npm test script', false)
+    .option('--types <list>', 'comma-separated test types (unit,integration,load,a11y,autonomous) — skips the prompt')
+    .option('--target <url>', 'target URL of the running app (default: http://localhost:3000 or testMode.targetUrl)')
+    .option('--allow-remote', 'explicitly allow targeting a non-local/staging URL', false)
     .action(async (opts) => {
       const { testCommand } = await import('./commands/test.js');
-      await testCommand({ changed: opts.changed });
+      await testCommand({
+        changed: opts.changed,
+        npm: opts.npm,
+        types: opts.types ? opts.types.split(',').map((t) => t.trim()).filter(Boolean) : null,
+        target: opts.target,
+        allowRemote: opts.allowRemote
+      });
     });
 
   program
@@ -299,6 +309,122 @@ export async function run(argv) {
     .action(async (opts) => {
       const { shipCommand } = await import('./commands/ship.js');
       await shipCommand({ env: opts.env, yes: opts.yes });
+    });
+
+  // ── Security checkup ──────────────────────────────────────────────────
+  program
+    .command('security-check')
+    .alias('security')
+    .description('exhaustive, industry-standard security checkup scan')
+    .option('-c, --category <category>', 'scope to specific category (auth, http-hardening, injection, data-protection, dependencies, data-leak)')
+    .option('--json', 'machine-readable output', false)
+    .option('--no-fix', 'skip interactive auto-fix prompt', false)
+    .option('-y, --yes', 'auto-fix all detected issues without prompt', false)
+    .action(async (opts, cmd) => {
+      const allOpts = cmd?.optsWithGlobals ? cmd.optsWithGlobals() : { ...program.opts(), ...opts };
+      const isJson = Boolean(allOpts.json || isJsonMode());
+      setJsonMode(isJson);
+      const { securityCheckCommand } = await import('./commands/security-check.js');
+      await securityCheckCommand({
+        category: allOpts.category,
+        asJson: isJson,
+        noFix: allOpts.fix === false || allOpts.noFix,
+        yes: allOpts.yes
+      });
+    });
+
+  // ── Review mode (doc 49) ──────────────────────────────────────────────
+  program
+    .command('review [target]')
+    .description('review uncommitted changes, a GitHub PR, or a file')
+    .option('--pr <number>', 'review a GitHub pull request by number')
+    .option('--json', 'machine-readable output', false)
+    .action(async (target, opts, cmd) => {
+      const allOpts = cmd?.optsWithGlobals ? cmd.optsWithGlobals() : { ...program.opts(), ...opts };
+      const isJson = Boolean(allOpts.json || isJsonMode());
+      setJsonMode(isJson);
+      const { reviewCommand } = await import('./commands/review.js');
+      await reviewCommand(target, { pr: allOpts.pr, asJson: isJson });
+    });
+
+  // ── Explain mode (doc 50) ─────────────────────────────────────────────
+  program
+    .command('explain [target]')
+    .description('explain a file, concept, or generate an onboarding tour')
+    .option('--tour', 'generate a full onboarding walkthrough of the project', false)
+    .action(async (target, opts) => {
+      const { explainCommand } = await import('./commands/explain.js');
+      await explainCommand(target, { tour: opts.tour });
+    });
+
+  // ── Migrate mode (doc 51) ─────────────────────────────────────────────
+  program
+    .command('migrate <prompt>')
+    .description('migrate mode: large structural change preserving exact behavioral equivalence')
+    .option('-y, --yes', 'skip plan confirmation prompt', false)
+    .option('--json', 'machine-readable JSON output', false)
+    .option('--max-passes <n>', 'max equivalence verification passes', (v) => Number(v) || 5, 5)
+    .action(async (prompt, opts, cmd) => {
+      const allOpts = cmd?.optsWithGlobals ? cmd.optsWithGlobals() : { ...program.opts(), ...opts };
+      const isJson = Boolean(allOpts.json || isJsonMode());
+      setJsonMode(isJson);
+      const { migrateCommand } = await import('./commands/migrate.js');
+      await migrateCommand(prompt, {
+        yes: Boolean(allOpts.yes),
+        asJson: isJson,
+        maxPasses: allOpts.maxPasses
+      });
+    });
+
+  // ── Clean mode (doc 55) ───────────────────────────────────────────────
+  program
+    .command('clean')
+    .description('clean mode: dead code and AI-bloat detection & removal')
+    .option('--dead-code-only', 'skip AI bloat detection (Tier 1 only)', false)
+    .option('--dry-run', 'report only, no fixes offered', false)
+    .option('-y, --yes', 'automatically clean all findings without confirmation', false)
+    .option('--json', 'machine-readable JSON output', false)
+    .action(async (opts, cmd) => {
+      const allOpts = cmd?.optsWithGlobals ? cmd.optsWithGlobals() : { ...program.opts(), ...opts };
+      const isJson = Boolean(allOpts.json || isJsonMode());
+      setJsonMode(isJson);
+      const { cleanCommand } = await import('./commands/clean.js');
+      await cleanCommand({
+        deadCodeOnly: Boolean(allOpts.deadCodeOnly),
+        dryRun: Boolean(allOpts.dryRun),
+        yes: Boolean(allOpts.yes),
+        asJson: isJson,
+      });
+    });
+
+
+  // ── Audit mode (doc 52) ───────────────────────────────────────────────
+  program
+    .command('audit')
+    .description('audit mode: full project health check (security, performance, a11y, dependencies, quality) without modifying code')
+    .option('--security-only', 'scan security category only', false)
+    .option('--perf-only', 'scan performance category only', false)
+    .option('--a11y-only', 'scan accessibility category only', false)
+    .option('--deps-only', 'scan dependencies category only', false)
+    .option('--quality-only', 'scan code quality category only', false)
+    .option('-c, --category <name>', 'comma-separated categories to audit')
+    .option('--pdf', 'export audit report as a PDF document', false)
+    .option('--json', 'machine-readable JSON output', false)
+    .action(async (opts, cmd) => {
+      const allOpts = cmd?.optsWithGlobals ? cmd.optsWithGlobals() : { ...program.opts(), ...opts };
+      const isJson = Boolean(allOpts.json || isJsonMode());
+      setJsonMode(isJson);
+      const { auditCommand } = await import('./commands/audit.js');
+      await auditCommand({
+        securityOnly: Boolean(allOpts.securityOnly),
+        perfOnly: Boolean(allOpts.perfOnly),
+        a11yOnly: Boolean(allOpts.a11yOnly),
+        depsOnly: Boolean(allOpts.depsOnly),
+        qualityOnly: Boolean(allOpts.qualityOnly),
+        category: allOpts.category,
+        pdf: Boolean(allOpts.pdf),
+        asJson: isJson
+      });
     });
 
   // ── Interactive onboarding / login ────────────────────────────────────

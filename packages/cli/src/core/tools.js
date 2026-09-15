@@ -7,12 +7,14 @@ import { redactSecrets, isNetworkAllowed } from './security.js';
 import { scoreRisk, RISK_LEVELS } from './audit.js';
 import { BrowserTool } from './browser-tool.js';
 
+export const WRITE_TOOLS = Object.freeze(['write_file', 'edit_file', 'run_shell']);
+
 /**
  * Scoped toolset handed to subagents. Writes go through a snapshot +
  * diff-preview layer so `/undo` can revert any todo's changes.
  */
 export class ToolExecutor {
-  constructor({ projectPath, bus = null, undoStack = null, allowShellAll = false, requireEditApproval = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null, memoryDir = null }) {
+  constructor({ projectPath = process.cwd(), bus = null, undoStack = null, allowShellAll = false, requireEditApproval = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null, memoryDir = null, mode = null, readOnly = false } = {}) {
     this.projectPath = resolve(projectPath);
     this.bus = bus;
     this.undoStack = undoStack;
@@ -24,6 +26,8 @@ export class ToolExecutor {
     this.networkWhitelist = networkWhitelist;
     this.auditLog = auditLog;
     this.memoryDir = memoryDir;
+    this.mode = mode;
+    this.readOnly = Boolean(readOnly || mode === 'review' || mode === 'explain' || mode === 'plan');
     this.browserTool = null; // lazily created
   }
 
@@ -43,7 +47,8 @@ export class ToolExecutor {
       t.memory_write = { description: 'Save a stable, lasting fact the user shared (their name, preferences, project details) to long-term memory — only for specific permanent facts, NOT random per-turn notes', parameters: { fact: 'string' } };
       t.memory_read = { description: 'Read facts previously saved to long-term user memory (optionally filtered by a keyword)', parameters: { key: 'string?' } };
     }
-    if (this.domain !== 'chat' && this.domain !== 'docs') {
+    const isReadOnly = this.domain === 'chat' || this.domain === 'docs' || this.readOnly;
+    if (!isReadOnly) {
       t.write_file = { description: 'Write a file (creates parent dirs)', parameters: { path: 'string', content: 'string' } };
       t.edit_file = { description: 'Edit a file by replacing text', parameters: { path: 'string', old: 'string', new: 'string' } };
       t.run_shell = { description: 'Run a shell command inside the project (npm install, build, etc.)', parameters: { command: 'string' } };
@@ -74,6 +79,10 @@ export class ToolExecutor {
   }
 
   async run(name, args) {
+    if (this.readOnly && WRITE_TOOLS.includes(name)) {
+      return { ok: false, error: `write tools are blocked in ${this.mode || this.domain || 'read-only'} mode` };
+    }
+
     const start = Date.now();
     const { score, level } = scoreRisk(name, args);
     this.bus?.emit(EVENTS.SUBAGENT_TOOL_CALL, { tool: name, args: JSON.stringify(args).slice(0, 200), risk: level });

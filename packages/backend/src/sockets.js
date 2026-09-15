@@ -285,6 +285,289 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }, 100);
     });
 
+    // ── Security Checkup Mode (doc 47) ───────────────────────────
+    socket.on('security:check', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      if (!projectPath && payload.projectId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
+          if (ws?.diskPath) projectPath = ws.diskPath;
+        } catch {}
+      }
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
+      try {
+        const { runSecurityCheck, saveReport } = await import('mcode-cli/security-checkup');
+        const results = await runSecurityCheck({ projectPath, category: payload.category });
+        const { reportFileName } = saveReport(results, projectPath);
+        const reportUrl = `/api/v1/workspaces/report/${reportFileName}`;
+        socket.emit('security:findings', { ...results, reportUrl });
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit('security:findings', { ...results, reportUrl });
+        }
+      } catch (err) {
+        socket.emit('chat:error', { message: `Security checkup failed: ${err.message}` });
+      }
+    });
+
+    socket.on('security:fix-selected', async ({ ids, projectId }) => {
+      if (!ids || ids.length === 0) return;
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      if (!projectPath && projectId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(projectId) });
+          if (ws?.diskPath) projectPath = ws.diskPath;
+        } catch {}
+      }
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
+      const { CHECKLIST, fixFinding, reCheckSelected, runSecurityCheck, saveReport } = await import('mcode-cli/security-checkup');
+      const planSummary = ids
+        .map((id) => {
+          const c = CHECKLIST.find((item) => item.id === id);
+          return c ? `• ${c.label}` : `• ${id}`;
+        })
+        .join('\n');
+
+      // Permission gate (doc 33 kind discriminator)
+      const permitted = await new Promise((resolve) => {
+        if (session?.config?.allowShellAll || session?.config?.permissionMode === 'full') {
+          return resolve(true);
+        }
+        const requestId = `secfix-perm-${Date.now()}`;
+        const onAnswer = (payload = {}) => {
+          if (payload.requestId === requestId) {
+            socket.off('chat:permission_answer', onAnswer);
+            resolve(payload.answer === 'yes' || payload.answer === 'always');
+          }
+        };
+        socket.on('chat:permission_answer', onAnswer);
+        setTimeout(() => {
+          socket.off('chat:permission_answer', onAnswer);
+          resolve(false);
+        }, 60000);
+
+        socket.emit('chat:permission', {
+          requestId,
+          status: 'running',
+          kind: 'security-fix',
+          count: ids.length,
+          planSummary
+        });
+      });
+
+      if (!permitted) return;
+
+      const todos = ids.map((id) => ({
+        id: `secfix-${id}`,
+        title: `Fix: ${CHECKLIST.find((c) => c.id === id)?.label || id}`,
+        domain: 'security'
+      }));
+
+      for (const todo of todos) {
+        const id = todo.id.replace('secfix-', '');
+        const finding = CHECKLIST.find((c) => c.id === id);
+        await fixFinding(finding || id, projectPath);
+      }
+
+      const reVerified = await reCheckSelected(ids, projectPath);
+      const freshResults = await runSecurityCheck({ projectPath });
+      const { reportFileName } = saveReport(freshResults, projectPath);
+      const reportUrl = `/api/v1/workspaces/report/${reportFileName}`;
+
+      socket.emit('security:fix-complete', {
+        results: reVerified,
+        updatedFindings: freshResults.findings,
+        reportUrl
+      });
+      if (projectId) {
+        io.to(`project:${projectId}`).emit('security:fix-complete', {
+          results: reVerified,
+          updatedFindings: freshResults.findings,
+          reportUrl
+        });
+      }
+    });
+
+    // ── Test Mode (doc 48) — autonomous self-healing testing agent ──
+    socket.on('test:mode:run', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      if (!session) {
+        socket.emit('chat:error', { message: 'chat session not started — send chat:start first' });
+        return;
+      }
+      if (!socket.userId) {
+        socket.emit('chat:error', { message: 'authentication required for test mode' });
+        return;
+      }
+      try {
+        await session.runTestMode(payload.prompt || '', {
+          types: Array.isArray(payload.types) ? payload.types : null,
+          targetUrl: payload.targetUrl || null,
+          allowRemote: Boolean(payload.allowRemote)
+        });
+      } catch (err) {
+        socket.emit('chat:error', { message: err.message });
+        socket.emit('chat:done', { text: '', mode: 'test', interrupted: false, error: true });
+      }
+    });
+
+    // ── Review Mode (doc 49) — senior dev code review ──────────────
+    socket.on('review:run', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      if (!projectPath && payload.projectId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
+          if (ws?.diskPath) projectPath = ws.diskPath;
+        } catch {}
+      }
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
+      try {
+        const { runReview } = await import('mcode-cli/review');
+        const findings = await runReview({
+          scope: payload.scope || 'diff',
+          target: payload.target || null,
+          router: session?.router || null,
+          projectPath
+        });
+        socket.emit('review:result', { findings });
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit('review:result', { findings });
+        }
+      } catch (err) {
+        socket.emit('chat:error', { message: `review failed: ${err.message}` });
+        socket.emit('review:result', { findings: [] });
+      }
+    });
+
+    // ── Migrate Mode (doc 51) ──────────────────────────────────────
+    socket.on('migrate:run', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      if (!projectPath && payload.projectId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
+          if (ws?.diskPath) projectPath = ws.diskPath;
+        } catch {}
+      }
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
+      try {
+        const { runMigrate } = await import('mcode-cli/migrate');
+        const { EventEmitter } = await import('node:events');
+        const bus = new EventEmitter();
+
+        bus.on('MIGRATE_STATUS', (evt) => {
+          socket.emit('migrate:status', evt);
+          if (payload.projectId) {
+            io.to(`project:${payload.projectId}`).emit('migrate:status', evt);
+          }
+        });
+
+        bus.on('MIGRATE_PASS_RESULT', (evt) => {
+          socket.emit('migrate:pass_result', evt);
+          if (payload.projectId) {
+            io.to(`project:${payload.projectId}`).emit('migrate:pass_result', evt);
+          }
+        });
+
+        const result = await runMigrate(payload.prompt, {
+          projectPath,
+          router: session?.router || null,
+          bus,
+          yes: true,
+          maxPasses: payload.maxPasses || 5
+        });
+
+        socket.emit('migrate:complete', result);
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit('migrate:complete', result);
+        }
+      } catch (err) {
+        socket.emit('chat:error', { message: `Migration failed: ${err.message}` });
+        socket.emit('migrate:complete', { equivalent: false, error: err.message });
+      }
+    });
+
+    // ── Audit Mode (doc 52) ────────────────────────────────────────
+    socket.on('audit:run', async (payload = {}) => {
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      if (!projectPath && payload.projectId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
+          if (ws?.diskPath) projectPath = ws.diskPath;
+        } catch {}
+      }
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
+      try {
+        const { runAudit, generateAuditPDF } = await import('mcode-cli/audit-mode');
+        const categories = payload.category ? [payload.category] : undefined;
+        const result = await runAudit(projectPath, { categories });
+
+        let pdfUrl = null;
+        if (payload.pdf) {
+          const { join } = await import('node:path');
+          const dateStr = new Date().toISOString().slice(0, 10);
+          const pdfFileName = `audit-${dateStr}.pdf`;
+          const pdfPath = join(projectPath, '.mcode', 'reports', pdfFileName);
+          await generateAuditPDF(result, pdfPath);
+          pdfUrl = `/api/v1/workspaces/report/${pdfFileName}`;
+        }
+
+        const reportUrl = result.reportFileName ? `/api/v1/workspaces/report/${result.reportFileName}` : null;
+
+        const responsePayload = {
+          ...result,
+          reportUrl,
+          pdfUrl
+        };
+
+        socket.emit('audit:result', responsePayload);
+        if (payload.projectId) {
+          io.to(`project:${payload.projectId}`).emit('audit:result', responsePayload);
+        }
+      } catch (err) {
+        socket.emit('chat:error', { message: `Audit failed: ${err.message}` });
+        socket.emit('audit:result', { grades: {}, overallGrade: 'F', error: err.message });
+      }
+    });
+
+    // ── Pair Mode Structural Suggestion on natural idle pause (doc 53) ────
+    socket.on('pair:idle', async (payload = {}) => {
+      const { fileContent = '', cursorLine = 1, filePath = '', recentEdits = [] } = payload;
+      if (!fileContent) return;
+
+      try {
+        const session = chatSessions.get(socket.id);
+        const { checkForStructuralSuggestion } = await import('./routes/pair.js');
+        const suggestion = await checkForStructuralSuggestion(
+          { fileContent, cursorLine, filePath, recentEdits },
+          { router: session?.router || null }
+        );
+        if (suggestion) {
+          socket.emit('pair:suggestion', suggestion);
+        }
+      } catch {
+        // Silently skip structural error
+      }
+    });
+
     // ── Web Chat / Agent events (authenticated users only) ─────────
     // These bridge the CLI's ChatAgent to web clients via Socket.IO.
     // CLI agents emit events without a token (role='emitter') and don't use chat.
@@ -358,10 +641,16 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         return;
       }
       const { prompt, mode = 'chat' } = payload;
-      if (!prompt) return;
+      if (!prompt && mode !== 'test') return;
       try {
         if (mode === 'god') {
           await session.runGod(prompt);
+        } else if (mode === 'test') {
+          await session.runTestMode(prompt, {
+            types: payload.types || null,
+            targetUrl: payload.targetUrl || null,
+            allowRemote: Boolean(payload.allowRemote)
+          });
         } else {
           await session.sendMessage(prompt, mode);
         }

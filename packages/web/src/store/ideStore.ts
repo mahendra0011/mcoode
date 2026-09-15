@@ -81,6 +81,11 @@ interface IDEState {
   toggleAutoSave: () => void;
   setAutoSaveEnabled: (enabled: boolean) => void;
 
+  // Pair Mode toggle (Doc 53 — inline ghost text & suggestions)
+  pairModeEnabled: boolean;
+  setPairModeEnabled: (enabled: boolean) => void;
+  togglePairMode: () => void;
+
   // Recent files list
   recentFiles: string[];
   addRecentFile: (path: string) => void;
@@ -324,6 +329,10 @@ export const useIDEStore = create<IDEState>()(
   autoSaveEnabled: true,
   toggleAutoSave: () => set((s) => ({ autoSaveEnabled: !s.autoSaveEnabled })),
   setAutoSaveEnabled: (autoSaveEnabled) => set({ autoSaveEnabled }),
+
+  pairModeEnabled: true,
+  setPairModeEnabled: (pairModeEnabled) => set({ pairModeEnabled }),
+  togglePairMode: () => set((s) => ({ pairModeEnabled: !s.pairModeEnabled })),
 
   recentFiles: getInitialRecentFiles(),
   addRecentFile: (path) => {
@@ -652,6 +661,7 @@ export const useIDEStore = create<IDEState>()(
         activePath: state.activePath,
         wordWrap: state.wordWrap,
         autoSaveEnabled: state.autoSaveEnabled,
+        pairModeEnabled: state.pairModeEnabled,
         columnSelection: state.columnSelection,
         multiCursorModifier: state.multiCursorModifier,
         editorLayout: state.editorLayout,

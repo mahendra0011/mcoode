@@ -83,6 +83,54 @@ export class MockProvider extends ModelProvider {
           }
         });
       }
+    } else if (system.includes('TEST_MODE_INVENTORY')) {
+      text = JSON.stringify({
+        features: [
+          { id: 'f1', name: 'Health check', layer: 'backend', route: 'GET /api/health', successCriteria: 'returns 200 with ok status', requiresAuth: false },
+          { id: 'f2', name: 'App root', layer: 'frontend', route: '/', successCriteria: 'renders the landing page without console errors', requiresAuth: false },
+          { id: 'f3', name: 'Dashboard', layer: 'both', route: '/dashboard', successCriteria: 'dashboard loads and shows user data', requiresAuth: true }
+        ]
+      });
+    } else if (system.includes('TEST_MODE_SCRIPT')) {
+      const m = lastUser.match(/"route"\s*:\s*"([^"]+)"/);
+      const route = m ? m[1] : '/';
+      text = JSON.stringify({
+        steps: [
+          { action: 'navigate', target: route },
+          { action: 'wait', target: '500' },
+          { action: 'expect', target: 'body', expectAfter: 'page renders without console errors' }
+        ]
+      });
+    } else if (system.includes('TEST_MODE_UNIT_TESTS')) {
+      text = JSON.stringify({
+        cases: [
+          { name: 'adds numbers correctly', code: 'assert.strictEqual(1 + 2, 3);' },
+          { name: 'concatenates strings', code: 'assert.strictEqual("a" + "b", "ab");' },
+          { name: 'array equality', code: 'assert.deepStrictEqual([1, 2], [1, 2]);' },
+          { name: 'truthy check', code: 'assert.ok({ });' },
+          { name: 'object shape', code: 'assert.deepStrictEqual(Object.keys({ a: 1, b: 2 }).length, 2);' },
+          { name: 'length check', code: 'assert.ok("hello".length === 5);' }
+        ]
+      });
+    } else if (system.includes('TEST_MODE_INTEGRATION_TESTS')) {
+      const routes = (lastUser.match(/"(?:route|path)"\s*:\s*"([^"]+)"/g) || [])
+        .map((s) => s.match(/"([^"]+)"$/)[1])
+        .filter((r) => /^[A-Z]+\s+\//.test(r))
+        .slice(0, 6);
+      text = JSON.stringify({
+        requests: (routes.length ? routes : ['GET /api/health']).map((r) => {
+          const [method, path] = r.split(/\s+/);
+          return { name: `${method} ${path}`, method, path, expectStatus: 200, expectContains: null };
+        })
+      });
+    } else if (system.includes('TEST_MODE_DIAGNOSE')) {
+      text = JSON.stringify({
+        issue: 'element could not be found — likely a removed or renamed selector after a recent refactor',
+        domain: 'frontend',
+        likelyFiles: ['src/components/App.jsx'],
+        summary: 'The automated step failed because the target element is missing from the current DOM.',
+        fixHint: 're-add the missing data-testid/selector or update the component to render the expected element'
+      });
     } else if (system.includes('IMPACT_ANALYSIS')) {
       text = JSON.stringify({ broken: false, reason: 'mock: no issue detected' });
     } else if (system.includes('BUGFIX')) {

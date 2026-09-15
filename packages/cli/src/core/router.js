@@ -44,13 +44,14 @@ export const MODE_REASONING = Object.freeze({
  * Historical scores persist in ~/.mcode/scores/{projectId}/model-scores.json
  */
 const STATIC_BENCHMARK = {
-  'anthropic:claude-3-5-sonnet':  { frontend: 0.88, backend: 0.91, db: 0.85, test: 0.87, bugfix: 0.90, planning: 0.92, docs: 0.80, devops: 0.83 },
-  'anthropic:claude-3-5-haiku':   { frontend: 0.75, backend: 0.80, db: 0.75, test: 0.82, bugfix: 0.78, planning: 0.70, docs: 0.75, devops: 0.72 },
-  'openai:gpt-4o':                { frontend: 0.92, backend: 0.88, db: 0.83, test: 0.91, bugfix: 0.86, planning: 0.85, docs: 0.88, devops: 0.85 },
-  'openai:gpt-4o-mini':           { frontend: 0.80, backend: 0.82, db: 0.78, test: 0.85, bugfix: 0.80, planning: 0.75, docs: 0.82, devops: 0.80 },
-  'google:gemini-2.0-flash':      { frontend: 0.85, backend: 0.89, db: 0.81, test: 0.88, bugfix: 0.83, planning: 0.80, docs: 0.84, devops: 0.89 },
-  'google:gemini-2.0-flash-thinking': { frontend: 0.88, backend: 0.92, db: 0.85, test: 0.90, bugfix: 0.88, planning: 0.85, docs: 0.80, devops: 0.87 },
-  'mock:default':                 { frontend: 0.5, backend: 0.5, db: 0.5, test: 0.5, bugfix: 0.5, planning: 0.5, docs: 0.5, devops: 0.5 }
+  'anthropic:claude-3-5-sonnet':  { frontend: 0.88, backend: 0.91, db: 0.85, test: 0.87, bugfix: 0.90, planning: 0.92, docs: 0.80, devops: 0.83, reviewer: 0.90, migration: 0.91 },
+  'anthropic:claude-3-5-haiku':   { frontend: 0.75, backend: 0.80, db: 0.75, test: 0.82, bugfix: 0.78, planning: 0.70, docs: 0.75, devops: 0.72, reviewer: 0.76, migration: 0.78 },
+  'openai:gpt-4o':                { frontend: 0.92, backend: 0.88, db: 0.83, test: 0.91, bugfix: 0.86, planning: 0.85, docs: 0.88, devops: 0.85, reviewer: 0.85, migration: 0.88 },
+  'openai:gpt-4o-mini':           { frontend: 0.80, backend: 0.82, db: 0.78, test: 0.85, bugfix: 0.80, planning: 0.75, docs: 0.82, devops: 0.80, reviewer: 0.78, migration: 0.79 },
+  'google:gemini-2.0-flash':      { frontend: 0.85, backend: 0.89, db: 0.81, test: 0.88, bugfix: 0.83, planning: 0.80, docs: 0.84, devops: 0.89, reviewer: 0.82, migration: 0.83 },
+  'google:gemini-2.0-flash-thinking': { frontend: 0.88, backend: 0.92, db: 0.85, test: 0.90, bugfix: 0.88, planning: 0.85, docs: 0.80, devops: 0.87, reviewer: 0.86, migration: 0.89 },
+  'deepseek:deepseek-v4-flash':   { frontend: 0.82, backend: 0.88, db: 0.80, test: 0.85, bugfix: 0.88, planning: 0.78, docs: 0.75, devops: 0.80, reviewer: 0.80, migration: 0.82 },
+  'mock:default':                 { frontend: 0.5, backend: 0.5, db: 0.5, test: 0.5, bugfix: 0.5, planning: 0.5, docs: 0.5, devops: 0.5, reviewer: 0.5, migration: 0.5 }
 };
 
 /**
@@ -423,7 +424,7 @@ export class ModelRouter {
     await this._init();
     const allRefs = await this._cacheAllRefs();
     const routingPrefs = this.routing;
-    const domains = ['frontend', 'backend', 'db', 'test', 'bugfix', 'planning', 'docs', 'devops'];
+    const domains = ['frontend', 'backend', 'db', 'test', 'bugfix', 'planning', 'docs', 'devops', 'reviewer'];
 
     const report = [];
     for (const { ref, provider, model } of allRefs) {

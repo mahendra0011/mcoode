@@ -35,6 +35,8 @@ import { searchRoutes } from './routes/search.js';
 import { extensionRoutes } from './routes/extensions.js';
 import { languageRoutes } from './routes/languages.js';
 import { androidRoutes } from './routes/android.js';
+import { pairRoutes, handlePairSuggest } from './routes/pair.js';
+import { promptRoutes } from './routes/prompt.js';
 import { validateEnv } from './config/envValidator.js';
 import { isPistonAvailable } from './piston-client.js';
 import { detectAvailableLanguages } from './host-runner.js';
@@ -161,6 +163,9 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/extensions', extensionRoutes());
   app.use('/api/v1/languages', languageRoutes());
   app.use('/api/v1/android', androidRoutes());
+  app.use('/api/v1/pair', pairRoutes({ secret }));
+  app.post('/api/v1/pair-suggest', (req, res) => handlePairSuggest(req, res, { secret }));
+  app.use('/api/v1/prompt', promptRoutes({ secret }));
 
   app.get('/api/v1/version', (_req, res) => {
     let pkgVersion = '0.1.0';

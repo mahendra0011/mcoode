@@ -317,6 +317,95 @@ export class ChatSession {
     return this.watchDaemon;
   }
 
+  /** Test Mode (doc 48) — autonomous self-healing testing agent, driven from the web.
+   *  Mirrors runGod(): builds a test-mode bus, forwards all TEST_* events to
+   *  the web client, runs the CLI's test-mode core, and emits chat:done. */
+  async runTestMode(prompt, { types = null, targetUrl = null, allowRemote = false } = {}) {
+    const t0 = Date.now();
+    this.onEvent(S2C.CHAT_MESSAGE, {
+      kind: 'system',
+      text: `🧪 test mode: "${String(prompt || 'autonomous self-healing testing').slice(0, 100)}"`,
+      ts: Date.now()
+    });
+
+    // Parse requested types from the prompt when not explicitly given
+    // (e.g. "run autonomous + unit tests" → ['autonomous', 'unit']).
+    let selectedTypes = Array.isArray(types) && types.length > 0 ? types : null;
+    if (!selectedTypes) {
+      const p = String(prompt || '').toLowerCase();
+      selectedTypes = [];
+      if (/autonomous|exploratory|e2e|browser|real user/.test(p)) selectedTypes.push('autonomous');
+      if (/unit/.test(p)) selectedTypes.push('unit');
+      if (/integration/.test(p)) selectedTypes.push('integration');
+      if (/load|performance/.test(p)) selectedTypes.push('load');
+      if (/a11y|accessib/.test(p)) selectedTypes.push('a11y');
+      if (selectedTypes.length === 0) selectedTypes = ['autonomous'];
+    }
+
+    // Test-mode bus — forwards TEST_* events to dedicated S2C socket events
+    const { EVENTS: E } = await import('@mcode/shared');
+    const testEventMap = {
+      [E.TEST_MODE_STARTED]: S2C.TEST_MODE_STARTED,
+      [E.TEST_INVENTORY]: S2C.TEST_INVENTORY,
+      [E.TEST_FEATURE_START]: S2C.TEST_FEATURE_START,
+      [E.TEST_STEP]: S2C.TEST_STEP,
+      [E.TEST_STEP_FAILED]: S2C.TEST_STEP_FAILED,
+      [E.TEST_DIAGNOSIS]: S2C.TEST_DIAGNOSIS,
+      [E.TEST_FEATURE_DONE]: S2C.TEST_FEATURE_DONE,
+      [E.TEST_TRADITIONAL]: S2C.TEST_TRADITIONAL,
+      [E.TEST_MODE_DONE]: S2C.TEST_MODE_DONE
+    };
+    const testBus = new EventEmitter();
+    this._testForwarder = (event, payload) => {
+      const s2c = testEventMap[event];
+      if (s2c) this.onEvent(s2c, payload);
+    };
+    for (const evt of Object.keys(testEventMap)) {
+      testBus.on(evt, this._testForwarder);
+    }
+    // Free-form progress lines go through the normal chat message channel
+    testBus.on('MESSAGE', (msg) => this.onEvent(S2C.CHAT_MESSAGE, { kind: msg.kind || 'system', text: msg.text, ts: Date.now() }));
+
+    try {
+      const { runTestMode: runCore } = await import('mcode-cli/test-mode');
+      const summary = await runCore(selectedTypes, {
+        projectPath: this.workspacePath,
+        router: this.router,
+        config: this.config || {},
+        bus: testBus,
+        undoStack: this.undoStack,
+        auditLog: this.auditLog,
+        ledger: this.router?.ledger || null,
+        targetUrl,
+        allowRemote,
+        headless: true
+      });
+
+      this.onEvent(S2C.TOAST, {
+        kind: summary.needsReview > 0 ? 'warn' : 'ok',
+        text: summary.needsReview > 0
+          ? `Test run complete — ${summary.selfHealedCount} auto-fixed, ${summary.needsReview} need manual review`
+          : `Test run complete — ${summary.selfHealedCount} issue${summary.selfHealedCount === 1 ? '' : 's'} auto-fixed`
+      });
+      this.onEvent(S2C.CHAT_DONE, {
+        text: `Test report saved to ${summary.reportFileName}`,
+        mode: 'test',
+        ...summary
+      });
+      return summary;
+    } catch (err) {
+      this.onEvent(S2C.CHAT_ERROR, { message: `test mode failed: ${err.message}` });
+      this.onEvent(S2C.CHAT_DONE, { text: '', mode: 'test', error: true, interrupted: false });
+      return null;
+    } finally {
+      for (const evt of Object.keys(testEventMap)) {
+        testBus.off(evt, this._testForwarder);
+      }
+      testBus.removeAllListeners();
+      void t0;
+    }
+  }
+
   /** Handle a permission answer from the client. */
   handlePermissionAnswer(payload) {
     if (this.bus) {
@@ -332,7 +421,7 @@ export class ChatSession {
   }
 
   /** Plain LLM chat with limited tools (read/search only) — no writes, no shell. */
-  async runChat(prompt) {
+  async runChat(prompt, mode = 'chat') {
     const assignment = (this.router.modelOverride && await this.router.find(this.router.modelOverride))
       || await this.router.pick('general');
 
@@ -363,39 +452,31 @@ export class ChatSession {
       });
 
       try {
-        const results = await searchAndFetch(prompt, { maxResults: 5 });
-
-        // Emit "reading" phase — sources fetched, spinner + favicon pills
-        this.onEvent(S2C.CHAT_TOOL_CALL, {
-          tool: 'web_search',
-          args: { query: prompt },
-          replaceKey: searchReplaceKey,
-          status: 'running',
-          searchResults: {
-            query: prompt,
-            phase: 'reading',
-            results: results.slice(0, 5).map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
-            answer: ''
-          }
-        });
-
-        webContext = buildContextBlock(results);
-
-        // Emit "done" phase — checkmark + source panel with links
-        this.onEvent(S2C.CHAT_TOOL_CALL, {
-          tool: 'web_search',
-          args: { query: prompt },
-          replaceKey: searchReplaceKey,
-          status: 'done',
-          searchResults: {
-            query: prompt,
-            phase: 'done',
-            results: results.slice(0, 5).map((r) => ({ title: r.title, url: r.url, snippet: r.snippet })),
-            answer: ''
-          }
-        });
+        const { searchResults, fetchedPages } = await searchAndFetch(prompt, { maxResults: 5 });
+        if (searchResults.length > 0) {
+          webContext = buildContextBlock(searchResults, fetchedPages);
+          this.onEvent(S2C.CHAT_TOOL_CALL, {
+            tool: 'web_search',
+            args: { query: prompt },
+            replaceKey: searchReplaceKey,
+            status: 'done',
+            searchResults: {
+              query: prompt,
+              phase: 'done',
+              results: searchResults,
+              answer: ''
+            }
+          });
+        } else {
+          this.onEvent(S2C.CHAT_TOOL_CALL, {
+            tool: 'web_search',
+            args: { query: prompt },
+            replaceKey: searchReplaceKey,
+            status: 'done',
+            searchResults: { query: prompt, phase: 'done', results: [], answer: '' }
+          });
+        }
       } catch (err) {
-        // Search failed — emit done with empty results
         this.onEvent(S2C.CHAT_TOOL_CALL, {
           tool: 'web_search',
           args: { query: prompt },
@@ -411,15 +492,20 @@ export class ChatSession {
     // edit, write, explore, shell, tests, web) so the user sees the same
     // animated step cards as agent mode — but every write/edit/shell still
     // flows through the permission gate before it executes.
+    const isExplain = mode === 'explain';
     const chatConfig = {
       ...this.config,
       allowShellAll: false,
       requireEditApproval: true,
+      domain: isExplain ? 'chat' : (this.config.domain || 'chat'),
+      mode,
       // Send the FULL conversation on every turn (Claude-style: no memory
       // between messages — the whole history goes into context fresh).
       historyLimit: 0,
       // Chat-style behavior: no filler greetings, answer directly.
-      extraRules: `Never open with filler greetings. Always respond directly — start with the answer, keep concise.`
+      extraRules: isExplain
+        ? `Explain code clearly to someone new to this codebase. Be concrete — reference actual function/file names, walk through the logic step by step where helpful, and explain WHY something is designed a certain way when it's not obvious, not just WHAT it does. No code changes, no opinions on quality — pure explanation.`
+        : `Never open with filler greetings. Always respond directly — start with the answer, keep concise.`
     };
 
     // Inject auto-searched web context into the environment so the model has
@@ -467,7 +553,7 @@ export class ChatSession {
         text: out.text,
         turns: out.turns,
         interrupted: Boolean(out.interrupted),
-        mode: 'chat'
+        mode
       });
     } finally {
       this.chatAgent = null;
@@ -581,7 +667,7 @@ export class ChatSession {
       if (mode === 'agent') {
         await this.runAgent(prompt);
       } else {
-        await this.runChat(prompt);
+        await this.runChat(prompt, mode);
       }
     } finally {
       this.running = false;

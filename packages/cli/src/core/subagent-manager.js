@@ -354,6 +354,27 @@ export class SubagentManager {
     this.bus?.emit(event, payload);
   }
 
+  /**
+   * Run a list of todos (or restart with new todos). Resolves with merged results.
+   */
+  async run(todos = null) {
+    if (Array.isArray(todos)) {
+      const planObj = { ...(this.plan || {}), todos };
+      this.plan = resolveFileConflicts(planObj);
+      this.results.clear();
+      this.queue = [];
+      this.running = 0;
+      this._stopped = false;
+    } else if (todos && Array.isArray(todos.todos)) {
+      this.plan = resolveFileConflicts(todos);
+      this.results.clear();
+      this.queue = [];
+      this.running = 0;
+      this._stopped = false;
+    }
+    return this.runAll();
+  }
+
   /** Run the whole DAG to completion. Resolves with merged results. */
   async runAll() {
     await this.initUndo();

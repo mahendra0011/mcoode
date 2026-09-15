@@ -55,6 +55,28 @@ import {
   bugcheckTierStarted,
   bugcheckTierDone,
   bugcheckDone,
+  // Security checkup mode
+  securityCheckStarted,
+  securityCheckDone,
+  securityFixStarted,
+  securityFixDone,
+  // Test mode (doc 48)
+  testModeStarted,
+  testInventorySet,
+  testFeatureUpdate,
+  testTraditionalUpdate,
+  testModeSummary,
+  // Review mode (doc 49)
+  reviewStarted,
+  reviewDone,
+  // Migrate mode (doc 51)
+  migrationStarted,
+  migrationStatusUpdated,
+  migrationPassResult,
+  migrationDone,
+  // Audit mode (doc 52)
+  auditStarted,
+  auditDone,
   addToast,
   removeToast
 } from '../store/chatSlice';
@@ -392,6 +414,140 @@ export function useChatSocket(workspaceId: string | null = null) {
       }));
     };
 
+    // Security checkup mode handlers (doc 47)
+    const onSecurityFindings = (payload: any) => {
+      dispatch(securityCheckDone(payload));
+      const count = payload?.findings?.length ?? 0;
+      if (count > 0) {
+        dispatch(addToast({
+          id: Date.now().toString(),
+          kind: 'warn',
+          text: `Security Checkup: ${count} issue${count !== 1 ? 's' : ''} found`,
+        }));
+      } else {
+        dispatch(addToast({
+          id: Date.now().toString(),
+          kind: 'ok',
+          text: 'Security Checkup: All 17 controls passed clean!',
+        }));
+      }
+    };
+    const onSecurityFixComplete = (payload: any) => {
+      dispatch(securityFixDone(payload));
+      const fixedCount = (payload?.results || []).filter((r: any) => r.passed).length;
+      dispatch(addToast({
+        id: Date.now().toString(),
+        kind: 'ok',
+        text: `Security fix complete — ${fixedCount} issue${fixedCount !== 1 ? 's' : ''} verified fixed`,
+      }));
+    };
+
+    // Review mode handler (doc 49)
+    const onReviewResult = (payload: any) => {
+      dispatch(reviewDone(payload));
+      const count = payload?.findings?.length ?? 0;
+      dispatch(addToast({
+        id: Date.now().toString(),
+        kind: count > 0 ? 'ok' : 'info',
+        text: `Review complete — ${count} comment${count !== 1 ? 's' : ''}`,
+      }));
+    };
+
+    // Migrate mode handlers (doc 51)
+    const onMigrateStatus = (payload: any) => {
+      dispatch(migrationStatusUpdated(payload));
+      if (payload?.message) {
+        dispatch(addToast({
+          id: Date.now().toString(),
+          kind: 'info',
+          text: payload.message,
+        }));
+      }
+    };
+    const onMigratePassResult = (payload: any) => {
+      const rows = (payload?.regressions || []).map((r: any) => ({
+        id: r.feature || r.id,
+        text: r.reason || r.feature,
+        state: r.regressed ? 'incomplete' : 'done'
+      }));
+      dispatch(migrationPassResult({
+        pass: payload?.pass,
+        maxPasses: payload?.maxPasses,
+        rows
+      }));
+    };
+    const onMigrateComplete = (payload: any) => {
+      dispatch(migrationDone(payload));
+      dispatch(addToast({
+        id: Date.now().toString(),
+        kind: payload?.equivalent ? 'ok' : 'warn',
+        text: payload?.equivalent
+          ? '✓ Migration complete — behavior verified identical'
+          : '⚠ Migration finished with unresolved regressions',
+      }));
+    };
+
+    // Audit mode handler (doc 52)
+    const onAuditResult = (payload: any) => {
+      dispatch(auditDone(payload));
+      dispatch(addToast({
+        id: Date.now().toString(),
+        kind: 'ok',
+        text: `Audit complete — Overall Grade: ${payload?.overallGrade || 'A'}`,
+      }));
+    };
+
+    // Test mode handlers (doc 48)
+    const onTestStep = (payload: any) => {
+      dispatch(testFeatureUpdate({
+        featureId: payload?.featureId,
+        feature: payload?.feature,
+        route: payload?.route,
+        desc: payload?.desc,
+        stepStatus: payload?.status === 'ok' ? (payload?.retried ? 'fixed' : 'ok') : 'failed',
+      }));
+    };
+    const onTestStepFailed = (payload: any) => {
+      dispatch(testFeatureUpdate({
+        featureId: payload?.featureId,
+        feature: payload?.feature,
+        route: payload?.route,
+        desc: payload?.desc || `step ${payload?.index} failed`,
+        stepStatus: 'failed',
+        error: payload?.error,
+      }));
+    };
+    const onTestDiagnosis = (payload: any) => {
+      dispatch(addToast({
+        id: Date.now().toString(),
+        kind: 'info',
+        text: `Test diagnosis (attempt ${payload?.attempt}): ${payload?.issue}`,
+      }));
+    };
+    const onTestFeatureDone = (payload: any) => {
+      dispatch(testFeatureUpdate({
+        featureId: payload?.featureId,
+        feature: payload?.feature,
+        status: payload?.status,
+        selfHealed: payload?.selfHealed,
+      }));
+    };
+    const onTestTraditional = (payload: any) => {
+      dispatch(testTraditionalUpdate(payload));
+    };
+    const onTestDone = (payload: any) => {
+      dispatch(testModeSummary(payload));
+      const healed = payload?.selfHealedCount ?? 0;
+      const review = payload?.needsReview ?? 0;
+      dispatch(addToast({
+        id: Date.now().toString(),
+        kind: review > 0 ? 'warn' : 'ok',
+        text: review > 0
+          ? `Test run complete — ${healed} auto-fixed, ${review} need manual review`
+          : `Test run complete — ${healed} issue${healed === 1 ? '' : 's'} auto-fixed`,
+      }));
+    };
+
     socket.on('connect', onConnect);
     socket.on('chat:ready', onChatReady);
     socket.on('chat:error', onChatError);
@@ -444,6 +600,32 @@ export function useChatSocket(workspaceId: string | null = null) {
     socket.on('bugcheck:tier-start', onBugcheckTierStart);
     socket.on('bugcheck:tier-done', onBugcheckTierDone);
     socket.on('bugcheck:done', onBugcheckDone);
+
+    // Security checkup mode socket subscriptions (doc 47)
+    socket.on('security:findings', onSecurityFindings);
+    socket.on('security:fix-complete', onSecurityFixComplete);
+
+    // Review mode socket subscriptions (doc 49)
+    socket.on('review:result', onReviewResult);
+
+    // Migrate mode socket subscriptions (doc 51)
+    socket.on('migrate:status', onMigrateStatus);
+    socket.on('migrate:pass_result', onMigratePassResult);
+    socket.on('migrate:complete', onMigrateComplete);
+
+    // Audit mode socket subscriptions (doc 52)
+    socket.on('audit:result', onAuditResult);
+
+    // Test mode socket subscriptions (doc 48)
+    socket.on('test:started', (p) => dispatch(testModeStarted({ types: p?.types, targetUrl: p?.targetUrl })));
+    socket.on('test:inventory', (p) => dispatch(testInventorySet(p)));
+    socket.on('test:feature:start', (p) => dispatch(testFeatureUpdate({ featureId: p?.featureId, feature: p?.feature, route: p?.route, status: 'running' })));
+    socket.on('test:step', onTestStep);
+    socket.on('test:step:failed', onTestStepFailed);
+    socket.on('test:diagnosis', onTestDiagnosis);
+    socket.on('test:feature:done', onTestFeatureDone);
+    socket.on('test:traditional', onTestTraditional);
+    socket.on('test:done', onTestDone);
 
     // Real Debugger events
     const onDebugStarted = (p: any) => {
@@ -546,6 +728,22 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off('bugcheck:tier-start', onBugcheckTierStart);
       socket.off('bugcheck:tier-done', onBugcheckTierDone);
       socket.off('bugcheck:done', onBugcheckDone);
+      socket.off('security:findings', onSecurityFindings);
+      socket.off('security:fix-complete', onSecurityFixComplete);
+      socket.off('review:result', onReviewResult);
+      socket.off('migrate:status', onMigrateStatus);
+      socket.off('migrate:pass_result', onMigratePassResult);
+      socket.off('migrate:complete', onMigrateComplete);
+      socket.off('audit:result', onAuditResult);
+      socket.off('test:started');
+      socket.off('test:inventory');
+      socket.off('test:feature:start');
+      socket.off('test:step', onTestStep);
+      socket.off('test:step:failed', onTestStepFailed);
+      socket.off('test:diagnosis', onTestDiagnosis);
+      socket.off('test:feature:done', onTestFeatureDone);
+      socket.off('test:traditional', onTestTraditional);
+      socket.off('test:done', onTestDone);
       socket.off('debug:started', onDebugStarted);
       socket.off('debug:output', onDebugOutput);
       socket.off('debug:exited', onDebugExited);
@@ -643,6 +841,52 @@ export function useChatSocket(workspaceId: string | null = null) {
     }
   }, []);
 
+  const runSecurityCheck = useCallback((category?: string) => {
+    if (socketRef.current) {
+      dispatch(securityCheckStarted());
+      socketRef.current.emit('security:check', { category, projectId: workspaceIdRef.current });
+    }
+  }, [dispatch]);
+
+  const fixSelectedSecurity = useCallback((ids: string[]) => {
+    if (socketRef.current) {
+      dispatch(securityFixStarted());
+      socketRef.current.emit('security:fix-selected', { ids, projectId: workspaceIdRef.current });
+    }
+  }, [dispatch]);
+
+  const runTestMode = useCallback((types: string[], targetUrl?: string) => {
+    if (socketRef.current) {
+      dispatch(testModeStarted({ types, targetUrl }));
+      socketRef.current.emit('test:mode:run', { types, targetUrl, prompt: (types || []).join(' + ') });
+    }
+  }, [dispatch]);
+
+  const runReview = useCallback((scope = 'diff', target?: string) => {
+    if (socketRef.current) {
+      dispatch(reviewStarted());
+      socketRef.current.emit('review:run', { scope, target, projectId: workspaceIdRef.current });
+    }
+  }, [dispatch]);
+
+  const runMigrate = useCallback((prompt: string, maxPasses = 5) => {
+    if (socketRef.current) {
+      dispatch(migrationStarted());
+      socketRef.current.emit('migrate:run', { prompt, maxPasses, projectId: workspaceIdRef.current });
+    }
+  }, [dispatch]);
+
+  const runAudit = useCallback((options: { pdf?: boolean; category?: string } = {}) => {
+    if (socketRef.current) {
+      dispatch(auditStarted());
+      socketRef.current.emit('audit:run', {
+        pdf: Boolean(options.pdf),
+        category: options.category || null,
+        projectId: workspaceIdRef.current
+      });
+    }
+  }, [dispatch]);
+
   return {
     send,
     interrupt,
@@ -658,6 +902,12 @@ export function useChatSocket(workspaceId: string | null = null) {
     restartTask,
     reloadModels,
     fetchKeys,
-    fetchGithubStatus
+    fetchGithubStatus,
+    runSecurityCheck,
+    fixSelectedSecurity,
+    runTestMode,
+    runReview,
+    runMigrate,
+    runAudit
   };
 }

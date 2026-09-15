@@ -9,9 +9,10 @@ export interface PermissionModalProps {
 export interface PermissionRequest {
   status: string;
   requestId: string;
-  kind?: 'shell' | 'plan-approval' | 'security-audit' | 'playwright-audit';
+  kind?: 'shell' | 'plan-approval' | 'security-audit' | 'playwright-audit' | 'security-fix';
   command?: string;
   planSummary?: string;
+  count?: number;
 }
 
 export function PermissionModal({ request, onAnswer }: PermissionModalProps) {
@@ -39,6 +40,7 @@ export function PermissionModal({ request, onAnswer }: PermissionModalProps) {
               {kind === 'plan-approval' && 'Approve this plan and start building?'}
               {kind === 'security-audit' && 'Run security audit now?'}
               {kind === 'playwright-audit' && 'Run Playwright self-testing now?'}
+              {kind === 'security-fix' && `Auto-fix ${request?.count ? `${request.count} ` : ''}selected security issue${request?.count !== 1 ? 's' : ''} with AI?`}
             </span>
             {kind === 'shell' && request!.command && (
               <div className="mt-2 bg-black/40 p-2 rounded-lg border border-white/5 font-mono text-xs text-white/80 overflow-x-auto whitespace-pre">

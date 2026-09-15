@@ -16,12 +16,14 @@ import {
   Check,
   Globe,
   ExternalLink,
+  Users,
 } from 'lucide-react';
 import api from '../../lib/axios';
 import editorApi from '../../lib/extensions/editorApi';
 import { useIDEStore } from '../../store/ideStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { getSocket } from '../../hooks/useChatSocket';
+import PairSuggestionToast, { PairSuggestion } from './PairSuggestionToast';
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -77,6 +79,8 @@ export function EditorPane({
   const autoSaveEnabled = useIDEStore((s) => s.autoSaveEnabled);
   const editorLayout = useIDEStore((s) => s.editorLayout);
   const setEditorLayout = useIDEStore((s) => s.setEditorLayout);
+  const pairModeEnabled = useIDEStore((s) => s.pairModeEnabled);
+  const setPairModeEnabled = useIDEStore((s) => s.setPairModeEnabled);
 
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -147,12 +151,69 @@ export function EditorPane({
   const editorRef = React.useRef<any>(null);
   const monacoRef = React.useRef<any>(null);
   const decorationsRef = React.useRef<any[]>([]);
+  const inlineCompletionsDisposableRef = React.useRef<any>(null);
+  const [pairSuggestion, setPairSuggestion] = useState<PairSuggestion | null>(null);
+  const idleTimerRef = useRef<any>(null);
+
+  // Request inline pair suggestion from backend (cheap, fast, sub-second)
+  const requestPairSuggestion = useCallback(async ({
+    fileContent,
+    cursorLine,
+    cursorColumn,
+    filePath,
+  }: {
+    fileContent: string;
+    cursorLine: number;
+    cursorColumn: number;
+    filePath: string;
+  }) => {
+    try {
+      const res = await api.post('/api/v1/pair-suggest', {
+        fileContent,
+        cursorLine,
+        cursorColumn,
+        filePath,
+      });
+      return res.data;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const handleEditorDidMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
     editorApi.attachEditor(editor, monaco);
     useIDEStore.getState().setActiveEditor(editor, monaco);
+
+    // NEW — Pair Mode registration, only active when pairMode is on
+    if (pairModeEnabled) {
+      if (inlineCompletionsDisposableRef.current) {
+        inlineCompletionsDisposableRef.current.dispose();
+        inlineCompletionsDisposableRef.current = null;
+      }
+      inlineCompletionsDisposableRef.current = monaco.languages.registerInlineCompletionsProvider('*', {
+        provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
+          if (token?.isCancellationRequested) return { items: [] };
+          const suggestion = await requestPairSuggestion({
+            fileContent: model.getValue(),
+            cursorLine: position.lineNumber,
+            cursorColumn: position.column,
+            filePath: model.uri?.path || model.uri?._formatted || '',
+          });
+          if (!suggestion || !suggestion.text || token?.isCancellationRequested) {
+            return { items: [] };
+          }
+          return {
+            items: [{
+              insertText: suggestion.text,
+              range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+            }]
+          };
+        },
+        freeInlineCompletions: () => {},
+      });
+    }
 
     // Custom right-click context menu (matching Screenshot 3)
     editor.onContextMenu((e: any) => {
@@ -238,15 +299,81 @@ export function EditorPane({
     });
   }, []);
 
+  // Dynamically register/dispose inline completions when pairModeEnabled toggles
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (!monaco) return;
+
+    if (inlineCompletionsDisposableRef.current) {
+      inlineCompletionsDisposableRef.current.dispose();
+      inlineCompletionsDisposableRef.current = null;
+    }
+
+    if (pairModeEnabled) {
+      try {
+        inlineCompletionsDisposableRef.current = monaco.languages.registerInlineCompletionsProvider('*', {
+          provideInlineCompletions: async (model: any, position: any, _context: any, token: any) => {
+            if (token?.isCancellationRequested) return { items: [] };
+            const suggestion = await requestPairSuggestion({
+              fileContent: model.getValue(),
+              cursorLine: position.lineNumber,
+              cursorColumn: position.column,
+              filePath: model.uri?.path || model.uri?._formatted || '',
+            });
+            if (!suggestion || !suggestion.text || token?.isCancellationRequested) {
+              return { items: [] };
+            }
+            return {
+              items: [{
+                insertText: suggestion.text,
+                range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
+              }]
+            };
+          },
+          freeInlineCompletions: () => {},
+        });
+      } catch (err) {
+        console.warn('Failed to register inline completions provider:', err);
+      }
+    }
+
+    editorRef.current?.updateOptions({
+      inlineSuggest: { enabled: pairModeEnabled },
+    });
+
+    return () => {
+      if (inlineCompletionsDisposableRef.current) {
+        inlineCompletionsDisposableRef.current.dispose();
+        inlineCompletionsDisposableRef.current = null;
+      }
+    };
+  }, [pairModeEnabled, requestPairSuggestion]);
+
+  // Listen for low-frequency structural suggestions from backend
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const onSuggestion = (sug: PairSuggestion) => {
+      if (pairModeEnabled) {
+        setPairSuggestion(sug);
+      }
+    };
+    socket.on('pair:suggestion', onSuggestion);
+    return () => {
+      socket.off('pair:suggestion', onSuggestion);
+    };
+  }, [pairModeEnabled]);
+
   // Update editor options reactively when monacoOptions or columnSelection change
   useEffect(() => {
     if (editorRef.current) {
       editorRef.current.updateOptions({
         ...monacoOptions,
         columnSelection,
+        inlineSuggest: { enabled: pairModeEnabled },
       });
     }
-  }, [monacoOptions, columnSelection]);
+  }, [monacoOptions, columnSelection, pairModeEnabled]);
 
   // Update glyph margin decorations whenever breakpoints or activePath change
   useEffect(() => {
@@ -316,7 +443,62 @@ export function EditorPane({
     try {
       localStorage.setItem(`mcode_draft_${activePath}`, str);
     } catch {}
-  }, [activePath, setFileContent]);
+
+    // Conversational Layer: check for structural suggestion after 2s pause in typing
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (pairModeEnabled) {
+      idleTimerRef.current = setTimeout(async () => {
+        try {
+          const pos = editorRef.current?.getPosition();
+          const socket = getSocket();
+          if (socket?.connected) {
+            socket.emit('pair:idle', {
+              filePath: activePath,
+              fileContent: str,
+              cursorLine: pos?.lineNumber || 1,
+              cursorColumn: pos?.column || 1,
+            });
+          } else {
+            const res = await api.post('/api/v1/pair/structural', {
+              filePath: activePath,
+              fileContent: str,
+              cursorLine: pos?.lineNumber || 1,
+              cursorColumn: pos?.column || 1,
+            });
+            if (res.data?.suggestion) {
+              setPairSuggestion(res.data.suggestion);
+            }
+          }
+        } catch {}
+      }, 2000);
+    }
+  }, [activePath, setFileContent, pairModeEnabled]);
+
+  const handleAcceptPairSuggestion = useCallback(() => {
+    if (!pairSuggestion || !activePath) return;
+    if (editorRef.current && monacoRef.current) {
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      const pos = editor.getPosition() || { lineNumber: pairSuggestion.line || 1, column: 1 };
+      const range = pairSuggestion.range
+        ? new monaco.Range(pairSuggestion.range.startLine, pairSuggestion.range.startCol, pairSuggestion.range.endLine, pairSuggestion.range.endCol)
+        : new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column);
+
+      const textToInsert = (pairSuggestion.replacement || pairSuggestion.preview) + '\n';
+      editor.executeEdits('pair-mode', [{
+        range,
+        text: textToInsert,
+        forceMoveMarkers: true,
+      }]);
+      editor.pushUndoStop();
+      toast.success('Applied pair suggestion');
+    }
+    setPairSuggestion(null);
+  }, [pairSuggestion, activePath]);
+
+  const handleDismissPairSuggestion = useCallback(() => {
+    setPairSuggestion(null);
+  }, []);
 
   // Handle Save (Cmd+S)
   const handleSave = useCallback(() => {
@@ -725,6 +907,19 @@ export function EditorPane({
         {/* Right-Side Editor Action Icons (matching VS Code top-right editor header) */}
         {activePath && (
           <div className="flex items-center gap-1.5 px-2 h-full flex-shrink-0 bg-[#181818] border-l border-[#252525]/50 z-20" ref={runMenuRef}>
+            {/* Pair Mode Toggle (Doc 53 — Web ONLY) */}
+            <button
+              onClick={() => setPairModeEnabled(!pairModeEnabled)}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition-all ${
+                pairModeEnabled
+                  ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30 font-medium'
+                  : 'bg-white/5 text-white/40 hover:text-white/70 border border-transparent'
+              }`}
+              title={pairModeEnabled ? 'Pair Mode: Active (inline ghost-text & structural suggestions)' : 'Enable Pair Mode (AI inline suggestions)'}
+            >
+              <Users className="w-3 h-3" /> Pair
+            </button>
+
             {/* Run Button Group */}
             <div className="relative flex items-center bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded transition group">
               <button
@@ -973,6 +1168,7 @@ export function EditorPane({
                   ...monacoOptions,
                   contextmenu: false,
                   columnSelection,
+                  inlineSuggest: { enabled: pairModeEnabled },
                   padding: { top: 16 },
                 }}
               />
@@ -1011,6 +1207,13 @@ export function EditorPane({
           )}
         </div>
       )}
+
+      {/* Conversational Layer — Structural Suggestion Toast (Doc 53) */}
+      <PairSuggestionToast
+        suggestion={pairSuggestion}
+        onAccept={handleAcceptPairSuggestion}
+        onDismiss={handleDismissPairSuggestion}
+      />
     </motion.div>
   );
 }

@@ -25,7 +25,17 @@ export const EVENTS = Object.freeze({
   WATCH_STATUS: 'WATCH_STATUS',
   UNDO: 'UNDO',
   HOOK_EXECUTED: 'HOOK_EXECUTED',
-  SUBAGENT_SHELL_OUTPUT: 'SUBAGENT_SHELL_OUTPUT'
+  SUBAGENT_SHELL_OUTPUT: 'SUBAGENT_SHELL_OUTPUT',
+  // Test Mode (doc 48) — autonomous self-healing testing agent
+  TEST_MODE_STARTED: 'TEST_MODE_STARTED',
+  TEST_INVENTORY: 'TEST_INVENTORY',
+  TEST_FEATURE_START: 'TEST_FEATURE_START',
+  TEST_STEP: 'TEST_STEP',
+  TEST_STEP_FAILED: 'TEST_STEP_FAILED',
+  TEST_DIAGNOSIS: 'TEST_DIAGNOSIS',
+  TEST_FEATURE_DONE: 'TEST_FEATURE_DONE',
+  TEST_TRADITIONAL: 'TEST_TRADITIONAL',
+  TEST_MODE_DONE: 'TEST_MODE_DONE'
 });
 
 export const SUBAGENT_STATUS = Object.freeze({
@@ -76,7 +86,9 @@ export const SOCKET = Object.freeze({
     CHAT_SEND: 'chat:send',
     CHAT_PERMISSION_ANSWER: 'chat:permission_answer',
     CHAT_INTERRUPT: 'chat:interrupt',
-    CHAT_UNDO: 'chat:undo'
+    CHAT_UNDO: 'chat:undo',
+    // Test Mode (doc 48)
+    TEST_MODE_RUN: 'test:mode:run'
   },
   SERVER_TO_CLIENT: {
     CHAT_READY: 'chat:ready',
@@ -107,6 +119,16 @@ export const SOCKET = Object.freeze({
     WAVE_COMPLETE: 'wave:complete',
     INTEGRATION_PASS: 'integration:pass',
     BUILD_COMPLETE: 'build:complete',
-    TOAST: 'toast'
+    TOAST: 'toast',
+    // Test Mode (doc 48) — autonomous self-healing testing agent
+    TEST_MODE_STARTED: 'test:started',
+    TEST_INVENTORY: 'test:inventory',
+    TEST_FEATURE_START: 'test:feature:start',
+    TEST_STEP: 'test:step',
+    TEST_STEP_FAILED: 'test:step:failed',
+    TEST_DIAGNOSIS: 'test:diagnosis',
+    TEST_FEATURE_DONE: 'test:feature:done',
+    TEST_TRADITIONAL: 'test:traditional',
+    TEST_MODE_DONE: 'test:done'
   }
 });
