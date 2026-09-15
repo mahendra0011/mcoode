@@ -1,13 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Circle, XCircle, AlertTriangle } from 'lucide-react';
+import { Circle, X, AlertTriangle } from 'lucide-react';
 
 interface TodoItem {
   id?: string | number;
   title?: string;
   description?: string;
   status?: string;
-  error?: string;
+  error?: string | null;
 }
 export interface TodoCardProps {
   plan?: {
@@ -75,17 +75,16 @@ export function TodoCard({ plan }: TodoCardProps) {
           const isFailed = todo.status === 'failed';
           const isNeedsReview = todo.status === 'needs_review';
 
-          let borderClass = 'hover:bg-white/5';
-          if (isFailed) {
-            borderClass = 'border border-red-500/30 bg-red-500/5';
-          } else if (isNeedsReview) {
-            borderClass = 'border border-amber-500/30 bg-amber-500/5';
-          }
-
           return (
             <div
               key={todo.id != null && String(todo.id).trim() ? String(todo.id) : `todo-item-${idx}`}
-              className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${borderClass}`}
+              className={`flex items-start gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors border ${
+                isFailed
+                  ? 'border-red-500/40'
+                  : isNeedsReview
+                  ? 'border-amber-500/40'
+                  : 'border-transparent'
+              }`}
               title={isFailed && todo.error ? todo.error : undefined}
             >
               <div className="mt-0.5 flex-shrink-0">
@@ -133,7 +132,7 @@ export function TodoCard({ plan }: TodoCardProps) {
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: "spring", stiffness: 500, damping: 20 }}
                   >
-                    <XCircle className="w-4 h-4 text-red-400" />
+                    <X className="w-4 h-4 text-red-400" />
                   </motion.div>
                 ) : isNeedsReview ? (
                   <motion.div
@@ -147,19 +146,17 @@ export function TodoCard({ plan }: TodoCardProps) {
                   <Circle className="w-4 h-4 text-white/20" />
                 )}
               </div>
-              <div className="flex flex-col min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm font-medium ${isDone ? 'text-white/40 line-through' : isFailed ? 'text-red-300' : 'text-white/80'}`}>
-                    {todo.title}
-                  </span>
+              <div className="flex flex-col min-w-0">
+                <span className={`text-sm font-medium flex items-center gap-1.5 ${isDone ? 'text-white/40 line-through' : isFailed ? 'text-red-400' : 'text-white/80'}`}>
+                  {todo.title}
                   {isNeedsReview && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                    <span className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
                       Needs review
                     </span>
                   )}
-                </div>
-                <span className={`text-[11px] truncate ${isFailed ? 'text-red-400/80 font-mono' : 'text-white/40'}`}>
-                  {isFailed && todo.error ? `Error: ${todo.error}` : todo.description}
+                </span>
+                <span className="text-[11px] text-white/40 truncate">
+                  {isFailed && todo.error ? todo.error : todo.description}
                 </span>
               </div>
             </div>
