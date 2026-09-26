@@ -40,14 +40,23 @@ function findCompatibleNodeSync() {
 
   // Generic search locations — machine-specific install paths don't belong here.
   // Each candidate is probed and must actually support --experimental-ffi.
-  const candidates = [
+  // POSIX layouts first on non-Windows (never probe `.exe` there); the loop
+  // below accepts any Node >= 26, so pinned versions can't rot.
+  const isWin = process.platform === 'win32';
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const candidates = isWin ? [
     // nvm-windows-style
-    join(process.env.LOCALAPPDATA || process.env.HOME || '', 'nvm', 'versions', 'node', `v26.4.0`, 'node.exe'),
+    join(process.env.LOCALAPPDATA || home, 'nvm', 'versions', 'node', 'v26.4.0', 'node.exe'),
     // fnm/volta-style
-    join(process.env.HOME || '', '.volta', 'bin', 'node.exe'),
-    join(process.env.HOME || '', '.fnm', 'versions', '26.4.0', 'node.exe'),
+    join(home, '.volta', 'bin', 'node.exe'),
     // standard installer location
     'C:/Program Files/nodejs/node.exe',
+  ] : [
+    join(home, '.nvm', 'versions', 'node', 'v26.4.0', 'bin', 'node'),
+    join(home, '.volta', 'bin', 'node'),
+    join(home, '.fnm', 'versions', '26.4.0', 'bin', 'node'),
+    '/usr/local/bin/node',
+    '/opt/homebrew/bin/node',
   ];
 
   // Machine-specific hint stored outside the repo (~/.mcode/node-path)

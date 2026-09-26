@@ -50,18 +50,24 @@ mcode                                   # REPL with /god, /bugfix, /plan, /undo�
 
 | Command | What it does |
 | --- | --- |
-| `mcode` | Interactive TUI session (slash commands: `/god`, `/bugfix`, `/agents`, `/plan`, `/undo`, `/diff`, `/model`, `/help`, `/exit`) |
+| `mcode` | Interactive TUI session (OpenTUI; `/god`, `/bugfix`, `/agents`, `/connect`, `/models`, `/init`, `/hooks`, `/help`, `/exit`, …) |
 | `mcode init [name] --template <t>` | Scaffold from `express`, `fastify`, `react-vite`, `full-stack` templates |
 | `mcode god "<prompt>" [--yes] [--model <ref>] [--verbose] [--watch-after]` | God Mode: plan → parallel subagents → integration pass |
-| `mcode run <script>` · `mcode test [--changed]` | Run scripts / tests |
+| `mcode run <script>` · `mcode test [--types unit,integration] [--target <url>]` | Run scripts / autonomous self-healing test agent |
 | `mcode env add\|remove\|list KEY [value]` | Encrypted secrets vault; `--plain` for CI `.env` |
+| `mcode connect [--provider <id> --key <k>]` | Connect a provider (wizard, or flags for CI) |
 | `mcode add <plugin>` | Install registry plugins (eslint, prettier, deploy-*) |
-| `mcode ship [--env prod]` | Build + verify + tag + deploy hook |
+| `mcode ship [--env prod]` | Build + verify + tag + deploy hook (targets below) |
 | `mcode model list\|show\|set <domain> <provider:model>` | Inspect / pin the model catalog |
+
+Deploy targets (`ship` stage 4/4): `netlify`, `vercel`, `docker` (local build),
+`railway`, `flyio`, `cloudflare-pages`, `gh-pages` run locally; `render` and
+`aws-ecs` are git-push / manual-config flows and print guidance instead of deploying.
 | `mcode watch [--background]` · `watch-stop` · `watch-status` | Scan + auto-fix daemon |
-| `mcode serve [-p 3100]` | Local backend (Express + Socket.IO) for the dashboard |
-| `mcode doctor` | Full environment diagnosis |
+| `mcode serve [-p 3100]` | Local backend (Express + Socket.IO) for the dashboard (monorepo; global installs print a fallback hint) |
+| `mcode doctor` | Full environment diagnosis (Node 26.4+, config, vault, providers) |
 | `mcode history [--clear]` | Session history files |
+| `mcode security-check` · `audit [--pdf]` · `review` · `explain` · `migrate` · `clean` | Power commands: security scan, health audit, diff review, walkthrough, migration, dead-code clean |
 
 Global flags: `--json`, `--non-interactive`. `god` flags: `--model <ref>`, `--verbose`,
 `--concurrency <n>`, `--watch-after`.
@@ -91,11 +97,11 @@ mcode god "build a full-stack todo app with auth, postgres and a react dashboard
 
 ## Providers
 
-18 adapters built in — auto-detected by the presence of their env key:
-
-OpenRouter, OpenCode Zen, OpenAI, Anthropic, Gemini, Groq, Together, Mistral, DeepSeek,
-xAI, Fireworks, Perplexity, Cerebras, Novita, HuggingFace, **Ollama** (local),
-**LM Studio** (local), **mock**.
+100+ adapters built in — auto-detected by the presence of their env key
+(top: OpenRouter, OpenCode Zen, OpenAI, Anthropic, Gemini, Groq, Together,
+Mistral, DeepSeek, xAI, Fireworks, Perplexity, Cerebras, Novita, HuggingFace,
+Qwen, Moonshot, Poolside, Ollama (local), LM Studio (local), **mock**).
+Run `mcode connect` (wizard) or `mcode doctor` to see the full list.
 
 Routing preference per task type lives in `@mcode/shared` (`DEFAULT_ROUTING`); override
 with `mcode model set <domain> <ref>` or `~/.mcode/config.json` → `routing`.
@@ -103,28 +109,28 @@ with `mcode model set <domain> <ref>` or `~/.mcode/config.json` → `routing`.
 ## Web dashboard
 
 ```bash
-mcode serve          # backend on :3100 (Mongo/Redis optional — memory fallback)
-npm run dev:dashboard # vite on :5173 (proxies /api and /live → :3100)
+mcode serve            # backend on :3100 (needs the monorepo or @mcode/backend)
+npm run dev:dashboard  # next dev (proxies /api and /live → BACKEND_URL|:3100)
 ```
 
-- Landing + docs/commands/plugins/changelog pages
-- Live subagent monitor (Socket.IO `/live`, JWT-authed, session & project rooms)
-- Watch daemon activity, sessions + transcripts, usage + PDF report export
-- JWT auth (access 15m / refresh 30d), plugin registry
+- Landing + AI chat + CLI reference + extensions + settings pages
+- Live subagent events (Socket.IO `/live`, JWT-authed) + watch activity feed
+- Sessions + transcripts, usage stats, plugin registry
+- JWT auth (access 15m / refresh 30d, silent refresh in the dashboard)
 
 ## Architecture
 
 ```
 packages/
   shared/    events, task domains + colors, plan/todo math, provider contracts, rate-limit ledger (RPM/TPM)
-  cli/       commander app + Ink TUI, god mode, watch daemon, providers, templates, vault
-  backend/   Express + Socket.IO: auth, sessions, plugins, watch, usage (PDF), uploads
-  dashboard/ React 18 + Vite + Tailwind + Redux Toolkit + React Query + Recharts
+  cli/       commander app + OpenTUI TUI, god mode, watch daemon, providers, templates, vault
+  backend/   Express + Socket.IO: auth, sessions, plugins, watch, usage, uploads
+  web/       Next.js + React + Tailwind + Redux Toolkit + React Query + Monaco + xterm
 ```
 
 CLI distribution: esbuild bundles the CLI into a single ESM file (`dist/mcode.mjs`,
-Ink is bundled; the package also ships the watch daemon entry + templates). The CLI
-stays a self-healing dev entry: `bin/mcode.js` rebuilds the bundle on demand.
+OpenTUI is bundled; the package also ships the watch daemon entry + templates). The CLI
+stays a self-healing dev entry: `bin/mcode.js` rebuilds the bundle on demand (needs Node 26.4+).
 
 Config lives in `~/.mcode/` (`config.json`, encrypted `vault.json.enc`, history, watch state).
 Secrets never leave the machine: **keys are stored locally, encrypted** (AES-256-GCM,

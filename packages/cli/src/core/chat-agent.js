@@ -125,6 +125,25 @@ export function extractActions(text) {
     }
   }
 
+  // Fallback: parse JSON action fences the model emitted as ```json instead
+  // of ```mcode-action (common provider drift). Only accepted when the parsed
+  // object has a string `tool` property — a normal JSON code block almost
+  // never does, so false positives are effectively impossible.
+  if (actions.length === 0) {
+    const jsonFenceRegex = /```json\s*([\s\S]*?)```/gi;
+    for (const match of source.matchAll(jsonFenceRegex)) {
+      try {
+        const parsed = JSON.parse(match[1].trim());
+        if (parsed && typeof parsed.tool === 'string') {
+          actions.push({
+            tool: parsed.tool,
+            args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
+          });
+        }
+      } catch { /* not an action — skip */ }
+    }
+  }
+
   // Fallback: parse XML-style <tool_call> blocks
   if (actions.length === 0) {
     const toolCallRegex = /<tool_call>([\s\S]*?)<\/tool_call>/gi;
@@ -607,7 +626,7 @@ export class ChatAgent {
       requireEditApproval: this.requireEditApproval,
       networkWhitelist: this.networkWhitelist,
       auditLog: this.auditLog,
-      domain: this.config.domain || 'backend',
+      domain: this.domain || this.config.domain || this.config.forceDomain || 'backend',
       todoId: null,
       memoryDir: this.memoryDir,
       cancelSignal: signal

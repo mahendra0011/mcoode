@@ -45,6 +45,10 @@ export function TestModeSelector({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set(['autonomous']));
   const [targetUrl, setTargetUrl] = useState('');
+  const [allowRemote, setAllowRemote] = useState(false);
+  const trimmedUrl = targetUrl.trim();
+  const isRemote = /^https?:\/\//i.test(trimmedUrl) && !/localhost|127\.0\.0\.1|192\.168\.|10\./.test(trimmedUrl);
+  const canStart = selected.size > 0 && (!isRemote || allowRemote);
 
   return (
     <motion.div
@@ -94,11 +98,18 @@ export function TestModeSelector({
           placeholder="Target URL (default: local/staging from testMode.targetUrl)"
           className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-white/80 placeholder:text-white/25 outline-none focus:border-teal-500/40"
         />
+        {isRemote && (
+          <label className="flex items-center gap-1.5 text-[11px] text-amber-300 cursor-pointer whitespace-nowrap">
+            <input type="checkbox" checked={allowRemote} onChange={(e) => setAllowRemote(e.target.checked)} className="accent-amber-400" />
+            Allow remote target
+          </label>
+        )}
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          disabled={selected.size === 0}
-          onClick={() => onStart([...selected], targetUrl.trim() || undefined)}
+          disabled={!canStart}
+          onClick={() => onStart([...selected], trimmedUrl || undefined)}
+          title={isRemote && !allowRemote ? 'Confirm targeting a non-local URL first' : undefined}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 disabled:opacity-30 disabled:cursor-not-allowed text-teal-400 text-xs font-medium"
         >
           <Play className="w-3 h-3 fill-current" /> Run tests

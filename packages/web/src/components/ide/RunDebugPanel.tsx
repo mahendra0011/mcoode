@@ -158,9 +158,41 @@ export function RunDebugPanel({
     consoleEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  // Evaluate watch expressions in sandbox
+  // Evaluate watch expressions: live debuggee via CDP when a debug
+  // session is active, otherwise the local JS sandbox fallback.
   const evaluateWatch = useCallback(() => {
     if (watchExpressions.length === 0) return;
+    try {
+      const socket = getSocket();
+      if (socket && socket.connected && hasStarted) {
+        const pending = new Map<string, (v: string) => void>();
+        const onResult = (p: any) => {
+          const fn = pending.get(p.expression);
+          if (!fn) return;
+          pending.delete(p.expression);
+          if (p.error) fn(`<error: ${p.error}>`);
+          else {
+            const r = p.result?.result;
+            fn(r?.type === 'undefined' ? 'undefined' : r?.value !== undefined ? String(r.value) : JSON.stringify(r).slice(0, 500));
+          }
+          if (pending.size === 0) socket.off('debug:evaluate-result', onResult);
+        };
+        socket.on('debug:evaluate-result', onResult);
+        setWatchExpressions((prev) =>
+          prev.map((item) => {
+            pending.set(item.expr, (v) =>
+              setWatchExpressions((cur) => cur.map((c) => (c.expr === item.expr ? { ...c, result: v } : c)))
+            );
+            socket.emit('debug:evaluate', { expression: item.expr });
+            return { ...item, result: '…' };
+          })
+        );
+        setTimeout(() => socket.off('debug:evaluate-result', onResult), 15000);
+        return;
+      }
+    } catch {
+      // fall through to sandbox
+    }
     try {
       const iframe = document.createElement("iframe");
       iframe.style.display = "none";
@@ -185,7 +217,7 @@ export function RunDebugPanel({
     } catch {
       // ignore
     }
-  }, [watchExpressions]);
+  }, [watchExpressions, hasStarted]);
 
   useEffect(() => {
     if (hasStarted) {
@@ -545,13 +577,11 @@ export function RunDebugPanel({
 
           <p className="text-white/40 text-[11px] mt-6 max-w-[240px] leading-relaxed">
             To customize Run and Debug, create a{" "}
-            <a
-              href="#"
-              onClick={createLaunchJson}
+            <button type="button" onClick={createLaunchJson}
               className="text-[#3794ff] hover:underline cursor-pointer"
             >
               launch.json
-            </a>{" "}
+            </button>{" "}
             file.
           </p>
         </div>
@@ -965,13 +995,11 @@ export function RunDebugPanel({
               {hasLaunchConfig ? "Using .vscode/launch.json" : "Sandboxed iframe runner"}
             </span>
             {!hasLaunchConfig && (
-              <a
-                href="#"
-                onClick={createLaunchJson}
+              <button type="button" onClick={createLaunchJson}
                 className="text-[#3794ff] hover:underline cursor-pointer"
               >
                 create launch.json
-              </a>
+              </button>
             )}
           </div>
         </div>

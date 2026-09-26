@@ -32,10 +32,11 @@
   "files": [
     "bin",
     "dist",
+    "scripts",
     "templates"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=26.4.0"
   },
   "scripts": {
     "start": "node bin/mcode.js",

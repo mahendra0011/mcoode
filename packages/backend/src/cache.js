@@ -45,7 +45,7 @@ export async function connectRedis(uri) {
     await redis.connect();
     client = redis;
     mode = 'redis';
-    return { mode, connected: true };
+    return { mode, connected: true, client: redis };
   } catch (err) {
     console.error('[cache] ❌ Redis connection failed:', err.message);
     console.error('[cache]    Running in pass-through mode — caching disabled.');
@@ -56,6 +56,10 @@ export async function connectRedis(uri) {
     mode = 'passthrough';
     return { mode, connected: false };
   }
+}
+
+export function getRedisClient() {
+  return client;
 }
 
 export function cache() {

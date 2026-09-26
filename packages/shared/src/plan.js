@@ -8,7 +8,7 @@ import { SUBAGENT_STATUS } from './events.js';
 
 export function normalizeTodo(raw, index) {
   const id = String(raw.id || `t${index + 1}`).trim();
-  const domain = ['frontend', 'backend', 'db', 'devops', 'test', 'docs', 'bugfix', 'planning']
+  const domain = ['frontend', 'backend', 'db', 'devops', 'test', 'docs', 'bugfix', 'planning', 'reviewer', 'migration']
     .includes(raw.domain) ? raw.domain : 'backend';
   const dependsOn = Array.isArray(raw.dependsOn)
     ? raw.dependsOn.map(String)
@@ -29,7 +29,7 @@ export function normalizeTodo(raw, index) {
     startedAt: null,
     finishedAt: null,
     error: null,
-    completedFiles: new Set(),
+    completedFiles: [],
   };
 }
 

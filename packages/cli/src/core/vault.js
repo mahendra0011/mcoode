@@ -135,5 +135,5 @@ export async function vaultList(passphrase = '') {
 export function maskSecret(value) {
   if (!value) return '';
   if (value.length <= 8) return '••••';
-  return `${value.slice(0, 4)}••••••${value.slice(-4)}`;
+  return `••••••${value.slice(-2)}`;
 }

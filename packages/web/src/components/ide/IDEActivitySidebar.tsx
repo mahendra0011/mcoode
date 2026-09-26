@@ -43,22 +43,23 @@ type LucideIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 interface ActivityItem {
   id: string;
-  label: string;
+  labelKey: string;
+  fallback: string;
   Icon: LucideIcon;
   shortcut: string;
 }
 
 const ACTIVITY_ITEMS: ActivityItem[] = [
-  { id: "explorer", label: "Explorer", Icon: Folder, shortcut: "Ctrl+Shift+E" },
-  { id: "search", label: "Search", Icon: Search, shortcut: "Ctrl+Shift+F" },
-  { id: "source-control", label: "Source Control", Icon: GitBranch, shortcut: "Ctrl+Shift+G" },
-  { id: "run-debug", label: "Run and Debug", Icon: Bug, shortcut: "Ctrl+Shift+D" },
-  { id: "languages", label: "Languages & Runtimes", Icon: Code2, shortcut: "Ctrl+Shift+L" },
-  { id: "extensions", label: "Extensions", Icon: Puzzle, shortcut: "Ctrl+Shift+X" },
-  { id: "remote", label: "Remote Explorer", Icon: Laptop, shortcut: "Ctrl+Shift+R" },
-  { id: "containers", label: "Containers", Icon: Boxes, shortcut: "Ctrl+Shift+C" },
-  { id: "testing", label: "Testing", Icon: Beaker, shortcut: "Ctrl+Shift+T" },
-  { id: "android", label: "Android Emulators", Icon: Smartphone, shortcut: "Ctrl+Shift+A" },
+  { id: "explorer", labelKey: "sidebar.explorer", fallback: "Explorer", Icon: Folder, shortcut: "Ctrl+Shift+E" },
+  { id: "search", labelKey: "sidebar.search", fallback: "Search", Icon: Search, shortcut: "Ctrl+Shift+F" },
+  { id: "source-control", labelKey: "sidebar.sourceControl", fallback: "Source Control", Icon: GitBranch, shortcut: "Ctrl+Shift+G" },
+  { id: "run-debug", labelKey: "sidebar.runDebug", fallback: "Run and Debug", Icon: Bug, shortcut: "Ctrl+Shift+D" },
+  { id: "languages", labelKey: "sidebar.languages", fallback: "Languages & Runtimes", Icon: Code2, shortcut: "Ctrl+Shift+L" },
+  { id: "extensions", labelKey: "sidebar.extensions", fallback: "Extensions", Icon: Puzzle, shortcut: "Ctrl+Shift+X" },
+  { id: "remote", labelKey: "sidebar.remote", fallback: "Remote Explorer", Icon: Laptop, shortcut: "Ctrl+Shift+R" },
+  { id: "containers", labelKey: "sidebar.containers", fallback: "Containers", Icon: Boxes, shortcut: "Ctrl+Shift+C" },
+  { id: "testing", labelKey: "sidebar.testing", fallback: "Testing", Icon: Beaker, shortcut: "Ctrl+Shift+T" },
+  { id: "android", labelKey: "sidebar.android", fallback: "Android Emulators", Icon: Smartphone, shortcut: "Ctrl+Shift+A" },
 ];
 
 /**
@@ -148,7 +149,7 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
   const setWelcomeOpen = useIDEStore((s) => s.setWelcomeOpen);
   const setActivePath = useIDEStore((s) => s.setActivePath);
   const openSettings = useIDEStore((s) => s.openSettings);
-  const { lang, setLang } = useI18n();
+  const { lang, setLang, t } = useI18n();
 
   const isSidebarOpen = useIDEStore((s) => s.isSidebarOpen);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
@@ -212,6 +213,7 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
           {ACTIVITY_ITEMS.map((item) => {
             const Icon = item.Icon;
             const isActive = isSidebarOpen && active === item.id;
+            const label = t(item.labelKey) === item.labelKey ? item.fallback : t(item.labelKey);
             return (
               <Tooltip key={item.id}>
                 <TooltipTrigger asChild>
@@ -226,8 +228,8 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
                         ? "bg-[#172036] text-white border border-[#3b82f6]/40 shadow-[0_0_10px_rgba(59,130,234,0.3)]"
                         : "text-white/50 hover:text-white hover:bg-white/5"
                     }`}
-                    aria-label={`${item.label} (${item.shortcut})`}
-                    title={`${item.label} (${item.shortcut})`}
+                    aria-label={`${label} (${item.shortcut})`}
+                    title={`${label} (${item.shortcut})`}
                   >
                     <Icon className="w-4.5 h-4.5" />
                   </button>
@@ -237,7 +239,7 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
                   align="center"
                   className="px-2.5 py-1.5 text-xs text-white/80 bg-[#1e1e1e] border border-white/10 rounded shadow-xl z-50"
                 >
-                  <span className="font-medium">{item.label}</span>
+                  <span className="font-medium">{label}</span>
                   <span className="ml-1.5 opacity-50">·</span>
                   <kbd className="ml-1 opacity-50">{item.shortcut.replace("Ctrl", "⌃")}</kbd>
                 </TooltipContent>

@@ -1,0 +1,11 @@
+{
+  "id": "sub-017",
+  "name": "User 017",
+  "email": "user017@example.com",
+  "status": "active",
+  "created_at": "2026-09-09T13:35:44.780Z",
+  "preferences": {
+    "notifications": false,
+    "theme": "light"
+  }
+}

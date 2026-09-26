@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, access, chmod } from 'node:fs/promises';
 
 const HOME = homedir();
 export const MCCODE_DIR = join(HOME, '.mcode');
@@ -40,6 +40,7 @@ export async function saveConfig(patch = null) {
   cache = config;
   await ensureDirs();
   await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+  await chmod(CONFIG_PATH, 0o600).catch(() => {});
   return config;
 }
 

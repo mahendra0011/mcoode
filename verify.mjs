@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
 
 // Create test project
 const testDir = path.join(process.cwd(), 'verify-project');
@@ -7,13 +7,13 @@ fs.mkdirSync(testDir, { recursive: true });
 fs.writeFileSync(path.join(testDir, 'main.js'), 'console.log("hello world");\n');
 fs.writeFileSync(path.join(testDir, 'lib.js'), 'export const add = (a, b) => a + b;\n');
 
-const { ToolExecutor } = require('./packages/cli/src/core/tools.js');
-const { ChatAgent, extractAction } = require('./packages/cli/src/core/chat-agent.js');
-const { computeAnalytics } = require('./packages/cli/src/core/analytics.js');
-const { redactSecrets, isNetworkAllowed } = require('./packages/cli/src/core/security.js');
-const { scoreRisk, RISK_LEVELS } = require('./packages/cli/src/core/audit.js');
-const { getModeList } = require('./packages/cli/src/core/modes.js');
-const { cache } = require('./packages/cli/src/core/cache.js');
+const { ToolExecutor } = await import('./packages/cli/src/core/tools.js');
+const { ChatAgent, extractAction } = await import('./packages/cli/src/core/chat-agent.js');
+const { computeAnalytics } = await import('./packages/cli/src/core/analytics.js');
+const { redactSecrets, isNetworkAllowed } = await import('./packages/cli/src/core/security.js');
+const { scoreRisk, RISK_LEVELS } = await import('./packages/cli/src/core/audit.js');
+const { getModeList } = await import('./packages/cli/src/core/modes.js');
+const { cache } = await import('./packages/cli/src/core/cache.js');
 
 const executor = new ToolExecutor({
   projectPath: testDir,
@@ -85,6 +85,7 @@ async function run() {
   console.log('  ' + passed + ' passed . ' + failed + ' failed . ' + results.length + ' total');
   console.log('  ' + (failed === 0 ? 'ALL CHECKS PASSED' : 'SOME CHECKS FAILED'));
   console.log('='.repeat(55));
+  if (failed > 0) process.exit(1);
 }
 
 run().catch(e => { console.error(e); process.exit(1); });

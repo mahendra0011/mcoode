@@ -1,6 +1,6 @@
 "use client";
 import { Provider } from "react-redux";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { store } from "../store";
@@ -21,10 +21,15 @@ const THEMES: Record<string, string> = {
   teal: "#14b8a6",
 };
 
-// Single shared React Query client for the whole app.
-const queryClient = new QueryClient();
-
+// Per-request React Query client (never module-shared across SSR requests).
 export default function Providers({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient());
+  useEffect(() => {
+    // PWA shell: register once, silently skip when unsupported/offline.
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
   useEffect(() => {
     try {
       const tokens = JSON.parse(localStorage.getItem("mcode_tokens") || "{}");

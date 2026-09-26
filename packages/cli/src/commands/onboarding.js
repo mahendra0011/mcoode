@@ -23,7 +23,7 @@ const KNOWN_KEYS = [
 
 
 export function backendUrl(config) {
-  return config?.backend?.url || DEFAULT_CONFIG.backend.url;
+  return process.env.MCCODE_BACKEND_URL || config?.backend?.url || DEFAULT_CONFIG.backend.url;
 }
 
 export async function hasApiKey(_config) {
@@ -178,8 +178,11 @@ export async function runOnboarding({ interactive = true } = {}) {
   }
 }
 
-export async function loginCommand() {
+export async function loginCommand({ url = null } = {}) {
   const config = await loadConfig();
+  if (url) {
+    await saveConfig({ backend: { ...(config.backend || {}), url } });
+  }
   const rl = createInterface({ input, output, terminal: true });
   try {
     output.write(`\x1b[32m${LOGO}\x1b[0m\n`);
@@ -196,7 +199,7 @@ export async function loginCommand() {
 }
 
 export async function logoutCommand() {
-  await saveConfig({ account: null });
+  await saveConfig({ account: null, backend: null });
   await vaultDelete('MCCODE_REFRESH_TOKEN');
   output.write('\u2713 logged out (API keys in the vault are untouched)\n');
 }

@@ -21,12 +21,29 @@ import axios from 'axios';
 import { getTokens, setTokens } from './api';
 import { getBackendUrl } from './electron-nav';
 
+function resolveBaseURL() {
+  if (typeof window !== 'undefined' && window.mcodeElectron?.backendUrl) {
+    return window.mcodeElectron.backendUrl;
+  }
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  // In production (non-localhost host), always use relative URLs so Next
+  // rewrites proxy /api → BACKEND. A hardcoded localhost:3100 from .env.local
+  // would bypass the proxy and break prod.
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.');
+    if (!isLocal) return '/';
+    if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) return envUrl;
+    return '/';
+  }
+  return envUrl || '/';
+}
+
 const api = axios.create({
   // In Electron, point directly at the child-process backend.
-  // In the browser, Vite dev server proxies /api → http://localhost:3100.
-  baseURL: typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
-    ? window.mcodeElectron.backendUrl
-    : (process.env.NEXT_PUBLIC_API_URL || '/'),
+  // In the browser, prefer relative /api (Next rewrites → BACKEND_URL).
+  baseURL: resolveBaseURL(),
+  withCredentials: true,
   timeout: 8000, // 8s default — slow external provider calls can override
   // NOTE: Do NOT set a default Content-Type here. When a FormData body is
   // passed (e.g. zip uploads, file attachments), axios must be allowed to
@@ -36,10 +53,47 @@ const api = axios.create({
   headers: {},
 });
 
-// ── Request interceptor: inject Bearer token ──
+// ── Request interceptor: inject Bearer token (+ pro-active refresh) ──
 // For FormData bodies, let the browser set the multipart Content-Type with
 // the correct boundary automatically (don't override it).
-api.interceptors.request.use((config) => {
+function tokenExpiresInSec(token) {
+  try {
+    const part = String(token).split('.')[1];
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+    if (!json.exp) return Infinity;
+    return json.exp - Math.floor(Date.now() / 1000);
+  } catch {
+    return Infinity;
+  }
+}
+
+let proactiveRefreshPromise = null;
+async function ensureFreshToken() {
+  const { access, refresh } = getTokens();
+  if (!access || !refresh) return;
+  if (tokenExpiresInSec(access) > 60) return;
+  if (!proactiveRefreshPromise) {
+    proactiveRefreshPromise = axios.post(
+      '/api/v1/auth/refresh',
+      { refresh },
+      {
+        baseURL: typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
+          ? window.mcodeElectron.backendUrl
+          : '/',
+        timeout: 15000,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    ).then((r) => {
+      if (r.data?.access) setTokens({ access: r.data.access, refresh: r.data.refresh || refresh });
+    }).catch(() => {}).finally(() => { proactiveRefreshPromise = null; });
+  }
+  await proactiveRefreshPromise;
+}
+
+api.interceptors.request.use(async (config) => {
+  if (!config.url?.includes('/auth/refresh')) {
+    await ensureFreshToken();
+  }
   const { access } = getTokens();
   if (access) {
     config.headers.Authorization = `Bearer ${access}`;
@@ -108,7 +162,7 @@ api.interceptors.response.use(
         {
           baseURL: typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
             ? window.mcodeElectron.backendUrl
-            : (process.env.NEXT_PUBLIC_API_URL || '/'),
+            : '/',
           timeout: 15000,
           headers: { 'Content-Type': 'application/json' }
         }

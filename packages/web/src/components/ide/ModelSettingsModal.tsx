@@ -31,6 +31,7 @@ export function ModelSettingsModal({ isOpen, onClose }: ModelSettingsModalProps)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [quota, setQuota] = useState<{ tokens?: { limit?: number; used?: number }; builds?: { limit?: number; used?: number } } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -42,6 +43,9 @@ export function ModelSettingsModal({ isOpen, onClose }: ModelSettingsModalProps)
       const savedKeys = (keyRes.keys || []) as KeyEntry[];
       setProviders(provList);
       setKeys(savedKeys);
+      api.get('/api/v1/usage/quotas', { timeout: 5000 })
+        .then((r) => setQuota({ tokens: r.data?.tokens, builds: r.data?.builds }))
+        .catch(() => {});
       // Default to first saved provider, or first available
       if (!activeProviderId) {
         const firstSaved = savedKeys.length > 0 ? savedKeys[0].providerId : null;
@@ -138,6 +142,25 @@ export function ModelSettingsModal({ isOpen, onClose }: ModelSettingsModalProps)
             <div>
               <h2 className="text-2xl font-semibold text-white mb-2">Model settings</h2>
               <p className="text-sm text-white/50">Manage custom model providers. Once configured, they can be selected during chat.</p>
+              {quota && (
+                <div className="mt-3 space-y-1.5 max-w-md" aria-label="Plan quotas">
+                  {[
+                    { label: 'tokens', used: quota.tokens?.used || 0, limit: quota.tokens?.limit || 0 },
+                    { label: 'builds', used: quota.builds?.used || 0, limit: quota.builds?.limit || 0 },
+                  ].map((q) => {
+                    const pct = q.limit > 0 ? Math.min(100, Math.round((q.used / q.limit) * 100)) : 0;
+                    return (
+                      <div key={q.label} className="flex items-center gap-2">
+                        <span className="text-[11px] text-white/40 w-14">{q.label}</span>
+                        <div className="flex-1 h-1.5 rounded bg-white/5 overflow-hidden">
+                          <div className={`h-full rounded transition-all ${pct >= 90 ? 'bg-red-400' : pct >= 70 ? 'bg-amber-300' : 'bg-emerald-400'}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-[11px] text-white/40 font-mono">{q.used}/{q.limit}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-4">
               <button
@@ -147,6 +170,19 @@ export function ModelSettingsModal({ isOpen, onClose }: ModelSettingsModalProps)
                 title="Refresh providers"
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                onClick={async () => {
+                  if (!window.confirm('Reset all model routing overrides to defaults?')) return;
+                  try {
+                    await api.delete('/api/v1/settings/models');
+                    fetchData();
+                  } catch {}
+                }}
+                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60"
+                title="Reset routing overrides"
+              >
+                Reset routing
               </button>
               <button onClick={onClose} className="text-white/50 hover:text-white transition">
                 <X className="w-5 h-5" />

@@ -131,7 +131,24 @@ const githubAccountSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-/** Per-user settings persisted in MongoDB (fallback to in-memory defaults). */
+/** Saved prompt templates (prompt library) — plain text, per user. */
+const promptTemplateSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+  name: { type: String, required: true },
+  text: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+promptTemplateSchema.index({ userId: 1, createdAt: -1 });
+/** Refresh-token allowlist — one row per issued refresh JWT (by jti).
+ *  Rotation deletes the old row on every /refresh; reuse of an unknown jti
+ *  revokes ALL of the user's rows (theft response). */
+const refreshTokenSchema = new mongoose.Schema({
+  jti: { type: String, required: true, unique: true, index: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+  expiresAt: Date,
+  createdAt: { type: Date, default: Date.now }
+});
+refreshTokenSchema.index({ userId: 1, createdAt: -1 });
 const userSettingsSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true, unique: true },
   allowShellAll: { type: Boolean, default: false },
@@ -191,3 +208,5 @@ export const Workspace = mongoose.model('Workspace', workspaceSchema);
 export const ChatMessage = mongoose.model('ChatMessage', chatMessageSchema);
 export const GithubAccount = mongoose.model('GithubAccount', githubAccountSchema);
 export const UserSettings = mongoose.model('UserSettings', userSettingsSchema);
+export const RefreshToken = mongoose.model('RefreshToken', refreshTokenSchema);
+export const PromptTemplate = mongoose.model('PromptTemplate', promptTemplateSchema);

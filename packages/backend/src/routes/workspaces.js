@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import multer from 'multer';
 import { authMiddleware } from '../auth.js';
+import { deriveMasterKey, decryptKey } from '../secret-enc.js';
+import { uploadSingle, uploadFieldArray, UPLOADS_DIR } from '../upload-config.js';
 import { db } from '../db.js';
 import { join } from 'node:path';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
@@ -9,7 +10,6 @@ import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 
 const WORKSPACE_ROOT = join(homedir(), 'mcode-workspaces');
-const UPLOADS_DIR = join(homedir(), '.mcode', 'uploads');
 
 // Ensure destination directories exist on disk before Multer streams files
 try {
@@ -29,29 +29,10 @@ function ensureNamedJunction(name, diskPath) {
   } catch {}
 }
 
-// 50MB was too tight for "upload whole project" — any real project with a few images,
-// fonts, or a lockfile-heavy zip would silently fail this limit mid-upload, which is
-// part of what made folder upload feel like it randomly "gets stuck". Multer streams
-// to disk (dest: UPLOADS_DIR, not memory storage), so raising this only costs disk
-// space, not server RAM. Configurable via env for deployments with tighter constraints.
-const MAX_UPLOAD_MB = Number(process.env.MCODE_MAX_UPLOAD_MB) || 1024;
-
-const upload = multer({
-  dest: UPLOADS_DIR,
-  limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 }
-});
-
-const handleZipfileUpload = (req, res, next) => {
-  upload.single('zipfile')(req, res, (err) => {
-    if (err) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(413).json({ error: { code: 'FILE_TOO_LARGE', message: `ZIP file exceeds maximum upload limit of ${MAX_UPLOAD_MB}MB` } });
-      }
-      return res.status(400).json({ error: { code: 'UPLOAD_ERROR', message: err.message || 'File upload error' } });
-    }
-    next();
-  });
-};
+// Shared upload policy lives in upload-config.js (single 50MB default via
+// MCODE_MAX_UPLOAD_MB, zip-only gate, sanitized names). The old local 1024MB
+// ad-hoc multer stack was removed — one service, one limit, one MIME rule.
+const handleZipfileUpload = uploadSingle('zipfile');
 
 export function workspaceRoutes({ secret }) {
   const router = Router();
@@ -168,8 +149,6 @@ export function workspaceRoutes({ secret }) {
   router.get('/:id/files', async (req, res, next) => {
     try {
       let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
-      if (!ws) ws = await db().workspace.findById(req.params.id);
-      if (!ws) ws = await db().workspace.findOne({ _id: req.params.id });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const files = await walkDir(ws.diskPath);
       res.json({ files });
@@ -183,9 +162,7 @@ export function workspaceRoutes({ secret }) {
     try {
       const { path } = req.query;
       if (!path) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path query param required' } });
-      let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
-      if (!ws) ws = await db().workspace.findById(req.params.id);
-      if (!ws) ws = await db().workspace.findOne({ _id: req.params.id });
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const full = safeJoin(ws.diskPath, path);
       const content = await readFile(full, 'utf8');
@@ -210,9 +187,7 @@ export function workspaceRoutes({ secret }) {
       }
       if (!filePath) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path is required' } });
 
-      let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
-      if (!ws) ws = await db().workspace.findById(req.params.id);
-      if (!ws) ws = await db().workspace.findOne({ _id: req.params.id });
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       const full = safeJoin(ws.diskPath, filePath);
@@ -236,8 +211,6 @@ export function workspaceRoutes({ secret }) {
       if (!folderPath) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path is required' } });
 
       let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
-      if (!ws) ws = await db().workspace.findById(req.params.id);
-      if (!ws) ws = await db().workspace.findOne({ _id: req.params.id });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       const full = safeJoin(ws.diskPath, folderPath);
@@ -267,8 +240,6 @@ export function workspaceRoutes({ secret }) {
       if (!pathParam) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path query param required' } });
 
       let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
-      if (!ws) ws = await db().workspace.findById(req.params.id);
-      if (!ws) ws = await db().workspace.findOne({ _id: req.params.id });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       const full = safeJoin(ws.diskPath, pathParam);
@@ -408,6 +379,73 @@ export function workspaceRoutes({ secret }) {
     }
   });
 
+  // GET /workspaces/:id/diff?path=... — unified git diff for a file (or repo)
+  router.get('/:id/diff', async (req, res, next) => {
+    try {
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+      const git = (await import('simple-git')).default(ws.diskPath);
+      const isRepo = await git.checkIsRepo().catch(() => false);
+      if (!isRepo) return res.status(400).json({ error: { code: 'NOT_A_REPO', message: 'workspace is not a git repo' } });
+      const file = typeof req.query.path === 'string' ? req.query.path : null;
+      if (file) safeJoin(ws.diskPath, file);
+      const diff = await git.diff(file ? ['--', file] : []);
+      res.json({ diff });
+    } catch (err) {
+      next(err);
+    }
+  });
+  // POST /workspaces/:id/hunks — apply selected unified-diff hunks to a file.
+  // Body: { path, hunks: [{ oldStart, lines: [...] }], selected: [bool] }.
+  // Same algorithm as the web DiffReviewModal (single implementation for
+  // CLI/TUI reuse); unselected regions keep original content.
+  router.post('/:id/hunks', async (req, res, next) => {
+    try {
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+      const relPath = req.body?.path;
+      const hunks = req.body?.hunks;
+      const selected = req.body?.selected;
+      if (!relPath || !Array.isArray(hunks) || !Array.isArray(selected) || hunks.length !== selected.length) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'path, hunks[] and matching selected[] are required' } });
+      }
+      const full = safeJoin(ws.diskPath, relPath);
+      const original = await readFile(full, 'utf8').catch(() => null);
+      if (original === null) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'file not found' } });
+      const src = original.split('\n');
+      const out = [];
+      let cursor = 0;
+      hunks.forEach((h, i) => {
+        const start = Math.max(0, Number(h.oldStart || 1) - 1);
+        while (cursor < start && cursor < src.length) out.push(src[cursor++]);
+        const lines = Array.isArray(h.lines) ? h.lines : [];
+        if (!selected[i]) {
+          let span = 0;
+          for (const l of lines) {
+            if (String(l).startsWith(' ') || String(l).startsWith('-')) span++;
+          }
+          const end = Math.min(src.length, start + span);
+          while (cursor < end) out.push(src[cursor++]);
+          return;
+        }
+        for (const raw of lines) {
+          const l = String(raw);
+          if (l.startsWith(' ')) out.push(src[cursor++] ?? l.slice(1));
+          else if (l.startsWith('-')) cursor++;
+          else if (l.startsWith('+')) out.push(l.slice(1));
+        }
+      });
+      while (cursor < src.length) out.push(src[cursor++]);
+      await mkdir(join(full, '..'), { recursive: true });
+      await writeFile(full, out.join('\n'), 'utf8');
+      try {
+        await db().workspace.updateOne({ _id: ws._id }, { updatedAt: new Date() });
+      } catch {}
+      res.json({ ok: true, applied: selected.filter(Boolean).length, of: hunks.length });
+    } catch (err) {
+      next(err);
+    }
+  });
   // POST /workspaces/:id/push - commit and push
   // For git-cloned workspaces: uses stored ws.gitUrl
   // For zip-uploaded workspaces: accepts githubRepo in body, inits git if needed
@@ -423,8 +461,9 @@ export function workspaceRoutes({ secret }) {
       const githubAcc = await db().githubAccount.findOne({ userId: req.userId });
       if (!githubAcc) return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'GitHub not connected' }});
       
-      const { decrypt } = await import('../secret-enc.js');
-      const token = decrypt(githubAcc.accessToken, secret);
+      const { decryptKey: decKey, deriveMasterKey: deriveKey } = await import('../secret-enc.js');
+      const masterKey = deriveKey(secret, req.userId);
+      const token = decKey(githubAcc.accessToken, masterKey);
 
       const git = (await import('simple-git')).default(ws.diskPath);
       await git.addConfig('user.name', githubAcc.username);
@@ -461,7 +500,7 @@ export function workspaceRoutes({ secret }) {
   });
 
   // POST /workspaces/:id/upload - upload arbitrary files or entire folder tree
-  router.post('/:id/upload', upload.array('files', 2000), async (req, res, next) => {
+  router.post('/:id/upload', uploadFieldArray('files', 2000), async (req, res, next) => {
     try {
       const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
@@ -592,20 +631,32 @@ async function walkDir(dir, base = '') {
   return files;
 }
 
-/** Join and ensure the path stays within the workspace root (path traversal protection). */
+/** Join and ensure the path stays within the workspace root (fail-closed on traversal). */
 function safeJoin(root, p) {
   const rootResolved = root.replace(/\\/g, '/');
-  let rel = String(p || '').replace(/\\/g, '/');
-  // Strip leading ./ and any attempt to escape with ../
-  rel = rel.replace(/^\.\//, '');
-  const parts = rel.split('/');
-  const filtered = [];
-  for (const part of parts) {
-    if (part === '..') continue;
-    if (part === '') continue;
-    filtered.push(part);
+  const rel = String(p || '').replace(/\\/g, '/');
+  if (!rel || rel.startsWith('/') || /^[A-Za-z]:\//.test(rel)) {
+    const err = new Error('invalid path: absolute paths not allowed');
+    err.status = 400;
+    throw err;
   }
-  return join(rootResolved, ...filtered);
+  const parts = rel.split('/');
+  const stack = [];
+  for (const part of parts) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      const err = new Error('invalid path: path traversal not allowed');
+      err.status = 400;
+      throw err;
+    }
+    stack.push(part);
+  }
+  if (!stack.length) {
+    const err = new Error('invalid path');
+    err.status = 400;
+    throw err;
+  }
+  return join(rootResolved, ...stack);
 }
 
 /** Extract a ZIP archive to a directory using parallel 32-concurrency STREAMED disk writes.

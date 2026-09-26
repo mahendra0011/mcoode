@@ -595,7 +595,17 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
             </div>
           </div>
 
-          {viewMode === "grid" ? (
+          {isSearching ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5" aria-label="Searching extensions">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="animate-pulse rounded-xl border border-white/5 bg-white/[0.02] p-4 space-y-3">
+                  <div className="h-4 w-2/3 rounded bg-white/10" />
+                  <div className="h-3 w-full rounded bg-white/5" />
+                  <div className="h-3 w-1/2 rounded bg-white/5" />
+                </div>
+              ))}
+            </div>
+          ) : viewMode === "grid" ? (
             /* GRID VIEW - MAX 3 CARDS PER ROW */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5">
               {displayed.map((ext) => {

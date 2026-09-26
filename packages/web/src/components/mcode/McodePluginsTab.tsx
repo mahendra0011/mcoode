@@ -44,6 +44,12 @@ export function McodePluginsTab() {
       <div>
         <h2 className="text-lg font-semibold text-white mb-1">Plugin System</h2>
         <p className="text-sm text-white/40">7 active plugins across developer-tools, productivity, utilities, and guides categories.</p>
+        <p className="mt-2 text-xs text-white/40 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+          Reference for the desktop-app plugin format. The mcode CLI registry lives at{' '}
+          <a href="/plugins" className="text-emerald-300 hover:underline">/plugins</a>
+          {' '}— install with <code className="text-emerald-300">mcode add &lt;name&gt;</code>, manage with{' '}
+          <code className="text-emerald-300">mcode plugin remove|disable|enable</code>.
+        </p>
       </div>
 
       {/* Plugin Inventory */}

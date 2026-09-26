@@ -174,5 +174,16 @@ export function settingsRoutes({ secret }) {
     }
   });
 
+  // DELETE /api/v1/settings/models -> Reset modelOverrides to defaults
+  r.delete('/models', async (req, res) => {
+    try {
+      await db().userSettings.updateOne({ userId: req.userId }, { modelOverrides: {} });
+      const settings = await db().userSettings.findOne({ userId: req.userId });
+      res.json({ ok: true, settings: { ...DEFAULTS, ...(settings || {}), modelOverrides: {} } });
+    } catch (e) {
+      res.status(500).json({ error: { message: 'Failed to reset model preferences' } });
+    }
+  });
+
   return r;
 }

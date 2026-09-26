@@ -18,13 +18,16 @@ export async function configCommand({ open = false } = {}) {
 }
 
 export async function serveCommand({ port = process.env.MCCODE_PORT || 3100 } = {}) {
+  let mod;
   try {
-    await import('@mcode/backend');
+    mod = await import('@mcode/backend');
   } catch {
-    warn('@mcode/backend not installed in this workspace — install it or use the published `mcode-cli` bundle');
+    warn('@mcode/backend is not available next to this CLI install.');
+    warn('Fix: run inside the mcode monorepo (npm run dev:backend), or start the backend package directly:');
+    warn(`  npx -y @mcode/backend   # or: node packages/backend/src/main.js (PORT=${port})`);
     process.exit(1);
   }
-  const { startServer } = await import('@mcode/backend');
+  const { startServer } = mod?.startServer ? mod : await import('@mcode/backend');
   const server = await startServer({ port: Number(port) });
   out(`mcode backend listening on http://localhost:${port}  (dashboard: http://localhost:5173)`);
   return server;

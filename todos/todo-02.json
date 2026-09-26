@@ -1,9 +1,9 @@
 {
   "id": "todo-002",
-  "title": "Design database schema",
-  "description": "Create ERD for the application database",
-  "priority": "high",
+  "title": "Dev task 002",
+  "description": "Seeded development task number 2",
+  "priority": "low",
   "status": "completed",
-  "created_at": "2024-01-19T10:30:00Z",
-  "due_date": "2024-01-22T23:59:59Z"
+  "created_at": "2026-09-24T13:35:44.755Z",
+  "due_date": "2026-10-14T13:35:44.755Z"
 }

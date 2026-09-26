@@ -1,16 +1,17 @@
 # God Mode — Complete Architecture & Flow
 
-> Parallel subagent execution at scale. 100-300 agents → same-codebase safety.
+> Parallel subagent execution in dependency-sorted waves (default 5
+> concurrent, `--concurrency` to tune) with undo-safe file writes.
 
 ---
 
 ## 1. Overview
 
-God Mode = `mcode god "<prompt>"` or toggle in web UI. Creates a project-wide plan, launches 50-300 domain-specialized subagents in parallel waves, runs integration tests, auto-fixes failures, and verifies completion.
+God Mode = `mcode god "<prompt>"` or toggle in web UI. Creates a project-wide plan, launches domain-specialized subagents in parallel waves (one subagent per todo, default 5 concurrent), runs integration tests, auto-fixes failures, and verifies completion.
 
 ```
 User Prompt → Planner (AI) → Task DAG → File Ownership Map → 
-  Wave 1 (independent todos) → 100 subagents parallel
+  Wave 1 (independent todos) → up to 5 subagents parallel
     → Wave 2 (depend on wave 1) → more subagents
     → N waves → Integration Tests → Bugfix Rounds → Build Complete
 ```

@@ -28,9 +28,10 @@ export async function doctorCommand({ asJson = false } = {}) {
   const providers = await getProviders({ secrets, config });
   for (const provider of providers) {
     const avail = await provider.isAvailable();
+    const models = avail ? await provider.listModels() : [];
     rows.push([
       `provider:${provider.id}`,
-      avail ? `ready (${provider.listModels().length} models)` : 'unavailable',
+      avail ? `ready (${models.length} models)` : 'unavailable',
       avail ? 'ok' : 'warn'
     ]);
   }

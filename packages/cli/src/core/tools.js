@@ -10,6 +10,27 @@ import { BrowserTool } from './browser-tool.js';
 export const WRITE_TOOLS = Object.freeze(['write_file', 'edit_file', 'run_shell']);
 
 /**
+ * fetch with a real timeout (Node's undici fetch ignores `timeout` option).
+ * Combines AbortController timeout with an optional external cancel signal.
+ */
+export async function fetchWithTimeout(url, opts = {}, ms = 7000) {
+  const { timeout: _ignored, signal: extSignal, ...rest } = opts;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new Error(`fetch timeout after ${ms}ms: ${url}`)), ms);
+  const onAbort = () => ctrl.abort(extSignal?.reason);
+  if (extSignal) {
+    if (extSignal.aborted) ctrl.abort(extSignal.reason);
+    else extSignal.addEventListener('abort', onAbort, { once: true });
+  }
+  try {
+    return await fetch(url, { ...rest, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+    extSignal?.removeEventListener?.('abort', onAbort);
+  }
+}
+
+/**
  * Scoped toolset handed to subagents. Writes go through a snapshot +
  * diff-preview layer so `/undo` can revert any todo's changes.
  */
@@ -158,6 +179,15 @@ export class ToolExecutor {
 
   async list_files({ glob = '**/*' }) {
     const files = [];
+    let matches = null;
+    try {
+      const { minimatch } = await import('minimatch');
+      matches = (rel) => minimatch(rel, glob, { dot: false });
+    } catch {
+      // minimatch unavailable — fall back to safe substring/suffix match (never throws)
+      const suffix = glob.replace(/^\*\*\//, '').replace(/^\*\./, '.').replace(/^\*/, '');
+      matches = (rel) => (glob === '**/*' ? true : rel.endsWith(suffix));
+    }
     const walk = async (dir) => {
       let entries;
       try {
@@ -171,7 +201,11 @@ export class ToolExecutor {
         if (entry.isDirectory()) await walk(full);
         else {
           const rel = relative(this.projectPath, full);
-          if (rel.match(glob.replaceAll('**', '.*'))) files.push(rel);
+          try {
+            if (matches(rel)) files.push(rel);
+          } catch {
+            files.push(rel);
+          }
         }
       }
     };
@@ -332,7 +366,7 @@ export class ToolExecutor {
 
     // Tier 1: DuckDuckGo Lite HTML (fast, direct URLs, no ads/redirects)
     try {
-      const ddgRes = await fetch('https://lite.duckduckgo.com/lite/', {
+      const ddgRes = await fetchWithTimeout('https://lite.duckduckgo.com/lite/', {
         method: 'POST',
         body: 'q=' + encodeURIComponent(cleanQuery),
         headers: {
@@ -341,8 +375,7 @@ export class ToolExecutor {
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
         signal: this.cancelSignal || undefined,
-        timeout: 7000
-      });
+      }, 7000);
       if (ddgRes.ok) {
         const html = await ddgRes.text();
         const linkRegex = /<a\s+[^>]*?href=['"]([^'"]+)['"][^>]*?class=['"]result-link['"][^>]*>([\s\S]*?)<\/a>|<a\s+[^>]*?class=['"]result-link['"][^>]*?href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>/gi;
@@ -385,7 +418,7 @@ export class ToolExecutor {
     if (results.length === 0) {
       try {
         const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(cleanQuery)}&count=10&setmkt=en-US&setlang=en-US`;
-        const res = await fetch(searchUrl, {
+        const res = await fetchWithTimeout(searchUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -393,8 +426,7 @@ export class ToolExecutor {
             'Referer': 'https://www.bing.com/',
           },
           signal: this.cancelSignal || undefined,
-          timeout: 7000
-        });
+        }, 7000);
         if (res.ok) {
           const html = await res.text();
           const algoRegex = /<li[^]*?class=["']b_algo["'][^]*?<\/li>/gi;
@@ -427,7 +459,7 @@ export class ToolExecutor {
     if (results.length === 0) {
       try {
         const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(cleanQuery)}&limit=5&namespace=0&format=json`;
-        const wikiRes = await fetch(wikiUrl, { timeout: 4000 });
+        const wikiRes = await fetchWithTimeout(wikiUrl, { signal: this.cancelSignal || undefined }, 4000);
         if (wikiRes.ok) {
           const data = await wikiRes.json();
           if (Array.isArray(data) && data.length >= 4) {

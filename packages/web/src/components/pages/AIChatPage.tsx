@@ -20,6 +20,7 @@ import { handleSlashCommand, isSlashCommand, getAvailableSlashCommands, getGroup
 import { SlashCommandPicker } from '../chat/SlashCommandPicker';
 import { CleanupReport } from '../chat/CleanupReport';
 import { zipFilesOffMainThread, WORKSPACE_UPLOAD_TIMEOUT_MS, type ZipEntry } from '../../lib/zipInWorker';
+import { useI18n } from '../../lib/i18n';
 
 // Moved out of the component (was previously re-created on every single render, since it
 // lived inside the AIChatPage function body). These are static lookup tables, so they only
@@ -157,6 +158,7 @@ export function AIChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { t } = useI18n();
 
 
   // IDE State — declare BEFORE useChatSocket so there's no TDZ
@@ -1653,7 +1655,7 @@ export function AIChatPage() {
               className="flex items-center gap-1.5 text-xs font-medium text-purple-300 hover:text-white px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 transition cursor-pointer"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              title="Upload files, folders or ZIP project"
+              title={t('ide.uploadFiles')}
             >
               <UploadCloud className="w-3.5 h-3.5 text-purple-400" />
               <span className="hidden lg:inline">Upload</span>
@@ -1669,7 +1671,7 @@ export function AIChatPage() {
                 className="flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-white px-2.5 py-1 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 transition cursor-pointer"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                title="Git Branch"
+                title={t('ide.gitBranch')}
               >
                 <GitBranch className="w-3.5 h-3.5 text-blue-400" />
                 <span className="max-w-[80px] truncate">{activeBranch}</span>
@@ -1737,7 +1739,7 @@ export function AIChatPage() {
               type="button"
               onClick={handleExport}
               className="flex items-center gap-1.5 text-xs font-medium text-white/70 hover:text-white px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition"
-              title="Export workspace as ZIP"
+              title={t('ide.exportZip')}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -1749,7 +1751,7 @@ export function AIChatPage() {
               type="button"
               onClick={() => setShowCommitModal(true)}
               className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 transition"
-              title="Push changes to Git repository"
+              title={t('ide.pushGit')}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -1806,7 +1808,7 @@ export function AIChatPage() {
                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
                   : 'bg-[#13131a] text-white/60 border-white/10 hover:text-white hover:bg-white/10'
               }`}
-              title="Toggle AI Chat & Prompt Section"
+              title={t('ide.toggleChat')}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -1840,7 +1842,7 @@ export function AIChatPage() {
                   ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
                   : 'bg-[#13131a] text-white/60 border-white/10 hover:text-white hover:bg-white/10'
               }`}
-              title="Show mcode Turn Machine"
+              title={t('ide.turnMachine')}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -2098,7 +2100,7 @@ export function AIChatPage() {
               <button onClick={() => setIsHistoryOpen(true)} className="text-white/30 hover:text-white transition-colors">
                 <History className="w-5 h-5" />
               </button>
-              <button onClick={() => useIDEStore.getState().openSettings('models')} className="text-white/30 hover:text-white transition-colors cursor-pointer" title="Settings">
+              <button onClick={() => useIDEStore.getState().openSettings('models')} className="text-white/30 hover:text-white transition-colors cursor-pointer" title={t('ide.settings')}>
                 <Settings className="w-5 h-5" />
               </button>
               <button className="text-white/30 hover:text-white transition-colors">
@@ -2194,7 +2196,7 @@ export function AIChatPage() {
                           <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
                           <ChevronDown className="w-3 h-3 opacity-50"/>
                         </motion.button>
-                        <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
+                        <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title={t('ide.gitBranch')}>
                           <GitBranch className="w-4 h-4 text-blue-400"/>
                           <span>{activeBranch}</span>
                           <ChevronDown className="w-3 h-3 opacity-50"/>
@@ -2229,7 +2231,7 @@ export function AIChatPage() {
                             setShowCommandPicker(false);
                           }
                         }}
-                        placeholder="Ask a follow-up..." 
+                        placeholder={t('chat.askFollowup')} 
                         className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-1 py-1 min-h-[60px] text-[15px]"
                         onKeyDown={(e) => handleChatKeyDown(e, handleSubmit)}
                       />
@@ -2249,7 +2251,7 @@ export function AIChatPage() {
                       <div className="flex items-center justify-between mt-2">
                         {/* Left Group: Plus */}
                         <div className="flex items-center gap-2">
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title="Attach file or context">
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title={t('ide.attachFile')}>
                             {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Paperclip className="w-4 h-4" />}
                           </motion.button>
                         </div>
@@ -2264,13 +2266,13 @@ export function AIChatPage() {
                               type="button"
                               onClick={() => runCleanMode()}
                               className="h-8 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-xs text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer"
-                              title="Clean Mode: dead code + AI-bloat removal"
+                              title={t('ide.cleanMode')}
                             >
                               {isCleanScanning ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Scissors className="w-3.5 h-3.5 text-amber-400" />} Clean
                             </motion.button>
                           )}
                           {activeTab === 'AI Code Assistant' && (
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title={t('ide.cmdPalette')}>
                               <Slash className="w-4 h-4" />
                             </motion.button>
                           )}
@@ -2310,7 +2312,7 @@ export function AIChatPage() {
                                 transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                                 className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
                                 disabled={!prompt.trim() || isStreaming}
-                                title="Send message"
+                                title={t('ide.sendMessage')}
                               >
                                 <Send className="w-4 h-4 drop-shadow-md ml-0.5" />
                               </motion.button>
@@ -2390,13 +2392,13 @@ export function AIChatPage() {
                           />
                         )}
                         {comparisonRows && comparisonRows.length > 0 && (
-                          <ComparisonTable rows={comparisonRows} pass={verificationPass} maxPasses={8} title="Verification" />
+                          <ComparisonTable rows={comparisonRows} pass={verificationPass} maxPasses={8} title={t('ide.verification')} />
                         )}
                         {securityAudit && securityAudit.rows && securityAudit.rows.length > 0 && (
-                          <ComparisonTable rows={securityAudit.rows} pass={securityAudit.pass} maxPasses={5} title="Security Audit" />
+                          <ComparisonTable rows={securityAudit.rows} pass={securityAudit.pass} maxPasses={5} title={t('ide.securityAudit')} />
                         )}
                         {migration && migration.equivalenceRows && migration.equivalenceRows.length > 0 && (
-                          <ComparisonTable rows={migration.equivalenceRows} pass={migration.pass} maxPasses={migration.maxPasses || 5} title="Behavioral Equivalence" />
+                          <ComparisonTable rows={migration.equivalenceRows} pass={migration.pass} maxPasses={migration.maxPasses || 5} title={t('ide.equivalence')} />
                         )}
                         {playwrightAudit && (
                           <PlaywrightAuditPanel
@@ -2531,7 +2533,7 @@ export function AIChatPage() {
                             <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
                             <ChevronDown className="w-3 h-3 opacity-50"/>
                           </motion.button>
-                          <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
+                          <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title={t('ide.gitBranch')}>
                             <GitBranch className="w-4 h-4 text-blue-400"/>
                             <span>{activeBranch}</span>
                             <ChevronDown className="w-3 h-3 opacity-50"/>
@@ -2563,7 +2565,7 @@ export function AIChatPage() {
                             if (isCodeMode && val.startsWith('/')) { setShowCommandPicker(true); }
                             else { setShowCommandPicker(false); }
                           }}
-                          placeholder="Ask a follow-up..."
+                          placeholder={t('chat.askFollowup')}
                           className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-1 py-1 min-h-[60px] text-[15px]"
                           onKeyDown={(e) => handleChatKeyDown(e, handleSubmit)}
                         />
@@ -2582,7 +2584,7 @@ export function AIChatPage() {
                         </AnimatePresence>
                         <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-2">
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title="Upload Project (Folder, File, ZIP)">
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title={t('ide.uploadProject')}>
                             {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Plus className="w-4 h-4" />}
                           </motion.button>
                           <SparkleButton prompt={prompt} setPrompt={setPrompt} />
@@ -2593,7 +2595,7 @@ export function AIChatPage() {
                               type="button"
                               onClick={() => runReview('diff')}
                               className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition backdrop-blur-md border border-white/10 cursor-pointer"
-                              title="Review uncommitted changes"
+                              title={t('ide.reviewChanges')}
                             >
                               <MessageSquare className="w-3.5 h-3.5 text-blue-400" /> Review Changes
                             </motion.button>
@@ -2605,13 +2607,13 @@ export function AIChatPage() {
                               type="button"
                               onClick={() => runCleanMode()}
                               className="h-8 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-xs text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer"
-                              title="Clean Mode: dead code + AI-bloat removal"
+                              title={t('ide.cleanMode')}
                             >
                               {isCleanScanning ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Scissors className="w-3.5 h-3.5 text-amber-400" />} Clean
                             </motion.button>
                           )}
                           {(activeTab === 'AI Code Assistant' || activeTab === 'AI Code Editor') && (
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title={t('ide.cmdPalette')}>
                               <Slash className="w-4 h-4" />
                             </motion.button>
                           )}
@@ -2807,7 +2809,7 @@ export function AIChatPage() {
                           type="button"
                           onClick={() => useIDEStore.getState().setSecondarySideBarVisible(false)}
                           className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-white transition cursor-pointer"
-                          title="Close AI Panel"
+                          title={t('ide.closePanel')}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -2862,13 +2864,13 @@ export function AIChatPage() {
                       </div>
                     )}
                     {comparisonRows && comparisonRows.length > 0 && (
-                      <ComparisonTable rows={comparisonRows} pass={verificationPass} maxPasses={8} title="Verification" />
+                      <ComparisonTable rows={comparisonRows} pass={verificationPass} maxPasses={8} title={t('ide.verification')} />
                     )}
                     {securityAudit && securityAudit.rows && securityAudit.rows.length > 0 && (
-                      <ComparisonTable rows={securityAudit.rows} pass={securityAudit.pass} maxPasses={5} title="Security Audit" />
+                      <ComparisonTable rows={securityAudit.rows} pass={securityAudit.pass} maxPasses={5} title={t('ide.securityAudit')} />
                     )}
                     {migration && migration.equivalenceRows && migration.equivalenceRows.length > 0 && (
-                      <ComparisonTable rows={migration.equivalenceRows} pass={migration.pass} maxPasses={migration.maxPasses || 5} title="Behavioral Equivalence" />
+                      <ComparisonTable rows={migration.equivalenceRows} pass={migration.pass} maxPasses={migration.maxPasses || 5} title={t('ide.equivalence')} />
                     )}
                     {playwrightAudit && (
                       <PlaywrightAuditPanel
@@ -2982,7 +2984,7 @@ export function AIChatPage() {
                               <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}</span>
                               <ChevronDown className="w-3 h-3 opacity-50"/>
                             </motion.button>
-                            <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title="Git Branch">
+                            <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title={t('ide.gitBranch')}>
                               <GitBranch className="w-4 h-4 text-blue-400"/>
                               <span>{activeBranch}</span>
                               <ChevronDown className="w-3 h-3 opacity-50"/>
@@ -2997,7 +2999,7 @@ export function AIChatPage() {
                             if (val.startsWith('/')) { setShowCommandPicker(true); }
                             else if (!val.includes('/')) { setShowCommandPicker(false); }
                           }}
-                          placeholder="Ask AI code agent..."
+                          placeholder={t('chat.askAgent')}
                           className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-2 py-1 min-h-[40px] text-sm"
                           onKeyDown={(e) => handleChatKeyDown(e, handleSubmit)}
                         />
@@ -3016,7 +3018,7 @@ export function AIChatPage() {
                         </AnimatePresence>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title="Upload Project (Folder, File, ZIP)">
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title={t('ide.uploadProject')}>
                               {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" /> : <Paperclip className="w-3.5 h-3.5" />}
                             </motion.button>
                             <SparkleButton prompt={prompt} setPrompt={setPrompt} />
@@ -3026,7 +3028,7 @@ export function AIChatPage() {
                               type="button"
                               onClick={() => runReview('diff')}
                               className="h-7 px-2 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-1.5 text-[11px] text-white/60 hover:text-white transition backdrop-blur-md border border-white/10 cursor-pointer"
-                              title="Review uncommitted changes"
+                              title={t('ide.reviewChanges')}
                             >
                               <MessageSquare className="w-3 h-3 text-blue-400" /> Review Changes
                             </motion.button>
@@ -3036,11 +3038,11 @@ export function AIChatPage() {
                               type="button"
                               onClick={() => runCleanMode()}
                               className="h-7 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-[11px] text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer"
-                              title="Clean Mode: dead code + AI-bloat removal"
+                              title={t('ide.cleanMode')}
                             >
                               {isCleanScanning ? <Loader2 className="w-3 h-3 animate-spin text-amber-400" /> : <Scissors className="w-3 h-3 text-amber-400" />} Clean
                             </motion.button>
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title="Command Palette (/)">
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title={t('ide.cmdPalette')}>
                               <Slash className="w-4 h-4" />
                             </motion.button>
                             {mode === 'agent' && (
@@ -3075,7 +3077,7 @@ export function AIChatPage() {
                                   transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
                                   className="w-7 h-7 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 flex items-center justify-center text-emerald-400 transition disabled:opacity-50" 
                                   disabled={!prompt.trim() || isStreaming}
-                                  title="Send message"
+                                  title={t('ide.sendMessage')}
                                 >
                                   <Send className="w-3.5 h-3.5 ml-0.5" />
                                 </motion.button>
@@ -3123,7 +3125,7 @@ export function AIChatPage() {
                         type="button"
                         onClick={() => useIDEStore.getState().setActivePanelTab('terminal')}
                         className="flex items-center gap-1 px-1 hover:bg-white/20 rounded transition cursor-pointer h-full"
-                        title="Layout"
+                        title={t('ide.layout')}
                       >
                         <LayoutGrid className="w-3 h-3" />
                       </button>
@@ -3138,7 +3140,7 @@ export function AIChatPage() {
                           }
                         }}
                         className={`flex items-center px-1 hover:bg-white/20 rounded transition cursor-pointer h-full ${isSidebarOpen ? 'bg-white/15' : ''}`}
-                        title="Toggle Primary Side Bar"
+                        title={t('ide.primaryBar')}
                       >
                         <PanelLeft className="w-3.5 h-3.5" />
                       </button>
@@ -3146,7 +3148,7 @@ export function AIChatPage() {
                         type="button"
                         onClick={() => useIDEStore.getState().toggleTerminal()}
                         className={`flex items-center px-1 hover:bg-white/20 rounded transition cursor-pointer h-full ${isTerminalOpen ? 'bg-white/15' : ''}`}
-                        title="Toggle Panel"
+                        title={t('ide.togglePanel')}
                       >
                         <PanelBottom className="w-3.5 h-3.5" />
                       </button>
@@ -3154,14 +3156,14 @@ export function AIChatPage() {
                         type="button"
                         onClick={() => useIDEStore.getState().toggleSecondarySideBar()}
                         className={`flex items-center px-1 hover:bg-white/20 rounded transition cursor-pointer h-full ${secondarySideBarVisible ? 'bg-white/15' : ''}`}
-                        title="Toggle Secondary Side Bar"
+                        title={t('ide.secondaryBar')}
                       >
                         <PanelRight className="w-3.5 h-3.5" />
                       </button>
                       <button
                         type="button"
                         className="flex items-center px-1 hover:bg-white/20 rounded transition cursor-pointer h-full ml-1"
-                        title="No Notifications"
+                        title={t('ide.noNotifications')}
                       >
                         <Bell className="w-3 h-3" />
                       </button>
@@ -3304,7 +3306,7 @@ export function AIChatPage() {
                   type="text"
                   value={commitMessage}
                   onChange={(e) => setCommitMessage(e.target.value)}
-                  placeholder="Enter commit message..."
+                  placeholder={t('git.commitMsg')}
                   className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition mb-4"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter') handlePush(); if (e.key === 'Escape') setShowCommitModal(false); }}
@@ -3360,7 +3362,7 @@ export function AIChatPage() {
                 type="text"
                 value={branchName}
                 onChange={(e) => setBranchName(e.target.value)}
-                placeholder="Enter branch name..."
+                placeholder={t('git.branchName')}
                 className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition mb-4"
                 autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter') handleCreateBranch(); if (e.key === 'Escape') setShowBranchModal(false); }}
@@ -3418,7 +3420,7 @@ export function AIChatPage() {
                     type="text" 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search past conversations..." 
+                    placeholder={t('chat.searchHistory')} 
                     className="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 transition-colors"
                   />
                 </div>

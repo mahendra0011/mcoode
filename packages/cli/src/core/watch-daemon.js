@@ -95,8 +95,10 @@ export class WatchDaemon extends EventEmitter {
     this.startedAt = new Date();
     await this._loadIgnores();
     if (!this.projectId) this.projectId = await getProjectId(this.projectPath);
-    this.undoStack.filePath = this.undoStack.filePath || join(homedir(), '.mcode', 'projects', this.projectId, 'undo-watch.json');
-    await mkdir(dirname(this.undoStack.filePath), { recursive: true });
+    if (this.undoStack) {
+      this.undoStack.filePath = this.undoStack.filePath || join(homedir(), '.mcode', 'projects', this.projectId, 'undo-watch.json');
+      await mkdir(dirname(this.undoStack.filePath), { recursive: true });
+    }
 
     this.emitStatus();
 
@@ -361,6 +363,9 @@ export class WatchDaemon extends EventEmitter {
   }
 
   async _applyFix(rel, errorContext) {
+    // Prune BEFORE the budget check — otherwise the window never slides and
+    // the daemon stays paused forever after 60 fixes (deadlock).
+    this.fixTimestamps = this.fixTimestamps.filter((t) => Date.now() - t < 3_600_000);
     if (this.fixTimestamps.length >= this.config.maxFixesPerHour) {
       this._pushActivity({ file: rel, outcome: 'needs-review', detail: 'maxFixesPerHour budget reached — auto-fix paused' });
       return;

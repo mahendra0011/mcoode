@@ -6,6 +6,7 @@ let server;
 let base;
 
 beforeAll(async () => {
+  process.env.MCODE_BCRYPT_ROUNDS = process.env.MCODE_BCRYPT_ROUNDS || '4';
   server = await startServer({
     port: 0,
     env: { ...process.env, MONGODB_URI: '', REDIS_URI: '', BREVO_API_KEY: '', NODE_ENV: 'test' }

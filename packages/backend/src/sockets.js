@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { mkdir } from 'node:fs/promises';
-import pty from 'node-pty';
+import { createPtySession, writeToPty, resizePty, killPty, killAllPty, adoptOrphan } from './pty-manager.js';
 import { runSmart } from './piston-client.js';
 import { ensureProjectContainer, execInContainer, stopProjectContainer, getContainerPort } from './docker-runner.js';
 import { connectSSH, sendToSSH, disconnectSSH } from './ssh-manager.js';
@@ -16,8 +16,8 @@ import { spawn } from 'node:child_process';
 // Per-socket chat sessions (web clients only)
 const chatSessions = new Map();
 
-// Per-socket PTY terminal sessions: Map<socketId, Map<terminalId, ptyProcess>>
-const ptySessionsMap = new Map();
+// PTY terminal sessions live in pty-manager.js (single owner).
+// (Removed duplicate local ptySessionsMap — BUG-34.)
 
 // Per-socket debug sessions & project processes
 const activeDebugSessions = new Map(); // socket.id -> { child, port }
@@ -126,6 +126,43 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
   io.on('connection', (socket) => {
     console.log('[SOCKET] connection:', socket.id, 'role:', socket.role, 'url:', socket.handshake.url);
+    // Per-socket token buckets (BUG-37): cheap DoS guard for expensive events.
+    // Limits are per minute; over-limit callers get a `rate_limited` error.
+    const buckets = new Map();
+    const SOCKET_LIMITS = {
+      'chat:send': 20,
+      'terminal:command': 60,
+      'code:run-file': 30,
+      'project:run': 10,
+      'test:run': 20,
+      'debug:start': 20,
+      'debug:evaluate': 60,
+      'terminal:spawn': 20,
+    };
+    const checkRate = (event) => {
+      const max = SOCKET_LIMITS[event];
+      if (!max) return true;
+      const now = Date.now();
+      const row = buckets.get(event) || { windowStart: now, count: 0 };
+      if (now - row.windowStart > 60_000) {
+        row.windowStart = now;
+        row.count = 0;
+      }
+      row.count += 1;
+      buckets.set(event, row);
+      if (row.count > max) {
+        socket.emit('error', { code: 'RATE_LIMITED', message: `${event} rate-limited — slow down` });
+        return false;
+      }
+      return true;
+    };
+    const requireAuth = (event) => {
+      if (!socket.userId) {
+        socket.emit('error', { code: 'UNAUTH', message: `${event} requires authentication` });
+        return false;
+      }
+      return true;
+    };
     socket.on('terminal:command', (payload) => {
       console.log('[SOCKET] terminal:command received:', JSON.stringify(payload));
     });
@@ -752,6 +789,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     });
 
     socket.on('chat:send', async (payload = {}) => {
+      if (!checkRate('chat:send')) return;
       const session = chatSessions.get(socket.id);
       if (!session) {
         socket.emit('chat:error', { message: 'chat session not started — send chat:start first' });
@@ -809,6 +847,8 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
     // ── Single-file Execution (Smart: Host → Piston fallback) ──────────
     socket.on('code:run-file', async (payload = {}) => {
+      if (!checkRate('code:run-file')) return;
+      if (!requireAuth('code:run-file')) return;
       const { filename, code, stdin } = payload;
       if (!filename || code === undefined) {
         return socket.emit('code:run-result', { error: 'filename and code are required' });
@@ -823,6 +863,8 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
     // ── Real Node Inspector Debugging Session ─────────────────────────
     socket.on('debug:start', async (payload = {}) => {
+      if (!checkRate('debug:start')) return;
+      if (!requireAuth('debug:start')) return;
       const { filename, code } = payload;
       if (!filename || code === undefined) {
         return socket.emit('debug:error', { message: 'filename and code are required' });
@@ -863,6 +905,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     });
 
     socket.on('debug:stop', () => {
+      if (!requireAuth('debug:stop')) return;
       const session = activeDebugSessions.get(socket.id);
       if (session && session.child) {
         session.child.kill('SIGTERM');
@@ -871,8 +914,33 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       socket.emit('debug:stopped');
     });
 
+    // ── CDP evaluate in the paused debuggee (Variables pane) ──────────
+    socket.on('debug:evaluate', async (payload = {}) => {
+      if (!checkRate('debug:evaluate')) return;
+      if (!requireAuth('debug:evaluate')) return;
+      const session = activeDebugSessions.get(socket.id);
+      if (!session) {
+        return socket.emit('debug:error', { message: 'no active debug session — start one first' });
+      }
+      const expression = String(payload.expression || '');
+      if (!expression) {
+        return socket.emit('debug:evaluate-result', { error: 'expression is required' });
+      }
+      try {
+        const { evaluateInDebugger } = await import('./debug-eval.js');
+        const session = activeDebugSessions.get(socket.id);
+        if (!session) throw new Error('no active debug session — start one first');
+        const result = await evaluateInDebugger(session.port, expression);
+        socket.emit('debug:evaluate-result', { expression, result });
+      } catch (err) {
+        socket.emit('debug:evaluate-result', { expression, error: err.message });
+      }
+    });
+
     // ── Full Project Execution (Docker → Host fallback) ────────────────
     socket.on('project:run', async (payload = {}) => {
+      if (!checkRate('project:run')) return;
+      if (!requireAuth('project:run')) return;
       const session = chatSessions.get(socket.id);
       const projectPath = session?.workspacePath;
       if (!projectPath) {
@@ -1012,6 +1080,8 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     // Direct terminal command execution — attempts container execution first,
     // falls back to host workspace execa execution if container is inactive.
     socket.on('terminal:command', async (payload = {}) => {
+      if (!checkRate('terminal:command')) return;
+      if (!requireAuth('terminal:command')) return;
       const { command } = payload;
       if (!command || !command.trim()) return;
 
@@ -1065,10 +1135,25 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       const { id, shellType = 'powershell', cols = 80, rows = 24, cwd, workspaceId } = payload;
       if (!id) return null;
 
+      // Reload-reattach: a live orphan from the grace window wins over spawn.
+      const adopted = adoptOrphan(
+        socket.id,
+        id,
+        (data) => socket.emit('terminal:output', { id, data }),
+        ({ exitCode, signal }) => {
+          socket.emit('terminal:exit', { id, exitCode, signal });
+          killPty(socket.id, id);
+        }
+      );
+      if (adopted) {
+        socket.emit('terminal:spawned', { id, shellPath: adopted.shellPath, adopted: true });
+        return adopted.ptyProcess;
+      }
+
       let targetCwd = cwd;
       if (!targetCwd && workspaceId) {
         try {
-          const ws = await db().workspace.findOne({ _id: String(workspaceId) });
+          const ws = await db().workspace.findOne({ _id: String(workspaceId), userId: socket.userId });
           if (ws?.diskPath) {
             targetCwd = ws.diskPath;
           }
@@ -1110,41 +1195,22 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         else shellPath = '/bin/bash';
       }
 
-      // Clean up existing PTY session for this id if re-spawned
-      let socketPtyMap = ptySessionsMap.get(socket.id);
-      if (!socketPtyMap) {
-        socketPtyMap = new Map();
-        ptySessionsMap.set(socket.id, socketPtyMap);
-      }
-      if (socketPtyMap.has(id)) {
-        try {
-          socketPtyMap.get(id).kill();
-        } catch {}
-        socketPtyMap.delete(id);
-      }
+      // Single owner for PTY state is pty-manager.js (kill first on re-spawn).
+      killPty(socket.id, id);
 
       try {
         console.log(`[SOCKET PTY] Spawning PTY session ${id} (${shellPath}) in ${targetCwd}`);
-        const ptyProcess = pty.spawn(shellPath, [], {
-          name: 'xterm-256color',
-          cols: Math.max(cols || 80, 10),
-          rows: Math.max(rows || 24, 5),
-          cwd: targetCwd,
-          env: { ...process.env, COLORTERM: 'truecolor', TERM: 'xterm-256color' },
-          useConpty: isWin ? false : undefined, // Avoid Windows ConPty AttachConsole issues
-        });
-
-        socketPtyMap.set(id, ptyProcess);
-
-        ptyProcess.onData((data) => {
-          socket.emit('terminal:output', { id, data });
-        });
-
-        ptyProcess.onExit(({ exitCode, signal }) => {
-          console.log(`[SOCKET PTY] Session ${id} exited with code ${exitCode}`);
-          socket.emit('terminal:exit', { id, exitCode, signal });
-          socketPtyMap.delete(id);
-        });
+        const { ptyProcess } = createPtySession(
+          socket.id, id, targetCwd, shellType,
+          Math.max(cols || 80, 10), Math.max(rows || 24, 5),
+          (data) => socket.emit('terminal:output', { id, data }),
+          ({ exitCode, signal }) => {
+            console.log(`[SOCKET PTY] Session ${id} exited with code ${exitCode}`);
+            socket.emit('terminal:exit', { id, exitCode, signal });
+            killPty(socket.id, id);
+          },
+          shellPath
+        );
 
         socket.emit('terminal:spawned', { id, shellPath, cwd: targetCwd });
         return ptyProcess;
@@ -1159,44 +1225,37 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     }
 
     socket.on('terminal:spawn', async (payload = {}) => {
+      if (!checkRate('terminal:spawn')) return;
+      if (!requireAuth('terminal:spawn')) return;
       await spawnPtySession(payload);
     });
 
     socket.on('terminal:input', async ({ id, data }) => {
-      let socketPtyMap = ptySessionsMap.get(socket.id);
-      let ptyProcess = socketPtyMap?.get(id);
-      if (!ptyProcess && id && data !== undefined) {
-        console.log(`[SOCKET PTY] Auto-spawning missing session ${id} on terminal:input`);
-        ptyProcess = await spawnPtySession({ id });
-      }
-      if (ptyProcess && data !== undefined) {
-        ptyProcess.write(data);
+      if (!requireAuth('terminal:input')) return;
+      writeToPty(socket.id, id, data);
+      // Preserve legacy auto-spawn: first keystroke creates the session.
+      if (id && data !== undefined) {
+        const { getPty } = await import('./pty-manager.js');
+        if (!getPty(socket.id, id)) {
+          console.log(`[SOCKET PTY] Auto-spawning missing session ${id} on terminal:input`);
+          await spawnPtySession({ id });
+          writeToPty(socket.id, id, data);
+        }
       }
     });
 
     socket.on('terminal:resize', ({ id, cols, rows }) => {
-      const socketPtyMap = ptySessionsMap.get(socket.id);
-      const ptyProcess = socketPtyMap?.get(id);
-      if (ptyProcess && cols > 0 && rows > 0) {
-        try {
-          ptyProcess.resize(cols, rows);
-        } catch {}
-      }
+      resizePty(socket.id, id, cols, rows);
     });
 
     socket.on('terminal:kill', ({ id }) => {
-      const socketPtyMap = ptySessionsMap.get(socket.id);
-      const ptyProcess = socketPtyMap?.get(id);
-      if (ptyProcess) {
-        try {
-          ptyProcess.kill();
-        } catch {}
-        socketPtyMap.delete(id);
-      }
+      killPty(socket.id, id);
     });
 
     // ── Testing Panel ─────────────────────────────
     socket.on('test:run', async (payload = {}) => {
+      if (!checkRate('test:run')) return;
+      if (!requireAuth('test:run')) return;
       const session = chatSessions.get(socket.id);
       const projectPath = session?.workspacePath;
       if (!projectPath) {
@@ -1227,6 +1286,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
     // ── Ports Panel ──────────────────────────────
     socket.on('ports:list', async () => {
+      if (!requireAuth('ports:list')) return;
       try {
         const { execa } = await import('execa');
         let ports = [];
@@ -1257,19 +1317,11 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     socket.on('disconnect', async () => {
       await stopProjectContainer(socket.id);
       disconnectSSH(socket.id);
+      killAllPty(socket.id);
       const session = chatSessions.get(socket.id);
       if (session) {
         session.cleanup();
         chatSessions.delete(socket.id);
-      }
-      const socketPtyMap = ptySessionsMap.get(socket.id);
-      if (socketPtyMap) {
-        for (const [, proc] of socketPtyMap) {
-          try {
-            proc.kill();
-          } catch {}
-        }
-        ptySessionsMap.delete(socket.id);
       }
     });
   });

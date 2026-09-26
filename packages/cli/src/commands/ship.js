@@ -58,7 +58,12 @@ export async function shipCommand({ env = 'prod', cwd = process.cwd(), yes = fal
     if (wantTag) {
       await git.add(['-A']);
       await git.commit(`chore: ship ${tag}`).catch(() => {});
-      await git.addTag(tag);
+      try {
+        await git.addTag(tag);
+      } catch {
+        // Tag already exists locally — idempotent re-ship, keep going.
+        warn(`tag ${tag} already exists — reusing`);
+      }
       await git.pushTags().catch(() => warn('could not push tag (no remote configured?) \u2014 continuing'));
       ok(`tagged ${tag}`);
     }

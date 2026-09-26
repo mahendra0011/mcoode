@@ -157,8 +157,9 @@ export function usageRoutes({ secret }) {
         ? await db().chatMessage.countDocuments({ sessionId: { $in: range.map((s) => s._id) } }).catch(() => 0)
         : 0;
 
-      // Tokens per day (estimate: sum of quotas used across sessions)
-      // Since we don't store per-session tokens, approximate from quota usage
+      // Tokens per day — chat messages carry no token counts yet, so this is
+      // an estimate: quota-used spread proportionally to per-day session
+      // volume (NOT flat across days). Flagged so the UI can label it.
       const dailyTokens = {};
       for (let i = 29; i >= 0; i--) {
         const date = new Date(today);
@@ -167,12 +168,12 @@ export function usageRoutes({ secret }) {
         dailyTokens[dateStr] = 0;
       }
       const totalTokensUsed = quota.tokens.used || 0;
-      const activeDayCount = activeDays.length || 1;
-      Object.keys(dailyTokens).forEach((dateStr) => {
-        if (activeDays.includes(dateStr)) {
-          dailyTokens[dateStr] = Math.round(totalTokensUsed / activeDayCount);
+      const sessionsInWindow = Object.values(dailyActivity).reduce((a, b) => a + b, 0);
+      if (totalTokensUsed > 0 && sessionsInWindow > 0) {
+        for (const [dateStr, count] of Object.entries(dailyActivity)) {
+          dailyTokens[dateStr] = Math.round((totalTokensUsed * count) / sessionsInWindow);
         }
-      });
+      }
 
       res.json({
         ok: true,
@@ -188,6 +189,7 @@ export function usageRoutes({ secret }) {
           modelUsage,
           dailyActivity,
           dailyTokens,
+          tokensEstimated: true,
           totalMessages,
           tokenQuota: quota.tokens,
           buildQuota: quota.builds,
@@ -233,6 +235,48 @@ export function usageRoutes({ secret }) {
       doc.fontSize(10).fillColor(successRate >= 80 ? '#1a7f37' : successRate >= 50 ? '#b58900' : '#cb2431').text(`Success rate: ${successRate}%`);
       doc.fontSize(10).fillColor('#333').text(`Compliance status: ${successRate >= 50 ? 'compliant' : 'needs_review'}`);
       doc.end();
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/export.csv', async (req, res, next) => {
+    try {
+      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 });
+      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const lines = ['date,project,mode,status'];
+      for (const s of sessions) {
+        lines.push([
+          new Date(s.createdAt || 0).toISOString().slice(0, 10),
+          esc(s.projectName || 'unnamed'),
+          esc(s.mode || ''),
+          esc(s.status || ''),
+        ].join(','));
+      }
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="mcode-usage.csv"');
+      res.send(lines.join('\n'));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/v1/usage/coverage — last `npm run coverage` summary, if present.
+  router.get('/coverage', async (req, res, next) => {
+    try {
+      const { readFile, stat } = await import('node:fs/promises');
+      const { fileURLToPath } = await import('node:url');
+      const { dirname, join } = await import('node:path');
+      const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+      const summaryPath = join(root, 'coverage', 'coverage-summary.json');
+      const st = await stat(summaryPath).catch(() => null);
+      if (!st) {
+        return res.status(404).json({
+          error: { code: 'NO_COVERAGE', message: 'no coverage artifact yet — run `npm run coverage` at the repo root' },
+        });
+      }
+      const summary = JSON.parse(await readFile(summaryPath, 'utf8'));
+      res.json({ ok: true, generatedAt: st.mtime, total: summary.total || null });
     } catch (err) {
       next(err);
     }

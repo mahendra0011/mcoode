@@ -1,12 +1,10 @@
 import express from 'express';
+import { authMiddleware } from '../auth.js';
 import { searchAndFetch, buildContextBlock } from '../web-search/index.js';
 
 export function searchRoutes({ secret }) {
   const router = express.Router();
-
-  // POST /api/v1/search
-  // We can add auth middleware here if needed: router.use(authMiddleware({ secret }));
-  // But for now, we'll keep it accessible or assume it's protected at a higher level if desired.
+  router.use(authMiddleware({ secret }));
   
   router.post('/', async (req, res, next) => {
     try {

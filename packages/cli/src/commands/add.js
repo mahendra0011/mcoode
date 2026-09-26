@@ -9,12 +9,35 @@ export async function addCommand(plugin) {
     process.exit(1);
   }
   const config = await loadConfig();
-  config.plugins = { ...(config.plugins || {}), [plugin]: entry.config };
+  const plugins = { ...(config.plugins || {}), [plugin]: { ...entry.config, enabled: true } };
+  const patch = { plugins };
   for (const [key, value] of Object.entries(entry.config)) {
-    config[key] = { ...(config[key] || {}), ...value };
+    patch[key] = { ...(config[key] || {}), ...value };
   }
-  await saveConfig();
+  await saveConfig(patch);
   ok(`plugin ${plugin} installed (${entry.category}) \u2014 ${entry.desc}`);
+}
+
+export async function removeCommand(plugin) {
+  const config = await loadConfig();
+  if (!config.plugins?.[plugin]) {
+    fail(`plugin "${plugin}" is not installed`);
+    process.exit(1);
+  }
+  const plugins = { ...config.plugins };
+  delete plugins[plugin];
+  await saveConfig({ plugins });
+  ok(`plugin ${plugin} removed (merged config keys left untouched — edit config.json to clean up)`);
+}
+
+export async function setPluginEnabled(plugin, enabled) {
+  const config = await loadConfig();
+  if (!config.plugins?.[plugin]) {
+    fail(`plugin "${plugin}" is not installed — run "mcode add ${plugin}" first`);
+    process.exit(1);
+  }
+  await saveConfig({ plugins: { ...config.plugins, [plugin]: { ...config.plugins[plugin], enabled } } });
+  ok(`plugin ${plugin} ${enabled ? 'enabled' : 'disabled'}`);
 }
 
 export async function pluginsListCommand({ category } = {}) {

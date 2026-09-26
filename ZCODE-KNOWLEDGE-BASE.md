@@ -1,5 +1,11 @@
 # ZCode — Complete Knowledge Base: Architecture, Flow, Animations, Components & Tests
 
+> **Scope note (2026-09-26):** this file documents the ZCode Electron desktop
+> app + CLI (v2/v3.x) as observed on 2026-08-13 — a **different product** from
+> the `mcode` monorepo in this repo (`packages/cli` v2.4.6, OpenTUI).
+> God-mode capacity below refers to ZCode; mcode runs max 5 concurrent
+> subagents per wave (`--concurrency`).
+>
 > **Comprehensive reference** — Everything about ZCode from startup to shutdown, covering the CLI runtime, Electron desktop app, plugin system, MCP servers, skills, animation systems (both web/desktop and terminal CLI), and the full test suite.
 >
 > **Last updated:** 2026-08-13

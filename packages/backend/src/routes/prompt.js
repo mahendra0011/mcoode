@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
+import { db } from '../db.js';
 import { getOrCreateUserRouter } from './pair.js';
 
 /**
@@ -119,6 +120,41 @@ export function offlineEnhancePrompt(prompt = '') {
  */
 export function promptRoutes({ secret } = {}) {
   const router = Router();
+
+  // Prompt library — saved templates, newest first.
+  router.get('/library', authMiddleware({ secret }), async (req, res, next) => {
+    try {
+      const items = await db().promptTemplate.find({ userId: req.userId }, { createdAt: -1 });
+      res.json({ items });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/library', authMiddleware({ secret }), async (req, res, next) => {
+    try {
+      const name = String(req.body?.name || '').slice(0, 80).trim();
+      const text = String(req.body?.text || '').slice(0, 20000);
+      if (!name || !text) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'name and text are required' } });
+      }
+      const item = await db().promptTemplate.create({ userId: req.userId, name, text });
+      res.status(201).json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/library/:id', authMiddleware({ secret }), async (req, res, next) => {
+    try {
+      const row = await db().promptTemplate.findOne({ _id: req.params.id, userId: req.userId });
+      if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'prompt not found' } });
+      await db().promptTemplate.deleteOne({ _id: row._id });
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
 
   router.post('/enhance', authMiddleware({ secret }), async (req, res) => {
     const { prompt = '', mode = 'agent' } = req.body || {};

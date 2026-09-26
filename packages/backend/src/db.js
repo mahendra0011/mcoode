@@ -57,7 +57,7 @@ class MemoryModel {
     return null;
   }
 
-  async find(query = {}, sort = {}) {
+  async find(query = {}, sort = {}, { skip = 0, limit = 0 } = {}) {
     let out = [...this.rows.values()];
     if (query && Object.keys(query).length) {
       out = out.filter((doc) => matches(doc, query));
@@ -72,13 +72,20 @@ class MemoryModel {
         return (valA > valB ? dir : valA < valB ? -dir : 0);
       });
     }
+    if (skip) out = out.slice(skip);
+    if (limit) out = out.slice(0, limit);
     return out.map((d) => structuredClone(d));
   }
 
   async findByIdAndUpdate(id, patch) {
     const doc = this.rows.get(String(id));
     if (!doc) return null;
-    const merged = { ...doc, ...patch };
+    let merged = patch;
+    if (patch && typeof patch === 'object' && '$set' in patch) {
+      merged = { ...doc, ...patch.$set };
+    } else {
+      merged = { ...doc, ...patch };
+    }
     this.rows.set(doc._id, merged);
     return structuredClone(merged);
   }
@@ -86,8 +93,25 @@ class MemoryModel {
   async updateOne(query, patch) {
     const doc = await this.findOne(query);
     if (!doc) return { matchedCount: 0 };
-    const merged = { ...doc, ...patch };
-    this.rows.set(doc._id, merged);
+    // Support Mongo-style operators used across routes ($set, $unset, $inc)
+    let effective = patch;
+    if (patch && typeof patch === 'object' && ('$set' in patch || '$unset' in patch || '$inc' in patch)) {
+      effective = { ...doc };
+      if (patch.$set && typeof patch.$set === 'object') Object.assign(effective, patch.$set);
+      if (patch.$unset && typeof patch.$unset === 'object') {
+        for (const k of Object.keys(patch.$unset)) delete effective[k];
+      }
+      if (patch.$inc && typeof patch.$inc === 'object') {
+        for (const [k, v] of Object.entries(patch.$inc)) effective[k] = (Number(effective[k]) || 0) + Number(v);
+      }
+      // Preserve any non-operator keys too (defensive)
+      for (const [k, v] of Object.entries(patch)) {
+        if (!k.startsWith('$')) effective[k] = v;
+      }
+    } else {
+      effective = { ...doc, ...patch };
+    }
+    this.rows.set(doc._id, effective);
     return { matchedCount: 1 };
   }
 
@@ -216,7 +240,9 @@ export function db() {
     workspace: 'Workspace',
     chatMessage: 'ChatMessage',
     githubAccount: 'GithubAccount',
-    userSettings: 'UserSettings'
+    userSettings: 'UserSettings',
+    refreshToken: 'RefreshToken',
+    promptTemplate: 'PromptTemplate'
   };
 
   const out = {};
@@ -227,5 +253,21 @@ export function db() {
   }
   out.mode = mode;
   out.connected = connected;
+  // Storage-correct pagination for BOTH modes (MemoryModel and Mongoose
+  // have incompatible find() signatures — never call 3-arg find directly).
+  out.paginate = async (model, query, sortKey, page = 1, limit = 20) => {
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit) || 20));
+    if (mode === 'mongo') {
+      const [items, total] = await Promise.all([
+        model.find(query).sort({ [sortKey]: -1 }).skip((p - 1) * l).limit(l).lean(),
+        model.countDocuments(query),
+      ]);
+      return { items, total, page: p, limit: l };
+    }
+    const total = await model.countDocuments(query);
+    const items = await model.find(query, { [sortKey]: -1 }, { skip: (p - 1) * l, limit: l });
+    return { items, total, page: p, limit: l };
+  };
   return out;
 }

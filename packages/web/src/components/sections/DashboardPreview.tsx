@@ -159,10 +159,14 @@ export function DashboardPreview() {
                     <Terminal className="w-3.5 h-3.5 text-neutral-300" />
                     Live Activity Stream
                   </span>
-                  <span className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => router.push('/live')}
+                    className="text-[11px] text-emerald-400 font-mono flex items-center gap-1 hover:text-emerald-300"
+                  >
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    streaming
-                  </span>
+                    streaming · open live →
+                  </button>
                 </div>
 
                 <div className="font-mono text-[11.5px] leading-relaxed space-y-1.5 text-neutral-300 bg-neutral-950/80 p-3.5 rounded-xl border border-neutral-800/80">

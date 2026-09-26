@@ -89,6 +89,8 @@ const PROVIDER_CHOICES = [
   { id: 'Groq', env: 'GROQ_API_KEY', icon: '▪' },
   { id: 'DeepSeek', env: 'DEEPSEEK_API_KEY', icon: '▫' },
   { id: 'Mistral', env: 'MISTRAL_API_KEY', icon: '◆' },
+  { id: 'Qwen', env: 'QWEN_API_KEY', icon: '⬣' },
+  { id: 'Moonshot', env: 'MOONSHOT_API_KEY', icon: '⬔' },
   { id: 'Poolside', env: 'POOLSIDE_API_KEY', icon: '◈' },
   { id: 'Other provider', env: null, icon: '○' },
 ];
@@ -458,9 +460,9 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
       if ((key.name === "down") || (key.name === "pagedown")) setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
       if ((key.name === "return")) {
         if (selectedIdx === 0) { setStep(STEPS.API_KEY_PROVIDER); setSelectedIdx(0); }
-        else onComplete();
+        else setStep(STEPS.DONE);
       }
-      if ((key.name === "escape")) onComplete();
+      if ((key.name === "escape")) setStep(STEPS.DONE);
     });
 
     return (
@@ -603,7 +605,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
       try {
         await apiHandlers.saveApiKey(env, inputValues.apiKey);
         setStatus({ type: 'ok', message: `Key stored as ${env}` });
-        setTimeout(() => onComplete(), 1200);
+        setTimeout(() => setStep(STEPS.DONE), 900);
       } catch (err) {
         setStatus({ type: 'error', message: err.message });
       } finally {
@@ -660,6 +662,45 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
     );
   };
 
+  // ── Done step: checklist + next actions ───────────────────────────────
+
+  const DoneStep = () => {
+    useKeyboard((key) => {
+      if ((key.name === "return") || (key.name === "escape")) onComplete();
+    });
+
+    return (
+      <box flexDirection="column" alignItems="center">
+        <StepIndicator current={3} total={3} />
+        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}>
+          <text fg={theme.green}>✓ setup complete</text>
+        </box>
+        <box
+          flexDirection="column"
+          borderStyle="round"
+          borderColor={theme.green}
+          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
+          paddingLeft={SPACING.md} paddingRight={SPACING.md}
+          width={62}
+        >
+          <text fg={theme.text}>  ✓ account {hasAccount ? '(ready)' : '(skipped — local mode)'}</text>
+          <text fg={theme.text}>  ✓ provider key {hasKey || inputValues.apiKey ? '(ready)' : '(mock + local work)'}</text>
+          <text fg={theme.text}>  ✓ vault encrypted at ~/.mcode/vault.json.enc</text>
+          <box marginTop={SPACING.sm}>
+            <text fg={theme.dim}>try it:</text>
+          </box>
+          <text fg={theme.text}>  mcode doctor                      — verify setup</text>
+          <text fg={theme.text}>  mcode god "build ..." --yes       — first build</text>
+          <text fg={theme.text}>  mcode serve  +  dashboard on :5173 — live view</text>
+          <text fg={theme.text}>  mcode connect                     — add more keys</text>
+        </box>
+        <box marginTop={SPACING.sm}>
+          <text fg={theme.dim}>enter to start building</text>
+        </box>
+      </box>
+    );
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   const stepComponents = {
@@ -669,6 +710,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
     [STEPS.API_KEY_ASK]: ApiKeyAskStep,
     [STEPS.API_KEY_PROVIDER]: ApiKeyProviderStep,
     [STEPS.API_KEY_INPUT]: ApiKeyInputStep,
+    [STEPS.DONE]: DoneStep,
   };
 
   const CurrentStep = stepComponents[step];

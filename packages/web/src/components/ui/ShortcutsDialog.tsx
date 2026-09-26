@@ -19,9 +19,13 @@ const SHORTCUTS: ShortcutRow[] = [
   { keys: "⌘ / Ctrl + K", label: "Open command palette" },
   { keys: "⌘ / Ctrl + Shift + P", label: "Open command palette" },
   { keys: "⌘ / Ctrl + B", label: "Toggle file-tree sidebar" },
-  { keys: "⌘ / Ctrl + ` (backtick)", label: "Toggle integrated terminal" },
+  { keys: "⌘ / Ctrl + ` (backtick) or J", label: "Toggle integrated terminal" },
+  { keys: "⌘ / Ctrl + P", label: "Quick open file" },
+  { keys: "⌘ / Ctrl + Shift + O", label: "Go to symbol" },
+  { keys: "⌘ / Ctrl + G", label: "Go to line" },
+  { keys: "⌘ / Ctrl + Shift + B", label: "Open tasks" },
   { keys: "⌘ / Ctrl + /", label: "Show this cheat sheet" },
-  { keys: "Escape", label: "Close command palette" },
+  { keys: "Escape", label: "Close dialogs" },
 ];
 
 /**

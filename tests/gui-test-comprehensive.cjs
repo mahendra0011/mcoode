@@ -1,5 +1,7 @@
 const { chromium } = require('playwright');
 
+const BASE = process.env.MCODE_WEB_URL || 'http://localhost:3000';
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -15,7 +17,7 @@ const { chromium } = require('playwright');
 
   // === SETTINGS PAGE TEST ===
   console.log('\n========== SETTINGS PAGE ==========');
-  await page.goto('http://localhost:3000/settings', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto(`${BASE}/settings`, { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForTimeout(1000);
   console.log('Title:', await page.title());
 
@@ -74,7 +76,7 @@ const { chromium } = require('playwright');
 
   // === AI CHAT PAGE TEST ===
   console.log('\n========== AI CHAT PAGE ==========');
-  await page.goto('http://localhost:3000/ai/chat', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.goto(`${BASE}/ai/chat`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(3000);
   console.log('Title:', await page.title());
 
@@ -127,7 +129,7 @@ const { chromium } = require('playwright');
 
   // === LOGIN PAGE ===
   console.log('\n========== LOGIN PAGE ==========');
-  await page.goto('http://localhost:3000/login', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.waitForTimeout(1000);
   const loginText = await page.evaluate(() => document.body.innerText);
   console.log('Has ZCode text:', /ZCode|zcode|ZCODE/.test(loginText));

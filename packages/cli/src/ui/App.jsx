@@ -9,16 +9,17 @@ import { WelcomeScreen } from './WelcomeScreen.jsx';
 import { StatusBar } from './StatusBar.jsx';
 import { Sidebar } from './Sidebar.jsx';
 import { Header } from './Header.jsx';
-import { lazyComponent } from './lazy.js';
-const CommandPalette = lazyComponent('./CommandPalette.jsx', 'CommandPalette');
-const ProviderWizard = lazyComponent('./ProviderWizard.jsx', 'ProviderWizard');
-const AgentStrip = lazyComponent('./AgentStrip.jsx', 'AgentStrip');
-const ActivePanel = lazyComponent('./ActivePanel.jsx', 'ActivePanel');
-const PermissionModal = lazyComponent('./PermissionModal.jsx', 'PermissionModal');
-const ProcessingScreen = lazyComponent('./ProcessingScreen.jsx', 'ProcessingScreen');
-const AnalyticsPanel = lazyComponent('./AnalyticsPanel.jsx', 'AnalyticsPanel');
-const DebugPanel = lazyComponent('./DebugPanel.jsx', 'DebugPanel');
-const DiffViewer = lazyComponent('./DiffViewer.jsx', 'DiffViewer');
+// Static imports: the CLI ships as a single-file esbuild bundle with no
+// code-splitting, so variable dynamic import() can never resolve chunks.
+import { CommandPalette } from './CommandPalette.jsx';
+import { ProviderWizard } from './ProviderWizard.jsx';
+import { AgentStrip } from './AgentStrip.jsx';
+import { ActivePanel } from './ActivePanel.jsx';
+import { PermissionModal } from './PermissionModal.jsx';
+import { ProcessingScreen } from './ProcessingScreen.jsx';
+import { AnalyticsPanel } from './AnalyticsPanel.jsx';
+import { DebugPanel } from './DebugPanel.jsx';
+import { DiffViewer } from './DiffViewer.jsx';
 import { EVENTS, SUBAGENT_STATUS, planWaves } from '@mcode/shared';
 import { setTheme, THEME_NAMES } from './theme.js';
 import { saveHistory, listHistory } from '../core/history.js';
@@ -544,7 +545,7 @@ const handleSlash = async (raw) => {
     switch (name) {
       case 'help':
         setMessages((m) => [...m,
-          { kind: 'system', text: 'commands: /connect /models /init /god /hooks /security /audit /quota /compliance /workspaces /resume /stack /bugfix /watch on|off|status|logs|undo /agents /plan /diff /undo /rollback /mode /ui-mode /agent /analytics /theme /scheme /customize /debug /export /record /replay /clear /help /exit' }
+          { kind: 'system', text: 'commands: /connect /models /init /demo /god /hooks /security /audit /quota /compliance /workspaces /resume /stack /bugfix /watch on|off|status|logs|undo /agents /plan /diff /undo /rollback /mode /ui-mode /agent /analytics /theme /scheme /customize /debug /export /record /replay /clear /help /exit' }
         ]);
         break;
       case 'history': {
@@ -725,11 +726,16 @@ const handleSlash = async (raw) => {
         setActiveModal('connect');
         break;
       case 'models':
+      case 'model':
         setActiveModal('models');
         break;
       case 'init':
         if (onAction) onAction('init');
         else setMessages((m) => [...m, { kind: 'err', text: 'init not supported here' }]);
+        break;
+      case 'demo':
+        if (onAction) onAction('demo');
+        else setMessages((m) => [...m, { kind: 'err', text: 'demo not supported here' }]);
         break;
       case 'analytics':
         setAnalyticsOpen(true);
@@ -809,6 +815,29 @@ const handleSlash = async (raw) => {
         break;
       }
       case 'theme': {
+        const sub = (rest[0] || '').toLowerCase();
+        if (sub === 'export' || sub === 'import') {
+          const file = rest[1] || join(process.cwd(), '.mcode-theme.json');
+          try {
+            if (sub === 'export') {
+              const data = { theme: themeName, iconSet: theme.iconSet, fontSize: theme.fontSize, layout: theme.layout };
+              await writeFile(file, JSON.stringify(data, null, 2), 'utf8');
+              setMessages((m) => [...m, { kind: 'ok', text: `✓ theme exported to ${file}` }]);
+            } else {
+              const { readFile } = await import('node:fs/promises');
+              const data = JSON.parse(await readFile(file, 'utf8'));
+              if (data.theme) { setTheme(data.theme); setThemeName(data.theme); }
+              if (data.iconSet) theme.iconSet = data.iconSet;
+              if (data.fontSize) theme.fontSize = data.fontSize;
+              if (data.layout) theme.layout = data.layout;
+              setThemeVersion((v) => v + 1);
+              setMessages((m) => [...m, { kind: 'ok', text: `✓ theme imported from ${file}` }]);
+            }
+          } catch (err) {
+            setMessages((m) => [...m, { kind: 'err', text: `theme ${sub} failed: ${err.message}` }]);
+          }
+          break;
+        }
         const names = THEME_NAMES || ['dark', 'light', 'opencode'];
         const idx = names.indexOf(themeName);
         const next = names[(idx + 1) % names.length];

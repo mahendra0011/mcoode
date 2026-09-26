@@ -1,9 +1,11 @@
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 
 // Load environment variables from packages/backend/.env first, then root .env fallback
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -17,10 +19,11 @@ import { rateLimit } from 'express-rate-limit';
 import pino from 'pino';
 import pinoHttp from 'pino-http';
 import { connectDb, db } from './db.js';
-import { connectRedis, cache } from './cache.js';
+import { connectRedis, cache, getRedisClient } from './cache.js';
 import { connectQueue, jobQueue, startWorker } from './queue.js';
 import { attachSockets } from './sockets.js';
 import { configureMailer, sendMail } from './mailer.js';
+import { authMiddleware } from './auth.js';
 import { authRoutes } from './routes/auth.js';
 import { sessionRoutes } from './routes/sessions.js';
 import { pluginRoutes } from './routes/plugins.js';
@@ -66,23 +69,10 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   const storage = await connectDb(mongoUri);
 
   // ─── Redis (Optional — caching/job queuing) ─────────────────────────────────
+  // connectRedis() owns the single client; reuse it (no second connection).
   const redisUri = env.REDIS_URI || null;
   const cacheResult = await connectRedis(redisUri);
-  let redisClient = null;
-  if (cacheResult.mode === 'redis') {
-    try {
-      const { Redis } = await import('ioredis');
-      const candidate = new Redis(redisUri, {
-        lazyConnect: true,
-        retryStrategy: (times) => (times > 2 ? null : 200)
-      });
-      candidate.on('error', () => {});
-      await candidate.connect().catch(() => {});
-      if (candidate.status === 'ready') redisClient = candidate;
-    } catch {
-      redisClient = null;
-    }
-  }
+  const redisClient = cacheResult.client || getRedisClient();
 
   // ─── Job Queue (Optional — background jobs) ─────────────────────────────────
   await connectQueue(redisClient);
@@ -98,9 +88,10 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use((req, _res, next) => {
-    // Socket.IO / Engine.IO handles all /live requests at the httpServer level
+    // Socket.IO / Engine.IO handles all /live requests at the httpServer level.
+    // Skip the rest of the Express chain for those URLs (must call next).
     if (req.url === '/live' || req.url.startsWith('/live/') || req.url.startsWith('/live?')) {
-      return;
+      return next('router');
     }
     next();
   });
@@ -108,13 +99,16 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginEmbedderPolicy: false,
   }));
+  const allowedOrigins = String(env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000,http://localhost:5174').split(',').map((s) => s.trim()).filter(Boolean);
   app.use(cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (Electron, curl, server-to-server) or any dev origin
-      if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+      // Allow requests with no origin (Electron, curl, server-to-server) or explicit allowlist + local dev origins
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (/^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin) && env.NODE_ENV !== 'production') {
         return callback(null, true);
       }
-      return callback(null, true);
+      return callback(new Error('CORS blocked: origin not allowed'));
     },
     credentials: true,
   }));
@@ -161,11 +155,11 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/auth/github', githubAuthRoutes({ secret }));
   app.use('/api/v1/github', githubApiRoutes({ secret }));
   app.use('/api/v1/search', searchRoutes({ secret }));
-  app.use('/api/v1/extensions', extensionRoutes());
+  app.use('/api/v1/extensions', extensionRoutes({ secret }));
   app.use('/api/v1/languages', languageRoutes());
-  app.use('/api/v1/android', androidRoutes());
+  app.use('/api/v1/android', androidRoutes({ secret }));
   app.use('/api/v1/pair', pairRoutes({ secret }));
-  app.post('/api/v1/pair-suggest', (req, res) => handlePairSuggest(req, res, { secret }));
+  app.post('/api/v1/pair-suggest', authMiddleware({ secret }), (req, res) => handlePairSuggest(req, res, { secret }));
   app.use('/api/v1/prompt', promptRoutes({ secret }));
   app.use('/api/v1/clean', cleanRoutes({ secret }));
 

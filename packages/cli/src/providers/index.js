@@ -86,7 +86,13 @@ const m = (key, free) => {
 };
 
 function modelsFor(ids, map) {
-  return ids.map((id) => ({ id, ...map[id] }));
+  // Canonical refs are `provider:model` (single colon). Registry keys carry
+  // a `vendor/` prefix — strip it so `openrouter:anthropic/claude-x`
+  // double-prefix refs can never form (BUG-47).
+  return ids.map((id) => {
+    const short = id.includes('/') ? id.slice(id.indexOf('/') + 1) : id;
+    return { id: short, ...map[id] };
+  });
 }
 
 export function getAllAdapters(secrets = {}) {

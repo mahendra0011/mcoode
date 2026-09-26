@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link'; import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
@@ -20,6 +20,35 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const connectGithub = () => {
+    // Full OAuth login (no session needed) — backend links/creates the
+    // account and returns here with tokens in the fragment.
+    window.location.href = '/api/v1/auth/github/login';
+  };
+
+  const [mode, setMode] = useState<'password' | 'otp'>('password');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+
+  // OAuth-login return: backend redirects to /login#access=..&refresh=..
+  useEffect(() => {
+    const hash = window.location.hash || '';
+    if (!hash.includes('access=')) {
+      const q = new URLSearchParams(window.location.search);
+      const err = q.get('oauth_error');
+      if (err) setError(err);
+      return;
+    }
+    const p = new URLSearchParams(hash.slice(1));
+    const access = p.get('access');
+    const refresh = p.get('refresh');
+    if (access && refresh) {
+      setTokens({ access, refresh });
+      window.location.hash = '';
+      router.push('/ai/chat');
+    }
+  }, [router]);
+
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -29,6 +58,34 @@ export function LoginPage() {
       if (res.status >= 400) {
         throw new Error(res.data?.error?.message || 'Login failed');
       }
+      setTokens({ access: res.data.access, refresh: res.data.refresh });
+      router.push('/ai/chat');
+    } catch (err) {
+      setError((err as any).response?.data?.error?.message || (err as any).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendOtp = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await api.post('/api/v1/auth/send-otp', { email: form.email, intent: 'login' });
+      setOtpSent(true);
+    } catch (err) {
+      setError((err as any).response?.data?.error?.message || (err as any).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitOtp = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.post('/api/v1/auth/verify-otp', { email: form.email, otp, intent: 'login' });
       setTokens({ access: res.data.access, refresh: res.data.refresh });
       router.push('/ai/chat');
     } catch (err) {
@@ -131,6 +188,15 @@ export function LoginPage() {
           )}
 
           {/* Login Form */}
+          <div className="flex gap-1 mb-4 bg-[#eff4fb] rounded-xl p-1" role="tablist" aria-label="Login method">
+            {(['password', 'otp'] as const).map((m) => (
+              <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setError(''); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold ${mode === m ? 'bg-white text-zinc-900 shadow' : 'text-zinc-500'}`}>
+                {m === 'password' ? 'Password' : 'Email code'}
+              </button>
+            ))}
+          </div>
+          {mode === 'password' ? (
           <motion.form
             className="space-y-4"
             onSubmit={submit}
@@ -210,6 +276,49 @@ export function LoginPage() {
               {loading ? 'Logging in...' : 'Login'}
             </motion.button>
           </motion.form>
+          ) : (
+          <motion.form
+            className="space-y-4"
+            onSubmit={otpSent ? submitOtp : (e) => { e.preventDefault(); sendOtp(); }}
+            variants={formVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, email: e.target.value })}
+              className="w-full bg-[#eff4fb] border border-transparent rounded-xl py-3.5 px-4 text-zinc-900 placeholder:text-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
+              placeholder="Email Address"
+              required
+            />
+            {otpSent && (
+              <input
+                inputMode="numeric"
+                value={otp}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="w-full bg-[#eff4fb] border border-transparent rounded-xl py-3.5 px-4 text-zinc-900 placeholder:text-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all tracking-[0.3em] text-center"
+                placeholder="••••••"
+                required
+              />
+            )}
+            {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
+            <motion.button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#4ade80] hover:bg-[#22c55e] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 mt-4 disabled:opacity-50"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {loading ? 'Please wait…' : otpSent ? 'Verify & Login' : 'Send Code'}
+            </motion.button>
+            {otpSent && (
+              <button type="button" onClick={sendOtp} className="w-full text-xs font-semibold text-zinc-500 hover:text-zinc-800">
+                Resend code
+              </button>
+            )}
+          </motion.form>
+          )}
 
           {/* Divider */}
           <motion.div
@@ -223,20 +332,14 @@ export function LoginPage() {
 
           {/* Social Logins */}
           <motion.div
-            className="grid grid-cols-2 gap-4"
+            className="grid grid-cols-1 gap-4"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
           >
             <motion.button
-              className="flex items-center justify-center gap-2.5 bg-white border border-zinc-200 hover:bg-zinc-50 rounded-xl py-3 text-sm font-bold text-zinc-700 shadow-sm"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="Google" />
-              Google
-            </motion.button>
-            <motion.button
+              type="button"
+              onClick={connectGithub}
               className="flex items-center justify-center gap-2.5 bg-white border border-zinc-200 hover:bg-zinc-50 rounded-xl py-3 text-sm font-bold text-zinc-700 shadow-sm"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
@@ -244,7 +347,7 @@ export function LoginPage() {
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12,2C6.477,2,2,6.477,2,12c0,4.418,2.865,8.166,6.839,9.489c0.5,0.092,0.682-0.217,0.682-0.482c0-0.237-0.009-0.866-0.013-1.7 c-2.782,0.604-3.369-1.341-3.369-1.341c-0.454-1.155-1.11-1.462-1.11-1.462c-0.908-0.62,0.069-0.608,0.069-0.608 c1.003,0.07,1.531,1.03,1.531,1.03c0.892,1.529,2.341,1.087,2.91,0.831c0.092-0.646,0.35-1.087,0.636-1.337 c-2.22-0.253-4.555-1.11-4.555-4.943c0-1.091,0.39-1.984,1.029-2.683c-0.103-0.253-0.446-1.27,0.098-2.647 c0,0,0.84-0.269,2.75,1.026C10.795,7.904,11.398,7.789,12,7.784c0.601,0.005,1.205,0.12,2.004,0.342 c1.91-1.295,2.75-1.026,2.75-1.026c0.545,1.377,0.202,2.394,0.099,2.647c0.641,0.699,1.028,1.592,1.028,2.683 c0,3.842-2.339,4.687-4.566,4.935c0.359,0.309,0.678,0.919,0.678,1.852c0,1.336-0.012,2.415-0.012,2.743 c0,0.267,0.18,0.578,0.688,0.48C19.138,20.161,22,16.416,22,12C22,6.477,17.523,2,12,2z"/>
               </svg>
-              GitHub
+              Continue with GitHub
             </motion.button>
           </motion.div>
 

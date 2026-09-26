@@ -1,10 +1,12 @@
 import { Router } from 'express';
+import { authMiddleware } from '../auth.js';
 import { findDeadCode } from '../../../cli/src/core/clean/tier1-dead-code.js';
 import { findBloat } from '../../../cli/src/core/clean/tier2-bloat.js';
 import { runClean } from '../../../cli/src/core/clean/run-clean.js';
 
 export function cleanRoutes({ secret } = {}) {
   const router = Router();
+  router.use(authMiddleware({ secret }));
 
   /**
    * POST /api/v1/clean/scan

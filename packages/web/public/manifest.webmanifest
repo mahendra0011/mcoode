@@ -1,0 +1,12 @@
+{
+  "name": "mcode — terminal-first AI coding",
+  "short_name": "mcode",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0c0c0c",
+  "theme_color": "#0c0c0c",
+  "icons": [
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/favicon.png", "sizes": "64x64", "type": "image/png" }
+  ]
+}

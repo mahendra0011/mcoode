@@ -1,5 +1,7 @@
 const { chromium } = require('playwright');
 
+const BASE = process.env.MCODE_WEB_URL || 'http://localhost:3000';
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -11,7 +13,7 @@ const { chromium } = require('playwright');
     if (msg.type() === 'error') errors.push('CONSOLE_ERROR: ' + msg.text());
   });
 
-  await page.goto('http://localhost:3000/settings', { waitUntil: 'domcontentloaded', timeout: 15000 });
+  await page.goto(`${BASE}/settings`, { waitUntil: 'domcontentloaded', timeout: 15000 });
   console.log('SETTINGS PAGE TITLE:', await page.title());
   console.log('SETTINGS PAGE URL:', page.url());
 

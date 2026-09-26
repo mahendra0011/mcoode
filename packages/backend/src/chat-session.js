@@ -152,6 +152,31 @@ export class ChatSession {
 
     // Create a fresh EventEmitter for this chat session
     this.bus = new EventEmitter();
+    // Transcript persistence: one db session row per ChatSession, every
+    // finalized (non-stream) message stored with sessionId. Powers
+    // /sessions/:id transcripts + usage message counts + future replay.
+    try {
+      const row = await db().session.create({
+        userId: this.userId,
+        projectName: this.workspacePath ? String(this.workspacePath).split(/[\\/]/).pop() : 'mcode chat',
+        mode: 'chat',
+        status: 'active',
+        plan: null,
+        createdAt: new Date(),
+      });
+      this.dbSessionId = row._id;
+    } catch {
+      this.dbSessionId = null;
+    }
+    const persist = (role, text) => {
+      if (!this.dbSessionId || !text) return;
+      db().chatMessage.create({
+        sessionId: this.dbSessionId,
+        role,
+        content: String(text).slice(0, 20000),
+        timestamp: new Date(),
+      }).catch(() => {});
+    };
     this.bus.on(EVENTS.MESSAGE, (msg) => {
       // Stream chunks must go through CHAT_STREAM so the client appends
       // text to the last message instead of creating a new one per chunk.
@@ -162,6 +187,9 @@ export class ChatSession {
         return;
       }
       this.onEvent(S2C.CHAT_MESSAGE, msg);
+      if ((msg.status === 'done' || msg.kind === 'summary') && msg.kind !== 'user') {
+        persist('assistant', msg.text || msg.content || '');
+      }
       // Special: permission requests need a dedicated client event
       if (msg.block === 'permission' && msg.status === 'running') {
         this.onEvent(S2C.CHAT_PERMISSION, msg);
@@ -620,10 +648,10 @@ export class ChatSession {
           if (todo.status === 'done') continue;
           
           if (todo.files && todo.files.includes(changedFile)) {
-            if (!todo.completedFiles) todo.completedFiles = new Set();
-            todo.completedFiles.add(changedFile);
-            
-            if (todo.completedFiles.size >= todo.files.length) {
+            if (!Array.isArray(todo.completedFiles)) todo.completedFiles = [];
+            if (!todo.completedFiles.includes(changedFile)) todo.completedFiles.push(changedFile);
+
+            if (todo.completedFiles.length >= todo.files.length) {
               todo.status = 'done';
               this.onEvent(S2C.CHAT_TODO_UPDATE, { id: todo.id, status: 'done' });
             } else {
@@ -664,6 +692,14 @@ export class ChatSession {
     }
     this.running = true;
     try {
+      if (this.dbSessionId && prompt) {
+        db().chatMessage.create({
+          sessionId: this.dbSessionId,
+          role: 'user',
+          content: String(prompt).slice(0, 20000),
+          timestamp: new Date(),
+        }).catch(() => {});
+      }
       if (mode === 'agent') {
         await this.runAgent(prompt);
       } else {

@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "start": "nodemon --watch src --ext js,json --delay 2 src/main.js",
+    "start": "node src/main.js",
+    "dev": "nodemon --watch src --ext js,json --delay 2 src/main.js",
     "seed:plugins": "node scripts/seed-plugins.js",
     "test": "vitest run"
   },
@@ -16,9 +17,11 @@
     "archiver": "^8.0.0",
     "axios": "^1.19.0",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.4.0",
     "cors": "^2.8.5",
     "dockerode": "^5.0.1",
     "dotenv": "^16.4.7",
+    "execa": "^9.5.2",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",

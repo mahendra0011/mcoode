@@ -86,10 +86,10 @@ export function SecurityChecklistCard({ findings, onFixSelected }: {
           className="flex-1 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 disabled:opacity-30 disabled:cursor-not-allowed text-emerald-400 text-xs font-medium">
           Fix {selected.size > 0 ? `${selected.size} selected` : 'selected'} with AI
         </motion.button>
-        <a href="#" onClick={(e) => { e.preventDefault(); downloadReport(findings); }}
+        <button type="button" onClick={() => downloadReport(findings)}
           className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 text-xs">
           Download report
-        </a>
+        </button>
       </div>
     </motion.div>
   );

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authMiddleware } from '../auth.js';
 import axios from 'axios';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -128,8 +129,9 @@ function convertToMonacoTheme(themeData, uiTheme) {
   };
 }
 
-export function extensionRoutes() {
+export function extensionRoutes({ secret } = {}) {
   const router = Router();
+  if (secret) router.use(authMiddleware({ secret }));
 
   // GET /api/v1/extensions/search?q=eslint&category=...
   router.get('/search', async (req, res, next) => {
@@ -183,8 +185,19 @@ export function extensionRoutes() {
   router.post('/install', async (req, res, next) => {
     try {
       const { id, version, downloadUrl } = req.body;
-      if (!id || typeof id !== 'string') {
+      if (!id || typeof id !== 'string' || !/^[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+$/.test(id)) {
         return res.status(400).json({ error: 'Extension id is required (e.g. "publisher.name")' });
+      }
+      if (downloadUrl !== undefined) {
+        try {
+          const u = new URL(String(downloadUrl));
+          const host = u.hostname.toLowerCase();
+          if (!host.endsWith('open-vsx.org') && !host.endsWith('openvsx.org')) {
+            return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'downloadUrl must be an Open VSX URL' } });
+          }
+        } catch {
+          return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'invalid downloadUrl' } });
+        }
       }
 
       const parts = id.split('.');

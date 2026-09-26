@@ -13,6 +13,8 @@ export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'mcode — terminal-first AI coding',
   description: 'mcode: AI coding assistant in your terminal and browser',
+  manifest: '/manifest.webmanifest',
+  themeColor: '#0c0c0c',
   icons: {
     icon: '/logo.png',
     shortcut: '/logo.png',

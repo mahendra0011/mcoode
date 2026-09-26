@@ -176,7 +176,18 @@ export async function startRepl({ watchAfter = null } = {}) {
       continue;
     }
 
-    // persist session on exit
+    if (nextAction === 'demo') {
+      try {
+        const { doctorCommand } = await import('./commands/doctor.js');
+        await doctorCommand();
+      } catch (err) {
+        console.error(err);
+      }
+      await new Promise((r) => setTimeout(r, 2500));
+      continue;
+    }
+
+    // persist session on exit (loop only continues via /init above)
     await saveHistory({
       id: orchestrator.sessionId,
       mode: 'manual',

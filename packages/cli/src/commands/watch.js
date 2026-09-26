@@ -14,10 +14,21 @@ const statePath = async (cwd = process.cwd()) => {
 
 export async function watchCommand({ background = false, scanIntervalMs = null, cwd = process.cwd() }) {
   if (background) {
-    // detached child process (bundled: dist/watch-process.cjs, source: src/watch-process.js)
-    const script = typeof __dirname !== 'undefined'
-      ? join(__dirname, '..', 'dist', 'watch-process.mjs')
-      : join(process.cwd(), 'packages', 'cli', 'src', 'watch-process.js');
+    // detached child process — resolve relative to THIS file, never cwd.
+    // bundled: dist/watch-process.mjs next to the bundle; source: src/watch-process.js.
+    const { fileURLToPath } = await import('node:url');
+    const { dirname } = await import('node:path');
+    const here = dirname(fileURLToPath(import.meta.url));
+    const { existsSync } = await import('node:fs');
+    const candidates = [
+      join(here, '..', '..', 'dist', 'watch-process.mjs'), // src/commands → dist/
+      join(here, '..', 'watch-process.js'), // src/commands → src/
+    ];
+    const script = candidates.find((c) => existsSync(c));
+    if (!script) {
+      fail(`watch background script not found (looked in ${candidates.join(', ')}) — run "npm run build:cli" first`);
+      process.exit(1);
+    }
     const child = spawn(process.execPath, [script, cwd, scanIntervalMs || ''], {
       detached: true,
       stdio: 'ignore',

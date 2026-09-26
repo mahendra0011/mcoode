@@ -39,7 +39,7 @@ export function HowItWorks() {
             <span className="font-medium text-foreground">Enterprise plan</span>, ready to grow with you.
           </motion.p>
           <motion.a
-            href="#"
+            href="/ai/chat"
             initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}

@@ -55,18 +55,30 @@ describe('CostLedger', () => {
     expect(ledger.isRateLimited('openai', { maxRpm: 60, maxTpm: 120_000 })).toBe(true);
   });
 
-  it('tracks tpm entries (note: _trim uses timestamp comparison)', () => {
+  it('tracks tpm as token sums within the window', () => {
     const ledger = new CostLedger();
-    // The tpm array stores token counts, and _trim compares them to Date.now()
-    // Since token counts are much smaller than timestamps, they are always trimmed.
-    // This tests the actual current behavior — tpm effectively resets instantly.
     for (let i = 0; i < 5; i++) {
       ledger.record('openai', { inputTokens: 25_000, outputTokens: 0 });
     }
-    // tpm() returns 0 because token values < Date.now() cutoff
-    expect(ledger.tpm('openai')).toBe(0);
-    // Rate-limiting by tpm won't trigger, but rpm-based limiting still works
-    expect(ledger.isRateLimited('openai', { maxRpm: 5, maxTpm: 120_000 })).toBe(true);
+    // 5 x 25k = 125k tokens inside the 60s window
+    expect(ledger.tpm('openai')).toBe(125_000);
+    // TPM-based rate limiting now triggers
+    expect(ledger.isRateLimited('openai', { maxRpm: 100, maxTpm: 120_000 })).toBe(true);
+    expect(ledger.isRateLimited('openai', { maxRpm: 100, maxTpm: 200_000 })).toBe(false);
+  });
+
+  it('persists and reloads rpm/tpm via save/load', async () => {
+    const fs = await import('node:fs/promises');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const file = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'ledger-')), 'ledger.json');
+    const a = new CostLedger({ filePath: file });
+    a.record('openai', { inputTokens: 100, outputTokens: 50 });
+    await a.save();
+    const b = new CostLedger({ filePath: file });
+    await b.load();
+    expect(b.rpm('openai')).toBe(1);
+    expect(b.tpm('openai')).toBe(150);
   });
 
   it('is not rate-limited for unknown providers', () => {

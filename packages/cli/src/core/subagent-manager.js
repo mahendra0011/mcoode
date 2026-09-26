@@ -352,6 +352,55 @@ export class SubagentManager {
 
   emit(event, payload) {
     this.bus?.emit(event, payload);
+    // Live snapshot for `mcode agents` (other terminals): god-run subagents
+    // live in memory, so mirror minimal status to ~/.mcode/agents/. Best
+    // effort, throttled, never throws into the run loop.
+    if (
+      event === EVENTS.WAVE_START ||
+      event === EVENTS.WAVE_COMPLETE ||
+      event === EVENTS.SUBAGENT_DONE ||
+      event === EVENTS.SUBAGENT_FAILED ||
+      event === EVENTS.SUBAGENT_NEEDS_REVIEW
+    ) {
+      this._snapshotAgents().catch(() => {});
+    }
+  }
+
+  async _snapshotAgents() {
+    const now = Date.now();
+    if (now - (this._lastSnapshotAt || 0) < 2000) return;
+    this._lastSnapshotAt = now;
+    try {
+      const { homedir } = await import('node:os');
+      const { join, basename } = await import('node:path');
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      const projectId = await getProjectId(this.projectPath);
+      const dir = join(homedir(), '.mcode', 'agents');
+      await mkdir(dir, { recursive: true });
+      const todos = (this.plan?.todos || []).map((t) => ({
+        id: t.id,
+        title: t.title,
+        domain: t.domain,
+        wave: t.wave || null,
+        status: this.results.get(t.id)?.status || this.subagents.get(t.id)?.status || 'pending',
+      }));
+      const done = todos.filter((t) => t.status === SUBAGENT_STATUS.DONE).length;
+      await writeFile(
+        join(dir, `${projectId}.json`),
+        JSON.stringify({
+          kind: 'god',
+          project: basename(this.projectPath),
+          projectId,
+          pid: process.pid,
+          status: done === todos.length && todos.length > 0 ? 'completed' : 'running',
+          done,
+          total: todos.length,
+          updatedAt: new Date().toISOString(),
+          todos,
+        }, null, 2),
+        'utf8'
+      );
+    } catch {}
   }
 
   /**

@@ -1,6 +1,11 @@
 {
-  "id": "subscriber-05",
-  "name": "Test Subscriber 5",
-  "email": "test5@example.com",
-  "status": "active"
+  "id": "sub-005",
+  "name": "User 005",
+  "email": "user005@example.com",
+  "status": "inactive",
+  "created_at": "2026-09-21T13:35:44.772Z",
+  "preferences": {
+    "notifications": false,
+    "theme": "light"
+  }
 }

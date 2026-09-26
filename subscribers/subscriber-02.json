@@ -1,11 +1,11 @@
 {
   "id": "sub-002",
-  "name": "Jane Doe",
-  "email": "jane.doe@example.com",
+  "name": "User 002",
+  "email": "user002@example.com",
   "status": "active",
-  "created_at": "2024-01-16T14:20:00Z",
+  "created_at": "2026-09-24T13:35:44.770Z",
   "preferences": {
-    "notifications": false,
-    "theme": "light"
+    "notifications": true,
+    "theme": "dark"
   }
 }

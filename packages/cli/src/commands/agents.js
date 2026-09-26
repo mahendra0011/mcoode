@@ -4,21 +4,41 @@ import { readdir, readFile } from 'node:fs/promises';
 import { json, table, warn } from '../core/logger.js';
 
 export async function agentsCommand({ asJson = false } = {}) {
-  const dir = join(homedir(), '.mcode', 'watch');
-  const files = await readdir(dir).catch(() => []);
   const rows = [];
-  for (const f of files.filter((x) => x.endsWith('.json'))) {
+  // 1. Watch daemons (existing behavior).
+  const watchDir = join(homedir(), '.mcode', 'watch');
+  const watchFiles = await readdir(watchDir).catch(() => []);
+  for (const f of watchFiles.filter((x) => x.endsWith('.json'))) {
     try {
-      const state = JSON.parse(await readFile(join(dir, f), 'utf8'));
+      const state = JSON.parse(await readFile(join(watchDir, f), 'utf8'));
       rows.push([state.project || f, state.status, String(state.fixesApplied ?? 0), String(state.pid ?? '-')]);
     } catch {
       /* skip */
     }
   }
+  // 2. God-run subagents (mirrored live by SubagentManager into ~/.mcode/agents/).
+  const agentsDir = join(homedir(), '.mcode', 'agents');
+  const agentFiles = await readdir(agentsDir).catch(() => []);
+  for (const f of agentFiles.filter((x) => x.endsWith('.json'))) {
+    try {
+      const state = JSON.parse(await readFile(join(agentsDir, f), 'utf8'));
+      if (state.kind !== 'god') continue;
+      // Drop snapshots older than 2h (stale runs).
+      if (Date.now() - new Date(state.updatedAt || 0).getTime() > 2 * 3600 * 1000) continue;
+      rows.push([
+        `${state.project || f} (god ${state.done ?? 0}/${state.total ?? 0})`,
+        state.status,
+        String(state.done ?? 0),
+        String(state.pid ?? '-'),
+      ]);
+    } catch {
+      /* skip */
+    }
+  }
+  if (asJson) return json(rows);
   if (rows.length === 0) {
     warn('no daemons running — no live subagents outside an active session');
     return;
   }
-  if (asJson) return json(rows);
-  table(rows, { columns: ['PROJECT', 'STATUS', 'FIXES', 'PID'] });
+  table(rows, { columns: ['PROJECT', 'STATUS', 'DONE/FIXES', 'PID'] });
 }

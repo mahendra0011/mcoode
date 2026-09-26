@@ -9,16 +9,50 @@ import robotBg from '../../assets/robot-bg-new.png';
 export function ForgotPasswordPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [password, setPassword] = useState('');
+  const [step, setStep] = useState<'email' | 'reset' | 'done'>('email');
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
 
-  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const sendCode = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    setError('');
+    try {
+      const res = await fetch('/api/v1/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, intent: 'login' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || 'failed to send code');
+      setStep('reset');
+    } catch (err: any) {
+      setError(err.message || 'failed to send code');
+    } finally {
       setLoading(false);
-      setSubmitted(true);
-    }, 1000);
+    }
+  };
+
+  const reset = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/v1/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || 'reset failed');
+      setStep('done');
+    } catch (err: any) {
+      setError(err.message || 'reset failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -85,16 +119,16 @@ export function ForgotPasswordPage() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
             >
-              Enter your email and we'll send you a link to reset your password.
+              Enter your email and we'll send you a code to reset your password.
             </motion.p>
           </div>
 
           <AnimatePresence mode="wait">
-            {!submitted ? (
+            {step === 'email' ? (
               <motion.form
                 key="form"
                 className="space-y-4"
-                onSubmit={submit}
+                onSubmit={sendCode}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -116,6 +150,8 @@ export function ForgotPasswordPage() {
                   />
                 </motion.div>
 
+                {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
+
                 {/* Submit Button */}
                 <motion.button
                   type="submit"
@@ -128,7 +164,46 @@ export function ForgotPasswordPage() {
                   whileTap={{ scale: 0.98 }}
                 >
                   {loading && <motion.div animate={{ rotate: 360 }} transition={{ duration: 0.6, repeat: Infinity, ease: 'linear' }}><ArrowDownRight className="w-4 h-4" /></motion.div>}
-                  {loading ? 'Sending...' : 'Send Reset Link'}
+                  {loading ? 'Sending...' : 'Send Reset Code'}
+                </motion.button>
+              </motion.form>
+            ) : step === 'reset' ? (
+              <motion.form
+                key="reset"
+                className="space-y-4"
+                onSubmit={reset}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ delay: 0.25 }}
+              >
+                <p className="text-sm text-zinc-500">Enter the 6-digit code sent to {email} plus a new password.</p>
+                <input
+                  inputMode="numeric"
+                  value={otp}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full bg-[#eff4fb] border border-transparent rounded-xl py-3.5 px-4 text-zinc-900 placeholder:text-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all tracking-[0.3em] text-center"
+                  placeholder="••••••"
+                  required
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                  className="w-full bg-[#eff4fb] border border-transparent rounded-xl py-3.5 px-4 text-zinc-900 placeholder:text-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                  placeholder="New password (min 8 chars)"
+                  minLength={8}
+                  required
+                />
+                {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
+                <motion.button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-[#4ade80] hover:bg-[#22c55e] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {loading ? 'Resetting...' : 'Reset Password'}
                 </motion.button>
               </motion.form>
             ) : (
@@ -177,7 +252,7 @@ export function ForgotPasswordPage() {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.25 }}
                 >
-                  We've sent a password reset link to {email}
+                  Password reset — log in with the new password
                 </motion.p>
                 <motion.button
                   onClick={() => router.push('/login')}

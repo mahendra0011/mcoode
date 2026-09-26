@@ -1,5 +1,7 @@
 const { chromium } = require('playwright');
 
+const BASE = process.env.MCODE_WEB_URL || 'http://localhost:3000';
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
@@ -7,7 +9,7 @@ const { chromium } = require('playwright');
 
   // === AI CHAT PAGE ===
   console.log('\n========== AI CHAT PAGE ==========');
-  await page.goto('http://localhost:3000/ai/chat', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.goto(`${BASE}/ai/chat`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(3000);
   console.log('Title:', await page.title());
 

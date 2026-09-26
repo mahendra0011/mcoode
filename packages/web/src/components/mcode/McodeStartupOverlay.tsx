@@ -16,6 +16,7 @@ export function McodeStartupOverlay() {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
+    document.body.classList.add('mcode-startup-ready');
     const hide = () => setVisible(false);
 
     if (typeof window !== 'undefined' && window.mcodeElectron?.onReady) {

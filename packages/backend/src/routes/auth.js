@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomInt } from 'node:crypto';
-import { hashPassword, verifyPassword, signTokens, verifyToken, authMiddleware } from '../auth.js';
+import { hashPassword, verifyPassword, signTrackedTokens, rotateRefreshToken, setAuthCookies, clearAuthCookies, readAuthCookies, authMiddleware } from '../auth.js';
 import { db } from '../db.js';
 import { validate } from '../validate.js';
 import { sendMail, isMailEnabled } from '../mailer.js';
@@ -11,12 +11,28 @@ const OTP_SEND_WINDOW_MS = 10 * 60 * 1000;
 const OTP_SEND_LIMIT = 5;
 
 const sendLog = new Map();
+const SENDLOG_MAX_KEYS = 5000;
 
-function rateLimited(email) {
+// OTP send throttle: Redis-backed when available (multi-instance safe),
+// in-memory capped Map fallback for single-process dev/test.
+async function rateLimited(email) {
+  try {
+    const { cache } = await import('../cache.js');
+    const c = cache();
+    if (c.mode === 'redis') {
+      const key = `otp:send:${email}`;
+      const count = await c.incr(key, OTP_SEND_WINDOW_MS / 1000);
+      return count > OTP_SEND_LIMIT;
+    }
+  } catch {}
   const now = Date.now();
   const row = sendLog.get(email);
   if (!row || now - row.windowStart > OTP_SEND_WINDOW_MS) {
     sendLog.set(email, { windowStart: now, count: 1 });
+    if (sendLog.size > SENDLOG_MAX_KEYS) {
+      const oldest = sendLog.keys().next().value;
+      sendLog.delete(oldest);
+    }
     return false;
   }
   row.count += 1;
@@ -36,7 +52,7 @@ export function authRoutes({ secret }) {
       if (intent === 'login' && !await users.findOne({ email })) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'no account found for this email — try signup' } });
       }
-      if (rateLimited(email)) {
+      if (await rateLimited(email)) {
         return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'too many OTP requests — wait a few minutes' } });
       }
       const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
@@ -48,7 +64,7 @@ export function authRoutes({ secret }) {
         subject: `mcode verification code: ${code}`,
         text: `Your mcode ${intent} code is ${code}. It expires in 10 minutes.`
       });
-      const dev = process.env.NODE_ENV !== 'production';
+      const dev = process.env.NODE_ENV === 'test';
       res.json({
         ok: true,
         expiresInSec: OTP_TTL_MS / 1000,
@@ -99,7 +115,8 @@ export function authRoutes({ secret }) {
           return res.status(401).json({ error: { code: 'BAD_CREDENTIALS', message: 'no account for this email' } });
         }
       }
-      const tokens = signTokens(user._id, { secret });
+      const tokens = await signTrackedTokens(db(), user._id, { secret });
+      setAuthCookies(res, tokens);
       res.json({ user: { id: user._id, email: user.email, name: user.name, plan: user.plan }, ...tokens });
     } catch (err) {
       // DB hiccup during OTP verify — return 503 so client retries
@@ -124,7 +141,8 @@ export function authRoutes({ secret }) {
         plan: 'free',
         settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
       });
-      const tokens = signTokens(user._id, { secret });
+      const tokens = await signTrackedTokens(db(), user._id, { secret });
+      setAuthCookies(res, tokens);
       res.status(201).json({ user: { id: user._id, email, name, plan: user.plan }, ...tokens });
     } catch (err) {
       // DB hiccup is not a validation error — return 503 so client retries
@@ -143,7 +161,8 @@ export function authRoutes({ secret }) {
       if (!user || !verifyPassword(password, user.passwordHash)) {
         return res.status(401).json({ error: { code: 'BAD_CREDENTIALS', message: 'invalid email or password' } });
       }
-      const tokens = signTokens(user._id, { secret });
+      const tokens = await signTrackedTokens(db(), user._id, { secret });
+      setAuthCookies(res, tokens);
       res.json({ user: { id: user._id, email: user.email, name: user.name, plan: user.plan }, ...tokens });
     } catch (err) {
       // DB hiccup is not an auth failure — return 503 so client retries
@@ -154,16 +173,82 @@ export function authRoutes({ secret }) {
     }
   });
 
+  router.post('/reset-password', validate('resetPassword'), async (req, res, next) => {
+    try {
+      const { email, otp, password } = req.body;
+      const pending = await db().otp.findOne({ email, intent: 'login' });
+      if (!pending || new Date(pending.expiresAt) < new Date()) {
+        return res.status(400).json({ error: { code: 'OTP_EXPIRED', message: 'code expired — request a new one via send-otp (intent: login)' } });
+      }
+      if (pending.attempts >= OTP_MAX_ATTEMPTS) {
+        return res.status(400).json({ error: { code: 'OTP_EXPIRED', message: 'too many attempts — request a new code' } });
+      }
+      if (!verifyPassword(otp, pending.codeHash)) {
+        await db().otp.updateOne({ _id: pending._id }, { attempts: pending.attempts + 1 });
+        return res.status(401).json({ error: { code: 'BAD_OTP', message: 'incorrect code' } });
+      }
+      const user = await db().user.findOne({ email });
+      if (!user) {
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'no account for this email' } });
+      }
+      await db().user.updateOne({ _id: user._id }, { passwordHash: hashPassword(password) });
+      await db().otp.deleteMany({ email, intent: 'login' });
+      await db().refreshToken.deleteMany({ userId: user._id });
+      res.json({ ok: true });
+    } catch (err) {
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
+      }
+      next(err);
+    }
+  });
+
   router.post('/refresh', validate('refresh'), async (req, res, _next) => {
     try {
-      const payload = verifyToken(req.body.refresh, secret);
-      if (payload.type !== 'refresh') throw new Error('wrong token type');
-      // Refresh token doesn't need DB lookup (stateless) — but if you add
-      // refresh token revocation, wrap DB calls in try/catch → 503 on DB hiccups.
-      const tokens = signTokens(payload.sub, { secret });
+      const incoming = req.body.refresh || readAuthCookies(req).mcode_refresh;
+      if (!incoming) {
+        return res.status(401).json({ error: { code: 'INVALID_REFRESH', message: 'invalid refresh token' } });
+      }
+      const tokens = await rotateRefreshToken(db(), incoming, secret);
+      setAuthCookies(res, tokens);
       res.json(tokens);
-    } catch {
+    } catch (err) {
+      if (err?.code === 'REFRESH_REUSED') {
+        return res.status(401).json({ error: { code: 'REFRESH_REUSED', message: err.message } });
+      }
       res.status(401).json({ error: { code: 'INVALID_REFRESH', message: 'invalid refresh token' } });
+    }
+  });
+
+  // Session management — list active refresh sessions + revoke one/all.
+  router.get('/sessions', authMiddleware({ secret }), async (req, res, next) => {
+    try {
+      const rows = await db().refreshToken.find({ userId: req.userId }, { createdAt: -1 });
+      res.json({ sessions: rows.map((r) => ({ jti: r.jti, createdAt: r.createdAt, expiresAt: r.expiresAt })) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/sessions/:jti', authMiddleware({ secret }), async (req, res, next) => {
+    try {
+      const row = await db().refreshToken.findOne({ jti: req.params.jti });
+      if (!row || String(row.userId) !== String(req.userId)) {
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'session not found' } });
+      }
+      await db().refreshToken.deleteOne({ jti: req.params.jti });
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/sessions', authMiddleware({ secret }), async (req, res, next) => {
+    try {
+      await db().refreshToken.deleteMany({ userId: req.userId });
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
     }
   });
 
@@ -185,10 +270,14 @@ export function authRoutes({ secret }) {
   router.delete('/me', authMiddleware({ secret }), async (req, res, next) => {
     try {
       await db().user.deleteOne({ _id: req.userId });
-      if (db().session) await db().session.deleteOne({ userId: req.userId });
-      if (db().apiKey) await db().apiKey.deleteOne({ userId: req.userId });
-      if (db().userSettings) await db().userSettings.deleteOne({ userId: req.userId });
-      if (db().githubAccount) await db().githubAccount.deleteOne({ userId: req.userId });
+      if (db().session) await db().session.deleteMany({ userId: req.userId });
+      if (db().apiKey) await db().apiKey.deleteMany({ userId: req.userId });
+      if (db().userSettings) await db().userSettings.deleteMany({ userId: req.userId });
+      if (db().githubAccount) await db().githubAccount.deleteMany({ userId: req.userId });
+      if (db().workspace) await db().workspace.deleteMany({ userId: req.userId });
+      if (db().refreshToken) await db().refreshToken.deleteMany({ userId: req.userId });
+      if (db().otp) await db().otp.deleteMany({ email: req.user?.email });
+      clearAuthCookies(res);
       res.json({ ok: true });
     } catch (err) {
       if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {

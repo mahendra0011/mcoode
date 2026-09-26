@@ -49,10 +49,20 @@ export async function run(argv) {
     .option('-t, --template <name>', 'template: express | fastify | react-vite | full-stack', 'express')
     .option('-y, --yes', 'skip the empty-dir check', false)
     .option('-l, --list', 'list available templates', false)
+    .option('--preview', 'list template files without writing anything', false)
     .action(async (name, opts) => {
-      const { initCommand, initListCommand } = await import('./commands/init.js');
+      const { initCommand, initListCommand, initPreviewCommand } = await import('./commands/init.js');
       if (opts.list || !name) return initListCommand();
-      await initCommand({ name, template: opts.template, yes: opts.yes });
+      if (opts.preview) return initPreviewCommand({ template: opts.template });
+      try {
+        await initCommand({ name, template: opts.template, yes: opts.yes });
+      } catch (err) {
+        if (err?.code === 'INIT_DIR_NOT_EMPTY') {
+          fail(err.message);
+          process.exit(1);
+        }
+        throw err;
+      }
     });
 
   // ── God mode ──────────────────────────────────────────────────────────
@@ -63,13 +73,13 @@ export async function run(argv) {
     .option('--stack <stack>', 'stack hint for the planner')
     .option('--deploy <target>', 'deploy target label')
     .option('--no-tests', 'skip integration test pass', false)
-    .option('-c, --concurrency <n>', 'max concurrent subagents', parseFloat)
+    .option('-c, --concurrency <n>', 'max concurrent subagents', (v) => Math.max(1, Math.floor(parseInt(v, 10) || 5)))
     .option('--watch-after', 'start the watch daemon after the run', false)
     .option('-m, --model <ref>', 'force provider:model')
     .option('--verbose', 'verbose subagent output', false)
     .action(async (prompt, opts) => {
       const { godCommand } = await import('./commands/god.js');
-      setInteractive(Boolean(opts.yes));
+      setInteractive(!opts.yes);
       await godCommand({
         prompt,
         yes: opts.yes,
@@ -113,10 +123,12 @@ export async function run(argv) {
 
   program
     .command('gen <thing> <name>')
-    .description('generate a file (component, route, controller)')
-    .action(async (thing, name) => {
+    .description('generate a file (component, route, controller, page, api, hook, test)')
+    .option('--dry-run', 'print the target path without writing', false)
+    .option('--force', 'overwrite the target if it exists', false)
+    .action(async (thing, name, opts) => {
       const { genCommand } = await import('./commands/gen.js');
-      await genCommand(thing, name);
+      await genCommand(thing, name, { dryRun: opts.dryRun, force: opts.force });
     });
 
   // ── Env vault ─────────────────────────────────────────────────────────
@@ -301,6 +313,34 @@ export async function run(argv) {
       await pluginsListCommand({ category: opts.category });
     });
 
+  const plugin = program
+    .command('plugin')
+    .description('manage installed registry plugins');
+
+  plugin
+    .command('remove <name>')
+    .description('uninstall a registry plugin')
+    .action(async (name) => {
+      const { removeCommand } = await import('./commands/add.js');
+      await removeCommand(name);
+    });
+
+  plugin
+    .command('disable <name>')
+    .description('disable an installed plugin without uninstalling')
+    .action(async (name) => {
+      const { setPluginEnabled } = await import('./commands/add.js');
+      await setPluginEnabled(name, false);
+    });
+
+  plugin
+    .command('enable <name>')
+    .description('re-enable a disabled plugin')
+    .action(async (name) => {
+      const { setPluginEnabled } = await import('./commands/add.js');
+      await setPluginEnabled(name, true);
+    });
+
   program
     .command('ship')
     .description('build + verify + tag + deploy hook')
@@ -431,9 +471,10 @@ export async function run(argv) {
   program
     .command('login')
     .description('create an account or log in to the mcode backend')
-    .action(async () => {
+    .option('--url <url>', 'backend URL (saved to config; MCCODE_BACKEND_URL env also works)')
+    .action(async (opts) => {
       const { loginCommand } = await import('./commands/onboarding.js');
-      await loginCommand();
+      await loginCommand({ url: opts.url || null });
     });
 
   program
@@ -450,6 +491,16 @@ export async function run(argv) {
     .action(async () => {
       const { apiKeyAddCommand } = await import('./commands/api-key.js');
       await apiKeyAddCommand();
+    });
+
+  program
+    .command('connect')
+    .description('connect a provider (interactive wizard, or --provider/--key for CI)')
+    .option('--provider <id>', 'provider id (e.g. openai, anthropic)')
+    .option('--key <key>', 'API key (use with --provider)')
+    .action(async (opts) => {
+      const { connectCommand } = await import('./commands/connect.js');
+      await connectCommand({ provider: opts.provider, key: opts.key });
     });
 
   program.action(async () => {

@@ -1,7 +1,7 @@
 import { resolve, join } from 'node:path';
 import { stat, writeFile } from 'node:fs/promises';
 import { execa } from 'execa';
-import { applyTemplate, listTemplates } from '../core/templates.js';
+import { applyTemplate, listTemplates, previewTemplate } from '../core/templates.js';
 import { ok, info, warn, out, fail } from '../core/logger.js';
 import { saveHistory } from '../core/history.js';
 import { getProjectId } from '../core/store.js';
@@ -10,8 +10,9 @@ export const initCommand = async ({ name = null, template = 'express', dir = pro
   const targetDir = name ? resolve(process.cwd(), name) : dir;
   const isNewDir = !(await stat(targetDir).catch(() => null));
   if (!isNewDir && !yes && !(await isEmptyDir(targetDir))) {
-    fail(`directory is not empty: ${targetDir}`);
-    process.exit(1);
+    const err = new Error(`directory is not empty: ${targetDir} (re-run with -y to proceed)`);
+    err.code = 'INIT_DIR_NOT_EMPTY';
+    throw err;
   }
   await import('node:fs/promises').then(({ mkdir }) => mkdir(targetDir, { recursive: true }));
 
@@ -73,4 +74,12 @@ export const initListCommand = async () => {
   for (const t of listTemplates()) {
     out(`  ${t.name.padEnd(14)} ${t.description}`);
   }
+};
+
+export const initPreviewCommand = async ({ template }) => {
+  const { meta, files } = await previewTemplate(template);
+  out(`Template ${meta.name} — ${meta.description}`);
+  out(`deps: ${(meta.deps || []).join(', ') || 'none'} | devDeps: ${(meta.devDeps || []).join(', ') || 'none'}`);
+  out(`files (${files.length}, nothing written):`);
+  for (const f of files) out(`  ${f}`);
 };

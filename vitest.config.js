@@ -10,6 +10,10 @@ export default defineConfig({
     include: ['packages/**/tests/**/*.test.js'],
     globals: true,
     pool: 'forks',
-    coverage: { provider: 'v8', include: ['packages/shared/src/**'] }
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html'],
+      include: ['packages/shared/src/**', 'packages/backend/src/**', 'packages/cli/src/**/*.js'],
+    }
   }
 });

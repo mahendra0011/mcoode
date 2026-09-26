@@ -96,3 +96,23 @@ export async function applyTemplate(name, targetDir, { overwrite = false } = {})
 export function listTemplates() {
   return Object.values(TEMPLATES);
 }
+
+/** List the files a template WOULD write (no disk writes, no hooks). */
+export async function previewTemplate(name) {
+  const meta = TEMPLATES[name];
+  if (!meta) throw new Error(`Unknown template "${name}". Available: ${Object.keys(TEMPLATES).join(', ')}`);
+  const src = join(TEMPLATE_DIR, name);
+  if (!(await stat(src).catch(() => null))) {
+    throw new Error(`Template files for "${name}" not bundled`);
+  }
+  const files = [];
+  const walk = async (dir) => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const abs = join(dir, entry.name);
+      if (entry.isDirectory()) await walk(abs);
+      else files.push(relative(src, abs));
+    }
+  };
+  await walk(src);
+  return { meta, files: files.sort() };
+}

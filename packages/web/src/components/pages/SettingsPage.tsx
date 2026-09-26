@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Shield, Key, User, Github, ArrowLeft, Loader2,
   Plus, Trash2, Check, AlertTriangle, Eye, EyeOff, ChevronDown,
@@ -187,6 +188,48 @@ function GeneralTab() {
           checked={system.keepAwake}
           onChange={(v) => updateSystem('keepAwake', v)}
         />
+      </div>
+
+      {/* Backup & restore */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-semibold text-white/80 uppercase tracking-wider">Backup &amp; Restore</h3>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const raw = localStorage.getItem('mcode_unified_settings');
+              const blob = new Blob([raw || '{}'], { type: 'application/json' });
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = 'mcode-settings.json';
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }}
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium bg-white/5 hover:bg-white/10 text-white/70"
+          >
+            Export settings JSON
+          </button>
+          <label className="px-3 py-1.5 rounded-lg text-[13px] font-medium bg-white/5 hover:bg-white/10 text-white/70 cursor-pointer">
+            Import settings JSON
+            <input
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                try {
+                  const text = await f.text();
+                  JSON.parse(text);
+                  localStorage.setItem('mcode_unified_settings', text);
+                  window.location.reload();
+                } catch {
+                  alert('Invalid settings file — import aborted, nothing changed.');
+                }
+              }}
+            />
+          </label>
+        </div>
       </div>
 
       {/* Notifications */}
@@ -1822,6 +1865,26 @@ function UsageTab() {
   const [timeRange, setTimeRange] = useState('Last 30 days');
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [drillDay, setDrillDay] = useState<string | null>(null);
+  const [drillItems, setDrillItems] = useState<any[]>([]);
+  const [drillLoading, setDrillLoading] = useState(false);
+
+  const drill = async (dateStr: string) => {
+    if (drillDay === dateStr) {
+      setDrillDay(null);
+      return;
+    }
+    setDrillDay(dateStr);
+    setDrillLoading(true);
+    try {
+      const res = await api.get('/api/v1/sessions?limit=100', { timeout: 10000 });
+      setDrillItems((res.data.items || []).filter((s: any) => new Date(s.createdAt || 0).toISOString().slice(0, 10) === dateStr));
+    } catch {
+      setDrillItems([]);
+    } finally {
+      setDrillLoading(false);
+    }
+  };
 
   const fetchStats = useCallback(async () => {
     try {
@@ -1868,12 +1931,21 @@ function UsageTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4 border-b border-white/10 pb-2">
           <h2 className="text-xl font-semibold text-white">Usage stats</h2>
           <span className="text-sm font-medium text-white border-b-2 border-white pb-2 translate-y-[9px]">App usage</span>
         </div>
-        <div className="flex bg-[#1a1a1a] rounded-lg p-1 border border-white/5">
+        <div className="flex items-center gap-2">
+          <a href="/api/v1/usage/export.csv" download
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium bg-white/5 hover:bg-white/10 text-white/70">
+            Export CSV
+          </a>
+          <a href="/api/v1/usage/report.pdf" download
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium bg-white/5 hover:bg-white/10 text-white/70">
+            Export PDF
+          </a>
+          <div className="flex bg-[#1a1a1a] rounded-lg p-1 border border-white/5">
           {['Last 7 days', 'Last 30 days'].map((range) => (
             <button
               key={range}
@@ -1885,8 +1957,12 @@ function UsageTab() {
               {range}
             </button>
           ))}
+          </div>
         </div>
       </div>
+      {stats?.tokensEstimated && (
+        <p className="text-xs text-white/30">Daily token figures are estimates (per-day session volume), not metered counts.</p>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-64 text-[#666]">
@@ -1952,10 +2028,12 @@ function UsageTab() {
             <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">35-Day Activity Heatmap</h3>
             <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
               {heatmapData.map((val, idx) => (
-                <div
+                <button
                   key={idx}
-                  title={`${heatmapDates[idx]}: ${val} actions`}
-                  className={`w-4 h-4 rounded-sm flex-shrink-0 transition-all ${
+                  type="button"
+                  onClick={() => drill(heatmapDates[idx])}
+                  title={`${heatmapDates[idx]}: ${dailyActivity[heatmapDates[idx]] || 0} sessions, ~${dailyTokens[heatmapDates[idx]] || 0} tokens (est.) — click for sessions`}
+                  className={`w-4 h-4 rounded-sm flex-shrink-0 transition-all ${drillDay === heatmapDates[idx] ? 'ring-2 ring-white/60' : ''} ${
                     val === 0
                       ? 'bg-zinc-800'
                       : val === 1
@@ -1967,7 +2045,60 @@ function UsageTab() {
                 />
               ))}
             </div>
+            {drillDay && (
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                <p className="text-xs font-semibold text-white/60 mb-2">
+                  {drillDay} — {drillLoading ? 'loading…' : `${drillItems.length} session(s)`}
+                </p>
+                {!drillLoading && drillItems.length > 0 && (
+                  <ul className="space-y-1">
+                    {drillItems.map((s: any) => (
+                      <li key={s._id} className="text-xs text-white/60">
+                        <span className="text-white/85">{s.projectName || 'Untitled'}</span>
+                        <span className="text-white/30"> · {s.mode || ''} · {s.status || ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
+
+          <div className="bg-[#151515] border border-white/5 rounded-xl p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">Sessions per Day</h3>
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={heatmapDates.map((d) => ({ date: d.slice(5), sessions: dailyActivity[d] || 0, tokens: dailyTokens[d] || 0 }))}>
+                  <XAxis dataKey="date" tick={{ fill: '#666', fontSize: 10 }} interval={6} tickLine={false} axisLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fill: '#666', fontSize: 10 }} width={28} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    contentStyle={{ background: '#1e1e1e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
+                    labelStyle={{ color: '#fff' }}
+                  />
+                  <Area type="monotone" dataKey="sessions" stroke="#3ecf8e" fill="#3ecf8e33" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {stats?.modelUsage && Object.keys(stats.modelUsage).length > 0 && (            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 space-y-3">
+              <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">Usage by Model</h3>
+              {Object.entries(stats.modelUsage as Record<string, number>)
+                .sort(([, a], [, b]) => (b as number) - (a as number))
+                .map(([model, count]) => {
+                  const max = Math.max(...(Object.values(stats.modelUsage) as number[]), 1);
+                  return (
+                    <div key={model} className="flex items-center gap-3">
+                      <span className="font-mono text-xs text-emerald-300 w-48 truncate" title={model}>{model}</span>
+                      <div className="flex-1 h-2 rounded bg-white/5 overflow-hidden">
+                        <div className="h-full bg-emerald-500/70 rounded transition-all" style={{ width: `${Math.round(((count as number) / max) * 100)}%` }} />
+                      </div>
+                      <span className="text-xs text-white/50 w-16 text-right">{count as number} todos</span>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </>
       )}
     </div>

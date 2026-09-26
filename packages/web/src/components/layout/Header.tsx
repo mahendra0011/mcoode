@@ -1,21 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowDownRight, ChevronDown, User } from 'lucide-react';
+import { ArrowDownRight, User } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useI18n } from '../../lib/i18n';
 
 const MotionLink = motion.create(Link);
 
 export function Header() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [keyMode, setKeyMode] = useState<'mock' | 'live' | null>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
-    const tokens = localStorage.getItem('mcode_tokens');
-    if (tokens) {
-      try {
-        const parsed = JSON.parse(tokens);
-        if (parsed.access) setIsLoggedIn(true);
-      } catch (e) {}
-    }
+    let access: string | null = null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
+      if (parsed.access) {
+        access = parsed.access;
+        setIsLoggedIn(true);
+      }
+    } catch {}
+    // Provider badge: no stored keys → mock (free demo) mode.
+    const headers: Record<string, string> = access ? { Authorization: `Bearer ${access}` } : {};
+    fetch('/api/v1/keys', { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (Array.isArray(d?.keys)) setKeyMode(d.keys.length > 0 ? 'live' : 'mock');
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -25,7 +38,7 @@ export function Header() {
       transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
       className="fixed shadow-2xl/20 rounded-b-4xl top-2.5 inset-x-0 mx-auto w-full max-w-5xl bg-frame z-50 max-[850px]:top-0 max-[850px]:w-full max-[850px]:max-w-none max-[850px]:rounded-none max-[850px]:rounded-b-4xl max-[850px]:overflow-hidden"
     >
-      <div className="h-20 max-[850px]:h-18 grid grid-cols-[1fr_auto_1fr] items-center px-4 max-[850px]:px-6 w-full">
+      <div className="h-20 max-[850px]:h-[72px] grid grid-cols-[1fr_auto_1fr] items-center px-4 max-[850px]:px-6 w-full">
         {/* Left Side: Logo */}
         <div className="flex justify-start items-center">
           <motion.div
@@ -47,6 +60,16 @@ export function Header() {
               <span className="text-lg font-bold tracking-tight text-foreground leading-none max-[1200px]:hidden max-[850px]:inline">
                 mcode
               </span>
+              {keyMode && (
+                <span
+                  title={keyMode === 'live' ? 'Real provider keys configured' : 'No keys — running on the free mock provider'}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full max-[1200px]:hidden max-[850px]:inline ${
+                    keyMode === 'live' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'
+                  }`}
+                >
+                  {keyMode === 'live' ? 'LIVE' : 'MOCK'}
+                </span>
+              )}
             </Link>
           </motion.div>
         </div>
@@ -54,38 +77,31 @@ export function Header() {
         {/* Center: Nav (Perfectly Centered via Grid) */}
         <div className="flex justify-center items-center max-[850px]:hidden">
           <nav className="flex items-center gap-1 max-[1200px]:gap-0">
-            {['Products', 'AI', 'CLI', 'Resources', 'Pricing'].map((label, i) => {
-              const hrefMap: Record<string, string> = { Products: '#', AI: '/ai', CLI: '/cli', Resources: '#', Pricing: '#pricing' };
-              const isLink = label !== 'Products' && label !== 'Resources';
-              const content = (
-                <>
-                  {label}
-                  {label === 'Products' || label === 'Resources' ? (
-                    <ChevronDown className="w-4 h-4 ml-1" />
-                  ) : null}
-                </>
-              );
+            {[
+              { id: 'ai', label: t('nav.ai'), href: '/ai' },
+              { id: 'cli', label: t('nav.cli'), href: '/cli' },
+              { id: 'tools', label: t('nav.tools'), href: '/tools' },
+              { id: 'live', label: t('nav.live'), href: '/live' },
+              { id: 'docs', label: t('nav.docs'), href: '/docs' },
+            ].map((item, i) => {
+              const label = item.label;
+              const content = (<>{label}</>);
               return (
                 <motion.div
-                  key={label}
+                  key={item.id}
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.15 + i * 0.04, ease: [0.4, 0, 0.2, 1] }}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  {isLink ? (
-                    <Link
-                      href={hrefMap[label]}
-                      className="px-4 py-2 text-sm font-medium text-foreground/80 hover:text-foreground transition-colors rounded-full hover:bg-foreground/5 flex items-center"
-                    >
-                      {content}
-                    </Link>
-                  ) : (
-                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex items-center px-4 py-2 text-sm font-medium text-foreground/80 hover:text-foreground transition-colors rounded-full hover:bg-foreground/5">
-                      {content}
-                    </motion.button>
-                  )}
+                  <Link
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-foreground/80 hover:text-foreground transition-colors rounded-full hover:bg-foreground/5 flex items-center"
+                  >
+                    {content}
+                  </Link>
                 </motion.div>
               );
             })}
@@ -116,7 +132,7 @@ export function Header() {
                   whileHover={{ x: 3 }}
                   className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
                 >
-                  Log in
+                  {t('nav.login')}
                 </MotionLink>
                 <MotionLink
                   href="/signup"
@@ -144,7 +160,9 @@ export function Header() {
 
           <motion.button
             type="button"
-            aria-label="Open menu"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
             className="hidden max-[850px]:flex items-center justify-center w-10 h-10 ml-4"
             whileTap={{ scale: 0.9 }}
           >
@@ -169,6 +187,32 @@ export function Header() {
           </motion.button>
         </div>
       </div>
+      {menuOpen && (
+        <nav className="hidden max-[850px]:flex flex-col gap-1 px-6 pb-4" aria-label="Mobile">
+          {[
+            { label: 'AI Chat', href: '/ai/chat' },
+            { label: 'AI Home', href: '/ai' },
+            { label: 'CLI', href: '/cli' },
+            { label: 'Tools', href: '/tools' },
+            { label: 'Live', href: '/live' },
+            { label: 'Docs', href: '/docs' },
+            { label: 'Mcode', href: '/mcode' },
+            { label: 'Extensions', href: '/extensions' },
+            { label: 'Preview', href: '/preview' },
+            { label: 'Settings', href: '/settings' },
+            { label: isLoggedIn ? t('nav.account') : t('nav.login'), href: isLoggedIn ? '/settings' : '/login' },
+          ].map((item) => (
+            <Link
+              key={item.href + item.label}
+              href={item.href}
+              onClick={() => setMenuOpen(false)}
+              className="px-4 py-2.5 text-sm font-medium text-foreground/80 hover:text-foreground hover:bg-foreground/5 rounded-xl"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </motion.header>
   );
 }

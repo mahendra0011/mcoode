@@ -21,7 +21,12 @@ const schemas = {
     name: Joi.string().min(2).max(60).when('intent', { is: 'signup', then: Joi.required() }),
     password: Joi.string().min(8).when('intent', { is: 'signup', then: Joi.required() })
   }),
-  refresh: Joi.object({ refresh: Joi.string().required() }),
+  refresh: Joi.object({ refresh: Joi.string().allow('').optional() }),
+  resetPassword: Joi.object({
+    email: Joi.string().email().required(),
+    otp: Joi.string().pattern(/^\d{6}$/).required(),
+    password: Joi.string().min(8).required()
+  }),
   createSession: Joi.object({
     projectName: Joi.string().max(120).required(),
     mode: Joi.string().valid('god', 'init', 'run', 'watch', 'manual').required(),

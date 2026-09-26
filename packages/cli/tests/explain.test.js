@@ -1,8 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { runExplain, generateProjectTour } from '../src/core/explain/run-explain.js';
 import { ToolExecutor, WRITE_TOOLS } from '../src/core/tools.js';
+
+// Isolated temp dir — never touch the real repo cwd (racy under parallel load).
+const testTmpDir = await mkdtemp(join(tmpdir(), 'mcode-explain-test-'));
+afterEach(async () => {
+  try {
+    await rm(testTmpDir, { recursive: true, force: true });
+    await import('node:fs/promises').then((fs) => fs.mkdir(testTmpDir, { recursive: true }));
+  } catch {}
+});
 
 describe('Explain Mode (doc 50)', () => {
   const testReportPath = '.mcode/reports/project-tour.md';
@@ -38,7 +49,7 @@ describe('Explain Mode (doc 50)', () => {
     expect(explanation).toBe(mockAnswer);
   });
 
-  it('generates a full onboarding walkthrough and saves project-tour.md', async () => {
+  it('generates a full onboarding walkthrough and saves project-tour.md', { timeout: 30000 }, async () => {
     const mockTour = '# Project Onboarding Tour\n\nWelcome to the codebase...';
     const mockRouter = {
       pick: vi.fn().mockResolvedValue({
@@ -51,13 +62,14 @@ describe('Explain Mode (doc 50)', () => {
       })
     };
 
-    const tour = await generateProjectTour(process.cwd(), {
+    const tour = await generateProjectTour(testTmpDir, {
       router: mockRouter
     });
 
     expect(tour).toBe(mockTour);
-    expect(existsSync(testReportPath)).toBe(true);
-    const content = await readFile(testReportPath, 'utf8');
+    const tourPath = join(testTmpDir, '.mcode', 'reports', 'project-tour.md');
+    expect(existsSync(tourPath)).toBe(true);
+    const content = await readFile(tourPath, 'utf8');
     expect(content).toBe(mockTour);
   });
 

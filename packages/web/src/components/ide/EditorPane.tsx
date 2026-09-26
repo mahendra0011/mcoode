@@ -32,6 +32,7 @@ import {
   ContextMenuSeparator,
 } from '@radix-ui/react-context-menu';
 import { WelcomeTab } from './menu/WelcomeTab';
+import { DiffReviewModal } from './DiffReviewModal';
 import { EditorContextMenu } from './EditorContextMenu';
 import { toast } from 'sonner';
 
@@ -702,11 +703,12 @@ export function EditorPane({
 
   return (
     <motion.div
-      className="flex-1 flex flex-col min-w-0 bg-[#181818] h-full"
+      className="flex-1 flex flex-col min-w-0 bg-[#181818] h-full relative"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
     >
+      <DiffReviewModal workspaceId={workspaceId} />
       {/* Editor Header: Tabs on Left + Action Toolbar (Run Code, Split, More) on Right */}
       <div className="flex items-center justify-between border-b border-[#252525] bg-[#181818] flex-shrink-0 select-none h-9 relative">
         {/* Tabs on Left */}

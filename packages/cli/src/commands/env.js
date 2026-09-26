@@ -16,9 +16,19 @@ export async function envCommand({ action = 'list', key = null, value = null, pl
       process.exit(1);
     }
     if (plain) {
-      const { appendFile } = await import('node:fs/promises');
+      const { readFile, writeFile } = await import('node:fs/promises');
       const { join } = await import('node:path');
-      await appendFile(join(process.cwd(), '.env'), `${key}=${value}\n`, 'utf8');
+      const envPath = join(process.cwd(), '.env');
+      let lines = [];
+      try {
+        lines = (await readFile(envPath, 'utf8')).split('\n');
+      } catch {
+        lines = [];
+      }
+      const prefix = `${key}=`;
+      lines = lines.filter((l) => !l.startsWith(prefix) && l.trim() !== prefix.slice(0, -1));
+      lines.push(`${key}=${value}`);
+      await writeFile(envPath, `${lines.join('\n').replace(/\n+$/, '\n')}`, 'utf8');
       ok(`${key} written to .env (plaintext, CI mode)`);
     } else {
       await vaultSet(key, value);

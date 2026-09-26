@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authMiddleware } from '../auth.js';
 import { db } from '../db.js';
 import { deriveMasterKey, decryptKey } from '../secret-enc.js';
 import { CostLedger } from '@mcode/shared';
@@ -247,6 +248,7 @@ no markdown fences. If nothing sensible completes here, return an empty string.`
  */
 export function pairRoutes({ secret } = {}) {
   const router = Router();
+  router.use(authMiddleware({ secret }));
 
   // POST /api/v1/pair/suggest & /api/v1/pair-suggest
   router.post('/suggest', (req, res) => handlePairSuggest(req, res, { secret }));

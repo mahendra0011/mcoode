@@ -3,13 +3,14 @@ import { useState, useCallback } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  CommandDialog,
+  Command,
   CommandInput,
   CommandList,
   CommandItem,
   CommandGroup,
 } from "cmdk";
 import { useIDEStore } from "../../store/ideStore";
+import { useI18n } from "../../lib/i18n";
 import { MessageSquare, Code, Terminal, Settings, Zap, Sliders, Settings2 } from "lucide-react";
 
 interface NavItem {
@@ -17,13 +18,6 @@ interface NavItem {
   icon: ReactNode;
   href: string;
 }
-
-const NAV_ITEMS: NavItem[] = [
-  { label: "AI Chat", icon: <MessageSquare className="w-4 h-4" />, href: "/ai/chat" },
-  { label: "Landing", icon: <Code className="w-4 h-4" />, href: "/" },
-  { label: "CLI", icon: <Terminal className="w-4 h-4" />, href: "/cli" },
-  { label: "Settings", icon: <Settings className="w-4 h-4" />, href: "/settings" },
-];
 
 /**
  * Command palette (cmdk).
@@ -37,6 +31,27 @@ export function CommandPalette() {
   const router = useRouter();
   const open = useIDEStore((s) => s.isCommandPaletteOpen);
   const setOpen = useIDEStore((s) => s.setCommandPaletteOpen);
+  const { t } = useI18n();
+
+  const NAV_ITEMS: NavItem[] = [
+    { label: t('palette.aiChat'), icon: <MessageSquare className="w-4 h-4" />, href: "/ai/chat" },
+    { label: "AI Home", icon: <Zap className="w-4 h-4" />, href: "/ai" },
+    { label: t('palette.landing'), icon: <Code className="w-4 h-4" />, href: "/" },
+    { label: t('palette.cli'), icon: <Terminal className="w-4 h-4" />, href: "/cli" },
+    { label: "Mcode Dashboard", icon: <MessageSquare className="w-4 h-4" />, href: "/mcode" },
+    { label: "Extensions", icon: <Code className="w-4 h-4" />, href: "/extensions" },
+    { label: "Tools (search/ports/watch)", icon: <Zap className="w-4 h-4" />, href: "/tools" },
+    { label: "Live monitor", icon: <Zap className="w-4 h-4" />, href: "/live" },
+    { label: "Sessions", icon: <MessageSquare className="w-4 h-4" />, href: "/sessions" },
+    { label: "Plugins", icon: <Code className="w-4 h-4" />, href: "/plugins" },
+    { label: "Docs", icon: <Code className="w-4 h-4" />, href: "/docs" },
+    { label: "Commands", icon: <Terminal className="w-4 h-4" />, href: "/commands" },
+    { label: "Changelog", icon: <Settings className="w-4 h-4" />, href: "/changelog" },
+    { label: "Preview", icon: <Code className="w-4 h-4" />, href: "/preview" },
+    { label: "Login", icon: <Settings className="w-4 h-4" />, href: "/login" },
+    { label: "Signup", icon: <Settings className="w-4 h-4" />, href: "/signup" },
+    { label: t('palette.settings'), icon: <Settings className="w-4 h-4" />, href: "/settings" },
+  ];
 
   const go = useCallback(
     (href: string) => {
@@ -47,7 +62,7 @@ export function CommandPalette() {
   );
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
+    <Command.Dialog open={open} onOpenChange={setOpen} label="Command palette">
       <CommandInput placeholder="Type a command or search…" />
       <CommandList>
         <CommandGroup heading="Preferences & Settings">
@@ -106,7 +121,7 @@ export function CommandPalette() {
           ))}
         </CommandGroup>
       </CommandList>
-    </CommandDialog>
+    </Command.Dialog>
   );
 }
 

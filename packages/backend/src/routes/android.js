@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authMiddleware } from '../auth.js';
 import adbkit from '@devicefarmer/adbkit';
 
 let client = null;
@@ -11,8 +12,9 @@ try {
   console.warn('[android] ADB client initialization skipped:', e.message);
 }
 
-export function androidRoutes() {
+export function androidRoutes({ secret } = {}) {
   const router = Router();
+  if (secret) router.use(authMiddleware({ secret }));
 
   router.get('/devices', async (req, res) => {
     try {
@@ -28,8 +30,12 @@ export function androidRoutes() {
 
   router.post('/devices/:id/start', async (req, res, next) => {
     try {
+      const avdId = String(req.params.id || '');
+      if (!/^[A-Za-z0-9._-]+$/.test(avdId)) {
+        return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'invalid avd id' } });
+      }
       const { execa } = await import('execa');
-      execa('emulator', ['-avd', req.params.id], { detached: true });
+      execa('emulator', ['-avd', avdId], { detached: true });
       res.json({ started: true });
     } catch (err) {
       next(err);

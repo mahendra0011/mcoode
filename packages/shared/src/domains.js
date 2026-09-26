@@ -38,6 +38,20 @@ export const DOMAIN_TAGS = Object.freeze({
   migration: 'migration'
 });
 
+/** Aliases for task types used by callers that predate the domain list.
+ *  `router.pick('general'|'build'|'chat')` now resolves deterministically
+ *  instead of depending on CLI fallback behavior. */
+export const DOMAIN_ALIASES = Object.freeze({
+  general: 'backend',
+  build: 'backend',
+  chat: 'planning',
+});
+
+export function resolveDomain(domain) {
+  if (!domain) return 'backend';
+  return DOMAIN_ALIASES[domain] || domain;
+}
+
 /** Default model preferences per task type. Entries are tried top-down.
  *  Format: "providerId:modelId" — the router picks the first whose provider
  *  is available and not rate-limited. Defaults are cheap/free-first; the

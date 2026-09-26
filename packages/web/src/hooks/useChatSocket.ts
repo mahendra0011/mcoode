@@ -86,10 +86,19 @@ let socketSingleton: Socket | null = null;
 export function getSocket(): Socket {
   const token = getToken() || '';
   if (!socketSingleton || socketSingleton.disconnected) {
-    const backendUrl =
-      typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
-        ? window.mcodeElectron.backendUrl
-        : (process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}:3100` : 'http://localhost:3100'));
+    let backendUrl: string;
+    if (typeof window !== 'undefined' && (window as any).mcodeElectron?.backendUrl) {
+      backendUrl = (window as any).mcodeElectron.backendUrl;
+    } else if (typeof window !== 'undefined') {
+      // Same-origin in prod (Next rewrites /live → BACKEND); direct :3100 only for local dev.
+      const host = window.location.hostname;
+      const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.');
+      backendUrl = isLocal
+        ? (process.env.NEXT_PUBLIC_API_URL || `http://${host}:3100`)
+        : window.location.origin;
+    } else {
+      backendUrl = 'http://localhost:3100';
+    }
 
     socketSingleton = io(backendUrl, {
       path: '/live',

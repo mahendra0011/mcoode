@@ -112,7 +112,8 @@ export class Subagent {
 
   startTimer() {
     this.startedAt = new Date();
-    this.interval = setInterval(() => {
+    this.stopTimer();
+    this.timer = setInterval(() => {
       const secs = Math.floor((Date.now() - this.startedAt) / 1000);
       this.onEvent?.('TICK', { todoId: this.todo.id, elapsed: secs });
     }, 1000);
@@ -226,7 +227,7 @@ export class Subagent {
       return this.result;
     } finally {
       this.finishedAt = new Date();
-      clearInterval(this.interval);
+      this.stopTimer();
     }
   }
 
@@ -237,9 +238,17 @@ export class Subagent {
     return this.result;
   }
 
+  stopTimer() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+
   interrupt() {
     this.interrupted = true;
     this.abortController.abort();
+    this.stopTimer();
   }
 
   ledger(res) {

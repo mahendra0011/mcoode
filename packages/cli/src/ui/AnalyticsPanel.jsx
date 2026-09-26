@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { TextAttributes, useKeyboard } from '@opentui/react';
+import { TextAttributes } from '@opentui/core';
+import { useKeyboard } from '@opentui/react';
 import { theme, SPACING } from './theme.js';
 import { computeAnalytics } from '../core/analytics.js';
 

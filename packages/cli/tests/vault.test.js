@@ -85,8 +85,8 @@ describe('maskSecret', () => {
     expect(maskSecret('')).toBe('');
     const masked = maskSecret('abcdefghijklmnop');
     expect(masked).not.toBe('abcdefghijklmnop');
-    expect(masked.startsWith('abcd')).toBe(true);
-    expect(masked.endsWith('mnop')).toBe(true);
+    expect(masked).not.toContain('abcd');
+    expect(masked.endsWith('op')).toBe(true);
     expect(maskSecret('short')).toContain('\u2022');
   });
 });

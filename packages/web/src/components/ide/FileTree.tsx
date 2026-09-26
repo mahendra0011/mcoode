@@ -299,6 +299,24 @@ const TreeNode = ({ node, level = 0 }: { node: TreeNodeData; level?: number }) =
     setItemToDelete({ path: node.path, name: node.name });
   };
 
+  const handleDuplicate = async () => {
+    if (isDir) {
+      toast.info('Duplicating folders is not supported yet — duplicate files one by one');
+      return;
+    }
+    try {
+      const dir = node.path.includes('/') ? node.path.slice(0, node.path.lastIndexOf('/')) : '';
+      const copyName = node.name.replace(/^/, 'copy-of-');
+      const target = dir ? `${dir}/${copyName}` : copyName;
+      const res = await api.get(`/api/v1/workspaces/${workspaceId}/file`, { params: { path: node.path } });
+      await api.post(`/api/v1/workspaces/${workspaceId}/file`, { path: target, content: res.data?.content ?? '' });
+      toast.success(`Duplicated as "${target}"`);
+      useIDEStore.getState().bumpRefresh();
+    } catch (err: any) {
+      toast.error(`Duplicate failed: ${err?.response?.data?.error?.message || err.message}`);
+    }
+  };
+
   const fileContextMenu = (
     <ContextMenuContent className="min-w-[240px] bg-[#1e1e1e] border border-white/10 rounded-md shadow-2xl p-1 text-xs text-white/90 z-50 select-none animate-in fade-in-80 duration-100">
       {isDir && (
@@ -488,6 +506,16 @@ const TreeNode = ({ node, level = 0 }: { node: TreeNodeData; level?: number }) =
       >
         <span>Copy</span>
         <span className="text-[10px] text-white/40 font-mono tracking-tighter">Ctrl+C</span>
+      </ContextMenuItem>
+
+      <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />
+
+      <ContextMenuItem
+        className="flex items-center justify-between px-2.5 py-1.5 rounded hover:bg-[#04395e] hover:text-white cursor-pointer outline-none transition-colors"
+        onSelect={handleDuplicate}
+      >
+        <span>Duplicate</span>
+        <span className="text-[10px] text-white/40 font-mono tracking-tighter">Ctrl+D</span>
       </ContextMenuItem>
 
       <ContextMenuSeparator className="h-px bg-white/10 my-1 -mx-1" />

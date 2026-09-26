@@ -42,7 +42,12 @@ describe('Migrate Mode (doc 51)', () => {
       const mockRunner = async () => ({
         tests: [{ id: 't1', name: 'unit 1', passed: true, feature: 'f1' }]
       });
-      const snapshot = await snapshotBehavior(process.cwd(), { router, testRunner: mockRunner });
+      // Isolated temp dir — never the real repo cwd (flakes under parallel load).
+      const { mkdtempSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+      const dir = mkdtempSync(join(tmpdir(), 'migrate-test-'));
+      const snapshot = await snapshotBehavior(dir, { router, testRunner: mockRunner });
       expect(snapshot).toBeDefined();
       expect(snapshot.snapshotAt).toBeDefined();
       expect(Array.isArray(snapshot.characterizationTests)).toBe(true);
@@ -255,7 +260,9 @@ describe('Migrate Mode (doc 51)', () => {
   });
 
   describe('Full Migration Workflow (runMigrate)', () => {
-    it('executes the full migrate lifecycle', async () => {
+    // Full lifecycle (plan + snapshot + subagent rounds) is slow by design —
+    // 30s budget so parallel-suite load can't flake it on the 5s default.
+    it('executes the full migrate lifecycle', { timeout: 30000 }, async () => {
       const bus = new EventEmitter();
       const statusEvents = [];
       bus.on('MIGRATE_STATUS', (e) => statusEvents.push(e.stage));

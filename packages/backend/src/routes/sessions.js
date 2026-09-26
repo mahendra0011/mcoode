@@ -34,11 +34,8 @@ export function sessionRoutes({ secret }) {
 
   router.get('/', async (req, res, next) => {
     try {
-      const { page = 1, limit = 20 } = req.query;
-      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 });
-      const start = (Number(page) - 1) * Number(limit);
-      const total = sessions.length;
-      res.json({ items: sessions.slice(start, start + Number(limit)), total, page: Number(page) });
+      const store = db();
+      res.json(await store.paginate(store.session, { userId: req.userId }, 'createdAt', req.query.page, req.query.limit));
     } catch (err) {
       next(err);
     }
@@ -51,7 +48,23 @@ export function sessionRoutes({ secret }) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'session not found' } });
       }
       const transcripts = await db().agentTranscript.find({ sessionId: session._id });
-      res.json({ ...session, transcripts });
+      const messages = await db().chatMessage.find({ sessionId: session._id }, { timestamp: 1 });
+      res.json({ ...session, transcripts, messages });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /sessions/:id/replay — ordered user prompts for client-side replay.
+  router.get('/:id/replay', async (req, res, next) => {
+    try {
+      const session = await db().session.findById(req.params.id);
+      if (!session || String(session.userId) !== String(req.userId)) {
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'session not found' } });
+      }
+      const messages = await db().chatMessage.find({ sessionId: session._id }, { timestamp: 1 });
+      const prompts = messages.filter((m) => m.role === 'user').map((m) => m.content);
+      res.json({ sessionId: session._id, prompts });
     } catch (err) {
       next(err);
     }

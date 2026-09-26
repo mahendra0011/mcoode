@@ -60,12 +60,8 @@ export function watchRoutes({ secret }) {
       const { page = 1, limit = 20, outcome } = req.query;
       const query = { projectId: req.params.projectId };
       if (outcome) query.outcome = outcome;
-      // NOTE: MemoryModel.find(query, sort) but mongoose Model.find(query, projection) —
-      // sorting in JS keeps both storage modes correct.
-      const all = await db().watchActivity.find(query);
-      const items = all.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      const start = (Number(page) - 1) * Number(limit);
-      res.json({ items: items.slice(start, start + Number(limit)), total: items.length });
+      const store = db();
+      res.json(await store.paginate(store.watchActivity, query, 'timestamp', page, limit));
     } catch (err) {
       next(err);
     }

@@ -22,7 +22,7 @@ export class CostLedger {
       this.providers.set(providerId, entry);
     }
     entry.rpm.push(now);
-    entry.tpm.push(inputTokens + outputTokens);
+    entry.tpm.push({ t: now, n: inputTokens + outputTokens });
   }
 
   _trim(key, providerId) {
@@ -30,6 +30,10 @@ export class CostLedger {
     if (!entry) return 0;
     const cutoff = Date.now() - this.windowMs;
     const arr = entry[key];
+    if (key === 'tpm') {
+      while (arr.length && arr[0].t < cutoff) arr.shift();
+      return arr.reduce((sum, e) => sum + e.n, 0);
+    }
     while (arr.length && arr[0] < cutoff) arr.shift();
     return arr.length;
   }
@@ -55,11 +59,36 @@ export class CostLedger {
       providers: Object.fromEntries(
         [...this.providers.entries()].map(([id, e]) => [
           id,
-          { calls: e.rpm.length }
+          { rpm: e.rpm, tpm: e.tpm }
         ])
       )
     };
     await writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf8');
+  }
+
+  async load() {
+    if (!this.filePath) return;
+    try {
+      const { readFile } = await import('node:fs/promises');
+      const raw = await readFile(this.filePath, 'utf8');
+      const data = JSON.parse(raw);
+      // Back-compat: old files saved {calls:n} — treat as timestamps now
+      for (const [id, e] of Object.entries(data.providers || {})) {
+        const now = Date.now();
+        const rpm = Array.isArray(e.rpm) ? e.rpm.filter((t) => typeof t === 'number') : [];
+        const tpm = Array.isArray(e.tpm)
+          ? e.tpm.filter((x) => x && typeof x.t === 'number' && typeof x.n === 'number')
+          : [];
+        if (!rpm.length && typeof e.calls === 'number' && e.calls > 0) {
+          for (let i = 0; i < e.calls; i++) rpm.push(now);
+        }
+        this.providers.set(id, { rpm, tpm });
+        this._trim('rpm', id);
+        this._trim('tpm', id);
+      }
+    } catch {
+      /* missing/corrupt file — start empty */
+    }
   }
 }
 

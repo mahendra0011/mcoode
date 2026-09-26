@@ -8,23 +8,28 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=26.4.0"
   },
   "scripts": {
     "mcode": "node packages/cli/bin/mcode.js",
     "dev:cli": "node --watch packages/cli/bin/mcode.js",
     "dev:web": "npm --workspace=web run dev",
     "dev:dashboard": "npm --workspace=web run dev",
-    "dev:backend": "npm --workspace=@mcode/backend run start",
+    "dev:backend": "npm --workspace=@mcode/backend run dev",
     "serve": "node packages/cli/bin/mcode.js serve",
     "build:cli": "node packages/cli/scripts/build.js",
     "build:web": "npm --workspace=web run build",
     "test": "vitest run",
-    "lint": "eslint packages --ext .js,.jsx",
+    "test:all": "vitest run && npm --workspace=web run test",
+    "coverage": "vitest run --coverage",
+    "seed": "node scripts/seed-dev-data.mjs",
+    "lint": "eslint packages/cli/src packages/shared/src packages/backend/src",
+    "lint:web": "npm --workspace=web run lint",
     "publish:cli": "npm run build:cli && npm publish ./packages/cli",
     "postinstall": "node scripts/bootstrap.js"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint-plugin-react": "^7.37.5",
     "vitest": "^2.1.9"
   },
