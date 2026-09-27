@@ -16,7 +16,7 @@ const schemas = {
   }),
   verifyOtp: Joi.object({
     email: Joi.string().email().required(),
-    otp: Joi.string().pattern(/^\d{6}$/).required(),
+    otp: Joi.string().pattern(/^\d{8}$/).required(),
     intent: Joi.string().valid('signup', 'login', 'reset').required(),
     name: Joi.string().min(2).max(60).when('intent', { is: 'signup', then: Joi.required() }),
     password: Joi.string().min(8).when('intent', { is: 'signup', then: Joi.required() })
@@ -24,7 +24,7 @@ const schemas = {
   refresh: Joi.object({ refresh: Joi.string().allow('').optional() }),
   resetPassword: Joi.object({
     email: Joi.string().email().required(),
-    otp: Joi.string().pattern(/^\d{6}$/).required(),
+    otp: Joi.string().pattern(/^\d{8}$/).required(),
     password: Joi.string().min(8).required()
   }),
   createSession: Joi.object({

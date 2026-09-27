@@ -67,7 +67,7 @@ describe('refresh rotation (BUG-31)', () => {
     await signup(email);
     const sent = await request(base).post('/api/v1/auth/send-otp').send({ email, intent: 'reset' });
     expect(sent.status).toBe(200);
-    const bad = await request(base).post('/api/v1/auth/reset-password').send({ email, otp: '000000', password: 'newsecret123' });
+    const bad = await request(base).post('/api/v1/auth/reset-password').send({ email, otp: '00000000', password: 'newsecret123' });
     expect(bad.status).toBe(401);
     const ok = await request(base).post('/api/v1/auth/reset-password').send({ email, otp: sent.body.devOtp, password: 'newsecret123' });
     expect(ok.body.ok).toBe(true);

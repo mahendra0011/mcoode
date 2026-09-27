@@ -34,7 +34,9 @@ export function SignupPage() {
   const [resendTimeout, setResendTimeout] = useState(0);
   const [devOtp, setDevOtp] = useState('');
 
-  const inputRefs = [useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null)];
+  // OTP codes are 8 digits (AUTH-002).
+  const OTP_LENGTH = 8;
+  const inputRefs = [useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null)];
 
   // resend countdown
   useEffect(() => {
@@ -49,24 +51,24 @@ export function SignupPage() {
 
   const handleOtpChange = (idx: number, value: string) => {
     // BUG-19-10: pad first so out-of-order clicks don't collapse the array.
-    const newOtp = otp.padEnd(6, ' ').split('');
+    const newOtp = otp.padEnd(OTP_LENGTH, ' ').split('');
     newOtp[idx] = value.slice(-1) || ' ';
     setOtp(newOtp.join('').trim());
-    if (value && idx < 5) focusBox(idx + 1);
+    if (value && idx < OTP_LENGTH - 1) focusBox(idx + 1);
   };
 
   const handleOtpKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && !otp[idx] && idx > 0) focusBox(idx - 1);
     if (e.key === 'ArrowLeft' && idx > 0) focusBox(idx - 1);
-    if (e.key === 'ArrowRight' && idx < 5) focusBox(idx + 1);
+    if (e.key === 'ArrowRight' && idx < OTP_LENGTH - 1) focusBox(idx + 1);
   };
 
   const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').slice(0, 6);
-    if (/^\d{6}$/.test(pasted)) {
+    const pasted = e.clipboardData.getData('text').slice(0, OTP_LENGTH);
+    if (new RegExp(`^\\d{${OTP_LENGTH}}$`).test(pasted)) {
       setOtp(pasted);
-      inputRefs[5]?.current?.blur();
+      inputRefs[OTP_LENGTH - 1]?.current?.blur();
     }
   };
 
@@ -91,7 +93,7 @@ export function SignupPage() {
 
   const verifyOtp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (otp.length !== 6) return;
+    if (otp.length !== OTP_LENGTH) return;
     setLoading(true);
     setOtpError('');
     try {
@@ -342,7 +344,7 @@ export function SignupPage() {
                 className="flex items-center justify-center gap-2 py-4"
                 variants={otpBoxVariants}
               >
-                {Array.from({ length: 6 }).map((_, idx) => (
+                {Array.from({ length: OTP_LENGTH }).map((_, idx) => (
                   <motion.input
                     key={idx}
                     ref={inputRefs[idx]}
@@ -401,7 +403,7 @@ export function SignupPage() {
               {/* Submit Button */}
               <motion.button
                 type="submit"
-                disabled={loading || otp.length !== 6}
+                disabled={loading || otp.length !== OTP_LENGTH}
                 className="w-full bg-[#4ade80] hover:bg-[#22c55e] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
                 variants={fieldVariants}
                 whileHover={{ scale: 1.02 }}

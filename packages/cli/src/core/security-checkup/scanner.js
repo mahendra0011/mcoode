@@ -93,11 +93,12 @@ async function fetchNpmAudit(projectPath) {
     const pkgPath = path.join(projectPath, 'package.json');
     if (!fs.existsSync(pkgPath)) return { vulnerabilities: [] };
 
-    // npm audit requires a lockfile to run without hanging
+    // npm audit requires a lockfile to run without hanging — without one,
+    // report an explicit skipped finding instead of a fake-clean empty list.
     const lockFiles = ['package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock', 'pnpm-lock.yaml'];
     const hasLockfile = lockFiles.some((f) => fs.existsSync(path.join(projectPath, f)));
     if (!hasLockfile) {
-      return { vulnerabilities: [] };
+      return { vulnerabilities: [], skipped: 'no lockfile — run npm install first for audit results' };
     }
 
     // 871: 30s budget — 4s timed out on any real monorepo and reported a

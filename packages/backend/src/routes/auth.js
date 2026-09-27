@@ -54,20 +54,22 @@ export function authRoutes({ secret }) {
     try {
       const { email, intent } = req.body;
       const users = db().user;
-      if (intent === 'signup' && await users.findOne({ email })) {
-        return res.status(409).json({ error: { code: 'EMAIL_TAKEN', message: 'email already registered — try login' } });
-      }
-      if ((intent === 'login' || intent === 'reset') && !await users.findOne({ email })) {
-        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'no account found for this email — try signup' } });
+      // AUTH-005: uniform response — existence is never revealed here.
+      // Signup mail goes only to the address owner; login/reset for unknown
+      // addresses return success without sending anything.
+      const existingUser = await users.findOne({ email });
+      if (!existingUser && intent !== 'signup') {
+        return res.json({ ok: true, expiresInSec: OTP_TTL_MS / 1000 });
       }
       if (await rateLimited(email)) {
         return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'too many OTP requests — wait a few minutes' } });
       }
-      // AUTH-020: never issue an all-identical-digit code (000000 looks
-      // like a placeholder and is the first guess of every attacker).
-      let code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-      if (/^(\d)\1{5}$/.test(code)) {
-        code = String((Number(code) + 111111) % 1_000_000).padStart(6, '0');
+      // AUTH-002/020: 8 digits (100x the space of 6) and never an
+      // all-identical run (00000000 looks like a placeholder and is every
+      // attacker's first guess).
+      let code = String(randomInt(0, 100_000_000)).padStart(8, '0');
+      if (/^(\d)\1{7}$/.test(code)) {
+        code = String((Number(code) + 11111111) % 100_000_000).padStart(8, '0');
       }
       const codeHash = hashOtpCode(code, secret);
       await db().otp.deleteMany({ email, intent });
@@ -100,6 +102,9 @@ export function authRoutes({ secret }) {
       const { email, otp, intent, name, password } = req.body;
       // AUTH-008: password-reset codes are single-purpose — they verify here
       // only for signup/login. Use /reset-password for intent 'reset'.
+      // AUTH-005: signup for an existing address is idempotent — a valid OTP
+      // proves email ownership, so it logs into the existing account instead
+      // of leaking EMAIL_TAKEN.
       if (intent !== 'signup' && intent !== 'login') {
         return res.status(400).json({ error: { code: 'WRONG_INTENT', message: 'this code was issued for password reset — use /reset-password' } });
       }
@@ -120,17 +125,20 @@ export function authRoutes({ secret }) {
 
       const users = db().user;
       let user;
+      let existingAccount = false;
       if (intent === 'signup') {
-        if (await users.findOne({ email })) {
-          return res.status(409).json({ error: { code: 'EMAIL_TAKEN', message: 'email already registered' } });
+        user = await users.findOne({ email });
+        if (user) {
+          existingAccount = true;
+        } else {
+          user = await users.create({
+            email,
+            passwordHash: await hashPassword(password),
+            name,
+            plan: 'free',
+            settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
+          });
         }
-        user = await users.create({
-          email,
-          passwordHash: await hashPassword(password),
-          name,
-          plan: 'free',
-          settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
-        });
       } else {
         user = await users.findOne({ email });
         if (!user) {
@@ -139,7 +147,7 @@ export function authRoutes({ secret }) {
       }
       const tokens = await signTrackedTokens(db(), user._id, { secret });
       setAuthCookies(res, tokens);
-      res.json({ user: { id: user._id, email: user.email, name: user.name, plan: user.plan }, ...tokens });
+      res.json({ user: { id: user._id, email: user.email, name: user.name, plan: user.plan }, existingAccount, ...tokens });
     } catch (err) {
       // DB hiccup during OTP verify — return 503 so client retries
       if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {

@@ -26,7 +26,7 @@ describe('OTP auth flow', () => {
       .send({ email: 'new@user.dev', intent: 'signup' });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
-    expect(res.body.devOtp).toMatch(/^\d{6}$/);
+    expect(res.body.devOtp).toMatch(/^\d{8}$/);
     expect(res.body.expiresInSec).toBe(600);
   });
 
@@ -54,17 +54,29 @@ describe('OTP auth flow', () => {
     await request(base).post('/api/v1/auth/send-otp').send({ email: 'wrong@user.dev', intent: 'signup' });
     const res = await request(base)
       .post('/api/v1/auth/verify-otp')
-      .send({ email: 'wrong@user.dev', otp: '000000', intent: 'signup', name: 'Wrong User', password: 'secret123' });
+      .send({ email: 'wrong@user.dev', otp: '00000000', intent: 'signup', name: 'Wrong User', password: 'secret123' });
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe('BAD_OTP');
   });
 
-  it('send-otp rejects signup for already-registered emails', async () => {
+  it('send-otp is uniform for already-registered emails (no enumeration)', async () => {
     const res = await request(base)
       .post('/api/v1/auth/send-otp')
       .send({ email: 'otp@user.dev', intent: 'signup' });
-    expect(res.status).toBe(409);
-    expect(res.body.error.code).toBe('EMAIL_TAKEN');
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  it('verify-otp signup for an existing address logs in idempotently', async () => {
+    const sent = await request(base)
+      .post('/api/v1/auth/send-otp')
+      .send({ email: 'otp@user.dev', intent: 'signup' });
+    const res = await request(base)
+      .post('/api/v1/auth/verify-otp')
+      .send({ email: 'otp@user.dev', otp: sent.body.devOtp, intent: 'signup', name: 'Otp User', password: 'secret123' });
+    expect(res.status).toBe(200);
+    expect(res.body.existingAccount).toBe(true);
+    expect(res.body.access).toBeDefined();
   });
 
   it('verify-otp login intent authenticates an existing account', async () => {
