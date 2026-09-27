@@ -1,5 +1,3 @@
-/* global AbortController, AbortSignal */
-
 /**
  * ModelProvider interface — every provider adapter (OpenRouter, OpenCode Zen,
  * direct provider SDKs, local Ollama/LM Studio, Mock) implements this shape.

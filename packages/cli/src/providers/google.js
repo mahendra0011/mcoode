@@ -46,7 +46,11 @@ export class GeminiProvider extends HttpProvider {
     }
   }
 
-  _request(model, { messages, temperature, maxTokens, reasoning }) {
+  /**
+   * @param {any} model
+   * @param {{ messages?: Array<{role: string, content: string}>, temperature?: number, maxTokens?: number, reasoning?: any, signal?: any }} [opts]
+   */
+  _request(model, { messages = [], temperature, maxTokens, reasoning } = /** @type {any} */ ({})) {
     const contents = messages
       .filter((m) => m.role !== 'system')
       .map((m) => ({

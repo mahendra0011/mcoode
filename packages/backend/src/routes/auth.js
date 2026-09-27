@@ -47,7 +47,8 @@ async function rateLimited(email) {
   return row.count > OTP_SEND_LIMIT;
 }
 
-export function authRoutes({ secret }) {
+/** @param {{ secret?: string }} opts */
+export function authRoutes({ secret } = {}) {
   const router = Router();
 
   router.post('/send-otp', validate('sendOtp'), async (req, res, next) => {

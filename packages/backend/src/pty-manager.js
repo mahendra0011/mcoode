@@ -27,7 +27,7 @@ export function createPtySession(socketId, id, cwd, shellType, cols, rows, onDat
 
   ptyProcess.onData((data) => onData(data));
   ptyProcess.onExit(({ exitCode, signal }) => onExit(exitCode, signal));
-  ptyProcess.shellPath = shellPath;
+  /** @type {any} */ (ptyProcess).shellPath = shellPath;
   
   let socketPtyMap = sessions.get(socketId);
   if (!socketPtyMap) {

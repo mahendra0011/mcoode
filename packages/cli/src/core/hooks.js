@@ -38,6 +38,7 @@ export async function loadHooks(projectPath) {
 }
 
 export class HooksManager {
+  /** @param {{ hooks?: Record<string, Function>, projectPath?: string, hooksPath?: string }} [opts] */
   constructor({ hooks = {}, projectPath, hooksPath } = {}) {
     this.hooks = hooks;
     this.projectPath = projectPath;

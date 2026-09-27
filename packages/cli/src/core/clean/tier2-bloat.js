@@ -109,7 +109,7 @@ function detectHeuristicBloat(source, relPath) {
  * Scans files > 30 lines for AI-generated bloat, repetitive logic, and obsolete code.
  *
  * @param {string[]|string} filesOrProject - Array of file paths or project directory
- * @param {{ router?: object, thresholdLines?: number, projectPath?: string }} options
+ * @param {{ router?: any, thresholdLines?: number, projectPath?: string }} [options]
  */
 export async function findBloat(filesOrProject, { router, thresholdLines = 30, projectPath = process.cwd() } = {}) {
   let fileList = [];

@@ -65,7 +65,8 @@ export async function shipCommand({ env = 'prod', cwd = process.cwd(), yes = fal
   }
 
   info(`stage 3/4 \u2014 tag (env=${env})`);
-  const git = (await import('simple-git')).default(cwd);
+  const sgMod = /** @type {any} */ (await import('simple-git'));
+  const git = (sgMod.default || sgMod)(cwd);
   const isRepo = await isGitRepo(cwd);
   if (isRepo) {
     const tag = `v${pkg.version}-${env}`;

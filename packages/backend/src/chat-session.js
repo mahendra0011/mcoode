@@ -41,6 +41,14 @@ function promptNeedsPlanning(prompt) {
  * and provider adapters directly — no logic is reimplemented.
  */
 export class ChatSession {
+  /**
+   * @param {object} [opts]
+   * @param {string} [opts.userId]
+   * @param {string} [opts.secret]
+   * @param {string} [opts.workspacePath]
+   * @param {string|null} [opts.modelRef]
+   * @param {(event: string, payload?: any) => void} [opts.onEvent]
+   */
   constructor({ userId, secret, workspacePath, modelRef = null, onEvent = () => {} } = {}) {
     this.userId = userId;
     this.secret = secret;
@@ -332,6 +340,7 @@ export class ChatSession {
     const { WatchDaemon } = await import('mcode-cli/watch-daemon');
     const { join } = await import('node:path');
     const { homedir } = await import('node:os');
+    const { DEFAULT_CONFIG } = await import('@mcode/shared');
     this.watchDaemon = new WatchDaemon({
       projectPath: this.workspacePath,
       config: { ...DEFAULT_CONFIG.watch, ...(this.config?.watch || {}), ...opts },
@@ -483,9 +492,10 @@ export class ChatSession {
       });
 
       try {
-        const { searchResults, fetchedPages } = await searchAndFetch(prompt, { maxResults: 5 });
-        if (searchResults.length > 0) {
-          webContext = buildContextBlock(searchResults, fetchedPages);
+        // searchAndFetch resolves to the enriched result array directly.
+        const results = await searchAndFetch(prompt, { maxResults: 5 });
+        if (results.length > 0) {
+          webContext = buildContextBlock(results);
           this.onEvent(S2C.CHAT_TOOL_CALL, {
             tool: 'web_search',
             args: { query: prompt },
@@ -494,7 +504,7 @@ export class ChatSession {
             searchResults: {
               query: prompt,
               phase: 'done',
-              results: searchResults,
+              results,
               answer: ''
             }
           });

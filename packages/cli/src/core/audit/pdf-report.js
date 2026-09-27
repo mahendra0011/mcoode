@@ -5,7 +5,7 @@ import path from 'node:path';
 /**
  * Generate a styled PDF report for stakeholders / due-diligence.
  *
- * @param {object} auditResult - Output from runAudit()
+ * @param {Record<string, any>} auditResult - Output from runAudit()
  * @param {string} outputPath - Path to write the PDF file
  * @returns {Promise<string>}
  */

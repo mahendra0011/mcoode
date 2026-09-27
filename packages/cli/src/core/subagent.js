@@ -1,7 +1,6 @@
 import { SUBAGENT_STATUS, EVENTS, estimateTokens } from '@mcode/shared';
 import { ToolExecutor } from './tools.js';
 
-/* global AbortController */
 
 const SUBAGENT_SYSTEM = (todo, tools) => `SUBAGENT
 You are mcode subagent #${todo.id}. You own exactly ONE todo. Work autonomously to completion.
@@ -77,6 +76,17 @@ function parseAction(text, { tools = null } = {}) {
 }
 
 export class Subagent {
+  /**
+   * @param {object} args
+   * @param {Record<string, any>} args.todo
+   * @param {Record<string, any>} args.assignment
+   * @param {string} args.projectPath
+   * @param {{ on: Function, off: Function, emit: (event: string, payload?: any) => void }|null} [args.bus]
+   * @param {Record<string, any>|null} [args.undoStack]
+   * @param {Record<string, any>} [args.config]
+   * @param {Function|null} [args.onEvent]
+   * @param {Record<string, any>|null} [args.reasoning]
+   */
   constructor({ todo, assignment, projectPath, bus, undoStack, config = {}, onEvent = null, reasoning = null }) {
     this.todo = todo;
     this.assignment = assignment; // { provider, model, ref }
@@ -89,11 +99,14 @@ export class Subagent {
     this.networkWhitelist = config.networkWhitelist || null;
     this.auditLog = config.auditLog || null;
     this.onEvent = onEvent;
+    /** @type {import('@mcode/shared').SubagentStatus} */
     this.status = SUBAGENT_STATUS.PENDING;
     this.step = 0;
     this.totalSteps = 1;
     this.message = 'queued';
+    /** @type {Date|null} */
     this.startedAt = null;
+    /** @type {Date|null} */
     this.finishedAt = null;
     this.messages = [];
     this.blockedCount = 0;
@@ -111,10 +124,11 @@ export class Subagent {
   }
 
   startTimer() {
-    this.startedAt = new Date();
+    const startedAt = new Date();
+    this.startedAt = startedAt;
     this.stopTimer();
     this.timer = setInterval(() => {
-      const secs = Math.floor((Date.now() - this.startedAt) / 1000);
+      const secs = Math.floor((Date.now() - startedAt.getTime()) / 1000);
       this.onEvent?.('TICK', { todoId: this.todo.id, elapsed: secs });
     }, 1000);
   }
@@ -258,7 +272,7 @@ export class Subagent {
   elapsedSecs() {
     if (!this.startedAt) return 0;
     const end = this.finishedAt || new Date();
-    return Math.floor((end - this.startedAt) / 1000);
+    return Math.floor((end.getTime() - this.startedAt.getTime()) / 1000);
   }
 }
 

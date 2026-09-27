@@ -165,7 +165,7 @@ function normalizeFeature(f, i) {
 /**
  * Build the testable feature inventory for the project.
  * @param {string} projectPath
- * @param {{ router?: object, bus?: EventEmitter, repoContext?: string }} ctx
+ * @param {{ router?: any, bus?: { emit: (e: string, p?: any) => void }|null, repoContext?: string|null }} [ctx]
  */
 export async function buildFeatureInventory(projectPath, { router = null, bus = null, repoContext = null } = {}) {
   if (!repoContext) repoContext = await buildRepoContext(projectPath);

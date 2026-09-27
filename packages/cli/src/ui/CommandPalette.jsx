@@ -1,3 +1,4 @@
+// @ts-nocheck — OpenTUI JSX, type-covered by esbuild bundle + manual runs, not tsc.
 import { useState } from 'react';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';

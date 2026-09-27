@@ -10,6 +10,7 @@ import { EVENTS } from '@mcode/shared';
  * snapshots to verify the result.
  */
 export class BrowserTool {
+  /** @param {{ projectPath?: string, bus?: any, timeoutMs?: number, viewport?: { width: number, height: number }|null, userAgent?: string|null }} [opts] */
   constructor({ projectPath, bus = null, timeoutMs = 300_000, viewport = null, userAgent = null } = {}) {
     this.projectPath = projectPath;
     this.bus = bus;

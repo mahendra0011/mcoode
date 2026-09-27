@@ -13,6 +13,12 @@ import { loadConfig, getProjectId } from './store.js';
 
 // SHR-003: bus→socket mapping lives in @mcode/shared (EVENT_TO_SOCKET) —
 export class Orchestrator extends EventEmitter {
+  /**
+   * @param {object} [opts]
+   * @param {string} [opts.projectPath]
+   * @param {Record<string, any>|null} [opts.config]
+   * @param {Record<string, any>} [opts.options]
+   */
   constructor({ projectPath = process.cwd(), config = null, options = {} } = {}) {
     super();
     this.projectPath = projectPath;

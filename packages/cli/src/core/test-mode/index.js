@@ -66,6 +66,17 @@ export function resolveTargetUrl({ targetUrl, configTarget, allowRemote = false 
  * SubagentManager's internal `_runFixer` — one Subagent, bugfix domain,
  * bounded turns, records scoring + token usage. `router` may be null
  * (CI/offline) in which case fixes are skipped and reported.
+ * @param {Record<string, any>} todo
+ * @param {{
+ *   router?: any,
+ *   projectPath?: string,
+ *   config?: Record<string, any>,
+ *   undoStack?: any,
+ *   auditLog?: any,
+ *   ledger?: any,
+ *   reasoning?: any,
+ *   bus?: any
+ * }} [options]
  */
 export async function dispatchFixSubagent(todo, { router, projectPath, config = {}, undoStack = null, auditLog = null, ledger = null, reasoning = null, bus = null } = {}) {
   if (!router) {
@@ -123,9 +134,19 @@ export async function dispatchFixSubagent(todo, { router, projectPath, config = 
 
 /**
  * Run Test Mode end to end.
- * @param {string[]} selectedTypes — subset of TEST_TYPES ids
- * @param {{ projectPath, router, config, bus, undoStack, auditLog, ledger,
- *           targetUrl, allowRemote, headless }} opts
+ * @param {string[]} [selectedTypes] - subset of TEST_TYPES ids
+ * @param {{
+ *   projectPath?: string,
+ *   router?: any,
+ *   config?: Record<string, any>,
+ *   bus?: any,
+ *   undoStack?: any,
+ *   auditLog?: any,
+ *   ledger?: any,
+ *   targetUrl?: string|null,
+ *   allowRemote?: boolean,
+ *   headless?: boolean
+ * }} [opts]
  */
 export async function runTestMode(selectedTypes = [], {
   projectPath = process.cwd(),

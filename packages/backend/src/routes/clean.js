@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
+import { httpError } from '../http-error.js';
+import { db } from '../db.js';
 import { findDeadCode, findBloat, runClean } from 'mcode-cli/clean';
 
+/** @param {{ secret?: string }} [opts] */
 export function cleanRoutes({ secret } = {}) {
   const router = Router();
   router.use(authMiddleware({ secret }));
@@ -27,6 +30,7 @@ export function cleanRoutes({ secret } = {}) {
           tier2Findings = await findBloat(projectPath, { projectPath, thresholdLines });
         } catch (err) {
           // 1051: sanitize control characters before logging.
+          // eslint-disable-next-line no-control-regex -- matching control chars is the point here
           console.warn('[clean:scan] Tier 2 AI scan warning:', String(err.message || err).replace(/[\x00-\x1f\x7f]/g, '?').slice(0, 300));
         }
       }
@@ -103,9 +107,7 @@ async function resolveTargetPath(req) {
     if (existsSync(req.body.projectPath) && insideAllowed(req.body.projectPath)) {
       return req.body.projectPath;
     }
-    const err = new Error('projectPath is not inside one of your workspaces');
-    err.status = 400;
-    throw err;
+    throw httpError(400, 'projectPath is not inside one of your workspaces');
   }
   if (req.body?.projectId) {
     try {

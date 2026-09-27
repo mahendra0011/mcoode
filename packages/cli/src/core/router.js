@@ -256,6 +256,8 @@ class ModelScorer {
  * respecting rate-limit budgets and user overrides (mcode model set).
  */
 export class ModelRouter {
+  /** @type {boolean} one-time guard so the shutdown flush hooks install once */
+  static _shutdownHookInstalled = false;
 
   constructor({ secrets = null, config = null, ledger = null, providers = null, projectId = 'default' } = {}) {
     this.secrets = secrets;
@@ -265,8 +267,14 @@ export class ModelRouter {
     this.providers = providers;
     this.mode = MODES.includes(config?.mode) ? config.mode : 'medium';
     this.scorer = new ModelScorer(projectId);
+    /** @type {any} */
+    this._ledgerAutosave = null;
     this._scorerInitialized = false;
     this._allRefsCache = null;
+    /** Frontend-selected model ref for this session (set by the web client). */
+    this.modelOverride = /** @type {string|null} */ (null);
+    /** Per-user model overrides loaded from DB user settings. */
+    this.userModelOverrides = /** @type {Record<string, any>|null} */ (null);
   }
 
   setMode(mode) {
@@ -285,8 +293,14 @@ export class ModelRouter {
     // RTR-005: refresh remote score overrides (best-effort, never blocks).
     if (this.config?.modelScoresUrl && !this._remoteScoresStarted) {
       this._remoteScoresStarted = true;
-      const { refreshRemoteScores } = await import('../providers/index.js').catch(() => ({}));
-      refreshRemoteScores?.(this.config.modelScoresUrl)?.catch(() => {});
+      try {
+        const providersMod = await import('../providers/index.js');
+        if (typeof providersMod.refreshRemoteScores === 'function') {
+          providersMod.refreshRemoteScores(this.config.modelScoresUrl).catch(() => {});
+        }
+      } catch {
+        /* offline — static scores stand */
+      }
     }
     if (!this.providers) this.providers = await getProviders({ secrets: this.secrets, config: this.config });
     if (!this._scorerInitialized) {
@@ -368,11 +382,9 @@ export class ModelRouter {
    * Choose a model for a domain using the 5-layer weighted scoring system.
    * Falls back to routing preference order if scoring yields no available model.
    *
-   * @param {string} domain — task domain (frontend, backend, db, test, etc.)
-   * @param {object} opts
-   * @param {string[]} opts.exclude — model refs to exclude
-   * @param {object} opts.taskFingerprint — { framework, language, taskType }
-   * @returns {{provider, model, ref, scoreResult}} or null if nothing is usable.
+   * @param {string} domain task domain (frontend, backend, db, test, etc.)
+   * @param {{ exclude?: string[], taskFingerprint?: Record<string, any> }} [opts]
+   * @returns {Promise<{provider: any, model: any, ref: string, scoreResult: any}|null>} null if nothing is usable.
    */
   async pick(domain, { exclude = [], taskFingerprint = {} } = {}) {
     await this._init();

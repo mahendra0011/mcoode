@@ -8,7 +8,7 @@ const commands = new Map();
 
 /** Register a plugin.
  * @param {string} id - Unique plugin identifier
- * @param {object} plugin - { name, version, register }
+ * @param {Record<string, any>} plugin - { name, version, register, commands, widgets }
  */
 export function registerPlugin(id, plugin) {
   if (plugins.has(id)) {

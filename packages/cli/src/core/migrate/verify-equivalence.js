@@ -1,13 +1,20 @@
 import { runProjectTestCommand } from './equivalence-check.js';
 
 /**
+ * @typedef {{ id?: string, name?: string, feature?: string, passed?: boolean }} EquivTest
+ * @typedef {{ tests?: Array<EquivTest>, total?: number, baselineTests?: { tests?: Array<EquivTest> }, characterizationTests?: Array<object> }} EquivSnapshot
+ * @typedef {{ on: Function, off: Function, emit: (event: string, payload?: any) => void }} BusLike
+ * @typedef {{ run: (todos: object[]) => Promise<object> }} FixRunner
+ */
+
+/**
  * Compare current test run against the baseline snapshot.
  * In Migrate Mode, equivalence means the app does EXACTLY what it did before.
  * A test passing/failing the SAME way as the snapshot = correct.
  * A test flipping from pass-to-fail or fail-to-pass = a regression!
  *
- * @param {object} snapshot - Result from snapshotBehavior
- * @param {object} current - Result from runProjectTestCommand
+ * @param {EquivSnapshot} snapshot - Result from snapshotBehavior
+ * @param {EquivSnapshot} current - Result from runProjectTestCommand
  * @returns {Array<{ feature: string, expectedState: string, currentState: string, reason: string, regressed: boolean }>}
  */
 export function diffAgainstSnapshot(snapshot, current) {
@@ -79,13 +86,14 @@ export function toComparisonRows(equivalenceResults = []) {
  * Runs current tests + characterization tests against migrated code.
  * If any results flipped, dispatches subagents to restore original behavior.
  *
- * @param {object} snapshot
+ * @param {EquivSnapshot} snapshot
  * @param {{
- *   subagentManager?: object,
+ *   subagentManager?: FixRunner|null,
  *   router?: object,
- *   bus?: object,
+ *   bus?: BusLike|null,
  *   maxPasses?: number,
- *   projectPath?: string
+ *   projectPath?: string,
+ *   testRunner?: Function|null
  * }} options
  * @returns {Promise<{
  *   equivalent: boolean,
@@ -108,7 +116,7 @@ export async function verifyEquivalence(snapshot, { subagentManager, router, bus
     });
 
     const current = await runProjectTestCommand(projectPath, {
-      characterizationTests: snapshot?.characterizationTests || [],
+      characterizationTests: /** @type {Array<{feature: string, code?: string, name?: string, run?: Function}>} */ (snapshot?.characterizationTests || []),
       testRunner
     });
 
@@ -177,6 +185,7 @@ export async function verifyEquivalence(snapshot, { subagentManager, router, bus
   return {
     equivalent: false,
     passes: pass - 1,
+    regressions: [],
     unresolvedRegressions: [],
     history
   };

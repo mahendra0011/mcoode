@@ -57,7 +57,8 @@ export class MockProvider extends ModelProvider {
     };
   }
 
-  async complete(model, { messages } = {}) {
+  /** @param {any} model @param {{ messages?: Array<{role: string, content: string}> }} [opts] */
+  async complete(model, { messages = [] } = {}) {
     const system = messages.find((m) => m.role === 'system')?.content || '';
     const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content || '';
     let text = '';

@@ -26,7 +26,7 @@ export async function watchCommand({ background = false, scanIntervalMs = null, 
     for (const spec of ['../watch-process.js', '../../dist/watch-process.mjs']) {
       try {
         const url = import.meta.resolve(spec);
-        const p = fileURLToPath(url instanceof URL ? url : pathToFileURL(url));
+        const p = fileURLToPath(/** @type {any} */(url) instanceof URL ? /** @type {any} */(url) : pathToFileURL(String(url)));
         if (existsSync(p)) { resolved = p; break; }
       } catch {
         /* specifier unresolvable in this layout — try next */

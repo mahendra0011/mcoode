@@ -193,7 +193,7 @@ export async function runSecurityCheck({ projectPath = process.cwd(), category =
         const p = hasPattern(ctx, /fetch\s*\(\s*req\.(?:body|query)\.[a-zA-Z0-9_]*url/i) || hasPattern(ctx, /axios/i);
         if (p) location = { file: p.file, line: p.line };
       } else if (control.id === 'no-hardcoded-secrets') {
-        const p = hasPattern(ctx, /(?:AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|api_key\s*=\s*['"][a-zA-Z0-9_\-]{16,}['"])/i);
+        const p = hasPattern(ctx, /(?:AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|api_key\s*=\s*['"][a-zA-Z0-9_-]{16,}['"])/i);
         if (p) location = { file: p.file, line: p.line };
       } else if (control.id === 'no-sensitive-logs') {
         const p = hasPattern(ctx, /(?:console\.log|logger\.(?:info|debug|warn))\s*\([^)]*(?:password|token|secret|ssn|card|req\.body)/i);

@@ -143,6 +143,7 @@ function convertToMonacoTheme(themeData, uiTheme) {
   };
 }
 
+/** @param {{ secret?: string }} [opts] */
 export function extensionRoutes({ secret } = {}) {
   const router = Router();
   if (secret) router.use(authMiddleware({ secret }));

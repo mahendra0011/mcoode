@@ -17,6 +17,7 @@ export function isMailEnabled() {
   return brevoKey !== null;
 }
 
+/** @param {{ to: string, subject: string, text: string, html?: string }} opts */
 export async function sendMail({ to, subject, text, html }) {
   if (!brevoKey) {
     console.log(`[mail:disabled] to=${to} subject="${subject}" (set BREVO_API_KEY to enable)`);

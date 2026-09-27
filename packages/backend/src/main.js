@@ -1,5 +1,5 @@
 process.on('unhandledRejection', (reason) => {
-  console.error('[mcode backend] Unhandled Rejection:', reason?.message || reason);
+  console.error('[mcode backend] Unhandled Rejection:', /** @type {any} */(reason)?.message || reason);
 });
 
 process.on('uncaughtException', (err) => {

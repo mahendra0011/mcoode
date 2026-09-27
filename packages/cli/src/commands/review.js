@@ -36,7 +36,7 @@ export async function reviewCommand(target = null, { pr = null, asJson = false }
     console.log(`\nreviewing ${scopeLabel}...\n`);
   }
 
-  const findings = await runReview({ scope, target: reviewTarget, projectPath });
+  const findings = await runReview({ scope: /** @type {'diff'|'file'|'pr'} */ (scope), target: reviewTarget, projectPath });
 
   if (jsonOutput) {
     json(findings);

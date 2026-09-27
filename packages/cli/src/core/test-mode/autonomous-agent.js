@@ -100,7 +100,7 @@ function toLocator(page, target) {
 
 /**
  * Execute ONE script step in the live browser and verify its outcome.
- * @returns {{ success: boolean, error?: string, url?: string }}
+ * @returns {Promise<{ success: boolean, error?: string, url?: string }>}
  */
 export async function executeStep(page, step) {
   const outcome = { success: false, url: page.url() };
@@ -180,6 +180,7 @@ export async function executeStep(page, step) {
 }
 
 /** PLAN — model writes the interaction script for ONE feature. */
+/** @param {any} feature @param {{ router?: any, bus?: any, targetUrl?: string|null }} [opts] */
 export async function planInteractionScript(feature, { router, bus = null, targetUrl = null } = {}) {
   let steps = null;
   if (router) {
@@ -418,6 +419,7 @@ async function collectFailedRequests(page) {
  * @param {Array} inventory — feature inventory (Step 2)
  * @param {{ router, bus, projectPath, config, dispatchFix, targetUrl, headless }} ctx
  */
+/** @param {Array<any>} inventory @param {{ router?: any, bus?: any, projectPath?: string, config?: any, dispatchFix?: any, targetUrl?: string, headless?: boolean }} [opts] */
 export async function runAutonomousTesting(inventory, { router, bus = null, projectPath, config = {}, dispatchFix = null, targetUrl = 'http://localhost:3000', headless = true } = {}) {
   const maxFeatures = config?.autonomous?.maxFeatures || 30;
   const headlessFlag = config?.autonomous?.headless ?? headless;

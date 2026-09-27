@@ -1,3 +1,4 @@
+// @ts-nocheck — OpenTUI JSX, type-covered by esbuild bundle + manual runs, not tsc.
 import { useTerminalDimensions } from '@opentui/react';
 import { useTicker } from './useTicker.js';
 import { SPIN_FRAMES } from './blocks.jsx';

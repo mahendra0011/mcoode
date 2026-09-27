@@ -277,6 +277,7 @@ export async function checkForStructuralSuggestion({ fileContent = '', cursorLin
 /**
  * Generates an inline pair completion suggestion.
  */
+/** @param {any} req @param {any} res @param {{ secret?: string }} [opts] */
 export async function handlePairSuggest(req, res, { secret } = {}) {
   const { fileContent = '', cursorLine = 1, cursorColumn = 1, filePath = '' } = req.body || {};
 
@@ -325,6 +326,7 @@ no markdown fences. If nothing sensible completes here, return an empty string.`
 /**
  * Express router for Pair Mode endpoints.
  */
+/** @param {{ secret?: string }} [opts] */
 export function pairRoutes({ secret } = {}) {
   const router = Router();
   router.use(authMiddleware({ secret }));

@@ -1,3 +1,4 @@
+// @ts-nocheck — OpenTUI JSX, type-covered by esbuild bundle + manual runs, not tsc.
 import { useMemo } from 'react';
 import { theme, SPACING } from './theme.js';
 import { useTicker } from './useTicker.js';

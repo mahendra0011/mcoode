@@ -61,7 +61,7 @@ export async function startRepl({ watchAfter = null } = {}) {
   const needsOnboarding = !keyExists;
 
   if (needsOnboarding) {
-    await new Promise((resolve) => {
+    await new Promise(/** @type {(v?: any) => void} */ ((resolve) => {
       const base = backendUrl(config);
 
       async function apiCall(method, url, body, token = null) {
@@ -84,9 +84,10 @@ export async function startRepl({ watchAfter = null } = {}) {
         }
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const err = new Error(data?.error?.message || `request failed (${res.status})`);
-          err.code = data?.error?.code;
-          throw err;
+          throw Object.assign(
+            new Error(data?.error?.message || `request failed (${res.status})`),
+            { code: /** @type {any} */(data)?.error?.code }
+          );
         }
         return data;
       }
@@ -128,7 +129,7 @@ export async function startRepl({ watchAfter = null } = {}) {
           apiHandlers={apiHandlers}
         />
       );
-    });
+    }));
   }
 
   // ── Main TUI ──────────────────────────────────────────────────────────
@@ -149,7 +150,7 @@ export async function startRepl({ watchAfter = null } = {}) {
     let root;
     let nextAction = null;
     let onRendererDestroy = null;
-    const exited = new Promise((resolveExit) => {
+    const exited = new Promise(/** @type {(v?: any) => void} */ ((resolveExit) => {
       onRendererDestroy = () => resolveExit();
       renderer.on('destroy', onRendererDestroy);
 
@@ -173,7 +174,7 @@ export async function startRepl({ watchAfter = null } = {}) {
         renderer.destroy?.();
         process.exit(1);
       }
-    });
+    }));
 
     await exited;
     renderer.off('destroy', onRendererDestroy);

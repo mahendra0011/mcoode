@@ -19,9 +19,9 @@ const ZIP_MIMES = new Set([
 export function zipOnlyFilter(req, file, cb) {
   const name = String(file.originalname || '').toLowerCase();
   if (name.endsWith('.zip') || ZIP_MIMES.has(file.mimetype)) return cb(null, true);
-  const err = new Error('only .zip archives are accepted');
-  err.code = 'INVALID_FILE_TYPE';
-  cb(err);
+  cb(Object.assign(new Error('only .zip archives are accepted'), {
+    code: 'INVALID_FILE_TYPE'
+  }));
 }
 
 export function safeFilename(original) {

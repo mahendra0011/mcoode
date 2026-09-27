@@ -1,3 +1,4 @@
+// @ts-nocheck — OpenTUI JSX, type-covered by esbuild bundle + manual runs, not tsc.
 import { TextAttributes } from '@opentui/core';
 
 // OpenTUI's <box> natively supports backgroundColor (unlike Ink, where only

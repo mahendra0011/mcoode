@@ -56,6 +56,9 @@ export class AnthropicProvider extends HttpProvider {
     });
   }
 
+/** * @param {any} model
+ * @param {{ messages?: Array<{role: string, content: string}>, temperature?: number, maxTokens?: number, reasoning?: any, signal?: any }} [opts]
+ */
   async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
     const budget = reasoning?.thinkingBudget || 0;
     const thinking = budget > 0 ? { type: 'enabled', budget_tokens: budget } : undefined;
@@ -82,6 +85,9 @@ export class AnthropicProvider extends HttpProvider {
     };
   }
 
+/** * @param {any} model
+ * @param {{ messages?: Array<{role: string, content: string}>, temperature?: number, maxTokens?: number, reasoning?: any, signal?: any }} [opts]
+ */
   async *stream(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
     const budget = reasoning?.thinkingBudget || 0;
     const thinking = budget > 0 ? { type: 'enabled', budget_tokens: budget } : undefined;

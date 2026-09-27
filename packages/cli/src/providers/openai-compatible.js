@@ -74,6 +74,9 @@ export class OpenAICompatible extends HttpProvider {
     return filtered.length > 0;
   }
 
+/** * @param {any} model
+ * @param {{ messages?: Array<{role: string, content: string}>, temperature?: number, maxTokens?: number, reasoning?: any, signal?: any }} [opts]
+ */
   async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
     const res = await this.httpFetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -112,6 +115,9 @@ export class OpenAICompatible extends HttpProvider {
     };
   }
 
+/** * @param {any} model
+ * @param {{ messages?: Array<{role: string, content: string}>, temperature?: number, maxTokens?: number, reasoning?: any, signal?: any }} [opts]
+ */
   async *stream(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
     const res = await this.httpFetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',

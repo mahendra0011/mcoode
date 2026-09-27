@@ -123,7 +123,7 @@ async function runBugcheckTier1(projectPath) {
         }
       }
     } catch {
-      /* eslint unavailable/failed — tsc below is the backstop */
+      // eslint unavailable/failed - tsc below is the backstop
     }
   }
   if (await bugcheckBinExists(projectPath, 'tsc')) {
@@ -291,7 +291,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     globalBuckets.set(gkey, row);
     return row.count <= max * GLOBAL_RATE_MULTIPLIER;
   };
-  io.use((socket, next) => {
+  io.use((/** @type {import('socket.io').Socket & { userId?: string|null, role?: string, emitterAuthed?: boolean }} */ socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
     if (!token) {
       socket.userId = null;
@@ -316,7 +316,12 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     }
   });
 
-  io.on('connection', (socket) => {
+  /**
+   * @typedef {import('socket.io').Socket & {
+   *   userId?: string|null, role?: string, emitterAuthed?: boolean, rateKey?: string
+   * }} McodeSocket
+   */
+  io.on('connection', (/** @type {McodeSocket} */ socket) => {
     console.log('[SOCKET] connection:', socket.id, 'role:', socket.role, 'url:', socket.handshake.url);
     // BKD-006: per-IP connection cap + per-key identity for global budgets.
     const ip = socketIp(socket);

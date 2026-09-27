@@ -8,7 +8,7 @@ let client = null;
 function getAdbClient() {
   if (client) return client;
   try {
-    const Adb = adbkit.Adb || adbkit.default?.Adb || adbkit.default || adbkit;
+    const Adb = /** @type {any} */(adbkit).Adb || /** @type {any} */(adbkit).default?.Adb || /** @type {any} */(adbkit).default || adbkit;
     if (typeof Adb.createClient === 'function') {
       client = Adb.createClient();
     }
@@ -19,6 +19,7 @@ function getAdbClient() {
   return client;
 }
 
+/** @param {{ secret?: string }} [opts] */
 export function androidRoutes({ secret } = {}) {
   const router = Router();
   if (secret) router.use(authMiddleware({ secret }));

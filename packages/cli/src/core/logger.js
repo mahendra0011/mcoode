@@ -62,6 +62,7 @@ export async function confirm(question, { defaultYes = false } = {}) {
   });
 }
 
+/** @param {Array<Array<string>>} rows @param {{ columns?: string[] }} [opts] */
 export function table(rows, { columns } = {}) {
   if (jsonMode) return;
   if (!columns) return out(rows.map((r) => r.join('\t')).join('\n'));

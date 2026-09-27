@@ -6,6 +6,7 @@ import { getOrCreateUserRouter } from './pair.js';
 /**
  * Common technical typo dictionary for instant offline correction.
  */
+/** @type {Array<[RegExp, string]>} */
 const COMMON_TECH_TYPOS = [
   [/\bcreat\b/gi, 'create'],
   [/\bcretae\b/gi, 'create'],
@@ -119,6 +120,7 @@ export function offlineEnhancePrompt(prompt = '') {
 /**
  * Prompt enhancement router.
  */
+/** @param {{ secret?: string }} [opts] */
 export function promptRoutes({ secret } = {}) {
   const router = Router();
 

@@ -5,13 +5,22 @@ import { snapshotBehavior } from '../migrate/equivalence-check.js';
 import { verifyEquivalence } from '../migrate/verify-equivalence.js';
 
 /**
+ * @typedef {{
+ *   id?: string, file?: string, startLine?: number, issue?: string,
+ *   title?: string, category?: string, currentLines?: number,
+ *   estimatedCleanLines?: number, costsAI?: boolean, finding?: object
+ * }} CleanFinding
+ * @typedef {{ run: (todos: object[]) => Promise<object> }} FixRunner
+ */
+
+/**
  * Executes Clean Mode cleanup with equivalence guarantees (Doc 55).
  *
  * @param {string} projectPath
  * @param {{
- *   selectedFindings: Array<object>,
+ *   selectedFindings?: Array<CleanFinding>,
  *   router?: object,
- *   subagentManager?: object,
+ *   subagentManager?: FixRunner|null,
  *   bus?: import('node:events').EventEmitter,
  *   testRunner?: Function,
  *   maxPasses?: number

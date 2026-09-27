@@ -1,6 +1,7 @@
 import Docker from 'dockerode';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
+import { httpError } from './http-error.js';
 
 const docker = new Docker(); // Automatically connects to local Docker socket (/var/run/docker.sock or Windows named pipe)
 
@@ -21,12 +22,13 @@ const pullInflight = new Map();
 function pullImageOnce(image) {
   const existing = pullInflight.get(image);
   if (existing) return existing;
-  const p = new Promise((resolve, reject) => {
+  /** @type {Promise<any>} */
+  const p = new Promise(/** @type {(value?: any) => void} */ ((resolve, reject) => {
     docker.pull(image, (err, stream) => {
       if (err) return reject(err);
       docker.modem.followProgress(stream, (err) => (err ? reject(err) : resolve()));
     });
-  }).finally(() => {
+  })).finally(() => {
     if (pullInflight.get(image) === p) pullInflight.delete(image);
   });
   pullInflight.set(image, p);
@@ -37,9 +39,7 @@ function pullImageOnce(image) {
 const DESTRUCTIVE_CMD = /(\brm\s+[^;|&]*-[a-z]*r[a-z]*\s+(\/|\*)|:\(\)\s*\{|\bmkfs\b|\bdd\s+[^\n]*of=\/dev\/|\bformat\s+[a-z]:)/i;
 export function assertSafeCommand(command) {
   if (DESTRUCTIVE_CMD.test(String(command || ''))) {
-    const err = new Error('destructive command blocked (rm -rf /, fork bombs, mkfs, dd to devices)');
-    err.status = 400;
-    throw err;
+    throw httpError(400, 'destructive command blocked (rm -rf /, fork bombs, mkfs, dd to devices)');
   }
 }
 
@@ -131,7 +131,7 @@ export async function execInContainer(socketId, command, onData) {
   });
 
   const stream = await exec.start({ hijack: true, stdin: false });
-  return new Promise((resolve) => {
+return new Promise((resolve) => {
     container.modem.demuxStream(
       stream,
       { write: (chunk) => onData(chunk.toString()) }, // stdout

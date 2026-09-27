@@ -33,10 +33,10 @@ class FileLockManager {
   /**
    * Acquire a lock on a file for an agent. Resolves immediately if available,
    * or queues the caller as a waiter until the lock is released.
-   * @param {string} agentId — subagent identifier
-   * @param {string} filePath — absolute path to the file
-   * @param {number} [timeout=30000] — max wait time in ms
-   * @returns {Promise<() => void>} — release function
+   * @param {string} agentId - subagent identifier
+   * @param {string} filePath - absolute path to the file
+   * @param {number} [timeout=30000] - max wait time in ms
+   * @returns {Promise<() => void>} - release function
    */
   async acquireLock(agentId, filePath, timeout = 30000) {
     const existing = this.locks.get(filePath);
@@ -125,6 +125,15 @@ class FileLockManager {
  * every event onto the shared bus (terminal UI + Socket.IO bridge subscribe).
  */
 export class SubagentManager {
+  /**
+   * @param {object} args
+   * @param {object} args.plan
+   * @param {any} args.router
+   * @param {string} args.projectPath
+   * @param {Record<string, any>} [args.config]
+   * @param {{ on: Function, off: Function, emit: (event: string, payload?: any) => void }|null} [args.bus]
+   * @param {Record<string, any>} [args.options]
+   */
   constructor({ plan, router, projectPath, config = {}, bus = null, options = {} }) {
     this.plan = resolveFileConflicts(plan);
     this.router = router;

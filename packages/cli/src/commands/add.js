@@ -40,6 +40,7 @@ export async function setPluginEnabled(plugin, enabled) {
   ok(`plugin ${plugin} ${enabled ? 'enabled' : 'disabled'}`);
 }
 
+/** @param {{ category?: string }} [opts] */
 export async function pluginsListCommand({ category } = {}) {
   const ready = listPlugins({ category });
   if (ready.length === 0) {

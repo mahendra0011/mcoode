@@ -3,7 +3,6 @@ import { EVENTS } from '@mcode/shared';
 import { join, isAbsolute, relative } from 'node:path';
 import { readFile } from 'node:fs/promises';
 
-/* global AbortController */
 
 /**
  * Agent-mode chat: the assistant can inspect the project, edit files, run
@@ -305,7 +304,23 @@ async function* streamText(assignment, model, params) {
   }
 }
 export class ChatAgent {
-  constructor({ assignment, projectPath, bus, undoStack, config = {}, reasoning = null, history = [], onTool = null, domain = null, memoryDir = null, environment = null }) {
+  /**
+   * @param {object} args
+   * @param {Record<string, any>} args.assignment
+   * @param {string} args.projectPath
+   * @param {{ on: Function, off: Function, emit: (event: string, payload?: any) => void }|null} [args.bus]
+   * @param {Record<string, any>|null} [args.undoStack]
+   * @param {Record<string, any>} [args.config]
+   * @param {Record<string, any>|null} [args.reasoning]
+   * @param {Array<Record<string, any>>} [args.history]
+   * @param {Function|null} [args.onTool]
+   * @param {string|null} [args.domain]
+   * @param {number} [args.maxTurns]
+   * @param {boolean} [args.allowShellAll]
+   * @param {string|null} [args.memoryDir]
+   * @param {string|null} [args.environment]
+   */
+  constructor({ assignment, projectPath, bus, undoStack, config = {}, reasoning = null, history = [], onTool = null, domain = null, maxTurns = null, memoryDir = null, environment = null }) {
     this.assignment = assignment;
     this.projectPath = projectPath;
     this.config = config;
@@ -322,7 +337,7 @@ export class ChatAgent {
     this.historyLimit = hl === 0 ? null : (Number.isFinite(hl) && hl > 0 ? hl : 20);
     this.history = history ? this._capHistory(history) : [];
     // CAG-001: a single turn can never complete real work — floor at 3.
-    this.maxTurns = Math.max(3, Number(config.chatAgentTurns) || config.maxTurnsPerAgent || 12);
+    this.maxTurns = Math.max(3, Number(maxTurns) || Number(config.chatAgentTurns) || config.maxTurnsPerAgent || 12);
     this.allowShellAll = Boolean(config.allowShellAll);
     this.requireEditApproval = Boolean(config.requireEditApproval);
     this.networkWhitelist = config.networkWhitelist || null;
@@ -664,7 +679,7 @@ export class ChatAgent {
       requireEditApproval: this.requireEditApproval,
       networkWhitelist: this.networkWhitelist,
       auditLog: this.auditLog,
-      domain: this.domain || this.config.domain || this.config.forceDomain || 'backend',
+      domain: this.domain || this.config.domain || /** @type {any} */(this.config).forceDomain || 'backend',
       todoId: null,
       memoryDir: this.memoryDir,
       cancelSignal: signal

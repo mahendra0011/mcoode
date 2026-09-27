@@ -110,7 +110,7 @@ export async function securityCheckCommand({ category = null, asJson = false, no
         console.log(chalk.dim(`Report saved to .mcode/reports/${reportFileName}`));
         return;
       }
-      selected = promptResult;
+      selected = /** @type {any} */(promptResult);
     } catch {
       // Non-interactive fallback
       selected = [];

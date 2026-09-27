@@ -1,0 +1,30 @@
+{
+    "compilerOptions":  {
+                            "allowJs":  true,
+                            "checkJs":  true,
+                            "noEmit":  true,
+                            "strict":  false,
+                            "noImplicitAny":  false,
+                            "strictNullChecks":  false,
+                            "target":  "ES2022",
+                            "module":  "NodeNext",
+                            "moduleResolution":  "NodeNext",
+                            "skipLibCheck":  true,
+                            "types":  [
+                                          "node"
+                                      ],
+                            "jsx":  "react-jsx",
+                            "esModuleInterop":  true
+                        },
+    "include":  [
+                    "packages/cli/src/**/*.js",
+                    "packages/backend/src/**/*.js",
+                    "packages/shared/src/**/*.js"
+                ],
+    "exclude":  [
+                    "node_modules",
+                    "packages/cli/src/ui",
+                    "packages/cli/src/repl.js",
+                    "packages/web"
+                ]
+}

@@ -8,7 +8,7 @@
  * This mirrors the mediCore reference project: fail gracefully but
  * transparently, let Redis be the single source of truth for cache.
  */
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 
 let client = null;
 let mode = 'passthrough'; // 'redis' or 'passthrough'
@@ -20,8 +20,10 @@ export async function connectRedis(uri) {
     return { mode, connected: false };
   }
 
+  /** @type {any} */
+  let redis = null;
   try {
-    const redis = new Redis(uri, {
+    redis = new Redis(uri, {
       lazyConnect: true,
       maxRetriesPerRequest: null,
       retryStrategy: (times) => {

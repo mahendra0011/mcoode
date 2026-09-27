@@ -36,10 +36,10 @@ Rules:
  * @param {{
  *   projectPath?: string,
  *   repoContext?: string,
- *   router?: object,
- *   bus?: object
- * }} options
- * @returns {Promise<object>} The validated plan
+ *   router?: any,
+ *   bus?: { on: Function, off: Function, emit: (event: string, payload?: any) => void }|null
+ * }} [options]
+ * @returns {Promise<{ todos?: Array<Record<string, any>>, summary?: string, [k: string]: any }>} The validated plan
  */
 export async function planMigration(prompt, { projectPath = process.cwd(), repoContext = '', router, bus } = {}) {
   let assignment = null;

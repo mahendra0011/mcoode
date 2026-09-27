@@ -17,11 +17,11 @@ function normalizeText(text) {
  *
  * @param {string} html Raw HTML
  * @param {string} [baseUrl=''] Source page URL for resolving relative links
- * @returns {{ text: string, title: string, description: string, siteName: string, links: Array<{text: string, href: string}> }}
+ * @returns {{ text: string, title: string, description: string, siteName: string, byline: string, links: Array<{text: string, href: string}> }}
  */
 export function extractContent(html, baseUrl = '') {
   if (!html || typeof html !== 'string') {
-    return { text: '', title: '', description: '', siteName: '', links: [] };
+    return { text: '', title: '', description: '', siteName: '', byline: '', links: [] };
   }
 
   try {
@@ -104,7 +104,7 @@ export function extractContent(html, baseUrl = '') {
     };
   } catch (err) {
     console.error(`[extractContent Error]: ${err.message}`);
-    return { text: '', title: '', description: '', siteName: '', links: [] };
+    return { text: '', title: '', description: '', siteName: '', byline: '', links: [] };
   }
 }
 

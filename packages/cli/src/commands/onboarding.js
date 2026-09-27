@@ -92,10 +92,10 @@ async function api(method, path, body, token = null) {
     // 691: surface Retry-After so rate-limit waits are actionable.
     const retryAfter = res.headers?.get?.('retry-after');
     const suffix = res.status === 429 && retryAfter ? ` (retry after ${retryAfter}s)` : '';
-    const err = new Error(`${data?.error?.message || `request failed (${res.status})`}${suffix}`);
-    err.code = data?.error?.code;
-    err.status = res.status;
-    throw err;
+    throw Object.assign(
+      new Error(`${data?.error?.message || `request failed (${res.status})`}${suffix}`),
+      { code: /** @type {any} */(data)?.error?.code, status: res.status }
+    );
   }
   return data;
 }
@@ -181,7 +181,7 @@ export async function runOnboarding({ interactive = true } = {}) {
       }
     }
   } finally {
-    if (!rl.closed) rl.close();
+    if (!/** @type {any} */(rl).closed) /** @type {any} */(rl).close();
   }
 }
 

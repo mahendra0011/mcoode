@@ -158,6 +158,10 @@ function secretsFingerprint(secrets) {
   return h.toString(36);
 }
 
+/**
+ * @param {Record<string, string>} [secrets]
+ * @param {{ modelScores?: Record<string, Record<string, number>>, modelScoresUrl?: string, enabledProviders?: string[], disabledProviders?: string[] }} [config]
+ */
 export function getAllAdapters(secrets = {}, config = {}) {
   const cacheKey = JSON.stringify({ s: secretsFingerprint(secrets), c: config?.modelScores || null, e: envFingerprint() });
   const hit = adaptersCache.get(cacheKey);
@@ -180,6 +184,10 @@ function envFingerprint() {
     .join(';');
 }
 
+/**
+ * @param {Record<string, string>} [secrets]
+ * @param {{ modelScores?: Record<string, Record<string, number>>, modelScoresUrl?: string, enabledProviders?: string[], disabledProviders?: string[] }} [config]
+ */
 function buildAdapters(secrets = {}, config = {}) {
   const providers = [];
   const env = Object.fromEntries(
@@ -726,6 +734,9 @@ function buildAdapters(secrets = {}, config = {}) {
   return providers;
 }
 
+/**
+ * @param {{ secrets?: Record<string, string>, config?: { enabledProviders?: string[], disabledProviders?: string[], modelScores?: Record<string, Record<string, number>>, modelScoresUrl?: string } }} [opts]
+ */
 export async function getProviders({ secrets = {}, config = {} } = {}) {
   const all = getAllAdapters(secrets, config);
   let candidates = all.filter((p) => p.id === 'mock' || (typeof p.isConfigured === 'function' ? p.isConfigured() : (p.kind === 'local' || Boolean(p.apiKey))));

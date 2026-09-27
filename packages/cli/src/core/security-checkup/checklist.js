@@ -200,7 +200,7 @@ export const CHECKLIST = [
     id: 'no-hardcoded-secrets',
     category: 'auth',
     label: 'No hardcoded API keys/secrets/tokens in source',
-    check: (ctx) => !hasPattern(ctx, /(?:AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|api_key\s*=\s*['"][a-zA-Z0-9_\-]{16,}['"])/i),
+    check: (ctx) => !hasPattern(ctx, /(?:AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|api_key\s*=\s*['"][a-zA-Z0-9_-]{16,}['"])/i),
     riskIfMissing: 'critical',
     impact: 'Hardcoded secrets leaked in source code can lead to credential theft and unauthorized infrastructure access.'
   },

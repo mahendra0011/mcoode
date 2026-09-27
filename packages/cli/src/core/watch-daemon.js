@@ -597,7 +597,8 @@ You are mcode's bugfix subagent. Fix the reported problem in the file below. Res
 
   async _autoCommit(rel) {
     try {
-      const git = (await import('simple-git')).default(this.projectPath);
+      const sgMod = /** @type {any} */ (await import('simple-git'));
+      const git = (sgMod.default || sgMod)(this.projectPath);
       await git.add([rel]);
       await git.commit(`fix(watch): auto-fix ${rel}`);
     } catch {
@@ -613,7 +614,7 @@ You are mcode's bugfix subagent. Fix the reported problem in the file below. Res
     return {
       project: this.projectPath,
       status: this.status,
-      uptimeSecs: this.startedAt ? Math.floor((Date.now() - this.startedAt) / 1000) : 0,
+      uptimeSecs: this.startedAt ? Math.floor((Date.now() - this.startedAt.getTime()) / 1000) : 0,
       scansRun: this.scansRun,
       filesScanned: this.filesScanned,
       fixesApplied: this.fixesApplied,

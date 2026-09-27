@@ -10,9 +10,10 @@ export const initCommand = async ({ name = null, template = 'express', dir = pro
   const targetDir = name ? resolve(process.cwd(), name) : dir;
   const isNewDir = !(await stat(targetDir).catch(() => null));
   if (!isNewDir && !yes && !(await isEmptyDir(targetDir))) {
-    const err = new Error(`directory is not empty: ${targetDir} (re-run with -y to proceed)`);
-    err.code = 'INIT_DIR_NOT_EMPTY';
-    throw err;
+    throw Object.assign(
+      new Error(`directory is not empty: ${targetDir} (re-run with -y to proceed)`),
+      { code: 'INIT_DIR_NOT_EMPTY' }
+    );
   }
   await import('node:fs/promises').then(({ mkdir }) => mkdir(targetDir, { recursive: true }));
 

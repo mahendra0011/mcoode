@@ -15,7 +15,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
 import pino from 'pino';
-import pinoHttp from 'pino-http';
+import { pinoHttp } from 'pino-http';
 import { connectDb, db } from './db.js';
 import { connectRedis, cache, getRedisClient } from './cache.js';
 import { connectQueue, jobQueue, startWorker } from './queue.js';

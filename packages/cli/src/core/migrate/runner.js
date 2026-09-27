@@ -16,13 +16,14 @@ import { ModelRouter } from '../router.js';
  * @param {string} prompt - The migration instruction
  * @param {{
  *   projectPath?: string,
- *   router?: object,
- *   bus?: EventEmitter,
+ *   router?: any,
+ *   bus?: EventEmitter|null,
  *   maxPasses?: number,
  *   yes?: boolean,
- *   onConfirmPlan?: (plan: object) => Promise<boolean>,
- *   config?: object
- * }} options
+ *   onConfirmPlan?: ((plan: any) => Promise<boolean>)|null,
+ *   config?: Record<string, any>,
+ *   testRunner?: Function|null
+ * }} [options]
  */
 export async function runMigrate(prompt, {
   projectPath = process.cwd(),

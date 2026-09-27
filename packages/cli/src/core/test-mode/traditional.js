@@ -45,6 +45,7 @@ function pickRoute(route, methodHint = 'GET') {
 
 /* ── Unit tests (Step 3a) ─────────────────────────────────────────────── */
 
+/** @param {Array<any>} inventory @param {{ router?: any, bus?: any, projectPath?: string }} [opts] */
 export async function generateAndRunUnitTests(inventory, { router, bus = null, projectPath } = {}) {
   bus?.emit('TEST_TRADITIONAL', { kind: 'unit', status: 'running' });
   const summary = { kind: 'unit', total: 0, passed: 0, failed: 0, detail: '', cases: [] };
@@ -101,6 +102,7 @@ export async function generateAndRunUnitTests(inventory, { router, bus = null, p
 
 /* ── Integration tests (Step 3a) ──────────────────────────────────────── */
 
+/** @param {Array<any>} inventory @param {{ router?: any, bus?: any, targetUrl?: string }} [opts] */
 export async function generateAndRunIntegrationTests(inventory, { router, bus = null, targetUrl = 'http://localhost:3000' } = {}) {
   bus?.emit('TEST_TRADITIONAL', { kind: 'integration', status: 'running' });
   const summary = { kind: 'integration', total: 0, passed: 0, failed: 0, detail: '', cases: [] };
@@ -167,6 +169,7 @@ export async function generateAndRunIntegrationTests(inventory, { router, bus = 
 
 /* ── Accessibility (Step 3a) — axe-core, no AI needed ─────────────────── */
 
+/** @param {Array<any>} inventory @param {{ bus?: any, targetUrl?: string }} [opts] */
 export async function runA11yScan(inventory, { bus = null, targetUrl = 'http://localhost:3000' } = {}) {
   bus?.emit('TEST_TRADITIONAL', { kind: 'a11y', status: 'running' });
   const summary = { kind: 'a11y', total: 0, passed: 0, failed: 0, detail: '', cases: [] };
@@ -217,7 +220,7 @@ export async function runA11yScan(inventory, { bus = null, targetUrl = 'http://l
         const url = new URL(route, targetUrl).href;
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 });
         await page.evaluate(axeSource);
-        const results = await page.evaluate(() => window.axe.run(document, { resultTypes: ['violations'] }));
+        const results = await page.evaluate(() => /** @type {any} */(window).axe.run(document, { resultTypes: ['violations'] }));
         const violations = results.violations || [];
         const minor = violations.filter((v) => v.impact === 'minor' || v.impact === undefined).length;
         const serious = violations.length - minor;
@@ -244,6 +247,7 @@ export async function runA11yScan(inventory, { bus = null, targetUrl = 'http://l
 
 /* ── Load testing (Step 3a) ───────────────────────────────────────────── */
 
+/** @param {Array<any>} inventory @param {{ bus?: any, targetUrl?: string, concurrency?: number, requestsPerVU?: number }} [opts] */
 export async function runLoadTest(inventory, { bus = null, targetUrl = 'http://localhost:3000', concurrency = 10, requestsPerVU = 10 } = {}) {
   bus?.emit('TEST_TRADITIONAL', { kind: 'load', status: 'running' });
   const summary = { kind: 'load', total: 0, passed: 0, failed: 0, detail: '', cases: [] };

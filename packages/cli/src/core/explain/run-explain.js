@@ -37,10 +37,10 @@ export async function comprehendCodebase(projectPath = process.cwd(), { router =
  * Explain code or concepts in the project without modifying code or judging quality.
  *
  * @param {string} question - Question to answer
- * @param {object} options
+ * @param {object} [options]
  * @param {string} [options.projectPath]
- * @param {object} [options.router]
- * @param {object} [options.bus]
+ * @param {any} [options.router]
+ * @param {{ on: Function, off: Function, emit: (event: string, payload?: any) => void }|null} [options.bus]
  * @param {string} [options.targetFile]
  * @returns {Promise<string>} Plain conversational explanation
  */
@@ -107,7 +107,7 @@ not just WHAT it does. No code changes, no opinions on quality — pure explanat
  * Generate full onboarding walkthrough of the project and persist to .mcode/reports/project-tour.md
  *
  * @param {string} projectPath
- * @param {object} options
+ * @param {{ router?: any, bus?: { on: Function, off: Function, emit: (event: string, payload?: any) => void }|null }} [options]
  * @returns {Promise<string>} Generated markdown tour
  */
 export async function generateProjectTour(projectPath = process.cwd(), { router = null, bus = null } = {}) {

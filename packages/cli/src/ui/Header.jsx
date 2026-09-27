@@ -1,3 +1,4 @@
+// @ts-nocheck — OpenTUI JSX, type-covered by esbuild bundle + manual runs, not tsc.
 import { Logo } from './Logo.jsx';
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';

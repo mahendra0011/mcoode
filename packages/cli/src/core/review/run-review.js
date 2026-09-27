@@ -100,10 +100,10 @@ export async function getFileContent(target, cwd = process.cwd()) {
 /**
  * Run code review using the reviewer domain on router.
  *
- * @param {object} options
+ * @param {object} [options]
  * @param {'diff'|'pr'|'file'} [options.scope='diff']
  * @param {string} [options.target] - PR number or file path
- * @param {object} options.router - ModelRouter instance
+ * @param {any} [options.router] - ModelRouter instance
  * @param {string} [options.projectPath] - Project root directory
  * @returns {Promise<Array<{ file: string, line: number, severity: string, category: string, comment: string }>>}
  */

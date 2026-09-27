@@ -87,16 +87,19 @@ export const ALL_AUDIT_CATEGORIES = Object.freeze([
  *
  * @param {string} projectPath
  * @param {{
- *   categories?: string[],
- *   targetUrl?: string,
- *   router?: object,
- *   bus?: object
- * }} options
+ *   categories?: ReadonlyArray<string>,
+ *   targetUrl?: string|null,
+ *   router?: any,
+ *   bus?: { on: Function, off: Function, emit: (event: string, payload?: any) => void }|null
+ * }} [options]
  * @returns {Promise<{
- *   results: Record<string, object>,
+ *   results: Record<string, any>,
  *   grades: Record<string, string>,
  *   overallGrade: string,
- *   reportFile?: string
+ *   reportFile?: string,
+ *   reportPath: string|null,
+ *   reportFileName: string|null,
+ *   pdfPath?: string
  * }>}
  */
 export async function runAudit(projectPath = process.cwd(), {
@@ -150,7 +153,9 @@ export async function runAudit(projectPath = process.cwd(), {
     results,
     grades,
     overallGrade,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    reportPath: null,
+    reportFileName: null,
   };
 
   // Save report

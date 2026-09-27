@@ -8,7 +8,11 @@ import { buildFeatureInventory } from '../test-mode/feature-inventory.js';
  * Captures individual test outputs and their pass/fail status.
  *
  * @param {string} projectPath
- * @param {{ characterizationTests?: Array<{ feature: string, code: string }> }} options
+ * @param {{
+ *   characterizationTests?: Array<{ feature: string, code?: string, name?: string, run?: Function }>,
+ *   testRunner?: Function|null,
+ *   timeoutMs?: number
+ * }} options
  * @returns {Promise<{
  *   passed: number,
  *   failed: number,
@@ -150,6 +154,8 @@ export async function runProjectTestCommand(projectPath = process.cwd(), { chara
 /**
  * Generates characterization tests for under-tested features.
  * Captures CURRENT actual behavior (whatever it is) to lock it in.
+ * @param {Array<Record<string, any>>} features
+ * @param {{ router?: any, projectPath?: string }} [options]
  */
 export async function generateCharacterizationTests(features, { router, projectPath = process.cwd() } = {}) {
   const tests = [];
@@ -229,7 +235,7 @@ Keep the test focused and executable.`
  * 2. For anything under-tested, auto-generate characterization tests that lock in current behavior.
  *
  * @param {string} projectPath
- * @param {{ router?: object, bus?: object }} options
+ * @param {{ router?: any, bus?: { on: Function, off: Function, emit: (event: string, payload?: any) => void }|null, testRunner?: Function|null }} [options]
  */
 export async function snapshotBehavior(projectPath = process.cwd(), { router, bus, testRunner = null } = {}) {
   bus?.emit('MIGRATE_STATUS', { stage: 'snapshot', message: 'recording current test suite baseline...' });

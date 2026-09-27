@@ -234,11 +234,11 @@ export class ToolExecutor {
     });
 
     // Wait for answer
-    await new Promise((resolve) => {
+    await new Promise(/** @type {(v?: any) => void} */ ((resolve) => {
       const check = setInterval(() => {
         if (resolved) { clearInterval(check); resolve(); }
       }, 50);
-    });
+    }));
     return approved;
   }
 
@@ -716,7 +716,8 @@ export class ToolExecutor {
   }
 
   async git_status() {
-    const git = (await import('simple-git')).default(this.projectPath);
+    const sgMod = /** @type {any} */ (await import('simple-git'));
+    const git = (sgMod.default || sgMod)(this.projectPath);
     const status = await git.status();
     return { ok: true, files: status.files.map((f) => `${f.index} ${f.path}`), branch: status.current };
   }
@@ -913,6 +914,12 @@ export function lineDiff(before, after) {
    *  interleaved read-modify-write between concurrent subagents) and writes
    *  atomically (tmp file + rename) so a crash can never leave half a JSON. */
 export class UndoStack {
+  /**
+   * @param {object} [opts]
+   * @param {string} [opts.filePath]
+   * @param {number} [opts.maxEntries]
+   * @param {string|null} [opts.projectPath]
+   */
   constructor({ filePath, maxEntries = 200, projectPath = null } = {}) {
     this.filePath = filePath;
     this.maxEntries = maxEntries;

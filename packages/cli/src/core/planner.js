@@ -79,13 +79,26 @@ export function parsePlanOutput(text) {
 }
 
 export class Planner {
+  /**
+   * @param {object} [opts]
+   * @param {any} [opts.router]
+   * @param {{ on: Function, off: Function, emit: (event: string, payload?: any) => void }|null} [opts.bus]
+   * @param {string} [opts.modelDomain]
+   */
   constructor({ router, bus, modelDomain = 'planning' } = {}) {
     this.router = router;
     this.bus = bus;
     this.modelDomain = modelDomain;
   }
 
-  async plan(prompt, { repoContext = '', model = null } = {}) {
+  /**
+   * @param {string} prompt
+   * @param {object} [opts]
+   * @param {string} [opts.repoContext]
+   * @param {any} [opts.model]
+   * @param {string} [opts.projectPath]
+   */
+  async plan(prompt, { repoContext = '', model = null, projectPath = null } = {}) {
     let assignment = model;
     if (!assignment) {
       assignment = await this.router?.pick(this.modelDomain);

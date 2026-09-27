@@ -93,7 +93,7 @@ export async function computeAnalytics() {
 
   // Daily trend (last 7 days)
   const trend = [...dailyBuilds.entries()]
-    .sort(([a], [b]) => b.localeCompare(a))
+    .sort((a, b) => String(b[0]).localeCompare(String(a[0])))
     .slice(0, 7)
     .reverse()
     .map(([day, stats]) => ({ day, builds: stats.builds, cost: Number(stats.cost.toFixed(2)), avgDuration: Math.round(stats.duration / stats.builds) || 0 }));
@@ -186,7 +186,7 @@ export async function computeAnalytics() {
   }
   const throughput = [...buildsByDay.entries()]
     .map(([day, count]) => ({ day, builds: count }))
-    .sort(([a], [b]) => b.localeCompare(a))
+    .sort((a, b) => String(b[1].day).localeCompare(String(a[1].day)))
     .slice(0, 7)
     .reverse();
 

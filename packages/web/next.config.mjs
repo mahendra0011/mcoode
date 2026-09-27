@@ -20,29 +20,16 @@ export default {
   // needs it (Monaco workers = blob:, inline styles for dynamic theming,
   // ws(s) for Socket.IO, images from https/data/blob), strict everywhere
   // else (no object embeds, no base-uri hijack, upgrade-insecure-requests).
+  //
+  // The policy itself lives in `src/proxy.ts` because it needs a
+  // per-request nonce for the scripts Next.js inlines into the document.
+  // Setting it here as well would be a second, nonced-less policy that
+  // browsers intersect with the nonce one, re-blocking the bootstrap.
   async headers() {
     return [
       {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' blob:",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' https: data: blob:",
-              "font-src 'self' https: data:",
-              "connect-src 'self' http://localhost:* ws://localhost:* wss: https:",
-              "worker-src 'self' blob:",
-              "frame-src 'self' blob:",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-              'upgrade-insecure-requests',
-            ].join('; '),
-          },
-        ],
+        source: '/_next/static/:path*',
+        headers: [{ key: 'X-Content-Type-Options', value: 'nosniff' }],
       },
     ];
   },

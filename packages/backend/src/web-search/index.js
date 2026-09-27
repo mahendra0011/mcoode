@@ -10,9 +10,9 @@ export { extractContent, extractCleanText } from './extract.js';
 
 /**
  * Orchestrates the Search -> Fetch -> Extract pipeline (open-webSearch pattern)
- * @param {string} query 
- * @param {object} options 
- * @returns {Promise<Array>}
+ * @param {string} query
+ * @param {{ maxResults?: number, maxCharsPerPage?: number }} [options]
+ * @returns {Promise<Array<Record<string, any>>>} enriched, per-result objects
  */
 export async function searchAndFetch(query, options = {}) {
   const { maxResults = 5, maxCharsPerPage = 3000 } = options;

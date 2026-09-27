@@ -3,6 +3,7 @@ import { authMiddleware } from '../auth.js';
 import { deriveMasterKey, decryptKey } from '../secret-enc.js';
 import { uploadSingle, uploadFieldArray, UPLOADS_DIR } from '../upload-config.js';
 import { db } from '../db.js';
+import { httpError } from '../http-error.js';
 import { join, resolve as resolvePath, sep as pathSep } from 'node:path';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { createReadStream, existsSync, symlinkSync, rmSync, mkdirSync } from 'node:fs';
@@ -111,15 +112,11 @@ export function workspaceRoutes({ secret }) {
           if (f && f.path) {
             const text = String(f.content || '');
             if (text.length > 5_000_000) {
-              const err = new Error('duplicate file exceeds 5MB inline limit');
-              err.status = 413;
-              throw err;
+              throw httpError(413, 'duplicate file exceeds 5MB inline limit');
             }
             writtenBytes += text.length;
             if (writtenBytes > 100_000_000) {
-              const err = new Error('duplicate body exceeds 100MB total');
-              err.status = 413;
-              throw err;
+              throw httpError(413, 'duplicate body exceeds 100MB total');
             }
             const target = safeJoin(diskPath, f.path);
             await mkdir(dirname(target), { recursive: true });
@@ -460,7 +457,7 @@ export function workspaceRoutes({ secret }) {
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       
       try {
-        const git = (await import('simple-git')).default;
+        const git = await simpleGit();
         const branches = await git(ws.diskPath).branchLocal();
         return res.json({ branches: branches.all || [], current: branches.current || ws.branch || 'main' });
       } catch {
@@ -481,7 +478,7 @@ export function workspaceRoutes({ secret }) {
       const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       
-      const git = (await import('simple-git')).default;
+      const git = await simpleGit();
       if (create) {
         await git(ws.diskPath).checkoutLocalBranch(branch);
       } else {
@@ -507,7 +504,7 @@ export function workspaceRoutes({ secret }) {
     try {
       const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
-      const git = (await import('simple-git')).default(ws.diskPath);
+      const git = await simpleGit(ws.diskPath);
       const isRepo = await git.checkIsRepo().catch(() => false);
       if (!isRepo) return res.status(400).json({ error: { code: 'NOT_A_REPO', message: 'workspace is not a git repo' } });
       const file = typeof req.query.path === 'string' ? req.query.path : null;
@@ -588,7 +585,7 @@ export function workspaceRoutes({ secret }) {
       const masterKey = deriveKey(secret, req.userId);
       const token = decKey(githubAcc.accessToken, masterKey);
 
-      const git = (await import('simple-git')).default(ws.diskPath);
+      const git = await simpleGit(ws.diskPath);
       await git.addConfig('user.name', githubAcc.username);
       await git.addConfig('user.email', `${githubAcc.username}@users.noreply.github.com`);
 
@@ -772,6 +769,17 @@ async function walkDir(dir, base = '', depth = 0, maxDepth = 25) {
   return files;
 }
 
+/** simple-git ships `export =` typings — dynamic import callers go through
+ *  this untyped factory instead of tripping checkJs on `.default`.
+ *  @param {string} [cwd]
+ *  @returns {Promise.<any>}
+ */
+async function simpleGit(cwd) {
+  const mod = /** @type {any} */ (await import('simple-git'));
+  const factory = mod.default || mod;
+  return cwd ? factory(cwd) : factory;
+}
+
 /** Join and ensure the path stays within the workspace root (fail-closed on traversal).
  *  SEC-021: percent-decoding happens BEFORE segment checks, so %2e%2e%2f,
  *  double-encoding (%252e) and full-width slashes (%uff0f) can't smuggle `..`
@@ -791,25 +799,19 @@ function safeJoin(root, p) {
     }
   }
   if (!rel || rel.startsWith('/') || /^[A-Za-z]:\//.test(rel)) {
-    const err = new Error('invalid path: absolute paths not allowed');
-    err.status = 400;
-    throw err;
+    throw httpError(400, 'invalid path: absolute paths not allowed');
   }
   const parts = rel.split('/');
   const stack = [];
   for (const part of parts) {
     if (part === '' || part === '.') continue;
     if (part === '..') {
-      const err = new Error('invalid path: path traversal not allowed');
-      err.status = 400;
-      throw err;
+      throw httpError(400, 'invalid path: path traversal not allowed');
     }
     stack.push(part);
   }
   if (!stack.length) {
-    const err = new Error('invalid path');
-    err.status = 400;
-    throw err;
+    throw httpError(400, 'invalid path');
   }
   return join(rootResolved, ...stack);
 }
@@ -866,9 +868,7 @@ async function extractZipTo(zipPath, destDir) {
   const CONCURRENCY = 32;
   const entries = directory.files;
   if (entries.length > ZIP_MAX_ENTRIES) {
-    const err = new Error(`archive has too many entries (${entries.length} > ${ZIP_MAX_ENTRIES})`);
-    err.status = 413;
-    throw err;
+    throw httpError(413, `archive has too many entries (${entries.length} > ${ZIP_MAX_ENTRIES})`);
   }
 
   let totalBytes = 0;
@@ -881,15 +881,11 @@ async function extractZipTo(zipPath, destDir) {
 
         const declared = Number(entry.uncompressedSize || 0);
         if (declared > ZIP_MAX_FILE_BYTES) {
-          const err = new Error(`archive entry too large: ${entry.path}`);
-          err.status = 413;
-          throw err;
+          throw httpError(413, `archive entry too large: ${entry.path}`);
         }
         totalBytes += declared;
         if (totalBytes > ZIP_MAX_TOTAL_BYTES) {
-          const err = new Error('archive expands beyond the 500MB limit (possible zip bomb)');
-          err.status = 413;
-          throw err;
+          throw httpError(413, 'archive expands beyond the 500MB limit (possible zip bomb)');
         }
 
         const fullPath = safeJoin(destDir, entry.path);
@@ -904,9 +900,7 @@ async function extractZipTo(zipPath, destDir) {
           const realDest = await realpath(destDir).catch(() => destDir);
           const realParent = await realpath(join(fullPath, '..')).catch(() => null);
           if (!realParent || (realParent !== realDest && !realParent.startsWith(realDest + pathSep))) {
-            const err = new Error(`archive entry escapes destination (possible zip-slip/symlink): ${entry.path}`);
-            err.status = 413;
-            throw err;
+            throw httpError(413, `archive entry escapes destination (possible zip-slip/symlink): ${entry.path}`);
           }
           await pipeline(entry.stream(), createWriteStream(fullPath));
           // Post-write check: if the written file resolves outside destDir
@@ -914,9 +908,7 @@ async function extractZipTo(zipPath, destDir) {
           const realFile = await realpath(fullPath).catch(() => null);
           if (!realFile || (realFile !== fullPath && !realFile.startsWith(realDest + pathSep))) {
             await rmFile(realFile || fullPath, { force: true }).catch(() => {});
-            const err = new Error(`archive entry escapes destination after write: ${entry.path}`);
-            err.status = 413;
-            throw err;
+            throw httpError(413, `archive entry escapes destination after write: ${entry.path}`);
           }
         }
       })
@@ -924,9 +916,13 @@ async function extractZipTo(zipPath, destDir) {
   }
 }
 
-/** Clone a git repo to a directory with optional branch selection. */
+/** Clone a git repo to a directory with optional branch selection.
+ *  @param {string} repoUrl
+ *  @param {string} destDir
+ *  @param {{ branch?: string, branchName?: string }} [opts]
+ */
 async function cloneRepo(repoUrl, destDir, opts = {}) {
-  const git = (await import('simple-git')).default;
+  const git = await simpleGit();
   const cloneOpts = { '--depth': '1' };
   if (opts.branch && opts.branch !== 'current') {
     cloneOpts['--branch'] = opts.branchName || opts.branch;

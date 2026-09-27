@@ -60,7 +60,7 @@ function machinePassword(passphrase = '') {
  *  The `keytar` package is optional — install it to enable OS-keychain mode. */
 export async function keychainGet(account = 'mcode-vault-master') {
   try {
-    const mod = await import('keytar').catch(() => null);
+    const mod = await import(/** @type {string} */ ('keytar')).catch(() => null);
     const keytar = mod?.default || mod;
     if (!keytar?.getPassword) return null;
     return await keytar.getPassword('mcode', account).catch(() => null);

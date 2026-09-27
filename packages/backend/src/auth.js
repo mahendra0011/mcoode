@@ -14,7 +14,10 @@ export async function verifyPassword(plain, hash) {
   return bcrypt.compare(plain, hash);
 }
 
-export function signTokens(userId, { secret, accessTtl = '15m', refreshTtl = '30d' } = {}) {
+/** @param {string} userId
+ *  @param {{ secret: string, accessTtl?: string, refreshTtl?: string }} opts
+ */
+export function signTokens(userId, { secret, accessTtl = '15m', refreshTtl = '30d' }) {
   const access = jwt.sign({ sub: userId, type: 'access' }, secret, { expiresIn: accessTtl });
   const refresh = jwt.sign({ sub: userId, type: 'refresh', jti: randomUUID() }, secret, { expiresIn: refreshTtl });
   return { access, refresh };
@@ -41,7 +44,8 @@ export async function verifyOtpCode(code, stored, secret) {
  *  untracked refresh token would get all of the user's sessions revoked on
  *  first use (rotateRefreshToken treats unknown JTIs as reuse). Callers map
  *  DB errors to 503 so clients retry instead of failing closed. */
-export async function signTrackedTokens(db, userId, { secret } = {}) {
+/** @param {any} db @param {string} userId @param {{ secret: string }} opts */
+export async function signTrackedTokens(db, userId, { secret }) {
   const tokens = signTokens(userId, { secret });
   const { jti, exp } = jwt.decode(tokens.refresh) || {};
   await db.refreshToken.create({
@@ -62,9 +66,9 @@ export async function rotateRefreshToken(db, refresh, secret) {
     try {
       await db.refreshToken.deleteMany({ userId: payload.sub });
     } catch {}
-    const err = new Error('refresh token reused or revoked — all sessions revoked');
-    err.code = 'REFRESH_REUSED';
-    throw err;
+    throw Object.assign(new Error('refresh token reused or revoked — all sessions revoked'), {
+      code: 'REFRESH_REUSED'
+    });
   }
   await db.refreshToken.deleteOne({ jti: payload.jti });
   return signTrackedTokens(db, payload.sub, { secret });
