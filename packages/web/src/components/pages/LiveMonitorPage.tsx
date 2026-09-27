@@ -10,7 +10,7 @@ interface Agent {
   domain?: string;
   model?: string;
   wave?: number;
-  status: 'running' | 'done' | 'failed';
+  status: 'running' | 'done' | 'failed' | 'needs_review';
   steps: number;
   updatedAt: number;
 }
@@ -72,10 +72,20 @@ export function LiveMonitorPage() {
     const onDone = (p: any) => upsert(String(p.todoId || p.id), { title: p.title }, 'done');
     const onFailed = (p: any) => upsert(String(p.todoId || p.id), { title: p.title }, 'failed');
     const onFix = (p: any) => {
+      // BUG-19-15: time-windowed dedupe (5min) instead of an ever-growing
+      // set — re-fixes of the same file surface again, memory stays flat.
+      const now = Date.now();
       const key = `${p.file}:${p.detail}:${p.outcome}`;
+      const prevAt = (seen.current as any)._at as Map<string, number> | undefined;
+      const at = prevAt || new Map<string, number>();
+      (seen.current as any)._at = at;
+      for (const [k, t] of at) {
+        if (now - t > 5 * 60 * 1000) { at.delete(k); seen.current.delete(k); }
+      }
       if (seen.current.has(key)) return;
       seen.current.add(key);
-      setFixes((prev) => [{ id: ++fixSeq, file: p.file, detail: p.detail, outcome: p.outcome, at: Date.now() }, ...prev].slice(0, 30));
+      at.set(key, now);
+      setFixes((prev) => [{ id: ++fixSeq, file: p.file, detail: p.detail, outcome: p.outcome, at: now }, ...prev].slice(0, 30));
     };
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -83,7 +93,8 @@ export function LiveMonitorPage() {
     socket.on('agent:step', onStep);
     socket.on('agent:done', onDone);
     socket.on('agent:failed', onFailed);
-    socket.on('agent:needs_review', onFailed);
+    // BUG-19-16: needs_review is its own status, not a failure.
+    socket.on('agent:needs_review', (p: any) => upsert(String(p.todoId || p.id), { title: p.title }, 'needs_review'));
     socket.on('watch:fix', onFix);
     socket.on('WATCH_FIX', onFix);
     const t = setTimeout(() => setReady(true), 600);

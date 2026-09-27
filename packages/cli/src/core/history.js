@@ -7,7 +7,9 @@ const MAX_HISTORY_FILES = 100;
 export async function saveHistory(entry) {
   const { mkdir } = await import('node:fs/promises');
   await mkdir(HISTORY_DIR, { recursive: true });
-  const name = `${new Date(entry.startedAt || Date.now()).toISOString().replace(/[:.]/g, '-')}-${String(entry.id || 'session').replace(/[^a-z0-9-]/gi, '')}.json`;
+  // 705: fall back to 'session' when the id sanitizes to empty.
+  const safeId = String(entry.id || 'session').replace(/[^a-z0-9-]/gi, '') || 'session';
+  const name = `${new Date(entry.startedAt || Date.now()).toISOString().replace(/[:.]/g, '-')}-${safeId}.json`;
   await writeFile(join(HISTORY_DIR, name), JSON.stringify(entry, null, 2), 'utf8');
   await pruneHistory();
   return name;

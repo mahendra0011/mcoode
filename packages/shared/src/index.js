@@ -1,3 +1,8 @@
+/** @mcode/shared — typed contracts for CLI, backend and web (SHR-005).
+ *  Canonical imports: EVENTS/SOCKET/EVENT_TO_SOCKET (events.js), TASK_DOMAINS/
+ *  DEFAULT_ROUTING (domains.js), plan DAG (plan.js), provider base + JSDoc
+ *  typedefs (provider.js), CostLedger/estimateTokens (below), plugins
+ *  (plugins.js). Prefer these over raw string literals (SHR-001). */
 export * from './events.js';
 export * from './domains.js';
 export * from './plan.js';
@@ -12,9 +17,10 @@ export class CostLedger {
     this.filePath = filePath;
     this.windowMs = windowMs;
     this.providers = new Map(); // providerId -> { rpm: number[], tpm: number[] }
+    this.modes = new Map(); // 880: mode -> { tokens, cost, runs } (accounting only)
   }
 
-  record(providerId, { inputTokens = 0, outputTokens = 0 } = {}) {
+  record(providerId, { inputTokens = 0, outputTokens = 0, mode = null, cost = 0 } = {}) {
     const now = Date.now();
     let entry = this.providers.get(providerId);
     if (!entry) {
@@ -23,6 +29,20 @@ export class CostLedger {
     }
     entry.rpm.push(now);
     entry.tpm.push({ t: now, n: inputTokens + outputTokens });
+    // 880: per-mode budget attribution — separate from (never affecting)
+    // the provider-keyed rate-limit windows above.
+    if (mode) {
+      const m = this.modes.get(mode) || { tokens: 0, cost: 0, runs: 0 };
+      m.tokens += inputTokens + outputTokens;
+      m.cost += cost;
+      m.runs += 1;
+      this.modes.set(mode, m);
+    }
+  }
+
+  /** Spend report grouped by mode: { [mode]: { tokens, cost, runs } }. */
+  spendByMode() {
+    return Object.fromEntries(this.modes);
   }
 
   _trim(key, providerId) {
@@ -31,10 +51,14 @@ export class CostLedger {
     const cutoff = Date.now() - this.windowMs;
     const arr = entry[key];
     if (key === 'tpm') {
-      while (arr.length && arr[0].t < cutoff) arr.shift();
+      let idx = 0;
+      while (idx < arr.length && arr[idx].t < cutoff) idx++;
+      if (idx > 0) arr.splice(0, idx);
       return arr.reduce((sum, e) => sum + e.n, 0);
     }
-    while (arr.length && arr[0] < cutoff) arr.shift();
+    let idx = 0;
+    while (idx < arr.length && arr[idx] < cutoff) idx++;
+    if (idx > 0) arr.splice(0, idx);
     return arr.length;
   }
 
@@ -52,7 +76,9 @@ export class CostLedger {
 
   async save() {
     if (!this.filePath) return;
-    const { mkdir, writeFile } = await import('node:fs/promises');
+    // PERF-19-22: atomic tmp+rename — a mid-write crash must never leave a
+    // torn ledger behind.
+    const { mkdir, writeFile, rename } = await import('node:fs/promises');
     const { dirname } = await import('node:path');
     await mkdir(dirname(this.filePath), { recursive: true });
     const data = {
@@ -61,9 +87,12 @@ export class CostLedger {
           id,
           { rpm: e.rpm, tpm: e.tpm }
         ])
-      )
+      ),
+      modes: Object.fromEntries(this.modes),
     };
-    await writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf8');
+    const tmp = `${this.filePath}.tmp.${process.pid}`;
+    await writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
+    await rename(tmp, this.filePath);
   }
 
   async load() {
@@ -86,15 +115,27 @@ export class CostLedger {
         this._trim('rpm', id);
         this._trim('tpm', id);
       }
+      for (const [mode, m] of Object.entries(data.modes || {})) {
+        if (m && typeof m.tokens === 'number') this.modes.set(mode, m);
+      }
     } catch {
       /* missing/corrupt file — start empty */
     }
   }
 }
 
-/** Rough token estimation (used for rate-limit tracking when providers don't
- *  report usage). ~4 chars per token is a fine approximation for code. */
+/** Rough token estimation — fallback only (subagents prefer provider-reported
+ *  `usage` when the API returns it). ~4 chars/token holds for English prose
+ *  and code, but CJK/emoji run ~1-3 tokens per char, so non-ASCII is counted
+ *  at ~1 token/char instead of being underestimated 2-4x (RTR-004). */
 export function estimateTokens(text) {
   if (!text) return 0;
-  return Math.ceil(text.length / 4);
+  const str = String(text);
+  let ascii = 0;
+  let nonAscii = 0;
+  for (const ch of str) {
+    if (ch.codePointAt(0) < 128) ascii++;
+    else nonAscii++;
+  }
+  return Math.ceil(ascii / 4) + nonAscii;
 }

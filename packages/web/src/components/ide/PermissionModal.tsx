@@ -30,7 +30,7 @@ export function PermissionModal({ request, onAnswer }: PermissionModalProps) {
           transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
           className="w-full mb-4"
         >
-          <div className="w-full bg-[#1e1a0a] border border-[#eab308]/30 rounded-xl p-4 shadow-lg">
+          <div role="alertdialog" aria-modal="true" aria-label="Permission request" className="w-full bg-[#1e1a0a] border border-[#eab308]/30 rounded-xl p-4 shadow-lg">
       <div className="flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-[#eab308] flex-shrink-0 mt-0.5" />
         <div className="flex flex-col gap-3 w-full">
@@ -64,11 +64,14 @@ export function PermissionModal({ request, onAnswer }: PermissionModalProps) {
             >
               Allow Once
             </motion.button>
+            {/* 1218: honest scope — backend caches 'always' per agent run
+                (one todo/chat turn), NOT session-wide. */}
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               onClick={() => onAnswer(request!.requestId, 'always')}
+              title="Auto-approve similar prompts for this task only"
               className="px-3 py-1.5 rounded-lg bg-[#eab308] hover:bg-[#eab308]/90 text-black text-xs font-bold transition"
             >
-              Always Allow
+              Always (this task)
             </motion.button>
           </div>
         </div>

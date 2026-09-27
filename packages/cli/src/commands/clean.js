@@ -105,10 +105,23 @@ export async function cleanCommand({
   // Interactive selection or auto-confirm (--yes)
   let selected = allFindings;
   if (!yes && !process.env.CI && !process.env.NON_INTERACTIVE && allFindings.length > 0) {
-    const ans = await askQuestion(chalk.cyan('Clean all detected items? [Y/n/select]: '));
-    if (ans.toLowerCase() === 'n') {
+    const ans = (await askQuestion(chalk.cyan('Clean all detected items? [Y/n/select]: '))).toLowerCase();
+    if (ans === 'n') {
       console.log(chalk.dim('Clean cancelled.'));
       return;
+    }
+    if (ans === 'select' || ans === 's') {
+      selected = [];
+      for (const f of allFindings) {
+        const itemAns = (await askQuestion(chalk.cyan(`Clean ${f.label || f.title || f.file}? [y/N]: `))).toLowerCase();
+        if (itemAns === 'y' || itemAns === 'yes') {
+          selected.push(f);
+        }
+      }
+      if (selected.length === 0) {
+        console.log(chalk.dim('No items selected for cleaning.'));
+        return;
+      }
     }
   }
 

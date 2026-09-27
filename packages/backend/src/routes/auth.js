@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { randomInt } from 'node:crypto';
-import { hashPassword, verifyPassword, signTrackedTokens, rotateRefreshToken, setAuthCookies, clearAuthCookies, readAuthCookies, authMiddleware } from '../auth.js';
+import { hashPassword, verifyPassword, hashOtpCode, verifyOtpCode, signTrackedTokens, rotateRefreshToken, setAuthCookies, clearAuthCookies, readAuthCookies, authMiddleware } from '../auth.js';
 import { db } from '../db.js';
 import { validate } from '../validate.js';
 import { sendMail, isMailEnabled } from '../mailer.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
-const OTP_MAX_ATTEMPTS = 5;
+// AUTH-002: 3 attempts per code (was 5) — 6-digit codes only survive
+// ~3M guesses/day theoretical max; tighter window, same UX.
+const OTP_MAX_ATTEMPTS = 3;
 const OTP_SEND_WINDOW_MS = 10 * 60 * 1000;
 const OTP_SEND_LIMIT = 5;
 
@@ -30,8 +32,14 @@ async function rateLimited(email) {
   if (!row || now - row.windowStart > OTP_SEND_WINDOW_MS) {
     sendLog.set(email, { windowStart: now, count: 1 });
     if (sendLog.size > SENDLOG_MAX_KEYS) {
-      const oldest = sendLog.keys().next().value;
-      sendLog.delete(oldest);
+      // AUTH-003/004: sweep expired windows first; only then evict oldest.
+      for (const [k, v] of sendLog) {
+        if (now - v.windowStart > OTP_SEND_WINDOW_MS) sendLog.delete(k);
+        if (sendLog.size <= SENDLOG_MAX_KEYS) break;
+      }
+      if (sendLog.size > SENDLOG_MAX_KEYS) {
+        sendLog.delete(sendLog.keys().next().value);
+      }
     }
     return false;
   }
@@ -49,22 +57,29 @@ export function authRoutes({ secret }) {
       if (intent === 'signup' && await users.findOne({ email })) {
         return res.status(409).json({ error: { code: 'EMAIL_TAKEN', message: 'email already registered — try login' } });
       }
-      if (intent === 'login' && !await users.findOne({ email })) {
+      if ((intent === 'login' || intent === 'reset') && !await users.findOne({ email })) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'no account found for this email — try signup' } });
       }
       if (await rateLimited(email)) {
         return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'too many OTP requests — wait a few minutes' } });
       }
-      const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-      const codeHash = hashPassword(code);
+      // AUTH-020: never issue an all-identical-digit code (000000 looks
+      // like a placeholder and is the first guess of every attacker).
+      let code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      if (/^(\d)\1{5}$/.test(code)) {
+        code = String((Number(code) + 111111) % 1_000_000).padStart(6, '0');
+      }
+      const codeHash = hashOtpCode(code, secret);
       await db().otp.deleteMany({ email, intent });
       await db().otp.create({ email, codeHash, intent, expiresAt: new Date(Date.now() + OTP_TTL_MS), attempts: 0 });
       const mail = await sendMail({
         to: email,
-        subject: `mcode verification code: ${code}`,
+        subject: 'mcode verification code',
         text: `Your mcode ${intent} code is ${code}. It expires in 10 minutes.`
       });
-      const dev = process.env.NODE_ENV === 'test';
+      // AUTH-007: dev OTP echo requires an explicit opt-in, not just
+      // NODE_ENV=test (which must never enable it in a real deployment).
+      const dev = process.env.NODE_ENV === 'test' && process.env.MCODE_DEV_OTP === '1';
       res.json({
         ok: true,
         expiresInSec: OTP_TTL_MS / 1000,
@@ -83,14 +98,21 @@ export function authRoutes({ secret }) {
   router.post('/verify-otp', validate('verifyOtp'), async (req, res, next) => {
     try {
       const { email, otp, intent, name, password } = req.body;
+      // AUTH-008: password-reset codes are single-purpose — they verify here
+      // only for signup/login. Use /reset-password for intent 'reset'.
+      if (intent !== 'signup' && intent !== 'login') {
+        return res.status(400).json({ error: { code: 'WRONG_INTENT', message: 'this code was issued for password reset — use /reset-password' } });
+      }
       const pending = await db().otp.findOne({ email, intent });
       if (!pending || new Date(pending.expiresAt) < new Date()) {
         return res.status(400).json({ error: { code: 'OTP_EXPIRED', message: 'code expired — request a new one' } });
       }
       if (pending.attempts >= OTP_MAX_ATTEMPTS) {
+        // 1054: exhausted codes are destroyed, not left for further guessing.
+        await db().otp.deleteOne({ _id: pending._id }).catch(() => {});
         return res.status(400).json({ error: { code: 'OTP_EXPIRED', message: 'too many attempts — request a new code' } });
       }
-      if (!verifyPassword(otp, pending.codeHash)) {
+      if (!(await verifyOtpCode(otp, pending.codeHash, secret))) {
         await db().otp.updateOne({ _id: pending._id }, { attempts: pending.attempts + 1 });
         return res.status(401).json({ error: { code: 'BAD_OTP', message: 'incorrect code' } });
       }
@@ -104,7 +126,7 @@ export function authRoutes({ secret }) {
         }
         user = await users.create({
           email,
-          passwordHash: hashPassword(password),
+          passwordHash: await hashPassword(password),
           name,
           plan: 'free',
           settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
@@ -136,7 +158,7 @@ export function authRoutes({ secret }) {
       }
       const user = await users.create({
         email,
-        passwordHash: hashPassword(password),
+        passwordHash: await hashPassword(password),
         name,
         plan: 'free',
         settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
@@ -158,7 +180,7 @@ export function authRoutes({ secret }) {
       const { email, password } = req.body;
       const users = db().user;
       const user = await users.findOne({ email });
-      if (!user || !verifyPassword(password, user.passwordHash)) {
+      if (!user || !(await verifyPassword(password, user.passwordHash))) {
         return res.status(401).json({ error: { code: 'BAD_CREDENTIALS', message: 'invalid email or password' } });
       }
       const tokens = await signTrackedTokens(db(), user._id, { secret });
@@ -176,14 +198,21 @@ export function authRoutes({ secret }) {
   router.post('/reset-password', validate('resetPassword'), async (req, res, next) => {
     try {
       const { email, otp, password } = req.body;
-      const pending = await db().otp.findOne({ email, intent: 'login' });
+      // AUTH-008: dedicated 'reset' intent — login/signup codes are rejected.
+      // AUTH-009: new password floor (min 8) mirrors /change-password; the
+      // Joi schema already enforces it, this is defense in depth.
+      if (!password || password.length < 8) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'new password must be at least 8 characters' } });
+      }
+      const pending = await db().otp.findOne({ email, intent: 'reset' });
       if (!pending || new Date(pending.expiresAt) < new Date()) {
-        return res.status(400).json({ error: { code: 'OTP_EXPIRED', message: 'code expired — request a new one via send-otp (intent: login)' } });
+        return res.status(400).json({ error: { code: 'OTP_EXPIRED', message: 'code expired — request a new one via send-otp (intent: reset)' } });
       }
       if (pending.attempts >= OTP_MAX_ATTEMPTS) {
+        await db().otp.deleteOne({ _id: pending._id }).catch(() => {});
         return res.status(400).json({ error: { code: 'OTP_EXPIRED', message: 'too many attempts — request a new code' } });
       }
-      if (!verifyPassword(otp, pending.codeHash)) {
+      if (!(await verifyOtpCode(otp, pending.codeHash, secret))) {
         await db().otp.updateOne({ _id: pending._id }, { attempts: pending.attempts + 1 });
         return res.status(401).json({ error: { code: 'BAD_OTP', message: 'incorrect code' } });
       }
@@ -191,8 +220,8 @@ export function authRoutes({ secret }) {
       if (!user) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'no account for this email' } });
       }
-      await db().user.updateOne({ _id: user._id }, { passwordHash: hashPassword(password) });
-      await db().otp.deleteMany({ email, intent: 'login' });
+      await db().user.updateOne({ _id: user._id }, { passwordHash: await hashPassword(password) });
+      await db().otp.deleteMany({ email, intent: 'reset' });
       await db().refreshToken.deleteMany({ userId: user._id });
       res.json({ ok: true });
     } catch (err) {
@@ -215,6 +244,9 @@ export function authRoutes({ secret }) {
     } catch (err) {
       if (err?.code === 'REFRESH_REUSED') {
         return res.status(401).json({ error: { code: 'REFRESH_REUSED', message: err.message } });
+      }
+      if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
+        return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
       }
       res.status(401).json({ error: { code: 'INVALID_REFRESH', message: 'invalid refresh token' } });
     }
@@ -269,6 +301,28 @@ export function authRoutes({ secret }) {
 
   router.delete('/me', authMiddleware({ secret }), async (req, res, next) => {
     try {
+      const user = await db().user.findById(req.userId);
+      if (!user) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'user not found' } });
+      // AUTH-011: a stolen JWT alone must not be able to wipe an account.
+      // GitHub-only users: set a password first via /reset-password (OTP).
+      const { currentPassword } = req.body || {};
+      if (!currentPassword || !(await verifyPassword(currentPassword, user.passwordHash))) {
+        return res.status(401).json({ error: { code: 'PASSWORD_REQUIRED', message: 'account deletion requires your current password (GitHub-only accounts: set one via reset-password first)' } });
+      }
+      const email = user?.email;
+      // 048: remove workspace directories too — otherwise account deletion
+      // leaves orphaned gigabytes on disk with no owning record.
+      try {
+        const owned = await db().workspace.find({ userId: req.userId });
+        if (Array.isArray(owned)) {
+          const { rm } = await import('node:fs/promises');
+          for (const w of owned) {
+            if (w?.diskPath) await rm(w.diskPath, { recursive: true, force: true }).catch(() => {});
+          }
+        }
+      } catch {
+        /* disk cleanup is best-effort — DB deletes below still run */
+      }
       await db().user.deleteOne({ _id: req.userId });
       if (db().session) await db().session.deleteMany({ userId: req.userId });
       if (db().apiKey) await db().apiKey.deleteMany({ userId: req.userId });
@@ -276,7 +330,7 @@ export function authRoutes({ secret }) {
       if (db().githubAccount) await db().githubAccount.deleteMany({ userId: req.userId });
       if (db().workspace) await db().workspace.deleteMany({ userId: req.userId });
       if (db().refreshToken) await db().refreshToken.deleteMany({ userId: req.userId });
-      if (db().otp) await db().otp.deleteMany({ email: req.user?.email });
+      if (db().otp && email) await db().otp.deleteMany({ email });
       clearAuthCookies(res);
       res.json({ ok: true });
     } catch (err) {
@@ -291,7 +345,34 @@ export function authRoutes({ secret }) {
     try {
       const user = await db().user.findById(req.userId);
       if (!user) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'user not found' } });
-      const patch = { name: req.body.name, settings: req.body.settings };
+      // AUTH-012: sanitize settings — block operator injection ($keys/dots),
+      // prototype pollution, and document-bloat payloads (10KB cap).
+      const sanitizeSettings = (input) => {
+        if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+        if (Buffer.byteLength(JSON.stringify(input), 'utf8') > 10_240) return undefined;
+        const clean = (val) => {
+          if (Array.isArray(val)) return val.slice(0, 100).map(clean);
+          if (val && typeof val === 'object') {
+            const out = {};
+            for (const [k, v] of Object.entries(val).slice(0, 100)) {
+              if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+              if (k.startsWith('$') || k.includes('.')) continue;
+              out[k.slice(0, 100)] = clean(v);
+            }
+            return out;
+          }
+          return typeof val === 'string' ? val.slice(0, 2000) : val;
+        };
+        return clean(input);
+      };
+      const incoming = sanitizeSettings(req.body.settings);
+      const safeSettings = incoming !== undefined
+        ? { ...(user.settings || {}), ...incoming }
+        : undefined;
+      const patch = {
+        name: typeof req.body.name === 'string' ? req.body.name.slice(0, 100) : undefined,
+        settings: safeSettings
+      };
       const merged = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
       const updated = await db().user.findByIdAndUpdate(user._id, merged);
       res.json({ id: updated._id, email: updated.email, name: updated.name, plan: updated.plan, settings: updated.settings });
@@ -305,19 +386,32 @@ export function authRoutes({ secret }) {
 
   router.post('/change-password', authMiddleware({ secret }), async (req, res, next) => {
     try {
-      const { currentPassword, newPassword } = req.body;
-      if (!currentPassword || !newPassword) {
-        return res.status(400).json({ error: { code: 'VALIDATION', message: 'currentPassword and newPassword are required' } });
+      const { currentPassword, newPassword, otp } = req.body;
+      if (!newPassword) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'newPassword is required' } });
       }
       if (newPassword.length < 8) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'new password must be at least 8 characters' } });
       }
       const user = await db().user.findById(req.userId);
       if (!user) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'user not found' } });
-      if (!verifyPassword(currentPassword, user.passwordHash)) {
-        return res.status(401).json({ error: { code: 'BAD_CREDENTIALS', message: 'current password is incorrect' } });
+      if (currentPassword) {
+        if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+          return res.status(401).json({ error: { code: 'BAD_CREDENTIALS', message: 'current password is incorrect' } });
+        }
+      } else if (otp) {
+        // GH-003: passwordless (GitHub-only) accounts prove email ownership
+        // with a login-intent OTP instead of a password they were never given.
+        const pending = await db().otp.findOne({ email: user.email, intent: 'login' });
+        if (!pending || new Date(pending.expiresAt) < new Date() ||
+            !(await verifyOtpCode(otp, pending.codeHash, secret))) {
+          return res.status(401).json({ error: { code: 'BAD_OTP', message: 'invalid or expired code — request one via send-otp (intent: login)' } });
+        }
+        await db().otp.deleteOne({ _id: pending._id }).catch(() => {});
+      } else {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'currentPassword or otp is required' } });
       }
-      await db().user.findByIdAndUpdate(user._id, { passwordHash: hashPassword(newPassword) });
+      await db().user.findByIdAndUpdate(user._id, { passwordHash: await hashPassword(newPassword) });
       res.json({ ok: true });
     } catch (err) {
       if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {

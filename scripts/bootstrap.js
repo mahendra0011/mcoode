@@ -22,7 +22,14 @@ for (const p of ['packages/cli', 'packages/backend', 'packages/shared', 'package
   }
 }
 
-// 3. Shared runtime dirs.
+// 3. Install git hooks (.env guard — SEC-001/SEC-002). Best-effort.
+try {
+  await import('./install-hooks.mjs');
+} catch {
+  /* installer logs its own warning */
+}
+
+// 4. Shared runtime dirs.
 await mkdir(join(homedir(), '.mcode'), { recursive: true });
 await mkdir(join(homedir(), '.mcode', 'history'), { recursive: true });
 await mkdir(join(homedir(), '.mcode', 'projects'), { recursive: true });

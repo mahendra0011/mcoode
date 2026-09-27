@@ -49,7 +49,10 @@ export function PlaywrightAuditPanel({
         <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
           <AnimatePresence>
             {issues.map((issue, i) => {
-              const src = issue.screenshot || issue.screenshotUrl;
+              // 1219: backend stores absolute FS paths — browsers block
+              // file:// rendering, so only http(s)/data/blob URLs become <img>.
+              const rawSrc = issue.screenshot || issue.screenshotUrl;
+              const src = typeof rawSrc === 'string' && /^(https?:|data:|blob:)/i.test(rawSrc) ? rawSrc : '';
               return (
                 <motion.div
                   key={i}

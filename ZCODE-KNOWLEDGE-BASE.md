@@ -9,7 +9,7 @@
 > **Comprehensive reference** — Everything about ZCode from startup to shutdown, covering the CLI runtime, Electron desktop app, plugin system, MCP servers, skills, animation systems (both web/desktop and terminal CLI), and the full test suite.
 >
 > **Last updated:** 2026-08-13
-> **Sources:** `C:\Users\mahen\.zcode\` (v2 config, plugin cache), `C:\Users\mahen\AppData\Local\Programs\ZCode\resources\` (desktop app), `D:\projects\mcoode\` (project-level docs and tests)
+> **Sources:** `%USERPROFILE%\.zcode\` (v2 config, plugin cache), `%USERPROFILE%\AppData\Local\Programs\ZCode\resources\` (desktop app), `D:\projects\mcoode\` (project-level docs and tests)
 
 ## Table of Contents
 
@@ -91,18 +91,18 @@
 
 | Component | Path |
 |-----------|------|
-| Desktop app | `C:\Users\mahen\AppData\Local\Programs\ZCode\resources\app-extracted\out\` |
-| CLI bundle | `C:\Users\mahen\AppData\Local\Programs\ZCode\resources\glm\zcode.cjs` (3,641 lines) |
-| Model catalog | `C:\Users\mahen\AppData\Local\Programs\ZCode\resources\model-providers\*.json` |
-| Plugins cache | `C:\Users\mahen\.zcode\cli\plugins\cache\zcode-plugins-official\` |
-| v2 config | `C:\Users\mahen\.zcode\v2\` (config.json, setting.json, etc.) |
+| Desktop app | `%USERPROFILE%\AppData\Local\Programs\ZCode\resources\app-extracted\out\` |
+| CLI bundle | `%USERPROFILE%\AppData\Local\Programs\ZCode\resources\glm\zcode.cjs` (3,641 lines) |
+| Model catalog | `%USERPROFILE%\AppData\Local\Programs\ZCode\resources\model-providers\*.json` |
+| Plugins cache | `%USERPROFILE%\.zcode\cli\plugins\cache\zcode-plugins-official\` |
+| v2 config | `%USERPROFILE%\.zcode\v2\` (config.json, setting.json, etc.) |
 | Project docs | `D:\projects\mcoode\docs\cli/`, `docs\web\` |
 
 ---
 
 ## 2. Configuration System
 
-### V2 Config Files (`C:\Users\mahen\.zcode\v2\`)
+### V2 Config Files (`%USERPROFILE%\.zcode\v2\`)
 
 ```
 v2/

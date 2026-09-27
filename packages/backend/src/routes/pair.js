@@ -7,23 +7,35 @@ import { CostLedger } from '@mcode/shared';
 // LRU/Map cache for user ModelRouter instances to avoid re-decrypting keys on every single keystroke.
 const routerCache = new Map();
 const ROUTER_CACHE_TTL_MS = 5 * 60 * 1000;
+const ROUTER_CACHE_MAX = 200;
 
 /**
  * Extracts surrounding lines around the current cursor to keep the prompt small and latency sub-second.
  */
 export function extractSurroundingLines(fileContent = '', cursorLine = 1, windowSize = 40) {
   if (!fileContent) return '';
+  // 1042: cap the window — a minified one-liner must not inject hundreds
+  // of KB into the prompt.
   const lines = fileContent.split('\n');
   const lineIdx = Math.max(0, (cursorLine || 1) - 1);
   const half = Math.floor(windowSize / 2);
   const start = Math.max(0, lineIdx - half);
   const end = Math.min(lines.length, lineIdx + half + 1);
-  return lines.slice(start, end).join('\n');
+  return lines.slice(start, end).join('\n').slice(0, 8000);
 }
 
 /**
  * Infers model routing domain based on file extension.
  */
+/**
+ * Infers model routing domain based on file extension + path heuristics.
+ * PAIR-003: server-side JS/TS (server paths, node runtimes, config) routes to
+ * backend/devops instead of defaulting everything to frontend.
+ */
+const SERVER_PATH_HINTS = ['/server/', '/routes/', '/api/', '/controllers/', '/services/', '/backend/', '/cli/', '/core/', '/lib/', '/models/', '/middleware/', '/db/'];
+const SERVER_NAME_HINTS = ['server.', 'controller', 'route.', 'routes.', 'service.', 'model.', 'schema.', 'handler.', 'middleware.', 'worker.', 'cron.', 'server-'];
+const DEVOPS_NAME_HINTS = ['dockerfile', '.config.', 'config.', 'webpack.', 'vite.', 'eslint', 'tsconfig', 'package.json', 'ci.', '.yml', '.yaml', 'makefile', 'terraform', 'ansible'];
+
 export function inferDomain(filePath = '') {
   const p = filePath.toLowerCase();
   if (p.endsWith('.html') || p.endsWith('.css') || p.endsWith('.scss') || p.endsWith('.jsx') || p.endsWith('.tsx') || p.endsWith('.vue') || p.endsWith('.svelte')) {
@@ -38,11 +50,23 @@ export function inferDomain(filePath = '') {
   if (p.endsWith('.py') || p.endsWith('.go') || p.endsWith('.rs') || p.endsWith('.java') || p.endsWith('.rb') || p.endsWith('.php') || p.endsWith('.c') || p.endsWith('.cpp')) {
     return 'backend';
   }
+  if (SERVER_PATH_HINTS.some((h) => p.includes(h)) || SERVER_NAME_HINTS.some((h) => p.includes(h))) {
+    return 'backend';
+  }
+  if (p.endsWith('.mjs') || p.endsWith('.cjs')) {
+    return 'backend';
+  }
+  if (DEVOPS_NAME_HINTS.some((h) => p.includes(h))) {
+    return 'devops';
+  }
   return 'frontend';
 }
 
 /**
  * Clean model output so it's strictly inline completion text.
+ * PAIR-005: beyond fences, strip whole-output markdown wrappers (bold,
+ * italics, strikethrough) and per-line list prefixes — conservatively, so
+ * code operators (`*`, `<T>`) are never mangled.
  */
 export function cleanCompletionText(rawText = '') {
   let text = String(rawText || '').replace(/\r\n/g, '\n');
@@ -50,6 +74,17 @@ export function cleanCompletionText(rawText = '') {
   if (text.startsWith('```')) {
     text = text.replace(/^```[a-zA-Z0-9_-]*\n?/, '').replace(/```$/, '');
   }
+  const trimmed = text.trim();
+  // Whole-output wrappers: **x**, __x__, *x*, _x_, ~~x~~ → x
+  const wrap = /^(?:\*\*(.+)\*\*|__(.+)__|~~(.+)~~|\*([^*\n]+)\*)$/s.exec(trimmed);
+  if (wrap) {
+    text = wrap.slice(1).find((g) => g !== undefined);
+  }
+  // Leading ordered/unordered list markers per line ("- ", "* ", "1. ")
+  text = text
+    .split('\n')
+    .map((line) => line.replace(/^(\s*)(?:[-*+]|\d+[.)])\s+(?=\S)/, '$1'))
+    .join('\n');
   // Trim trailing whitespace but preserve essential indentation
   return text.trimEnd();
 }
@@ -63,13 +98,21 @@ export async function getOrCreateUserRouter(userId, secret) {
   if (cached && Date.now() - cached.timestamp < ROUTER_CACHE_TTL_MS) {
     return cached.router;
   }
+  // 1041: sweep expired entries so idle users never accumulate.
+  const now = Date.now();
+  for (const [k, v] of routerCache) {
+    if (now - v.timestamp >= ROUTER_CACHE_TTL_MS) routerCache.delete(k);
+  }
 
   const secrets = {};
 
   if (userId) {
+    // PAIR-002: fail closed without a real secret — the old dev-secret
+    // fallback decrypted with the wrong key and silently yielded no models.
+    if (!secret) return null;
     try {
       const keys = await db().apiKey.find({ userId });
-      const masterKey = deriveMasterKey(secret || 'mcode-dev-secret-change-me', userId);
+      const masterKey = deriveMasterKey(secret, userId);
       for (const k of keys) {
         try {
           const dec = decryptKey(k.encryptedKey, masterKey);
@@ -94,10 +137,37 @@ export async function getOrCreateUserRouter(userId, secret) {
     const providers = await getProviders({ secrets });
     const router = new ModelRouter({ secrets, config: {}, ledger: new CostLedger(), providers });
     routerCache.set(cacheKey, { router, timestamp: Date.now() });
+    // PAIR-001: bound the cache — evict oldest first.
+    if (routerCache.size > ROUTER_CACHE_MAX) {
+      routerCache.delete(routerCache.keys().next().value);
+    }
     return router;
   } catch {
     return null;
   }
+}
+
+/** Extract the first balanced {...} object (string/escape aware). */
+export function extractBalancedObject(text) {
+  const s = String(text || '');
+  const start = s.indexOf('{');
+  if (start < 0) return '';
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (esc) { esc = false; continue; }
+    if (ch === '\\' && inStr) { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return '';
 }
 
 /**
@@ -111,10 +181,15 @@ export async function checkForStructuralSuggestion({ fileContent = '', cursorLin
   const currentLine = lines[lineIdx] || '';
   const nearbyContext = extractSurroundingLines(fileContent, cursorLine, 25);
 
-  // Heuristic 1: Async function or await statement without try/catch
+  // Heuristic 1: Async function or await statement without try/catch.
+  // PAIR-004: also treat promise-chain guards (.catch/.then/.finally),
+  // `try` variants, and optional-chained awaits as handled to cut noise.
   if (/\bawait\s+[a-zA-Z0-9_$.]+\s*\(/.test(currentLine) || (lines[lineIdx - 1] && /\bawait\s+/.test(lines[lineIdx - 1]))) {
     const checkBlock = lines.slice(Math.max(0, lineIdx - 6), Math.min(lines.length, lineIdx + 7)).join('\n');
-    if (!checkBlock.includes('try {') && !checkBlock.includes('.catch(')) {
+    const guarded = checkBlock.includes('try {') || checkBlock.includes('try{') ||
+      checkBlock.includes('.catch(') || checkBlock.includes('.then(') ||
+      checkBlock.includes('.finally(') || /\bawait\s+\S*\?\./.test(checkBlock);
+    if (!guarded) {
       return {
         id: `sug_err_${Date.now()}`,
         message: 'Wrap await call with try/catch to handle errors?',
@@ -178,7 +253,11 @@ export async function checkForStructuralSuggestion({ fileContent = '', cursorLin
           maxTokens: 80,
           temperature: 0.1
         });
-        const parsed = JSON.parse(raw?.text?.trim()?.replace(/^```json/, '')?.replace(/```$/, '') || '{}');
+        // 1043: strip fences (any language tag/whitespace) and trailing
+        // prose, then extract the first balanced {...} — bare anchored
+        // replaces miss "```json\n" variants and post-JSON explanations.
+        const cleaned = String(raw?.text || '').replace(/```[a-zA-Z]*\s*/g, '').replace(/```/g, '');
+        const parsed = JSON.parse(extractBalancedObject(cleaned) || '{}');
         if (parsed?.message && parsed?.preview) {
           return {
             id: `sug_ai_${Date.now()}`,

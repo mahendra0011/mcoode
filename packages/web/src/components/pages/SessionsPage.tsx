@@ -52,7 +52,7 @@ export function SessionsPage() {
                 <span className={`w-2 h-2 rounded-full ${s.status === 'completed' ? 'bg-emerald-400' : s.status === 'failed' ? 'bg-red-400' : 'bg-amber-300'}`} />
                 <span className="font-medium text-sm truncate flex-1">{s.projectName || 'Untitled session'}</span>
                 <span className="text-xs text-white/40">{s.mode || ''}</span>
-                <span className="text-xs text-white/30">{s.createdAt ? new Date(s.createdAt).toLocaleDateString() : ''}</span>
+                <span className="text-xs text-white/30" suppressHydrationWarning>{s.createdAt ? new Date(s.createdAt).toISOString().slice(0, 10) : ''}</span>
               </Link>
             </li>
           ))}

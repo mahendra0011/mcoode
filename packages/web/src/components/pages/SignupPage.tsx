@@ -48,9 +48,10 @@ export function SignupPage() {
   };
 
   const handleOtpChange = (idx: number, value: string) => {
-    const newOtp = otp.split('');
-    newOtp[idx] = value.slice(-1) || '';
-    setOtp(newOtp.join(''));
+    // BUG-19-10: pad first so out-of-order clicks don't collapse the array.
+    const newOtp = otp.padEnd(6, ' ').split('');
+    newOtp[idx] = value.slice(-1) || ' ';
+    setOtp(newOtp.join('').trim());
     if (value && idx < 5) focusBox(idx + 1);
   };
 
@@ -361,8 +362,9 @@ export function SignupPage() {
                 ))}
               </motion.div>
 
-              {/* Dev OTP hint (only in non-production) */}
-              {devOtp && (
+              {/* Dev OTP hint — localhost only (SEC-19-11: never render a
+                  dev code on a non-local host even if the API ever leaks one) */}
+              {devOtp && /^(localhost|127\.0\.0\.1)/.test(typeof window !== 'undefined' ? window.location.hostname : '') && (
                 <motion.div
                   className="text-center text-xs text-zinc-400 font-mono bg-zinc-50 py-2 rounded-lg"
                   initial={{ opacity: 0 }}

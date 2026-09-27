@@ -12,10 +12,15 @@
 // Message protocol:
 //   -> { files: [{ path: string, file: File }, ...] }
 //   <- { type: 'progress', percent: number }
-//   <- { type: 'done', blob: Blob }
+//   <- { type: 'done', buf: Uint8Array } (transferred, zero-copy)
 //   <- { type: 'error', message: string }
 
 import JSZip from 'jszip';
+
+// 007: hard caps so a pathological selection OOMs with a clear error
+// instead of dying silently mid-zip.
+const MAX_ZIP_ENTRIES = 20000;
+const MAX_ZIP_BYTES = 500 * 1024 * 1024;
 
 self.onmessage = async (event) => {
   const { files } = event.data || {};
@@ -24,16 +29,28 @@ self.onmessage = async (event) => {
     self.postMessage({ type: 'error', message: 'No files received by zip worker' });
     return;
   }
+  if (files.length > MAX_ZIP_ENTRIES) {
+    self.postMessage({ type: 'error', message: `Too many files (${files.length} > ${MAX_ZIP_ENTRIES}) — select a smaller folder` });
+    return;
+  }
 
   try {
     const zip = new JSZip();
+    let totalBytes = 0;
     for (const { path, file } of files) {
+      totalBytes += file?.size || 0;
+      if (totalBytes > MAX_ZIP_BYTES) {
+        self.postMessage({ type: 'error', message: 'Selection exceeds 500MB — select fewer/smaller files' });
+        return;
+      }
       zip.file(path, file);
     }
 
-    const blob = await zip.generateAsync(
+    // 006: generate raw bytes and TRANSFER the buffer (zero-copy) instead
+    // of structured-cloning a Blob (which doubles peak memory).
+    const uint8 = await zip.generateAsync(
       {
-        type: 'blob',
+        type: 'uint8array',
         // STORE = no compression = fastest possible bundling (matches previous behavior).
         // Safe to switch to DEFLATE here later if upload bandwidth becomes the bottleneck
         // instead of CPU, since this now runs off the main thread either way.
@@ -44,8 +61,9 @@ self.onmessage = async (event) => {
       }
     );
 
-    self.postMessage({ type: 'done', blob });
+    self.postMessage({ type: 'done', buf: uint8 }, [uint8.buffer]);
   } catch (err) {
-    self.postMessage({ type: 'error', message: err?.message || 'Zip generation failed' });
+    // 749: never send an empty reason — name the failure class as fallback.
+    self.postMessage({ type: 'error', message: err?.message || String(err) || `${err?.name || 'Unknown'} error during zip generation` });
   }
 };

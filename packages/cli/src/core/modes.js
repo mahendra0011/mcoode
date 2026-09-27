@@ -20,7 +20,7 @@ export const MODE_META = Object.freeze({
   [SPECIAL_MODES.LEARNING]: {
     label: 'Learning',
     description: 'Step-by-step walkthrough with explanations',
-    icon: '\u309b',
+    icon: '📖',
     affects: ['show-steps', 'verbose-explanation'],
   },
   [SPECIAL_MODES.COMPETITION]: {
@@ -32,31 +32,31 @@ export const MODE_META = Object.freeze({
   [SPECIAL_MODES.ZEN]: {
     label: 'Zen',
     description: 'Minimal UI — just the essentials',
-    icon: '\u5b09',
+    icon: '🧘',
     affects: ['minimal-ui', 'hide-sidebar', 'hide-agent-strip'],
   },
   [SPECIAL_MODES.FOCUS]: {
     label: 'Focus',
     description: 'Hide distractions, show only the task',
-    icon: '\u1f512',
+    icon: '🔒',
     affects: ['hide-toasts', 'hide-agent-strip', 'full-width-input'],
   },
   [SPECIAL_MODES.PRESENTATION]: {
     label: 'Presentation',
     description: 'Large text, clean layout for demos',
-    icon: '\u0196',
+    icon: '📽',
     affects: ['large-font', 'center-align', 'minimal-colors'],
   },
   [SPECIAL_MODES.DEBUG]: {
     label: 'Debug',
     description: 'Verbose output and event inspector',
-    icon: '\u26a7',
+    icon: '🐛',
     affects: ['show-debug-panel', 'verbose-logs', 'show-raw-events'],
   },
   [SPECIAL_MODES.SILENT]: {
     label: 'Silent',
     description: 'Minimal output — only errors shown',
-    icon: '\u1f515',
+    icon: '🔕',
     affects: ['suppress-info', 'errors-only', 'quiet-mode', 'hide-toasts'],
   },
   [SPECIAL_MODES.BATCH]: {

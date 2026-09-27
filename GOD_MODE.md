@@ -40,7 +40,7 @@ Each wave runs independently; subagents in the same wave never touch the same fi
 ```
 for each wave:
   1. Filter ready todos (isEligible — all deps DONE)
-  2. Dispatch up to `concurrency` subagents (default: CPU count × 2)
+  2. Dispatch up to `concurrency` subagents (default: 5, configurable via --concurrency)
   3. Each subagent gets domain-specific model assignment from ModelRouter
   4. Subagent runs with JSON tool protocol: {tool, args} → file edits, test runs, shell commands
   5. Results collected → merged into undo stack
@@ -79,8 +79,8 @@ Model selection uses 5-layer weighted scoring. Higher score = preferred.
 // Per-domain benchmark scores from public eval (SWE-bench, HumanEval, etc.)
 const STATIC_BENCHMARK = {
   'claude-3-5-sonnet':  { planning: 0.92, frontend: 0.88, backend: 0.91, db: 0.85, test: 0.87, bugfix: 0.90 },
-  'gpt-4o':             { planning: 0.85, frontend: 0.92, backend: 0.88, db: 0.83, test: 0.91, fixup: 0.86 },
-  'gemini-2.0-flash':   { planning: 0.80, frontend: 0.85, backend: 0.89, db: 0.81, test: 0.88, fixup: 0.83 },
+  'gpt-4o':             { planning: 0.85, frontend: 0.92, backend: 0.88, db: 0.83, test: 0.91, bugfix: 0.86 },
+  'gemini-2.0-flash':   { planning: 0.80, frontend: 0.85, backend: 0.89, db: 0.81, test: 0.88, bugfix: 0.83 },
 };
 ```
 

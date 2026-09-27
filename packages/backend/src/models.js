@@ -98,7 +98,7 @@ pluginSchema.index({ name: 'text', description: 'text' });
 const otpSchema = new mongoose.Schema({
   email: { type: String, index: true },
   codeHash: String,
-  intent: { type: String, enum: ['signup', 'login'] },
+  intent: { type: String, enum: ['signup', 'login', 'reset'] },
   expiresAt: Date,
   attempts: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }

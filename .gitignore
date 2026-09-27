@@ -80,3 +80,7 @@ nul
 # Patch & Diff files
 *.patch
 *.diff
+
+# Generated local seed data
+/todos/
+/subscribers/

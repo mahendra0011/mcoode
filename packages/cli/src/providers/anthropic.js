@@ -48,7 +48,9 @@ export class AnthropicProvider extends HttpProvider {
       system,
       messages: rest,
       ...(thinking ? {} : { temperature }),
-      max_tokens: maxTokens + (thinking?.budget_tokens || 0),
+      // ANT-003: cap the combined total so thinking budgets can't push
+      // max_tokens past model limits.
+      max_tokens: Math.min(64000, maxTokens + (thinking?.budget_tokens || 0)),
       ...(thinking ? { thinking } : {}),
       stream
     });
@@ -89,8 +91,10 @@ export class AnthropicProvider extends HttpProvider {
       signal,
       body: this._body(model, { messages, temperature, maxTokens, thinking, stream: true })
     });
+    // ANT-004: include the response body like complete() does.
     if (!res.ok) {
-      throw new Error(`anthropic stream error ${res.status}`);
+      const detail = await res.text().catch(() => '');
+      throw new Error(`anthropic stream error ${res.status}: ${detail.slice(0, 400)}`);
     }
     for await (const payload of streamSSE(res)) {
       try {

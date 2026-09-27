@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { SUBAGENT_STATUS, EVENTS, planWaves, isEligible, resolveFileConflicts, mergeResults, estimateTokens } from '@mcode/shared';
+import { SUBAGENT_STATUS, EVENTS, planWaves, isEligible, isBlocked, resolveFileConflicts, mergeResults, estimateTokens } from '@mcode/shared';
 import { Subagent } from './subagent.js';
 import { UndoStack } from './tools.js';
 import { join } from 'node:path';
@@ -56,6 +56,9 @@ class FileLockManager {
         const entry = this.locks.get(filePath);
         if (entry) {
           entry.waiters = entry.waiters.filter((w) => w.agentId !== agentId);
+          if (!entry.ownerId && entry.waiters.length === 0) {
+            this.locks.delete(filePath);
+          }
         }
         reject(new Error(`lock timeout: could not acquire ${filePath} for ${agentId} after ${timeout}ms`));
       }, timeout);
@@ -64,10 +67,6 @@ class FileLockManager {
         agentId,
         resolve: () => {
           clearTimeout(timer);
-          // Preserve remaining waiters from the existing entry
-          const existing = this.locks.get(filePath);
-          const remainingWaiters = existing ? existing.waiters : [];
-          this.locks.set(filePath, { ownerId: agentId, waiters: remainingWaiters });
           const holderFiles = this.holderFiles.get(agentId) || new Set();
           holderFiles.add(filePath);
           this.holderFiles.set(agentId, holderFiles);
@@ -86,8 +85,8 @@ class FileLockManager {
     const holderFiles = this.holderFiles.get(agentId);
     if (holderFiles) holderFiles.delete(filePath);
 
-    if (entry.waiters.length > 0) {
-      // Hand off to next waiter (FIFO) — preserve remaining waiters
+    if (entry.waiters && entry.waiters.length > 0) {
+      // Hand off to next waiter (FIFO)
       const next = entry.waiters.shift();
       entry.ownerId = next.agentId;
       next.resolve();
@@ -143,6 +142,8 @@ export class SubagentManager {
     this._stopped = false;
     this._retries = new Map();
     this._fixers = new Set(); // in-flight bugfix subagents
+    this._drainWaiters = []; // GOD-007: promise-based wave wait (no polling)
+    this.suppressBuildComplete = Boolean(options.suppressBuildComplete); // GOD-009
     this.skipIntegrationTests = Boolean(options.skipIntegrationTests);
     this._t0 = Date.now();
     this._tokens = { in: 0, out: 0 };
@@ -233,10 +234,34 @@ export class SubagentManager {
   }
 
   _schedule() {
-    if (this._stopped) return;
+    if (this._stopped) {
+      this._notifyDrain();
+      return;
+    }
     while (this.running < this.concurrency && this.queue.length > 0) {
       const todo = this.queue.shift();
       this._spawn(todo);
+    }
+    this._notifyDrain();
+  }
+
+  /** GOD-007: promise-based wait for the current wave to drain (no polling). */
+  _waitForWave() {
+    if (this._stopped || (this.running === 0 && this.queue.length === 0)) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this._drainWaiters.push(resolve);
+    });
+  }
+
+  _notifyDrain() {
+    if (this._stopped || (this.running === 0 && this.queue.length === 0)) {
+      const waiters = this._drainWaiters;
+      this._drainWaiters = [];
+      for (const r of waiters) {
+        try { r(); } catch { /* ignore */ }
+      }
     }
   }
 
@@ -262,13 +287,16 @@ export class SubagentManager {
     }).finally(() => {
       this.running--;
       this._schedule();
+      this._notifyDrain();
     });
   }
 
+  /** GOD-013: iterative retry loop (max 3 attempts) — no recursion. */
   async _dispatch(todo) {
     let assignment = null;
-    const excluded = this._retries.get(todo.id) || [];
-    try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const excluded = this._retries.get(todo.id) || [];
+      try {
       if (this.options.forceRef) {
         assignment = await this.router.find(this.options.forceRef);
         if (!assignment) throw new Error(`forced model "${this.options.forceRef}" is not available`);
@@ -319,33 +347,39 @@ export class SubagentManager {
         }
       }
 
-      this.results.set(todo.id, { todoId: todo.id, ...result });
+        this.results.set(todo.id, { todoId: todo.id, ...result });
 
-      // Record result for scoring system — updates historical success/failure rates
-      const success = result.status === SUBAGENT_STATUS.DONE;
-      if (this.router?.recordAssignment) {
-        try { await this.router.recordAssignment(assignment.ref, todo.domain, success); } catch { /* scoring is best-effort */ }
-      }
-      this._tokens.in += sub.tokens?.in || 0;
-      this._tokens.out += sub.tokens?.out || 0;
-      const providerId = String(assignment.provider.id || 'default');
-      const byModel = this._models.get(todo.domain) || new Map();
-      const entry = byModel.get(assignment.ref) || { provider: providerId, count: 0 };
-      entry.count++;
-      byModel.set(assignment.ref, entry);
-      this._models.set(todo.domain, byModel);
-      return result;
-    } catch (err) {
-      const retries = this._retries.get(todo.id) || [];
-      if (retries.length < 2 && assignment?.ref) {
-        retries.push(assignment.ref);
-        this._retries.set(todo.id, retries);
-        this.emit(EVENTS.TOAST, { kind: 'warn', text: `retrying ${todo.id} with fallback model (${err.message})` });
-        await this._dispatch(todo);
-      } else {
+        // Record result for scoring system — updates historical success/failure rates
+        const success = result.status === SUBAGENT_STATUS.DONE;
+        if (this.router?.recordAssignment) {
+          try { await this.router.recordAssignment(assignment.ref, todo.domain, success); } catch { /* scoring is best-effort */ }
+        }
+        const tokensIn = sub.tokens?.in || 0;
+        const tokensOut = sub.tokens?.out || 0;
+        this._tokens.in += tokensIn;
+        this._tokens.out += tokensOut;
+        const providerId = String(assignment.provider.id || 'default');
+        const byModel = this._models.get(todo.domain) || new Map();
+        const entry = byModel.get(assignment.ref) || { provider: providerId, count: 0, tokensIn: 0, tokensOut: 0 };
+        entry.count++;
+        entry.tokensIn += tokensIn;
+        entry.tokensOut += tokensOut;
+        byModel.set(assignment.ref, entry);
+        this._models.set(todo.domain, byModel);
+        return result;
+      } catch (err) {
+        const retries = this._retries.get(todo.id) || [];
+        if (retries.length < 2 && assignment?.ref && attempt < 2) {
+          retries.push(assignment.ref);
+          this._retries.set(todo.id, retries);
+          this.emit(EVENTS.TOAST, { kind: 'warn', text: `retrying ${todo.id} with fallback model (${err.message})` });
+          assignment = null;
+          continue; // next attempt with excluded model
+        }
         const result = { status: 'failed', error: err.message };
         this.results.set(todo.id, { todoId: todo.id, ...result });
         this.emit(EVENTS.SUBAGENT_FAILED, { todoId: todo.id, error: err.message, retryCount: retries.length });
+        return result;
       }
     }
   }
@@ -478,13 +512,23 @@ export class SubagentManager {
         totalWaves: allWaves.length,
         todos: wave.map((t) => ({ id: t.id, domain: t.domain, title: t.title }))
       });
-      const ready = wave.filter((todo) => isEligible(todo, statusById()));
+      const currentStatus = statusById();
+      for (const todo of wave) {
+        if (!this.results.has(todo.id) && isBlocked(todo, currentStatus)) {
+          this.results.set(todo.id, {
+            todoId: todo.id,
+            status: SUBAGENT_STATUS.FAILED,
+            error: 'skipped because required dependency failed'
+          });
+          this.emit(EVENTS.TOAST, { kind: 'warn', text: `skipping ${todo.id} because dependency failed` });
+        }
+      }
+
+      const ready = wave.filter((todo) => isEligible(todo, statusById()) && !this.results.has(todo.id));
       this.queue.push(...ready);
       this._schedule();
-      while (this.running > 0 || this.queue.length > 0) {
-        if (this._stopped) break;
-        await sleep(100);
-      }
+      // GOD-007: promise-based drain (resolves via _notifyDrain, incl. on stop)
+      await this._waitForWave();
       this.emit(EVENTS.WAVE_COMPLETE, {
         wave: idx + 1,
         totalWaves: allWaves.length,
@@ -517,9 +561,11 @@ export class SubagentManager {
     if (!this.skipIntegrationTests) {
       integration = await this._integrationPass();
     }
-    // Bugfix rounds also run when todos ended up needs_review without breaking
-    // tests (e.g. a model never wrote its files) — otherwise the work is lost.
-    if (!this._stopped && needsReviewCount > 0) {
+    // GOD-012: only auto-fix when integration tests actually ran. When there
+    // is no test script (integration.ran === false) there is nothing to verify
+    // a fix against — dispatching bugfix agents would burn model calls blind.
+    const testsRan = integration?.ran === true;
+    if (!this._stopped && needsReviewCount > 0 && testsRan) {
       integration = await this._bugfixRounds({
         initialExitCode: integration?.exitCode,
         initialTail: integration?.tail
@@ -701,7 +747,10 @@ export class SubagentManager {
     }
   }
 
-  /** Push the final BUILD_COMPLETE summary (todos, files, time, tokens, cost, models). */
+  /** GOD-009: single BUILD_COMPLETE source. When the manager is driven by the
+   *  Orchestrator (orchestratorManaged/suppressBuildComplete), it returns the
+   *  payload WITHOUT emitting — the Orchestrator emits once with enriched data.
+   *  Standalone runs emit directly (backward compat). */
   _emitBuildComplete(merged, integration) {
     const elapsedSecs = Math.floor((Date.now() - this._t0) / 1000);
     const tokensIn = this._tokens.in;
@@ -712,12 +761,14 @@ export class SubagentManager {
       let best = null;
       for (const [model, m] of byModel) {
         const rate = RATES[m.provider] || RATES.default;
-        cost += ((tokensIn / 1e6) * rate.in + (tokensOut / 1e6) * rate.out) * m.count;
+        const mIn = m.tokensIn ?? 0;
+        const mOut = m.tokensOut ?? 0;
+        cost += (mIn / 1e6) * rate.in + (mOut / 1e6) * rate.out;
         if (!best || m.count > best.count) best = { model, count: m.count };
       }
       if (best) models.push({ domain, model: best.model, count: best.count });
     }
-    this.emit(EVENTS.BUILD_COMPLETE, {
+    const buildSummary = {
       done: merged.done,
       total: merged.total,
       failed: merged.failed,
@@ -729,11 +780,21 @@ export class SubagentManager {
       cost: Number(cost.toFixed(2)),
       models,
       integration
-    });
+    };
+    merged.cost = buildSummary.cost;
+    merged.tokensIn = tokensIn;
+    merged.tokensOut = tokensOut;
+    merged.elapsedSecs = elapsedSecs;
+    merged.integration = integration;
+    if (!this.options.orchestratorManaged && !this.suppressBuildComplete && !this.options.suppressBuildComplete) {
+      this.emit(EVENTS.BUILD_COMPLETE, buildSummary);
+    }
+    return buildSummary;
   }
 
   stop() {
     this._stopped = true;
+    this._notifyDrain();
     for (const sub of this.subagents.values()) {
       sub.interrupt?.();
       this.fileLocks.releaseAllFor(sub.id);
@@ -767,5 +828,3 @@ export async function persistSession({ mode, projectName, projectPath, plan, res
   await saveHistory(entry);
   return entry;
 }
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

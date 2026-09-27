@@ -100,10 +100,12 @@ async function fetchNpmAudit(projectPath) {
       return { vulnerabilities: [] };
     }
 
+    // 871: 30s budget — 4s timed out on any real monorepo and reported a
+    // false-clean `{ vulnerabilities: [] }`.
     const { stdout } = await execa('npm', ['audit', '--json'], {
       cwd: projectPath,
       reject: false,
-      timeout: 4000
+      timeout: 30000
     });
     if (!stdout || !stdout.trim()) return { vulnerabilities: [] };
     const parsed = JSON.parse(stdout);

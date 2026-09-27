@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { Orchestrator } from '../core/orchestrator.js';
 import { loadConfig, getProjectId } from '../core/store.js';
-import { ok, info, warn, json, table } from '../core/logger.js';
+import { ok, info, warn, json, table, fail } from '../core/logger.js';
 import { DEFAULT_CONFIG } from '@mcode/shared';
 
 const statePath = async (cwd = process.cwd()) => {
@@ -14,13 +14,26 @@ const statePath = async (cwd = process.cwd()) => {
 
 export async function watchCommand({ background = false, scanIntervalMs = null, cwd = process.cwd() }) {
   if (background) {
-    // detached child process — resolve relative to THIS file, never cwd.
+    // detached child process — resolve relative to THIS module, never cwd.
     // bundled: dist/watch-process.mjs next to the bundle; source: src/watch-process.js.
-    const { fileURLToPath } = await import('node:url');
+    const { fileURLToPath, pathToFileURL } = await import('node:url');
     const { dirname } = await import('node:path');
     const here = dirname(fileURLToPath(import.meta.url));
     const { existsSync } = await import('node:fs');
+    // CLI-006: import.meta.resolve() first (survives bundlers/relocations that
+    // move files without preserving relative layout), then relative fallbacks.
+    let resolved = null;
+    for (const spec of ['../watch-process.js', '../../dist/watch-process.mjs']) {
+      try {
+        const url = import.meta.resolve(spec);
+        const p = fileURLToPath(url instanceof URL ? url : pathToFileURL(url));
+        if (existsSync(p)) { resolved = p; break; }
+      } catch {
+        /* specifier unresolvable in this layout — try next */
+      }
+    }
     const candidates = [
+      ...(resolved ? [resolved] : []),
       join(here, '..', '..', 'dist', 'watch-process.mjs'), // src/commands → dist/
       join(here, '..', 'watch-process.js'), // src/commands → src/
     ];
@@ -64,9 +77,10 @@ export async function watchCommand({ background = false, scanIntervalMs = null, 
   });
 
   // persist state for `watch-status` / `watch-stop` from other terminals
-  await persistState(await statePath(cwd), daemon, process.pid);
+  const persistInterval = await persistState(await statePath(cwd), daemon, process.pid);
 
   const shutdown = async () => {
+    if (persistInterval) clearInterval(persistInterval);
     await daemon.stop();
     await unlink(await statePath(cwd)).catch(() => {});
     process.exit(0);
@@ -78,16 +92,27 @@ export async function watchCommand({ background = false, scanIntervalMs = null, 
   await new Promise(() => {});
 }
 
+/** 854: cross-platform kill — Windows has no graceful SIGTERM for trees. */
+async function killDaemonPid(pid) {
+  try {
+    if (process.platform === 'win32') {
+      const { execa } = await import('execa');
+      await execa('taskkill', ['/pid', String(pid), '/T', '/F'], { reject: false });
+    } else {
+      process.kill(pid, 'SIGTERM');
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function watchStopCommand({ cwd = process.cwd() } = {}) {
   const sp = await statePath(cwd);
   try {
     const state = JSON.parse(await readFile(sp, 'utf8'));
     if (state.pid) {
-      try {
-        process.kill(state.pid, 'SIGTERM');
-      } catch {
-        /* process already gone */
-      }
+      await killDaemonPid(state.pid);
       await unlink(sp).catch(() => {});
       ok(`watch daemon stopped (pid ${state.pid})`);
     }
@@ -99,10 +124,10 @@ export async function watchStopCommand({ cwd = process.cwd() } = {}) {
     }
     const match = daemons.find((d) => d.project === cwd);
     if (match?.pid) {
-      try {
-        process.kill(match.pid, 'SIGTERM');
+      const dead = await killDaemonPid(match.pid);
+      if (dead) {
         ok(`watch daemon stopped (pid ${match.pid})`);
-      } catch {
+      } else {
         warn(`daemon pid ${match.pid} not running — state file stale`);
       }
       await unlink(match.stateFile).catch(() => {});
@@ -135,7 +160,7 @@ async function persistState(sp, daemon, pid) {
   const write = () =>
     writeFile(sp, JSON.stringify({ ...daemon.summary(), pid }, null, 2), 'utf8');
   await write();
-  setInterval(write, 5000);
+  return setInterval(write, 5000);
 }
 
 async function listDaemonStates() {

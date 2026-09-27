@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, afterAll } from 'vitest';
 import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir, hostname, userInfo } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +15,10 @@ const { loadVault, saveVault, vaultSet, vaultGet, vaultDelete, vaultList, maskSe
 
 describe('vault roundtrip (isolated HOME)', () => {
   afterEach(async () => {
+    await rm(join(home, '.mcode'), { recursive: true, force: true });
+  });
+
+  afterAll(async () => {
     await rm(home, { recursive: true, force: true });
   });
 

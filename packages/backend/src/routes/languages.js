@@ -12,7 +12,9 @@ export function languageRoutes() {
       const { data } = await axios.get(`${PISTON_URL}/api/v2/runtimes`);
       res.json({ runtimes: data }); // [{language, version, aliases}, ...]
     } catch (err) {
-      // Piston down ho to static fallback list bhej do
+      // Piston down — static fallback list. Log the cause server-side so
+      // cluster-mesh issues are debuggable (SEC-030).
+      console.warn(`[languages] Piston unreachable at ${PISTON_URL}: ${err?.code || err?.message}`);
       res.json({ runtimes: [], error: 'Piston unreachable, showing static list only' });
     }
   });

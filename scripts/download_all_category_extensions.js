@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
 
-const ROOT_EXTENSIONS_DIR = path.resolve('d:/projects/mcoode/extensions');
+const ROOT_EXTENSIONS_DIR = path.resolve(__dirname, '../extensions');
 
 const AI_BLACKLIST_TERMS = [
   'claude',
@@ -114,7 +114,12 @@ async function downloadAndUnpackExtension(ext, categoryDir) {
       if (fileObj.dir || !filename.startsWith('extension/')) continue;
 
       const relPath = filename.replace(/^extension\//, '');
-      const outPath = path.join(extTargetDir, relPath);
+      const outPath = path.resolve(extTargetDir, relPath);
+      const safeTargetPrefix = path.resolve(extTargetDir) + path.sep;
+      if (!outPath.startsWith(safeTargetPrefix)) {
+        console.warn(`[ZIP SLIP PREVENTED] Skipping unsafe path ${filename} in ${extId}`);
+        continue;
+      }
 
       fs.mkdirSync(path.dirname(outPath), { recursive: true });
       const content = await fileObj.async('nodebuffer');

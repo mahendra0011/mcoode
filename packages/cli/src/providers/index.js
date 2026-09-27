@@ -21,53 +21,53 @@ const S = {
 
 const MODEL_DEFS = {
   // Anthropic
-  'anthropic/claude-fable-5': { name: 'Claude Fable 5', scores: { ...S.general, planning: 98, backend: 98, db: 95, bugfix: 96 }, costPer1kIn: 0.01, costPer1kOut: 0.05 },
-  'anthropic/claude-mythos-5': { name: 'Claude Mythos 5', scores: { ...S.general, planning: 98, backend: 98 }, costPer1kIn: 0.015, costPer1kOut: 0.075 },
-  'anthropic/claude-opus-5': { name: 'Claude Opus 5', scores: { ...S.general, planning: 96, backend: 96 }, costPer1kIn: 0.005, costPer1kOut: 0.025 },
-  'anthropic/claude-opus-4-8': { name: 'Claude Opus 4.8', scores: { ...S.general, planning: 94 }, costPer1kIn: 0.005, costPer1kOut: 0.025 },
-  'anthropic/claude-sonnet-5': { name: 'Claude Sonnet 5', scores: { ...S.general, planning: 95, backend: 95, db: 92, bugfix: 94 }, costPer1kIn: 0.003, costPer1kOut: 0.015 },
-  'anthropic/claude-sonnet-4-6': { name: 'Claude Sonnet 4.6', scores: { ...S.general, planning: 93 }, costPer1kIn: 0.003, costPer1kOut: 0.015 },
-  'anthropic/claude-haiku-4-5': { name: 'Claude Haiku 4.5', free: true, scores: { ...S.fast, planning: 65 }, costPer1kIn: 0.001, costPer1kOut: 0.005 },
+  'anthropic:claude-fable-5': { name: 'Claude Fable 5', scores: { ...S.general, planning: 98, backend: 98, db: 95, bugfix: 96 }, costPer1kIn: 0.01, costPer1kOut: 0.05 },
+  'anthropic:claude-mythos-5': { name: 'Claude Mythos 5', scores: { ...S.general, planning: 98, backend: 98 }, costPer1kIn: 0.015, costPer1kOut: 0.075 },
+  'anthropic:claude-opus-5': { name: 'Claude Opus 5', scores: { ...S.general, planning: 96, backend: 96 }, costPer1kIn: 0.005, costPer1kOut: 0.025 },
+  'anthropic:claude-opus-4-8': { name: 'Claude Opus 4.8', scores: { ...S.general, planning: 94 }, costPer1kIn: 0.005, costPer1kOut: 0.025 },
+  'anthropic:claude-sonnet-5': { name: 'Claude Sonnet 5', scores: { ...S.general, planning: 95, backend: 95, db: 92, bugfix: 94 }, costPer1kIn: 0.003, costPer1kOut: 0.015 },
+  'anthropic:claude-sonnet-4-6': { name: 'Claude Sonnet 4.6', scores: { ...S.general, planning: 93 }, costPer1kIn: 0.003, costPer1kOut: 0.015 },
+  'anthropic:claude-haiku-4-5': { name: 'Claude Haiku 4.5', free: true, scores: { ...S.fast, planning: 65 }, costPer1kIn: 0.001, costPer1kOut: 0.005 },
   
   // OpenAI
-  'openai/gpt-5.6-sol': { name: 'GPT-5.6 Sol', scores: { ...S.general, frontend: 96, planning: 95 }, costPer1kIn: 0.005, costPer1kOut: 0.03 },
-  'openai/gpt-5.6-terra': { name: 'GPT-5.6 Terra', scores: { ...S.general, frontend: 92 }, costPer1kIn: 0.002, costPer1kOut: 0.012 },
-  'openai/gpt-5.6-luna': { name: 'GPT-5.6 Luna', free: true, scores: { ...S.cheap, docs: 85 }, costPer1kIn: 0.0002, costPer1kOut: 0.0012 },
-  'openai/gpt-5.5': { name: 'GPT-5.5', scores: { ...S.general, planning: 92 }, costPer1kIn: 0.0025, costPer1kOut: 0.01 },
-  'openai/gpt-5.4': { name: 'GPT-5.4', scores: { ...S.general }, costPer1kIn: 0.002, costPer1kOut: 0.008 },
-  'openai/gpt-5.3-codex': { name: 'GPT-5.3 Codex', scores: { ...S.coding, backend: 96, bugfix: 95 }, costPer1kIn: 0.002, costPer1kOut: 0.008 },
+  'openai:gpt-5.6-sol': { name: 'GPT-5.6 Sol', scores: { ...S.general, frontend: 96, planning: 95 }, costPer1kIn: 0.005, costPer1kOut: 0.03 },
+  'openai:gpt-5.6-terra': { name: 'GPT-5.6 Terra', scores: { ...S.general, frontend: 92 }, costPer1kIn: 0.002, costPer1kOut: 0.012 },
+  'openai:gpt-5.6-luna': { name: 'GPT-5.6 Luna', free: true, scores: { ...S.cheap, docs: 85 }, costPer1kIn: 0.0002, costPer1kOut: 0.0012 },
+  'openai:gpt-5.5': { name: 'GPT-5.5', scores: { ...S.general, planning: 92 }, costPer1kIn: 0.0025, costPer1kOut: 0.01 },
+  'openai:gpt-5.4': { name: 'GPT-5.4', scores: { ...S.general }, costPer1kIn: 0.002, costPer1kOut: 0.008 },
+  'openai:gpt-5.3-codex': { name: 'GPT-5.3 Codex', scores: { ...S.coding, backend: 96, bugfix: 95 }, costPer1kIn: 0.002, costPer1kOut: 0.008 },
   
   // Google
-  'google/gemini-3.6-flash': { name: 'Gemini 3.6 Flash', free: true, scores: { ...S.fast, docs: 85 }, costPer1kIn: 0.0001, costPer1kOut: 0.0004 },
-  'google/gemini-3.1-pro': { name: 'Gemini 3.1 Pro', scores: { ...S.general, planning: 94 }, costPer1kIn: 0.00125, costPer1kOut: 0.005 },
-  'google/gemma-4-31b': { name: 'Gemma 4 31B', free: true, scores: { ...S.general }, costPer1kIn: 0, costPer1kOut: 0 },
+  'google:gemini-3.6-flash': { name: 'Gemini 3.6 Flash', free: true, scores: { ...S.fast, docs: 85 }, costPer1kIn: 0.0001, costPer1kOut: 0.0004 },
+  'google:gemini-3.1-pro': { name: 'Gemini 3.1 Pro', scores: { ...S.general, planning: 94 }, costPer1kIn: 0.00125, costPer1kOut: 0.005 },
+  'google:gemma-4-31b': { name: 'Gemma 4 31B', free: true, scores: { ...S.general }, costPer1kIn: 0, costPer1kOut: 0 },
   
   // DeepSeek
-  'deepseek/deepseek-v4-pro': { name: 'DeepSeek V4 Pro', scores: { ...S.coding, backend: 95 }, costPer1kIn: 0.0027, costPer1kOut: 0.011 },
-  'deepseek/deepseek-v4-flash-0731': { name: 'DeepSeek V4 Flash 0731', scores: { ...S.coding, bugfix: 98, backend: 96 }, costPer1kIn: 0.00014, costPer1kOut: 0.00028 },
-  'deepseek/deepseek-r1': { name: 'DeepSeek R1', scores: { ...S.coding, planning: 90 }, costPer1kIn: 0.001, costPer1kOut: 0.002 },
+  'deepseek:deepseek-v4-pro': { name: 'DeepSeek V4 Pro', scores: { ...S.coding, backend: 95 }, costPer1kIn: 0.0027, costPer1kOut: 0.011 },
+  'deepseek:deepseek-v4-flash-0731': { name: 'DeepSeek V4 Flash 0731', scores: { ...S.coding, bugfix: 98, backend: 96 }, costPer1kIn: 0.00014, costPer1kOut: 0.00028 },
+  'deepseek:deepseek-r1': { name: 'DeepSeek R1', scores: { ...S.coding, planning: 90 }, costPer1kIn: 0.001, costPer1kOut: 0.002 },
   
   // Mistral
-  'mistralai/mistral-medium-3.5': { name: 'Mistral Medium 3.5', scores: { ...S.general }, costPer1kIn: 0.001, costPer1kOut: 0.003 },
-  'mistralai/codestral': { name: 'Codestral', scores: { ...S.coding, backend: 92 }, costPer1kIn: 0.0003, costPer1kOut: 0.0009 },
+  'mistralai:mistral-medium-3.5': { name: 'Mistral Medium 3.5', scores: { ...S.general }, costPer1kIn: 0.001, costPer1kOut: 0.003 },
+  'mistralai:codestral': { name: 'Codestral', scores: { ...S.coding, backend: 92 }, costPer1kIn: 0.0003, costPer1kOut: 0.0009 },
   
   // Qwen
-  'qwen/qwen-3.8-max': { name: 'Qwen 3.8 Max', scores: { ...S.general, frontend: 94 }, costPer1kIn: 0.0015, costPer1kOut: 0.006 },
-  'qwen/qwen-3.7-flash': { name: 'Qwen 3.7 Flash', free: true, scores: { ...S.cheap }, costPer1kIn: 0.00015, costPer1kOut: 0.0006 },
+  'qwen:qwen-3.8-max': { name: 'Qwen 3.8 Max', scores: { ...S.general, frontend: 94 }, costPer1kIn: 0.0015, costPer1kOut: 0.006 },
+  'qwen:qwen-3.7-flash': { name: 'Qwen 3.7 Flash', free: true, scores: { ...S.cheap }, costPer1kIn: 0.00015, costPer1kOut: 0.0006 },
   
   // xAI
-  'xai/grok-4.5': { name: 'Grok 4.5', scores: { ...S.general }, costPer1kIn: 0.002, costPer1kOut: 0.01 },
+  'xai:grok-4.5': { name: 'Grok 4.5', scores: { ...S.general }, costPer1kIn: 0.002, costPer1kOut: 0.01 },
   
   // Moonshot
-  'moonshot/kimi-k3': { name: 'Kimi K3', scores: { ...S.general, planning: 93 }, costPer1kIn: 0.002, costPer1kOut: 0.008 },
+  'moonshot:kimi-k3': { name: 'Kimi K3', scores: { ...S.general, planning: 93 }, costPer1kIn: 0.002, costPer1kOut: 0.008 },
   
   // Poolside
-  'poolside/laguna-s-2.1': { name: 'Laguna S 2.1', free: true, scores: { ...S.coding, backend: 96, bugfix: 95 }, costPer1kIn: 0, costPer1kOut: 0 },
-  'poolside/laguna-xs-2.1': { name: 'Laguna XS 2.1', free: true, scores: { ...S.cheap }, costPer1kIn: 0, costPer1kOut: 0 },
+  'poolside:laguna-s-2.1': { name: 'Laguna S 2.1', free: true, scores: { ...S.coding, backend: 96, bugfix: 95 }, costPer1kIn: 0, costPer1kOut: 0 },
+  'poolside:laguna-xs-2.1': { name: 'Laguna XS 2.1', free: true, scores: { ...S.cheap }, costPer1kIn: 0, costPer1kOut: 0 },
   
   // Groq
-  'groq/llama-3.3-70b-versatile': { name: 'Llama 3.3 70B (Groq)', free: true, scores: { ...S.fast, frontend: 92 }, costPer1kIn: 0.0005, costPer1kOut: 0.001 },
-  'groq/llama-3.1-8b-instant': { name: 'Llama 3.1 8B (Groq)', free: true, scores: { ...S.cheap }, costPer1kIn: 0.0001, costPer1kOut: 0.0002 }
+  'groq:llama-3.3-70b-versatile': { name: 'Llama 3.3 70B (Groq)', free: true, scores: { ...S.fast, frontend: 92 }, costPer1kIn: 0.0005, costPer1kOut: 0.001 },
+  'groq:llama-3.1-8b-instant': { name: 'Llama 3.1 8B (Groq)', free: true, scores: { ...S.cheap }, costPer1kIn: 0.0001, costPer1kOut: 0.0002 }
 };
 
 const model = (id, def = {}, free = def.free) => ({
@@ -79,29 +79,154 @@ const model = (id, def = {}, free = def.free) => ({
   costPer1kOut: def.costPer1kOut
 });
 
-/** model() for MODEL_DEFS entries — key format is '<provider>/<model-id>'. */
+/** RTR-006: ONE canonical format everywhere — registry keys, refs and routing
+ *  preferences are all `provider:model` (single colon). `m()`/`modelsFor()`
+ *  still accept legacy `vendor/model` keys (normalized) for backward compat. */
+function canonicalKey(key) {
+  return String(key || '').replace('/', ':');
+}
+
+/** model() for MODEL_DEFS entries — key format is '<provider>:<model-id>'. */
 const m = (key, free) => {
-  const def = MODEL_DEFS[key];
-  return model(key.slice(key.indexOf('/') + 1), def, free);
+  const norm = canonicalKey(key);
+  const def = ACTIVE_DEFS[norm] || MODEL_DEFS[norm];
+  const short = norm.includes(':') ? norm.slice(norm.indexOf(':') + 1) : norm;
+  return model(short, def, free);
 };
 
 function modelsFor(ids, map) {
-  // Canonical refs are `provider:model` (single colon). Registry keys carry
-  // a `vendor/` prefix — strip it so `openrouter:anthropic/claude-x`
+  // Strip the `vendor:` prefix so `openrouter:anthropic:claude-x`
   // double-prefix refs can never form (BUG-47).
   return ids.map((id) => {
-    const short = id.includes('/') ? id.slice(id.indexOf('/') + 1) : id;
+    const norm = canonicalKey(id);
+    const short = norm.includes(':') ? norm.slice(norm.indexOf(':') + 1) : norm;
     return { id: short, ...map[id] };
   });
 }
 
-export function getAllAdapters(secrets = {}) {
-  const providers = [];
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('npm_') && !k.startsWith('NODE_') && !k.startsWith('_') && !k.startsWith('PSModulePath')));
-  const merged = { ...env, ...secrets };
+/** RTR-007: models actually served via OpenRouter. blanket-including the whole
+ *  registry caused 404s (e.g. poolside/moonshot-only models); google goes
+ *  through the direct Gemini provider. */
+const OPENROUTER_MODELS = Object.freeze([
+  'openai:gpt-5.6-sol', 'openai:gpt-5.6-terra', 'openai:gpt-5.6-luna',
+  'openai:gpt-5.5', 'openai:gpt-5.4', 'openai:gpt-5.3-codex',
+  'anthropic:claude-fable-5', 'anthropic:claude-mythos-5', 'anthropic:claude-opus-5',
+  'anthropic:claude-opus-4-8', 'anthropic:claude-sonnet-5', 'anthropic:claude-sonnet-4-6',
+  'anthropic:claude-haiku-4-5',
+  'deepseek:deepseek-v4-pro', 'deepseek:deepseek-v4-flash-0731', 'deepseek:deepseek-r1',
+  'qwen:qwen-3.8-max', 'qwen:qwen-3.7-flash',
+  'xai:grok-4.5',
+  'mistralai:mistral-medium-3.5', 'mistralai:codestral',
+  'groq:llama-3.3-70b-versatile', 'groq:llama-3.1-8b-instant',
+]);
 
+/** Active registry view (MODEL_DEFS + user score overrides). Reset per
+ *  getAllAdapters() call; factories run synchronously so this is race-free. */
+let ACTIVE_DEFS = MODEL_DEFS;
+
+/** Remote score overrides cache ({ ref: { domain: score } }). */
+let remoteScoresCache = {};
+
+/** Pull score overrides from a URL (best-effort, 5s timeout). Called at
+ *  router init; getAllAdapters() merges the cache synchronously. */
+export async function refreshRemoteScores(url) {
+  if (!url) return;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && typeof data === 'object') remoteScoresCache = data;
+  } catch {
+    /* offline/unreachable — static scores stand */
+  }
+}
+
+/** PRV-001: memoize adapter construction per secrets+config fingerprint —
+ *  rebuilding ~100 adapters on every /keys/models call was pure GC churn. */
+const adaptersCache = new Map();
+const MAX_ADAPTERS_CACHE = 5;
+
+// Non-cryptographic fingerprint (djb2) — distinguishes rotated keys without
+// retaining key material in the cache key itself.
+function secretsFingerprint(secrets) {
+  const str = Object.keys(secrets || {}).sort().map((k) => `${k}=${secrets[k] || ''}`).join(';');
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+export function getAllAdapters(secrets = {}, config = {}) {
+  const cacheKey = JSON.stringify({ s: secretsFingerprint(secrets), c: config?.modelScores || null, e: envFingerprint() });
+  const hit = adaptersCache.get(cacheKey);
+  if (hit) return hit;
+  const providers = buildAdapters(secrets, config);
+  adaptersCache.set(cacheKey, providers);
+  if (adaptersCache.size > MAX_ADAPTERS_CACHE) {
+    adaptersCache.delete(adaptersCache.keys().next().value);
+  }
+  return providers;
+}
+
+/** PRV-002: only key/host-shaped variables reach provider constructors —
+ *  never MONGODB_URI, JWT_SECRET, HOME, PATH, etc. */
+function envFingerprint() {
+  return Object.keys(process.env)
+    .filter((k) => /(_API_KEY|_TOKEN|_HOST)$/.test(k))
+    .sort()
+    .map((k) => `${k}=${(process.env[k] || '').length}`)
+    .join(';');
+}
+
+function buildAdapters(secrets = {}, config = {}) {
+  const providers = [];
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([k, v]) => v && /(_API_KEY|_TOKEN|_HOST)$/.test(k) && k !== 'JWT_SECRET')
+  );
+  const merged = { ...env, ...secrets };
+  // RTR-005: user-overridable scores via config.modelScores, e.g.
+  // { "deepseek:deepseek-v4-pro": { "frontend": 97 } } in ~/.mcode/config.json
+  // …or remotely via config.modelScoresUrl (see refreshRemoteScores(),
+  // pulled at router init; merged here synchronously from cache).
+  const scoreOverrides = { ...remoteScoresCache, ...((config && config.modelScores) || {}) };
+  if (Object.keys(scoreOverrides).length > 0) {
+    ACTIVE_DEFS = { ...MODEL_DEFS };
+    for (const [ref, scores] of Object.entries(scoreOverrides)) {
+      const norm = canonicalKey(ref);
+      const base = MODEL_DEFS[norm];
+      if (base && scores && typeof scores === 'object') {
+        ACTIVE_DEFS[norm] = { ...base, scores: { ...base.scores, ...scores } };
+      }
+    }
+  } else {
+    ACTIVE_DEFS = MODEL_DEFS;
+  }
+
+  // RTR-002/RTR-010: skip remote providers whose key is missing/empty instead
+  // of instantiating dead adapters. (getProviders() also filters, and probe()
+  // returns false without a key — defense in depth across all three layers.)
+  // PRV-003/004/009/010/011: entries that can NEVER work over Bearer-token
+  // OpenAI-compatible calls are skipped, not constructed:
+  //  - azure / azure_cognitive: generic cognitive URL (Azure needs
+  //    deployment-specific URLs)
+  //  - bedrock: SigV4 auth required; vertex: OAuth2/ADC required
+  //  - oci: duplicate of oracle AND its "key" is a config path, not a secret
+  //  - databricks: adb-123 placeholder URL (workspace-specific)
+  //  - cloudflare_gateway: missing {account,gateway} path segments
+  //  - cloudflare_workers: literal {account_id} placeholder in URL
+  //  - gitlab: gitlab.com/api/v4/ai is not an inference endpoint
+  const UNSUPPORTED_PROVIDER_IDS = new Set([
+    'azure', 'azure_cognitive', 'bedrock', 'vertex', 'oci', 'databricks',
+    'cloudflare_gateway', 'cloudflare_workers', 'gitlab',
+  ]);
   const addRemote = (def) => {
-    providers.push(Object.assign(def.factory(merged[def.key] || ''), { envVar: def.key }));
+    const key = merged[def.key] || '';
+    if (!key) return;
+    const adapter = def.factory(key);
+    if (UNSUPPORTED_PROVIDER_IDS.has(adapter.id)) return;
+    providers.push(Object.assign(adapter, { envVar: def.key }));
   };
 
   addRemote({
@@ -111,7 +236,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'OpenRouter',
       key,
       baseUrl: 'https://openrouter.ai/api/v1',
-      models: modelsFor(Object.keys(MODEL_DEFS).filter((id) => !id.startsWith('google/')), MODEL_DEFS)
+      models: modelsFor(OPENROUTER_MODELS, ACTIVE_DEFS)
     })
   });
 
@@ -138,10 +263,10 @@ export function getAllAdapters(secrets = {}) {
       key,
       baseUrl: 'https://api.openai.com/v1',
       models: [
-        m('openai/gpt-5.6-sol', false),
-        m('openai/gpt-5.6-luna', true),
-        m('openai/gpt-5.5', false),
-        m('openai/gpt-5.3-codex', false)
+        m('openai:gpt-5.6-sol', false),
+        m('openai:gpt-5.6-luna', true),
+        m('openai:gpt-5.5', false),
+        m('openai:gpt-5.3-codex', false)
       ]
     })
   });
@@ -151,10 +276,10 @@ export function getAllAdapters(secrets = {}) {
     factory: (key) => new AnthropicProvider({
       key,
       models: [
-        m('anthropic/claude-fable-5', false),
-        m('anthropic/claude-opus-5', false),
-        m('anthropic/claude-sonnet-5', false),
-        m('anthropic/claude-haiku-4-5', true)
+        m('anthropic:claude-fable-5', false),
+        m('anthropic:claude-opus-5', false),
+        m('anthropic:claude-sonnet-5', false),
+        m('anthropic:claude-haiku-4-5', true)
       ]
     })
   });
@@ -164,9 +289,9 @@ export function getAllAdapters(secrets = {}) {
     factory: (key) => new GeminiProvider({
       key,
       models: [
-        m('google/gemini-3.6-flash', true),
-        m('google/gemini-3.1-pro', false),
-        m('google/gemma-4-31b', true)
+        m('google:gemini-3.6-flash', true),
+        m('google:gemini-3.1-pro', false),
+        m('google:gemma-4-31b', true)
       ]
     })
   });
@@ -178,7 +303,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'Groq',
       key,
       baseUrl: 'https://api.groq.com/openai/v1',
-      models: [m('groq/llama-3.3-70b-versatile', true), m('groq/llama-3.1-8b-instant', true)]
+      models: [m('groq:llama-3.3-70b-versatile', true), m('groq:llama-3.1-8b-instant', true)]
     })
   });
 
@@ -190,8 +315,8 @@ export function getAllAdapters(secrets = {}) {
       key,
       baseUrl: 'https://api.together.xyz/v1',
       models: [
-        m('qwen/qwen-3.8-max', false),
-        m('qwen/qwen-3.7-flash', true)
+        m('qwen:qwen-3.8-max', false),
+        m('qwen:qwen-3.7-flash', true)
       ]
     })
   });
@@ -203,7 +328,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'Mistral',
       key,
       baseUrl: 'https://api.mistral.ai/v1',
-      models: [m('mistralai/mistral-medium-3.5', false), m('mistralai/codestral', false)]
+      models: [m('mistralai:mistral-medium-3.5', false), m('mistralai:codestral', false)]
     })
   });
 
@@ -214,7 +339,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'DeepSeek',
       key,
       baseUrl: 'https://api.deepseek.com/v1',
-      models: [m('deepseek/deepseek-v4-pro', false), m('deepseek/deepseek-v4-flash-0731', true)]
+      models: [m('deepseek:deepseek-v4-pro', false), m('deepseek:deepseek-v4-flash-0731', true)]
     })
   });
 
@@ -225,7 +350,7 @@ export function getAllAdapters(secrets = {}) {
       displayName: 'xAI (Grok)',
       key,
       baseUrl: 'https://api.x.ai/v1',
-      models: [m('xai/grok-4.5', false)]
+      models: [m('xai:grok-4.5', false)]
     })
   });
 
@@ -288,7 +413,7 @@ export function getAllAdapters(secrets = {}) {
   addRemote({ key: 'REQUESTY_API_KEY', factory: (key) => new OpenAICompatible({ id: 'requesty', displayName: 'Requesty', key, baseUrl: 'https://router.requesty.ai/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general }), model('gpt-4o-mini', { name: 'GPT-4o Mini', free: true, scores: S.cheap }), model('claude-3-5-sonnet-20241022', { name: 'Claude 3.5 Sonnet', free: false, scores: { ...S.general, planning: 93 } })] }) });
   addRemote({ key: 'AIHUBMIX_API_KEY', factory: (key) => new OpenAICompatible({ id: 'aihubmix', displayName: 'AIHubMix', key, baseUrl: 'https://aihubmix.com/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general }), model('gpt-4o-mini', { name: 'GPT-4o Mini', free: true, scores: S.cheap })] }) });
   addRemote({ key: 'DIGITALOCEAN_API_KEY', factory: (key) => new OpenAICompatible({ id: 'digitalocean', displayName: 'DigitalOcean Inference', key, baseUrl: 'https://inference.digitalocean.com/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general }), model('llama-3.1-70b', { name: 'Llama 3.1 70B', free: false, scores: { ...S.general, frontend: 90 } })] }) });
-  addRemote({ key: 'AZURE_OPENAI_API_KEY', factory: (key) => new OpenAICompatible({ id: 'azure', displayName: 'Azure OpenAI', key, baseUrl: 'https://api.cognitive.microsoft.com/v1', models: [m('openai/gpt-5.5', false), m('openai/gpt-5.3-codex', false), model('gpt-4o-mini', { name: 'GPT-4o Mini', free: true, scores: S.cheap })] }) });
+  addRemote({ key: 'AZURE_OPENAI_API_KEY', factory: (key) => new OpenAICompatible({ id: 'azure', displayName: 'Azure OpenAI', key, baseUrl: 'https://api.cognitive.microsoft.com/v1', models: [m('openai:gpt-5.5', false), m('openai:gpt-5.3-codex', false), model('gpt-4o-mini', { name: 'GPT-4o Mini', free: true, scores: S.cheap })] }) });
   addRemote({ key: 'AWS_BEDROCK_API_KEY', factory: (key) => new OpenAICompatible({ id: 'bedrock', displayName: 'AWS Bedrock', key, baseUrl: 'https://bedrock.us-east-1.amazonaws.com/v1', models: [model('anthropic.claude-3-5-sonnet', { name: 'Claude 3.5 Sonnet', free: false, scores: { ...S.general, planning: 93 } }), model('meta.llama-3-3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
   addRemote({ key: 'VERTEX_API_KEY', factory: (key) => new OpenAICompatible({ id: 'vertex', displayName: 'GCP Vertex AI', key, baseUrl: 'https://us-central1-aiplatform.googleapis.com/v1', models: [model('gemini-2.5-pro', { name: 'Gemini 2.5 Pro', free: false, scores: { ...S.general, planning: 94 } }), model('gemini-2.5-flash', { name: 'Gemini 2.5 Flash', free: true, scores: S.fast })] }) });
   addRemote({ key: 'ORACLE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'oracle', displayName: 'Oracle Code Assist', key, baseUrl: 'https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/v1', models: [model('cohere.command-r7b', { name: 'Cohere Command R7B', free: true, scores: S.cheap }), model('cohere.command-r', { name: 'Cohere Command R', free: false, scores: S.general })] }) });
@@ -298,8 +423,8 @@ export function getAllAdapters(secrets = {}) {
   addRemote({ key: 'NEBIUS_API_KEY', factory: (key) => new OpenAICompatible({ id: 'nebius', displayName: 'Nebius AI Studio', key, baseUrl: 'https://api.studio.nebius.ai/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
   addRemote({ key: 'BASETEN_API_KEY', factory: (key) => new OpenAICompatible({ id: 'baseten', displayName: 'Baseten', key, baseUrl: 'https://bridge.baseten.co/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
   addRemote({ key: 'COHERE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'cohere', displayName: 'Cohere', key, baseUrl: 'https://api.cohere.com/v1', models: [model('command-a', { name: 'Command A', free: false, scores: { ...S.general, planning: 92 } }), model('command-r7b', { name: 'Command R7B', free: true, scores: S.cheap })] }) });
-  addRemote({ key: 'QWEN_API_KEY', factory: (key) => new OpenAICompatible({ id: 'qwen', displayName: 'Alibaba Cloud (Qwen)', key, baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', models: [m('qwen/qwen-3.8-max', false), m('qwen/qwen-3.7-flash', true)] }) });
-  addRemote({ key: 'MOONSHOT_API_KEY', factory: (key) => new OpenAICompatible({ id: 'moonshot', displayName: 'Moonshot AI', key, baseUrl: 'https://api.moonshot.cn/v1', models: [m('moonshot/kimi-k3', false)] }) });
+  addRemote({ key: 'QWEN_API_KEY', factory: (key) => new OpenAICompatible({ id: 'qwen', displayName: 'Alibaba Cloud (Qwen)', key, baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', models: [m('qwen:qwen-3.8-max', false), m('qwen:qwen-3.7-flash', true)] }) });
+  addRemote({ key: 'MOONSHOT_API_KEY', factory: (key) => new OpenAICompatible({ id: 'moonshot', displayName: 'Moonshot AI', key, baseUrl: 'https://api.moonshot.cn/v1', models: [m('moonshot:kimi-k3', false)] }) });
   addRemote({ key: 'MINIMAX_API_KEY', factory: (key) => new OpenAICompatible({ id: 'minimax', displayName: 'MiniMax', key, baseUrl: 'https://api.minimax.chat/v1', models: [model('minimax-m1', { name: 'MiniMax M1', free: true, scores: S.coding }), model('minimax-m2', { name: 'MiniMax M2', free: false, scores: { ...S.general, planning: 92 } }), model('minimax-m3', { name: 'MiniMax M3', free: false, scores: { ...S.general, planning: 94 } })] }) });
   addRemote({ key: 'ZHIPU_API_KEY', factory: (key) => new OpenAICompatible({ id: 'zhipu', displayName: 'Zhipu AI', key, baseUrl: 'https://open.bigmodel.cn/api/paas/v4', models: [model('glm-4', { name: 'GLM-4', free: false, scores: { ...S.general, planning: 90 } }), model('glm-3.1', { name: 'GLM-3.1', free: true, scores: S.cheap })] }) });
   addRemote({ key: 'TENCENT_API_KEY', factory: (key) => new OpenAICompatible({ id: 'tencent', displayName: 'Tencent Hunyuan', key, baseUrl: 'https://hunyuan.tencentcloudapi.com/v1', models: [model('hunyuan-a13b-instruct', { name: 'Hunyuan A13B', free: false, scores: S.general }), model('hy3', { name: 'Hunyuan 3', free: true, scores: S.fast })] }) });
@@ -333,10 +458,10 @@ export function getAllAdapters(secrets = {}) {
   addRemote({ key: 'SNOWFLAKE_CORTEX_TOKEN', factory: (key) => new OpenAICompatible({ id: 'snowflake', displayName: 'Snowflake Cortex', key, baseUrl: 'https://api.snowflake.com/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
   addRemote({ key: 'DATABRICKS_TOKEN', factory: (key) => new OpenAICompatible({ id: 'databricks', displayName: 'Databricks', key, baseUrl: 'https://adb-123.azuredatabricks.net/serving-endpoints/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
   addRemote({ key: 'MANUS_API_KEY', factory: (key) => new OpenAICompatible({ id: 'manus', displayName: 'Manus AI', key, baseUrl: 'https://api.manus.ai/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
-  addRemote({ key: 'CHATGPT_PRO_TOKEN', factory: (key) => new OpenAICompatible({ id: 'chatgptpro', displayName: 'ChatGPT Pro', key, baseUrl: 'https://api.openai.com/v1', models: [m('openai/gpt-5.5', false), m('openai/gpt-5.3-codex', false), model('gpt-4o-mini', { name: 'GPT-4o Mini', free: true, scores: S.cheap })] }) });
+  addRemote({ key: 'CHATGPT_PRO_TOKEN', factory: (key) => new OpenAICompatible({ id: 'chatgptpro', displayName: 'ChatGPT Pro', key, baseUrl: 'https://api.openai.com/v1', models: [m('openai:gpt-5.5', false), m('openai:gpt-5.3-codex', false), model('gpt-4o-mini', { name: 'GPT-4o Mini', free: true, scores: S.cheap })] }) });
   // Doc 20 - New Providers from Merged CLI Lists
   addRemote({ key: '302_API_KEY', factory: (key) => new OpenAICompatible({ id: '302ai', displayName: '302.AI', key, baseUrl: 'https://api.302.ai/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
-  addRemote({ key: 'AZURE_COGNITIVE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'azure_cognitive', displayName: 'Azure Cognitive Services', key, baseUrl: 'https://api.cognitive.microsoft.com/v1', models: [m('openai/gpt-5.5', false), m('openai/gpt-5.3-codex', false), model('gpt-4o-mini', { name: 'GPT-4o Mini', free: true, scores: S.cheap })] }) });
+  addRemote({ key: 'AZURE_COGNITIVE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'azure_cognitive', displayName: 'Azure Cognitive Services', key, baseUrl: 'https://api.cognitive.microsoft.com/v1', models: [m('openai:gpt-5.5', false), m('openai:gpt-5.3-codex', false), model('gpt-4o-mini', { name: 'GPT-4o Mini', free: true, scores: S.cheap })] }) });
   addRemote({ key: 'CLOUDFLARE_GATEWAY_API_KEY', factory: (key) => new OpenAICompatible({ id: 'cloudflare_gateway', displayName: 'Cloudflare AI Gateway', key, baseUrl: 'https://gateway.ai.cloudflare.com/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
   addRemote({ key: 'CLOUDFLARE_WORKERS_API_KEY', factory: (key) => new OpenAICompatible({ id: 'cloudflare_workers', displayName: 'Cloudflare Workers AI', key, baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1', models: [model('llama-3-8b', { name: 'Llama 3 8B', free: true, scores: S.cheap })] }) });
   addRemote({ key: 'CORTECS_API_KEY', factory: (key) => new OpenAICompatible({ id: 'cortecs', displayName: 'Cortecs', key, baseUrl: 'https://api.cortecs.ai/v1', models: [model('mistral-large-2', { name: 'Mistral Large 2', free: false, scores: S.general })] }) });
@@ -359,7 +484,7 @@ export function getAllAdapters(secrets = {}) {
   addRemote({ key: 'HELICONE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'helicone', displayName: 'Helicone', key, baseUrl: 'https://oai.hconeai.com/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
   addRemote({ key: 'IONET_API_KEY', factory: (key) => new OpenAICompatible({ id: 'ionet', displayName: 'IO.NET', key, baseUrl: 'https://api.io.net/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
   addRemote({ key: 'NEBIUS_TOKEN_FACTORY_API_KEY', factory: (key) => new OpenAICompatible({ id: 'nebius_tf', displayName: 'Nebius Token Factory', key, baseUrl: 'https://api.tokenfactory.nebius.ai/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
-  addRemote({ key: 'POOLSIDE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'poolside', displayName: 'Poolside', key, baseUrl: 'https://inference.poolside.ai/v1', models: [m('poolside/laguna-s-2.1', true), m('poolside/laguna-xs-2.1', true)] }) });
+  addRemote({ key: 'POOLSIDE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'poolside', displayName: 'Poolside', key, baseUrl: 'https://inference.poolside.ai/v1', models: [m('poolside:laguna-s-2.1', true), m('poolside:laguna-xs-2.1', true)] }) });
   addRemote({ key: 'STACKIT_API_KEY', factory: (key) => new OpenAICompatible({ id: 'stackit', displayName: 'STACKIT', key, baseUrl: 'https://api.stackit.cloud/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
   addRemote({ key: 'OVHCLOUD_API_KEY', factory: (key) => new OpenAICompatible({ id: 'ovhcloud', displayName: 'OVHcloud AI Endpoints', key, baseUrl: 'https://api.ovhcloud.com/v1', models: [model('llama-3.3-70b', { name: 'Llama 3.3 70B', free: false, scores: S.general })] }) });
   addRemote({ key: 'VENICE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'venice', displayName: 'Venice AI', key, baseUrl: 'https://api.venice.ai/v1', models: [model('dolfinx-70b', { name: 'Dolphin 70B', free: true, scores: S.coding })] }) });
@@ -373,7 +498,7 @@ export function getAllAdapters(secrets = {}) {
   addRemote({ key: 'INCEPTION_API_KEY', factory: (key) => new OpenAICompatible({ id: 'inception', displayName: 'Inception', key, baseUrl: 'https://api.inception.ai/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
   addRemote({ key: 'V0_API_KEY', factory: (key) => new OpenAICompatible({ id: 'v0', displayName: 'v0 (Vercel)', key, baseUrl: 'https://api.v0.dev/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
   addRemote({ key: 'SYNTHETIC_API_KEY', factory: (key) => new OpenAICompatible({ id: 'synthetic', displayName: 'Synthetic Provider', key, baseUrl: 'https://api.synthetic.ai/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
-  addRemote({ key: 'ALIBABA_CLOUD_API_KEY', factory: (key) => new OpenAICompatible({ id: 'alibaba', displayName: 'Alibaba Cloud', key, baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', models: [m('qwen/qwen-3.8-max', false), m('qwen/qwen-3.7-flash', true)] }) });
+  addRemote({ key: 'ALIBABA_CLOUD_API_KEY', factory: (key) => new OpenAICompatible({ id: 'alibaba', displayName: 'Alibaba Cloud', key, baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', models: [m('qwen:qwen-3.8-max', false), m('qwen:qwen-3.7-flash', true)] }) });
   addRemote({ key: 'KILO_GATEWAY_API_KEY', factory: (key) => new OpenAICompatible({ id: 'kilogateway', displayName: 'Kilo Gateway', key, baseUrl: 'https://gateway.kilo.ai/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
   addRemote({ key: 'OPENCODE_GO_API_KEY', factory: (key) => new OpenAICompatible({ id: 'opencode_go', displayName: 'OpenCode Go', key, baseUrl: 'https://go.opencode.ai/v1', models: [model('opencode-go-32b', { name: 'OpenCode Go 32B', free: false, scores: S.coding })] }) });
   addRemote({ key: 'LITELLM_API_KEY', factory: (key) => new OpenAICompatible({ id: 'litellm', displayName: 'LiteLLM (self-hosted gateway)', key, baseUrl: 'http://localhost:4000/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
@@ -399,7 +524,7 @@ export function getAllAdapters(secrets = {}) {
   addRemote({ key: 'SENSETIME_API_KEY', factory: (key) => new OpenAICompatible({ id: 'sensetime', displayName: 'SenseTime', key, baseUrl: 'https://api.sensetime.com/v1', models: [model('sensechat', { name: 'SenseChat', free: false, scores: S.general })] }) });
   addRemote({ key: 'ERNIE_API_KEY', factory: (key) => new OpenAICompatible({ id: 'ernie', displayName: 'Ernie (Baidu)', key, baseUrl: 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1', models: [model('ernie-4.5', { name: 'Ernie 4.5', free: false, scores: S.general })] }) });
   addRemote({ key: 'STEPFUN_API_KEY', factory: (key) => new OpenAICompatible({ id: 'stepfun', displayName: 'StepFun', key, baseUrl: 'https://api.stepfun.com/v1', models: [model('step-3.7-flash', { name: 'Step 3.7 Flash', free: true, scores: S.fast })] }) });
-  addRemote({ key: 'SILICONFLOW_API_KEY', factory: (key) => new OpenAICompatible({ id: 'siliconflow', displayName: 'SiliconFlow', key, baseUrl: 'https://api.siliconflow.cn/v1', models: [m('qwen/qwen-3.8-max', false), m('qwen/qwen-3.7-flash', true)] }) });
+  addRemote({ key: 'SILICONFLOW_API_KEY', factory: (key) => new OpenAICompatible({ id: 'siliconflow', displayName: 'SiliconFlow', key, baseUrl: 'https://api.siliconflow.cn/v1', models: [m('qwen:qwen-3.8-max', false), m('qwen:qwen-3.7-flash', true)] }) });
   addRemote({ key: 'LEPTON_API_KEY', factory: (key) => new OpenAICompatible({ id: 'lepton', displayName: 'Lepton AI', key, baseUrl: 'https://api.lepton.ai/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
   addRemote({ key: 'PHIND_API_KEY', factory: (key) => new OpenAICompatible({ id: 'phind', displayName: 'Phind', key, baseUrl: 'https://api.phind.com/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
   addRemote({ key: 'YOU_API_KEY', factory: (key) => new OpenAICompatible({ id: 'you', displayName: 'You.com', key, baseUrl: 'https://api.you.com/v1', models: [model('gpt-4o', { name: 'GPT-4o', free: false, scores: S.general })] }) });
@@ -602,8 +727,8 @@ export function getAllAdapters(secrets = {}) {
 }
 
 export async function getProviders({ secrets = {}, config = {} } = {}) {
-  const all = getAllAdapters(secrets);
-  let candidates = all.filter((p) => p.kind === 'local' || (p.apiKey && p.apiKey !== '') || p.id === 'mock');
+  const all = getAllAdapters(secrets, config);
+  let candidates = all.filter((p) => p.id === 'mock' || (typeof p.isConfigured === 'function' ? p.isConfigured() : (p.kind === 'local' || Boolean(p.apiKey))));
 
   if (config.enabledProviders?.length) {
     candidates = candidates.filter((p) => config.enabledProviders.includes(p.id) || p.id === 'mock');

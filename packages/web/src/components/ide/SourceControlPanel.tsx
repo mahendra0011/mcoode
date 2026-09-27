@@ -185,7 +185,8 @@ export function SourceControlPanel() {
     }
 
     if (!runCmd) {
-      toast.info(`Git: ${label}`);
+      // 1214: say what's wrong instead of silently dropping the action.
+      toast.error(`No terminal connected — open a terminal first, then retry "${label}"`);
       return;
     }
 
@@ -200,7 +201,8 @@ export function SourceControlPanel() {
     } else if (label === "Commit All Changes") {
       const msg = window.prompt("Enter commit message for all changes:", message || "update");
       if (msg) {
-        runCmd(`git commit -am "${msg.replace(/"/g, '\\"')}"`);
+        const cleanMsg = msg.replace(/[`$"\\;|\&<>]/g, '').trim() || "update";
+        runCmd(`git commit -am "${cleanMsg}"`);
       }
     } else if (label === "Stash All Changes") {
       runCmd("git stash push -u");
@@ -209,12 +211,24 @@ export function SourceControlPanel() {
     } else if (label === "Clone") {
       const repo = window.prompt("Enter Git repository URL to clone:");
       if (repo) {
-        runCmd(`git clone ${repo.trim()}`);
+        const cleanRepo = repo.trim();
+        if (/^(https?:\/\/|git@)[\w\.\-:\/]+$/.test(cleanRepo) && !cleanRepo.startsWith("-")) {
+          runCmd(`git clone "${cleanRepo}"`);
+        } else {
+          toast.error("Invalid repository URL");
+        }
       }
     } else if (label === "Checkout to...") {
       const branch = window.prompt("Enter branch or tag name to checkout:");
       if (branch) {
-        runCmd(`git checkout ${branch.trim()}`);
+        const cleanBranch = branch.trim();
+        if (/^[a-zA-Z0-9_\-\.\/]+$/.test(cleanBranch) && !cleanBranch.startsWith("-")) {
+          runCmd(`git checkout "${cleanBranch}"`);
+          // Branch switch changes the whole tree — refresh it shortly after.
+          setTimeout(() => bumpRefresh(), 1500);
+        } else {
+          toast.error("Invalid branch name");
+        }
       }
     }
   };

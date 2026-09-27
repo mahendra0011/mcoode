@@ -108,18 +108,24 @@ export async function uninstallCommand() {
     await sleep(300);
   }
 
-  for (const { dir } of existing) {
+  // 687: report per-directory failures (EBUSY/EPERM from a live watch
+  // daemon) instead of claiming success while leaving orphans behind.
+  const failed = [];
+  for (const { label, dir } of existing) {
     try {
-      await rm(dir, { recursive: true, force: true });
+      await rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 300 });
       removed++;
-    } catch {
-      /* best effort */
+    } catch (err) {
+      failed.push({ label, dir, reason: err.code || err.message });
     }
   }
 
   await sleep(300);
   if (removed > 0) {
     console.log(pc.dim(`  Removed ${removed} local mcode director${removed === 1 ? 'y' : 'ies'}.`));
+  }
+  for (const f of failed) {
+    console.log(pc.yellow(`  ! Could not remove ${f.label} (${f.dir}): ${f.reason} — stop any running daemon (mcode watch-stop) and retry.`));
   }
 
   outro(pc.green('mcode data has been uninstalled. Run "npm uninstall -g mcode-cli" to remove the CLI itself.'));

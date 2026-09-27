@@ -8,6 +8,7 @@ const macroState = {
   isRecording: false,
   buffer: [],
   recorded: [],
+  workspaceId: null,
 };
 
 /**
@@ -140,9 +141,12 @@ export function getGroupedSlashCommands(activeTab, filterText = '', selectedCate
   const commands = getAvailableSlashCommands(activeTab);
   const q = (filterText || '').trim().toLowerCase().replace(/^\//, '');
 
+  // 736: match typed args against the command token only — "/god --watch"
+  // must still highlight the `god` command.
+  const qCmd = q.split(/\s+/)[0];
   const filtered = commands.filter((c) => {
     const matchesCategory = !selectedCategory || selectedCategory === 'all' || c.category === selectedCategory;
-    const matchesQuery = !q || c.cmd.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q);
+    const matchesQuery = !q || c.cmd.toLowerCase().includes(qCmd) || c.desc.toLowerCase().includes(q);
     return matchesCategory && matchesQuery;
   });
 
@@ -183,15 +187,37 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
   const [name, ...rest] = trimmed.slice(1).split(' ');
   const { setPrompt, toggleWatchMode, switchToAssistantTab } = state;
 
-  // Record macro commands if recording is active
+  // Record macro commands if recording is active.
+  // 735: scope the buffer to the project where recording started — a
+  // project switch mid-recording stops it instead of leaking commands
+  // across projects.
   if (macroState.isRecording && name !== 'record' && name !== 'replay') {
-    macroState.buffer.push(trimmed);
+    if (macroState.workspaceId && state.activeWorkspaceId && macroState.workspaceId !== state.activeWorkspaceId) {
+      macroState.isRecording = false;
+      macroState.buffer = [];
+      macroState.workspaceId = null;
+      dispatch(addMessage({ kind: 'warn', text: 'Macro recording stopped — project changed mid-recording.' }));
+    } else {
+      macroState.buffer.push(trimmed);
+    }
   }
 
   switch (name) {
     case 'agent': {
       const sub = (rest[0] || '').toLowerCase();
+      // 876: reset the activity bar on mode switches so panels from the
+      // previous mode don't linger in a conflicting state.
+      try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch { /* store unavailable */ }
       dispatch(setMode('agent'));
+      // 737: actually propagate the role — previously the message claimed
+      // it while nothing was dispatched.
+      if (sub) {
+        if (typeof state.setAgentRole === 'function') {
+          state.setAgentRole(sub);
+        } else {
+          socket?.emit?.('agent:role', { role: sub, projectId: state.activeWorkspaceId });
+        }
+      }
       if (state.setGodMode) state.setGodMode(false);
       if (switchToAssistantTab && activeTab !== 'AI Code Assistant' && activeTab !== 'AI Code Editor') {
         switchToAssistantTab();
@@ -511,10 +537,12 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
           text: `⚙️ Current mode: ${state.mode || 'agent'}. Available modes: chat, agent, god, explain, plan, review. Use: /mode <name>`
         }));
       } else if (target === 'god') {
+        try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch { /* store unavailable */ }
         dispatch(setMode('agent'));
         if (state.setGodMode) state.setGodMode(true);
         dispatch(addMessage({ kind: 'ok', text: '⚡ Switched to God-mode (parallel multi-agent builds).' }));
       } else if (['chat', 'agent', 'plan', 'explain', 'review'].includes(target)) {
+        try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch { /* store unavailable */ }
         dispatch(setMode(target));
         if (target === 'agent' && state.setGodMode) state.setGodMode(false);
         dispatch(addMessage({ kind: 'ok', text: `✓ Switched to ${target} mode.` }));
@@ -591,6 +619,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
       macroState.isRecording = !macroState.isRecording;
       if (macroState.isRecording) {
         macroState.buffer = [];
+        macroState.workspaceId = state.activeWorkspaceId || null;
         dispatch(addMessage({ kind: 'system', text: '⏺️ Recording macro commands... Enter commands, then run /record again to stop.' }));
       } else {
         macroState.recorded = [...macroState.buffer];

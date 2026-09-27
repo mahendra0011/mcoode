@@ -13,9 +13,19 @@ export class GeminiProvider extends HttpProvider {
     });
   }
 
+  // GEM-001/002: key travels via x-goog-api-key header, never in the URL
+  // (URLs land in proxy/CDN/monitoring logs).
+  headers(apiKey = this.apiKey) {
+    const h = { 'Content-Type': 'application/json' };
+    if (apiKey) h['x-goog-api-key'] = apiKey;
+    return h;
+  }
+
   async testKey(key) {
     try {
-      const res = await this.httpFetch(`${this.baseUrl}/models?key=${key}`);
+      const res = await this.httpFetch(`${this.baseUrl}/models`, {
+        headers: this.headers(key),
+      });
       return res.ok;
     } catch {
       return false;
@@ -29,15 +39,11 @@ export class GeminiProvider extends HttpProvider {
   async probe() {
     if (!this.apiKey) return false;
     try {
-      const res = await this.httpFetch(`${this.baseUrl}/models?key=${this.apiKey}`);
+      const res = await this.httpFetch(`${this.baseUrl}/models`, { headers: this.headers() });
       return res.ok;
     } catch {
       return false;
     }
-  }
-
-  headers() {
-    return { 'Content-Type': 'application/json' };
   }
 
   _request(model, { messages, temperature, maxTokens, reasoning }) {
@@ -47,7 +53,9 @@ export class GeminiProvider extends HttpProvider {
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
       }));
-    const system = messages.find((m) => m.role === 'system')?.content;
+    // GEM-003: concatenate ALL system messages instead of dropping all
+    // but the first.
+    const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n') || undefined;
     const budget = reasoning?.thinkingBudget || 0;
     return {
       body: JSON.stringify({
@@ -59,7 +67,7 @@ export class GeminiProvider extends HttpProvider {
           ...(budget > 0 ? { thinkingConfig: { thinkingBudget: budget } } : {})
         }
       }),
-      url: `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`
+      url: `${this.baseUrl}/models/${model}:generateContent`
     };
   }
 
@@ -91,7 +99,8 @@ export class GeminiProvider extends HttpProvider {
 
   async *stream(model, opts = {}) {
     const { url, body } = this._request(model, { maxTokens: 4096, temperature: 0.3, ...opts });
-    const streamUrl = `${url}&alt=sse`;
+    // GEM-004: separator depends on whether a query string already exists.
+    const streamUrl = `${url}${url.includes('?') ? '&' : '?'}alt=sse`;
     const res = await this.httpFetch(streamUrl, {
       method: 'POST',
       headers: this.headers(),

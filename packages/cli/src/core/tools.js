@@ -9,6 +9,77 @@ import { BrowserTool } from './browser-tool.js';
 
 export const WRITE_TOOLS = Object.freeze(['write_file', 'edit_file', 'run_shell']);
 
+export const PROTECTED_FILE_PATTERNS = Object.freeze([
+  /^\.env(\..+)?$/i,
+  /^package-lock\.json$/i,
+  /^pnpm-lock\.yaml$/i,
+  /^yarn\.lock$/i,
+  /^\.git(\/|\\|$)/i,
+  /^\.github\/workflows(\/|\\|$)/i,
+  /^\.gitlab-ci\.yml$/i,
+]);
+
+export function isProtectedPath(relPath) {
+  const norm = String(relPath || '').replace(/\\/g, '/').replace(/^\.?\//, '');
+  const fileName = norm.split('/').pop() || norm;
+  return PROTECTED_FILE_PATTERNS.some((pat) => pat.test(norm) || pat.test(fileName));
+}
+
+const SENSITIVE_ENV_PATTERN = /(key|secret|token|password|auth|jwt|credential|conn|db_|database|mongo|redis)/i;
+
+/** SEC-004: default-deny allowlist for shell execution (build/test tooling only).
+ *  Anything else (curl/wget/nc/ssh/powershell/…) needs --allow-shell-all. */
+export const SHELL_ALLOWLIST = new Set([
+  'npm', 'npx', 'node', 'git', 'tsc', 'pnpm', 'yarn', 'bun',
+  'go', 'cargo', 'rustc', 'python', 'python3', 'pip', 'pip3',
+  'docker', 'jest', 'vitest', 'eslint', 'prettier', 'tsserver',
+  'make', 'ls', 'cat', 'echo', 'pwd', 'dir',
+]);
+
+/** Extract the invoked binary (lowercased, extension-stripped) from a command
+ *  line. Handles quoted binaries containing spaces ("C:\Program Files\…"). */
+export function shellBinary(command) {
+  const s = String(command || '');
+  const m = /^\s*(?:"([^"]+)"|'([^']+)'|([^\s"'|&;()<>`]+))/.exec(s);
+  if (!m) return '';
+  const base = (m[1] || m[2] || m[3]).split(/[\\/]/).pop().toLowerCase();
+  return base.replace(/\.(cmd|exe|ps1|bat|com)$/, '');
+}
+
+/** Minimal quote-aware argv splitter (no glob/expansion — shell:false safe). */
+export function splitShellArgs(command) {
+  const out = [];
+  let cur = '';
+  let q = null;
+  const s = String(command || '');
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (q) {
+      if (ch === q) q = null;
+      else if (ch === '\\' && i + 1 < s.length) { cur += s[i + 1]; i++; }
+      else cur += ch;
+    } else if (ch === '"' || ch === "'") {
+      q = ch;
+    } else if (/\s/.test(ch)) {
+      if (cur) { out.push(cur); cur = ''; }
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+export function getSafeShellEnv(customEnv = {}) {
+  const safe = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (!SENSITIVE_ENV_PATTERN.test(k)) {
+      safe[k] = v;
+    }
+  }
+  return { ...safe, FORCE_COLOR: '1', ...customEnv };
+}
+
 /**
  * fetch with a real timeout (Node's undici fetch ignores `timeout` option).
  * Combines AbortController timeout with an optional external cancel signal.
@@ -54,12 +125,12 @@ export class ToolExecutor {
 
   tools() {
     const t = {
-      read_file: { description: 'Read a file from the project', parameters: { path: 'string' } },
-      list_files: { description: 'List files matching a glob', parameters: { glob: 'string' } },
-      search_code: { description: 'Search the codebase for text', parameters: { query: 'string' } },
-      web_search: { description: 'Search the web for information', parameters: { query: 'string' } },
-      web_fetch: { description: 'Fetch and extract text content from a URL', parameters: { url: 'string' } },
-      git_status: { description: 'Show current git status / diff summary', parameters: {} }
+      read_file: { description: 'Read a file from the project. Supports optional offset and length for paging large files. Fails if the path escapes the project root or the file is missing/unreadable — on ENOENT use list_files to find the correct path instead of retrying.', parameters: { path: 'string', offset: 'number?', length: 'number?' } },
+      list_files: { description: 'List files matching a glob (max 500). Never throws — returns an empty list when nothing matches.', parameters: { glob: 'string' } },
+      search_code: { description: 'Search the codebase for text (ripgrep, with a bounded native fallback). Returns at most 50 files.', parameters: { query: 'string' } },
+      web_search: { description: 'Search the web for information (supports optional count limit up to 20). Fails gracefully with "No search results found" when all engines miss — try simpler keywords.', parameters: { query: 'string', count: 'number?' } },
+      web_fetch: { description: 'Fetch and extract text content from a URL (15s timeout). Blocked unless the URL matches networkWhitelist when one is configured.', parameters: { url: 'string' } },
+      git_status: { description: 'Show current git status / diff summary. Fails outside a git repository.', parameters: {} }
     };
     // Long-term user memory — only available when the session provides a
     // per-user memory file (web chat sessions). Claude-style: the model saves
@@ -70,10 +141,10 @@ export class ToolExecutor {
     }
     const isReadOnly = this.domain === 'chat' || this.domain === 'docs' || this.readOnly;
     if (!isReadOnly) {
-      t.write_file = { description: 'Write a file (creates parent dirs)', parameters: { path: 'string', content: 'string' } };
-      t.edit_file = { description: 'Edit a file by replacing text', parameters: { path: 'string', old: 'string', new: 'string' } };
-      t.run_shell = { description: 'Run a shell command inside the project (npm install, build, etc.)', parameters: { command: 'string' } };
-      t.run_tests = { description: 'Run the project test suite (or one file)', parameters: { file: 'string' } };
+      t.write_file = { description: 'Write a file (creates parent dirs). Fails on protected files (.env, lockfiles, .git/*, CI configs) without approval, and on paths escaping the project root. Overwrites ask for confirmation when requireEditApproval is on.', parameters: { path: 'string', content: 'string' } };
+      t.edit_file = { description: 'Edit a file by replacing text (supports optional replaceAll: boolean). Fails when the file is missing, when old text is absent, or when old text matches multiple locations (add context or set replaceAll:true). Single match is replaced by default.', parameters: { path: 'string', old: 'string', new: 'string', replaceAll: 'boolean?' } };
+      t.run_shell = { description: 'Run a build/test command inside the project (allowlisted binaries only: npm, npx, node, git, tsc, ...). Shell operators (|, ;, $, redirects) and network tools (curl, ssh, ...) are blocked without --allow-shell-all. Times out after 120s.', parameters: { command: 'string' } };
+      t.run_tests = { description: 'Run the project test suite (or one file) via npm test. Times out after 180s. Reports passed:false when output contains failures.', parameters: { file: 'string' } };
       // Browser automation tools
       t.browser_navigate = { description: 'Open a URL in a real browser to test the running app', parameters: { url: 'string' } };
       t.browser_click = { description: 'Click an element by CSS selector or visible text', parameters: { selector: 'string?', text: 'string?' } };
@@ -171,10 +242,30 @@ export class ToolExecutor {
     return approved;
   }
 
-  async read_file({ path }) {
+  async read_file({ path, offset = 0, length = null }) {
     const full = this._abs(path);
-    const content = await readFile(full, 'utf8');
-    return { ok: true, content };
+    let raw;
+    try {
+      raw = await readFile(full, 'utf8');
+    } catch (err) {
+      const hint = err.code === 'ENOENT'
+        ? ` (file does not exist — use list_files to find the right path instead of retrying this one)`
+        : err.code === 'EISDIR' ? ` (path is a directory — use list_files instead)` : '';
+      throw new Error(`${err.message}${hint}`);
+    }
+    const start = Math.max(0, Number(offset) || 0);
+    const maxLen = length != null ? Math.max(1, Number(length) || 0) : null;
+    const slice = maxLen !== null ? raw.slice(start, start + maxLen) : raw.slice(start);
+    const totalLength = raw.length;
+    const truncated = start + slice.length < totalLength;
+    return {
+      ok: true,
+      content: slice,
+      totalLength,
+      offset: start,
+      truncated,
+      ...(truncated ? { note: `Content truncated. ${totalLength - (start + slice.length)} remaining characters. Use offset=${start + slice.length} to read more.` } : {})
+    };
   }
 
   async list_files({ glob = '**/*' }) {
@@ -254,18 +345,23 @@ export class ToolExecutor {
   }
 
   async write_file({ path, content }) {
+    if (isProtectedPath(path)) {
+      if (!this.allowShellAll && !this.requireEditApproval) {
+        return { ok: false, error: `Writing to protected file "${path}" is blocked. Explicit approval is required.` };
+      }
+    }
     const full = this._abs(path);
     await mkdir(join(full, '..'), { recursive: true });
     const prev = await readFile(full, 'utf8').catch(() => null);
     if (prev !== null) {
-      if (this.requireEditApproval) {
+      if (this.requireEditApproval || isProtectedPath(path)) {
         const answer = await this._askOverwrite(path, prev);
         if (answer !== 'y' && answer !== 'always') {
           return { ok: false, error: `Overwrite denied by user for ${path}` };
         }
       }
-    } else if (this.requireEditApproval) {
-      // New file — prompt for approval when review-before-write is enabled
+    } else if (this.requireEditApproval || isProtectedPath(path)) {
+      // New file — prompt for approval when review-before-write is enabled or file is protected
       const answer = await this._askOverwrite(path, null, true);
       if (answer !== 'y' && answer !== 'always') {
         return { ok: false, error: `Write denied by user for ${path}` };
@@ -287,7 +383,7 @@ export class ToolExecutor {
     return { ok: true, file: rel, created, diff, diffLines: diff?.lines || [], content, undoId };
   }
 
-  async edit_file({ path, old: oldText, new: newText }) {
+  async edit_file({ path, old: oldText, new: newText, replaceAll = false }) {
     const full = this._abs(path);
     const prev = await readFile(full, 'utf8').catch(() => null);
     if (prev === null) {
@@ -297,22 +393,27 @@ export class ToolExecutor {
       return { ok: false, error: `old text not found in ${path}` };
     }
     // Guard against ambiguous edits — replace() only touches the first match,
-    // so if oldText appears more than once we'd silently edit whichever
-    // occurrence happens to come first, which may not be the intended one.
+    // so if oldText appears more than once we require replaceAll: true or surrounding context
     const occurrences = prev.split(oldText).length - 1;
-    if (occurrences > 1) {
-      return { ok: false, error: `old text matches ${occurrences} locations in ${path} — include more surrounding context to make it unique` };
+    if (occurrences > 1 && !replaceAll) {
+      return { ok: false, error: `old text matches ${occurrences} locations in ${path} — include more surrounding context or specify replaceAll: true` };
     }
 
-    // Prompt for approval when review-before-write is enabled
-    if (this.requireEditApproval) {
+    if (isProtectedPath(path)) {
+      if (!this.allowShellAll && !this.requireEditApproval) {
+        return { ok: false, error: `Editing protected file "${path}" is blocked. Explicit approval is required.` };
+      }
+    }
+
+    // Prompt for approval when review-before-write is enabled or file is protected
+    if (this.requireEditApproval || isProtectedPath(path)) {
       const answer = await this._askOverwrite(path, prev);
       if (answer !== 'y' && answer !== 'always') {
         return { ok: false, error: `Edit denied by user for ${path}` };
       }
     }
 
-    const content = prev.replace(oldText, newText);
+    const content = replaceAll ? prev.replaceAll(oldText, newText) : prev.replace(oldText, newText);
     const undoId = await this.undoStack?.snapshot(path, prev);
     await writeFile(full, content, 'utf8');
     const diff = lineDiff(prev, content);
@@ -339,9 +440,10 @@ export class ToolExecutor {
       .trim();
   }
 
-  async web_search({ query }) {
+  async web_search({ query, count = 5 }) {
     const cleanQuery = String(query || '').replace(/^["']|["']$/g, '').trim();
     if (!cleanQuery) return { ok: false, error: 'empty search query' };
+    const limit = Math.min(20, Math.max(1, Number(count) || 5));
 
     // Helper to decode Bing redirect URLs (u=a1base64url)
     const decodeBingUrl = (url) => {
@@ -383,7 +485,7 @@ export class ToolExecutor {
 
         const links = [];
         let m;
-        while ((m = linkRegex.exec(html)) !== null && links.length < 5) {
+        while ((m = linkRegex.exec(html)) !== null && links.length < limit) {
           let href = m[1] || m[3];
           let title = m[2] || m[4];
           if (href && href.includes('uddg=')) {
@@ -401,7 +503,7 @@ export class ToolExecutor {
         }
 
         const snippets = [];
-        while ((m = snippetRegex.exec(html)) !== null && snippets.length < 5) {
+        while ((m = snippetRegex.exec(html)) !== null && snippets.length < limit) {
           snippets.push(redactSecrets(this._stripHtml(m[1]).replace(/\s+/g, ' ').trim()));
         }
 
@@ -417,7 +519,7 @@ export class ToolExecutor {
     // Tier 2: Bing HTML with redirect decoding and strict domain exclusion
     if (results.length === 0) {
       try {
-        const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(cleanQuery)}&count=10&setmkt=en-US&setlang=en-US`;
+        const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(cleanQuery)}&count=${Math.max(10, limit)}&setmkt=en-US&setlang=en-US`;
         const res = await fetchWithTimeout(searchUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -431,7 +533,7 @@ export class ToolExecutor {
           const html = await res.text();
           const algoRegex = /<li[^]*?class=["']b_algo["'][^]*?<\/li>/gi;
           let algoMatch;
-          while ((algoMatch = algoRegex.exec(html)) !== null && results.length < 5) {
+          while ((algoMatch = algoRegex.exec(html)) !== null && results.length < limit) {
             const block = algoMatch[0];
             const linkMatch = block.match(/<h2[^>]*><a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
             if (!linkMatch) continue;
@@ -458,7 +560,7 @@ export class ToolExecutor {
     // Tier 3: Wikipedia OpenSearch API
     if (results.length === 0) {
       try {
-        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(cleanQuery)}&limit=5&namespace=0&format=json`;
+        const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(cleanQuery)}&limit=${limit}&namespace=0&format=json`;
         const wikiRes = await fetchWithTimeout(wikiUrl, { signal: this.cancelSignal || undefined }, 4000);
         if (wikiRes.ok) {
           const data = await wikiRes.json();
@@ -466,7 +568,7 @@ export class ToolExecutor {
             const titles = data[1] || [];
             const snippets = data[2] || [];
             const urls = data[3] || [];
-            for (let i = 0; i < titles.length && results.length < 5; i++) {
+            for (let i = 0; i < titles.length && results.length < limit; i++) {
               if (urls[i] && urls[i].startsWith('http')) {
                 results.push({
                   title: redactSecrets(titles[i]),
@@ -491,15 +593,18 @@ export class ToolExecutor {
       return { ok: false, error: 'network request blocked by whitelist' };
     }
     try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-          'Accept': 'text/markdown,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
+      const res = await fetchWithTimeout(
+        url,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+            'Accept': 'text/markdown,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          signal: this.cancelSignal || undefined,
         },
-        signal: this.cancelSignal || undefined,
-        timeout: 15_000
-      });
+        15_000
+      );
       const contentType = String(res.headers.get('content-type') || '').toLowerCase();
       const raw = await res.text();
       const isMarkdown = contentType.includes('markdown') || url.endsWith('.md') || url.endsWith('.markdown');
@@ -617,9 +722,11 @@ export class ToolExecutor {
   }
 
   async run_shell({ command }) {
+    const rawCmd = String(command || '');
+    this.auditLog?.logToolCall('run_shell', { command: rawCmd.slice(0, 500), todoId: this.todoId, domain: this.domain }).catch(() => {});
     if (!this.allowShellAll) {
       // strip quoting/escapes first so `r"m" -r -f` / `r\m -rf` can't sneak past
-      const flat = String(command).replace(/["'`\\]/g, '');
+      const flat = rawCmd.replace(/["'`\\]/g, '');
       const tokens = flat.toLowerCase().split(/[\s;&|()]+/);
       const killers = ['rm', 'rmdir', 'del', 'erase', 'dd', 'mkfs', 'format', 'shutdown'];
       const hit = tokens.some((t) => killers.some((k) => t === k || t.startsWith(`${k}.`)));
@@ -632,19 +739,49 @@ export class ToolExecutor {
       ) {
         return { ok: false, error: 'destructive command blocked by sandbox (use --allow-shell-all to bypass)' };
       }
+      // SEC-004: allowlist — only build/test tooling may run without explicit bypass.
+      // This blocks curl/wget/nc/ssh/powershell exfiltration & reverse shells by default.
+      const bin = shellBinary(rawCmd);
+      if (!SHELL_ALLOWLIST.has(bin)) {
+        const netBins = ['curl', 'wget', 'nc', 'netcat', 'ncat', 'ssh', 'scp', 'ftp', 'telnet', 'powershell', 'pwsh', 'cmd', 'bash', 'sh'];
+        if (netBins.includes(bin)) {
+          return { ok: false, error: `network/shell binary "${bin}" blocked by sandbox egress policy (use --allow-shell-all to bypass)` };
+        }
+        return { ok: false, error: `command "${bin || '(empty)'}" not in shell allowlist (${[...SHELL_ALLOWLIST].join(', ')}) (use --allow-shell-all to bypass)` };
+      }
+      // SEC-004: shell syntax (pipes, chains, substitution, redirection, env
+      // reads like $KEY) requires an OS shell — block unless bypassed.
+      if (/[;&|`$()<>]|\n|\r|\$\{/.test(rawCmd) || /-EncodedCommand\b/i.test(rawCmd)) {
+        return { ok: false, error: 'shell operators/pipes/redirection/substitution blocked by sandbox (use --allow-shell-all to bypass)' };
+      }
+      // No shell: run as argv (prevents injection through OS shell parsing).
+      const [file, ...argv] = splitShellArgs(rawCmd);
+      if (!file) return { ok: false, error: 'empty command' };
+      const child = execa(file, argv, {
+        cwd: this.projectPath,
+        shell: false,
+        timeout: 120_000,
+        cancelSignal: this.cancelSignal || undefined,
+        env: getSafeShellEnv()
+      });
+      child.stdout?.on('data', chunk => this.bus?.emit(EVENTS.SUBAGENT_SHELL_OUTPUT, { chunk: chunk.toString() }));
+      child.stderr?.on('data', chunk => this.bus?.emit(EVENTS.SUBAGENT_SHELL_OUTPUT, { chunk: chunk.toString() }));
+
+      const { stdout, stderr } = await child;
+      return { ok: true, stdout: String(stdout || '').slice(0, 4000), stderr: String(stderr || '').slice(0, 2000) };
     }
-    const child = execa(command, {
+    const child = execa(rawCmd, {
       cwd: this.projectPath,
       shell: true,
       timeout: 120_000,
       cancelSignal: this.cancelSignal || undefined,
-      env: { ...process.env, FORCE_COLOR: '1' }
+      env: getSafeShellEnv()
     });
     child.stdout?.on('data', chunk => this.bus?.emit(EVENTS.SUBAGENT_SHELL_OUTPUT, { chunk: chunk.toString() }));
     child.stderr?.on('data', chunk => this.bus?.emit(EVENTS.SUBAGENT_SHELL_OUTPUT, { chunk: chunk.toString() }));
-    
+
     const { stdout, stderr } = await child;
-    return { ok: true, stdout: stdout.slice(0, 4000), stderr: stderr.slice(0, 2000) };
+    return { ok: true, stdout: String(stdout || '').slice(0, 4000), stderr: String(stderr || '').slice(0, 2000) };
   }
 
   async run_tests({ file = '' }) {
@@ -654,7 +791,7 @@ export class ToolExecutor {
         cwd: this.projectPath,
         timeout: 180_000,
         cancelSignal: this.cancelSignal || undefined,
-        env: { ...process.env, FORCE_COLOR: '1' },
+        env: getSafeShellEnv(),
         reject: false
       });
       child.stdout?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
@@ -771,49 +908,81 @@ export function lineDiff(before, after) {
   return { changedLines: changed, lines };
 }
 
-  /** Per-project undo stack: snapshots of every file before a subagent writes. */
+  /** Per-project undo stack: snapshots of every file before a subagent writes.
+   *  TOOL-002: all persistence funnels through a promise-chain mutex (no
+   *  interleaved read-modify-write between concurrent subagents) and writes
+   *  atomically (tmp file + rename) so a crash can never leave half a JSON. */
 export class UndoStack {
   constructor({ filePath, maxEntries = 200, projectPath = null } = {}) {
     this.filePath = filePath;
     this.maxEntries = maxEntries;
     this.entries = [];
     this.projectPath = projectPath;
+    this._writeChain = Promise.resolve();
+  }
+
+  /** Serialize persistence work: each write runs only after the previous one. */
+  _queueWrite(fn) {
+    const run = this._writeChain.then(fn, fn);
+    this._writeChain = run.catch(() => {});
+    return run;
+  }
+
+  /** Atomic persist: write tmp + rename so readers never see torn JSON. */
+  async _persist() {
+    if (!this.filePath) return;
+    const { rename } = await import('node:fs/promises');
+    const tmp = `${this.filePath}.tmp.${process.pid}`;
+    try {
+      await writeFile(tmp, JSON.stringify(this.entries), 'utf8');
+      await rename(tmp, this.filePath);
+    } catch {
+      /* best-effort persistence */
+    }
   }
 
   async snapshot(relPath, prevContent) {
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     this.entries.push({ id, at: new Date().toISOString(), file: relPath, prev: prevContent });
     if (this.entries.length > this.maxEntries) this.entries.shift();
-    if (this.filePath) {
-      try {
-        await writeFile(this.filePath, JSON.stringify(this.entries), 'utf8');
-      } catch {
-        /* best-effort persistence */
-      }
-    }
+    await this._queueWrite(() => this._persist());
     return id;
   }
 
   async load() {
     if (this.entries.length) return;
-    try {
-      const raw = await readFile(this.filePath, 'utf8').catch(() => null);
-      if (raw) this.entries = JSON.parse(raw);
-    } catch {
-      this.entries = [];
-    }
+    await this._queueWrite(async () => {
+      try {
+        const raw = await readFile(this.filePath, 'utf8').catch(() => null);
+        if (raw) this.entries = JSON.parse(raw);
+      } catch (err) {
+        process.stderr.write(`[undo] warning: undo history at ${this.filePath} is corrupted (${err.message}) — backing up and starting fresh\n`);
+        if (this.filePath) {
+          try {
+            const backupPath = `${this.filePath}.bak.${Date.now()}`;
+            const raw = await readFile(this.filePath, 'utf8').catch(() => null);
+            if (raw) await writeFile(backupPath, raw, 'utf8');
+          } catch { /* best-effort backup */ }
+        }
+        this.entries = [];
+      }
+    });
   }
 
-  /** Revert a write by id (when provided) or the most recent write (LIFO fallback).
-   *  Returns the reverted file path or null if the stack is empty. */
+  /** Revert a write by id, or the most recent write when no id is given.
+   *  TOOL-003: an explicit id that matches nothing returns null ("not
+   *  found") — it NEVER falls back to reverting some other file.
+   *  Returns the reverted file path or null. */
   async undo(id) {
     await this.load();
     let entry;
     if (id) {
       const idx = this.entries.findIndex((e) => e.id === id);
-      if (idx !== -1) entry = this.entries.splice(idx, 1)[0];
+      if (idx === -1) return null;
+      entry = this.entries.splice(idx, 1)[0];
+    } else {
+      entry = this.entries.pop();
     }
-    if (!entry) entry = this.entries.pop();
     if (!entry) return null;
     const full = this.projectPath ? resolve(this.projectPath, entry.file) : resolve(process.cwd(), entry.file);
     if (entry.prev === null) {
@@ -821,9 +990,7 @@ export class UndoStack {
     } else {
       await writeFile(full, entry.prev, 'utf8');
     }
-    if (this.filePath) {
-      await writeFile(this.filePath, JSON.stringify(this.entries), 'utf8').catch(() => {});
-    }
+    await this._queueWrite(() => this._persist());
     return entry.file;
   }
 

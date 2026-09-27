@@ -38,6 +38,10 @@ export const EVENTS = Object.freeze({
   TEST_MODE_DONE: 'TEST_MODE_DONE'
 });
 
+/** Subagent lifecycle states (SHR-001: the single source of truth — compare
+ *  with === SUBAGENT_STATUS.X, never with raw strings).
+ *  @typedef {'pending'|'running'|'done'|'failed'|'needs_review'} SubagentStatus
+ */
 export const SUBAGENT_STATUS = Object.freeze({
   PENDING: 'pending',
   RUNNING: 'running',
@@ -131,4 +135,25 @@ export const SOCKET = Object.freeze({
     TEST_TRADITIONAL: 'test:traditional',
     TEST_MODE_DONE: 'test:done'
   }
+});
+
+/** SHR-003: the ONE bus→socket mapping (was duplicated implicitly between
+ *  EVENTS, SOCKET and the orchestrator). Add new realtime events here and
+ *  every bridge picks them up — no third file to update. */
+export const EVENT_TO_SOCKET = Object.freeze({
+  [EVENTS.PLAN_GENERATED]: SOCKET.CLIENT_TO_SERVER.PLAN_GENERATED,
+  [EVENTS.SUBAGENT_STARTED]: SOCKET.CLIENT_TO_SERVER.AGENT_STARTED,
+  [EVENTS.SUBAGENT_STEP]: SOCKET.CLIENT_TO_SERVER.AGENT_STEP,
+  [EVENTS.SUBAGENT_FILE]: SOCKET.CLIENT_TO_SERVER.AGENT_FILE,
+  [EVENTS.SUBAGENT_DONE]: SOCKET.CLIENT_TO_SERVER.AGENT_DONE,
+  [EVENTS.SUBAGENT_FAILED]: SOCKET.CLIENT_TO_SERVER.AGENT_FAILED,
+  [EVENTS.SUBAGENT_NEEDS_REVIEW]: SOCKET.CLIENT_TO_SERVER.AGENT_NEEDS_REVIEW,
+  [EVENTS.WAVE_START]: SOCKET.CLIENT_TO_SERVER.WAVE_START,
+  [EVENTS.WAVE_COMPLETE]: SOCKET.CLIENT_TO_SERVER.WAVE_COMPLETE,
+  [EVENTS.INTEGRATION_PASS]: SOCKET.CLIENT_TO_SERVER.INTEGRATION_PASS,
+  [EVENTS.BUILD_COMPLETE]: SOCKET.CLIENT_TO_SERVER.BUILD_COMPLETE,
+  [EVENTS.TOAST]: SOCKET.CLIENT_TO_SERVER.TOAST,
+  [EVENTS.WATCH_SCAN]: SOCKET.CLIENT_TO_SERVER.WATCH_SCAN,
+  [EVENTS.WATCH_FIX]: SOCKET.CLIENT_TO_SERVER.WATCH_FIX,
+  [EVENTS.WATCH_STATUS]: SOCKET.CLIENT_TO_SERVER.WATCH_STATUS,
 });

@@ -75,12 +75,12 @@ describe('planWaves', () => {
     expect(waves.map((w) => w.map((t) => t.id).sort())).toEqual([['a', 'b'], ['c'], ['d']]);
   });
 
-  it('never deadlocks on cycles (cycle guard)', () => {
+  it('throws a descriptive error on cycles instead of force-executing (SHR-002)', () => {
     const plan = normalizePlan({ todos: [
       { id: 'a', title: '1', dependsOn: ['b'] },
       { id: 'b', title: '2', dependsOn: ['a'] }
     ] });
-    expect(planWaves(plan).length).toBe(1);
+    expect(() => planWaves(plan)).toThrow(/dependency cycle detected/);
   });
 });
 

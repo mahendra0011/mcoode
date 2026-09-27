@@ -19,7 +19,9 @@ const common = {
   alias: {
     'react-devtools-core': join(root, 'scripts', 'stubs', 'react-devtools-core.js')
   },
-  sourcemap: false,
+  // External sourcemaps for production debugging (separate .map files —
+  // stack traces stay readable, runtime stays unminified for the CLI).
+  sourcemap: 'external',
   minify: false,
   define: { 'process.env.MCCODE_BUNDLED': '"1"' },
   // some CJS deps (commander) use dynamic require() — shim it for ESM

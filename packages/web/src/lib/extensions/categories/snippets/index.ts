@@ -9,20 +9,23 @@ import {
   testSnippets,
 } from './snippetDefinitions';
 
+// NOTE (746): activate/deactivate pass the extension id as the snippet
+// owner, so disabling one pack only disposes ITS providers — never the
+// whole language (which would also kill other packs' snippets).
 export const snippetExtensions: Record<string, EditorExtensionRuntime> = {
   // ES7+ React/Redux Snippets
   'dsznajder.es7-react-js-snippets': {
     id: 'dsznajder.es7-react-js-snippets',
     activate: (editorApi) => {
-      editorApi.registerSnippets?.('javascript', reactSnippets);
-      editorApi.registerSnippets?.('typescript', reactSnippets);
-      editorApi.registerSnippets?.('javascriptreact', reactSnippets);
-      editorApi.registerSnippets?.('typescriptreact', reactSnippets);
+      editorApi.registerSnippets?.('javascript', reactSnippets, 'dsznajder.es7-react-js-snippets');
+      editorApi.registerSnippets?.('typescript', reactSnippets, 'dsznajder.es7-react-js-snippets');
+      editorApi.registerSnippets?.('javascriptreact', reactSnippets, 'dsznajder.es7-react-js-snippets');
+      editorApi.registerSnippets?.('typescriptreact', reactSnippets, 'dsznajder.es7-react-js-snippets');
       editorApi.showToast?.('ES7+ React/Redux snippets active', 'success');
     },
     deactivate: (editorApi) => {
-      editorApi.unregisterSnippets?.('javascript');
-      editorApi.unregisterSnippets?.('typescript');
+      editorApi.unregisterSnippets?.('javascript', 'dsznajder.es7-react-js-snippets');
+      editorApi.unregisterSnippets?.('typescript', 'dsznajder.es7-react-js-snippets');
     },
   },
 
@@ -30,13 +33,13 @@ export const snippetExtensions: Record<string, EditorExtensionRuntime> = {
   'burkeholland.simple-react-snippets': {
     id: 'burkeholland.simple-react-snippets',
     activate: (editorApi) => {
-      editorApi.registerSnippets?.('javascript', reactSnippets);
-      editorApi.registerSnippets?.('typescript', reactSnippets);
+      editorApi.registerSnippets?.('javascript', reactSnippets, 'burkeholland.simple-react-snippets');
+      editorApi.registerSnippets?.('typescript', reactSnippets, 'burkeholland.simple-react-snippets');
       editorApi.showToast?.('Simple React snippets active', 'success');
     },
     deactivate: (editorApi) => {
-      editorApi.unregisterSnippets?.('javascript');
-      editorApi.unregisterSnippets?.('typescript');
+      editorApi.unregisterSnippets?.('javascript', 'burkeholland.simple-react-snippets');
+      editorApi.unregisterSnippets?.('typescript', 'burkeholland.simple-react-snippets');
     },
   },
 
@@ -44,13 +47,13 @@ export const snippetExtensions: Record<string, EditorExtensionRuntime> = {
   'pulkitgangwar.nextjs-snippets': {
     id: 'pulkitgangwar.nextjs-snippets',
     activate: (editorApi) => {
-      editorApi.registerSnippets?.('javascript', nextjsSnippets);
-      editorApi.registerSnippets?.('typescript', nextjsSnippets);
+      editorApi.registerSnippets?.('javascript', nextjsSnippets, 'pulkitgangwar.nextjs-snippets');
+      editorApi.registerSnippets?.('typescript', nextjsSnippets, 'pulkitgangwar.nextjs-snippets');
       editorApi.showToast?.('Next.js snippets active', 'success');
     },
     deactivate: (editorApi) => {
-      editorApi.unregisterSnippets?.('javascript');
-      editorApi.unregisterSnippets?.('typescript');
+      editorApi.unregisterSnippets?.('javascript', 'pulkitgangwar.nextjs-snippets');
+      editorApi.unregisterSnippets?.('typescript', 'pulkitgangwar.nextjs-snippets');
     },
   },
 
@@ -58,12 +61,12 @@ export const snippetExtensions: Record<string, EditorExtensionRuntime> = {
   'sdras.vue-vscode-snippets': {
     id: 'sdras.vue-vscode-snippets',
     activate: (editorApi) => {
-      editorApi.registerSnippets?.('vue', vueSnippets);
-      editorApi.registerSnippets?.('html', vueSnippets);
+      editorApi.registerSnippets?.('vue', vueSnippets, 'sdras.vue-vscode-snippets');
+      editorApi.registerSnippets?.('html', vueSnippets, 'sdras.vue-vscode-snippets');
       editorApi.showToast?.('Vue snippets active', 'success');
     },
     deactivate: (editorApi) => {
-      editorApi.unregisterSnippets?.('vue');
+      editorApi.unregisterSnippets?.('vue', 'sdras.vue-vscode-snippets');
     },
   },
 
@@ -71,14 +74,14 @@ export const snippetExtensions: Record<string, EditorExtensionRuntime> = {
   'bradlc.vscode-tailwindcss': {
     id: 'bradlc.vscode-tailwindcss',
     activate: (editorApi) => {
-      editorApi.registerSnippets?.('css', tailwindSnippets);
-      editorApi.registerSnippets?.('html', tailwindSnippets);
-      editorApi.registerSnippets?.('javascript', tailwindSnippets);
-      editorApi.registerSnippets?.('typescript', tailwindSnippets);
+      editorApi.registerSnippets?.('css', tailwindSnippets, 'bradlc.vscode-tailwindcss');
+      editorApi.registerSnippets?.('html', tailwindSnippets, 'bradlc.vscode-tailwindcss');
+      editorApi.registerSnippets?.('javascript', tailwindSnippets, 'bradlc.vscode-tailwindcss');
+      editorApi.registerSnippets?.('typescript', tailwindSnippets, 'bradlc.vscode-tailwindcss');
       editorApi.showToast?.('Tailwind CSS IntelliSense snippets active', 'success');
     },
     deactivate: (editorApi) => {
-      editorApi.unregisterSnippets?.('css');
+      editorApi.unregisterSnippets?.('css', 'bradlc.vscode-tailwindcss');
     },
   },
 
@@ -86,11 +89,11 @@ export const snippetExtensions: Record<string, EditorExtensionRuntime> = {
   'cstrap.python-snippets': {
     id: 'cstrap.python-snippets',
     activate: (editorApi) => {
-      editorApi.registerSnippets?.('python', pythonSnippets);
+      editorApi.registerSnippets?.('python', pythonSnippets, 'cstrap.python-snippets');
       editorApi.showToast?.('Python snippets active', 'success');
     },
     deactivate: (editorApi) => {
-      editorApi.unregisterSnippets?.('python');
+      editorApi.unregisterSnippets?.('python', 'cstrap.python-snippets');
     },
   },
 
@@ -98,11 +101,11 @@ export const snippetExtensions: Record<string, EditorExtensionRuntime> = {
   'formulahendry.auto-complete-tag': {
     id: 'formulahendry.auto-complete-tag',
     activate: (editorApi) => {
-      editorApi.registerSnippets?.('html', htmlSnippets);
+      editorApi.registerSnippets?.('html', htmlSnippets, 'formulahendry.auto-complete-tag');
       editorApi.showToast?.('HTML snippets active', 'success');
     },
     deactivate: (editorApi) => {
-      editorApi.unregisterSnippets?.('html');
+      editorApi.unregisterSnippets?.('html', 'formulahendry.auto-complete-tag');
     },
   },
 
@@ -110,13 +113,13 @@ export const snippetExtensions: Record<string, EditorExtensionRuntime> = {
   'orta.vscode-jest': {
     id: 'orta.vscode-jest',
     activate: (editorApi) => {
-      editorApi.registerSnippets?.('javascript', testSnippets);
-      editorApi.registerSnippets?.('typescript', testSnippets);
+      editorApi.registerSnippets?.('javascript', testSnippets, 'orta.vscode-jest');
+      editorApi.registerSnippets?.('typescript', testSnippets, 'orta.vscode-jest');
       editorApi.showToast?.('Jest / Vitest snippets active', 'success');
     },
     deactivate: (editorApi) => {
-      editorApi.unregisterSnippets?.('javascript');
-      editorApi.unregisterSnippets?.('typescript');
+      editorApi.unregisterSnippets?.('javascript', 'orta.vscode-jest');
+      editorApi.unregisterSnippets?.('typescript', 'orta.vscode-jest');
     },
   },
 };

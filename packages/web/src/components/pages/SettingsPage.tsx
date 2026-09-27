@@ -184,7 +184,7 @@ function GeneralTab() {
         <SettingToggle
           icon={Sun}
           label="Keep Computer Awake While Running"
-          description="Prevents the operating system from going to sleep while ZCode agent builds and tasks are executing."
+          description="Prevents the operating system from going to sleep while mcode agent builds and tasks are executing."
           checked={system.keepAwake}
           onChange={(v) => updateSystem('keepAwake', v)}
         />
@@ -220,8 +220,22 @@ function GeneralTab() {
                 if (!f) return;
                 try {
                   const text = await f.text();
-                  JSON.parse(text);
-                  localStorage.setItem('mcode_unified_settings', text);
+                  const parsed = JSON.parse(text);
+                  // BUG-19-05: schema-gate the import — a corrupt/partial blob
+                  // (e.g. {"system": null}) must never brick the dashboard.
+                  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    throw new Error('Settings file must be a JSON object');
+                  }
+                  for (const [k, v] of Object.entries(parsed)) {
+                    if (k === '__proto__' || k === 'constructor' || k === 'prototype') {
+                      throw new Error(`Settings file contains forbidden key "${k}"`);
+                    }
+                    if (v === undefined) throw new Error(`Settings key "${k}" is undefined`);
+                  }
+                  if ('system' in parsed && (parsed.system === null || typeof parsed.system !== 'object')) {
+                    throw new Error('Settings "system" section must be an object');
+                  }
+                  localStorage.setItem('mcode_unified_settings', JSON.stringify(parsed));
                   window.location.reload();
                 } catch {
                   alert('Invalid settings file — import aborted, nothing changed.');
@@ -278,7 +292,7 @@ function GeneralTab() {
         <SettingRowItem
           icon={Globe}
           label="Display Language (Locale)"
-          description="Display language for the ZCode UI and generated system logs."
+          description="Display language for the mcode UI and generated system logs."
         >
           <select
             value={system.locale}
@@ -734,13 +748,14 @@ function IndexingTab() {
   const data = useSettingsStore((s) => s.data);
   const updateData = useSettingsStore((s) => s.updateDataSetting);
 
+  // BUG-19-06: mcode paths (was: legacy ZCode + a hardcoded personal dir).
   const FILE_LOCATIONS = [
-    { file: 'setting.json', path: 'C:\\Users\\mahen\\.zcode\\v2\\setting.json', desc: 'User-level settings/preferences (~33 keys)' },
-    { file: 'config.json', path: 'C:\\Users\\mahen\\.zcode\\v2\\config.json', desc: 'Model provider configuration (API keys, base URLs, model metadata)' },
-    { file: 'credentials.json', path: 'C:\\Users\\mahen\\.zcode\\v2\\credentials.json', desc: 'Encrypted OAuth tokens (AES-256-GCM)' },
-    { file: 'bot-state.v2.json', path: 'C:\\Users\\mahen\\.zcode\\v2\\bot-state.v2.json', desc: 'Bot state (conversations, memory)' },
-    { file: 'telemetry-state.json', path: 'C:\\Users\\mahen\\.zcode\\v2\\telemetry-state.json', desc: 'Telemetry opt-in/opt-out state' },
-    { file: 'tasks-index.sqlite', path: 'C:\\Users\\mahen\\.zcode\\v2\\tasks-index.sqlite', desc: 'Tasks database' },
+    { file: 'config.json', path: '~/.mcode/config.json', desc: 'User-level settings/preferences + model provider configuration' },
+    { file: 'vault.json.enc', path: '~/.mcode/vault.json.enc', desc: 'Encrypted secrets vault (AES-256-GCM)' },
+    { file: 'history/', path: '~/.mcode/history/', desc: 'Session history entries' },
+    { file: 'projects/', path: '~/.mcode/projects/', desc: 'Per-project state (undo stacks, watch state)' },
+    { file: 'ledger.json', path: '~/.mcode/ledger.json', desc: 'Provider usage ledger (rate-limit tracking)' },
+    { file: 'watch/', path: '~/.mcode/watch/', desc: 'Watch daemon state files' },
   ];
 
   return (
@@ -791,7 +806,7 @@ function IndexingTab() {
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-white">Persistent Storage Directory (storage.dir)</div>
               <p className="text-xs text-[var(--mcode-text-dim,#8b8d98)] mt-0.5">
-                Persistent storage directory for all ZCode and Mcode data: <code className="text-zinc-300 font-mono">~/.mcode</code>
+                Persistent storage directory for all mcode data: <code className="text-zinc-300 font-mono">~/.mcode</code>
               </p>
               <div className="flex items-center gap-2 mt-2">
                 <code className="text-xs text-[var(--mcode-text-dim,#8b8d98)] bg-[#0d0e12] px-3 py-1.5 rounded font-mono border border-white/5 flex-1">
@@ -846,7 +861,7 @@ function IndexingTab() {
 
       {/* File Locations Table */}
       <div className="space-y-3">
-        <h3 className="text-xs font-semibold text-white/80 uppercase tracking-wider">Official ZCode File Locations</h3>
+        <h3 className="text-xs font-semibold text-white/80 uppercase tracking-wider">Official mcode File Locations</h3>
         <div className="overflow-hidden rounded-xl border border-white/10 bg-[#151515]">
           <table className="w-full text-left text-xs">
             <thead className="bg-white/5 text-white/70 border-b border-white/10 font-semibold uppercase text-[10px] tracking-wider">
@@ -910,7 +925,7 @@ function PermissionsTab({
           <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">CLI Permission Mode</h3>
         </div>
         <p className="text-xs text-white/40">
-          Corresponds to <code className="text-zinc-300 font-mono">permission.mode</code> in ZCode CLI config schema.
+          Corresponds to <code className="text-zinc-300 font-mono">permission.mode</code> in mcode CLI config schema.
         </p>
         <div className="grid grid-cols-2 gap-3">
           {[

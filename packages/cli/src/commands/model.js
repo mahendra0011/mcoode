@@ -84,3 +84,42 @@ export async function modelModesCommand({ asJson = false } = {}) {
   if (asJson) return json(MODES.map((m) => ({ mode: m, desc: MODE_DESC[m] })));
   table(MODES.map((m) => [m, MODE_DESC[m]]), { columns: ['MODE', 'DESCRIPTION'] });
 }
+
+/** RTR-005: live benchmark — times a tiny completion per configured model
+ *  so static scores can be sanity-checked against reality. Providers without
+ *  keys are reported as skipped, never probed. */
+export async function modelBenchmarkCommand({ asJson = false, prompt = 'Reply with exactly: ok' } = {}) {
+  const router = new ModelRouter();
+  await router._init();
+  const available = await router.listAvailable();
+  const rows = [];
+  for (const provider of available) {
+    let models = [];
+    try {
+      models = await provider.listModels();
+    } catch {
+      continue;
+    }
+    for (const m of models.slice(0, 3)) {
+      const ref = `${provider.id}:${m.id}`;
+      const t0 = Date.now();
+      try {
+        const res = await provider.complete(m.id, {
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0,
+          maxTokens: 16,
+        });
+        rows.push({ ref, ok: true, ms: Date.now() - t0, chars: (res.text || '').length });
+      } catch (err) {
+        rows.push({ ref, ok: false, ms: Date.now() - t0, error: String(err.message || err).slice(0, 120) });
+      }
+    }
+  }
+  if (asJson) return json(rows);
+  if (rows.length === 0) {
+    fail('no configured providers to benchmark — add a key first');
+    return;
+  }
+  table(rows.map((r) => [r.ref, r.ok ? 'ok' : 'FAIL', String(r.ms), r.ok ? String(r.chars) : (r.error || '')]),
+    { columns: ['REF', 'STATUS', 'MS', 'DETAIL'] });
+}

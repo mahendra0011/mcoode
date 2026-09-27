@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=26.4.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "mcode": "node packages/cli/bin/mcode.js",
@@ -24,6 +24,8 @@
     "coverage": "vitest run --coverage",
     "seed": "node scripts/seed-dev-data.mjs",
     "lint": "eslint packages/cli/src packages/shared/src packages/backend/src",
+    "typecheck": "tsc -p packages/shared/tsconfig.json",
+    "build": "npm run build:cli && npm run build:web",
     "lint:web": "npm --workspace=web run lint",
     "publish:cli": "npm run build:cli && npm publish ./packages/cli",
     "postinstall": "node scripts/bootstrap.js"

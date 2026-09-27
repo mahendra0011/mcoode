@@ -99,6 +99,11 @@ export async function genCommand(thing, name, { cwd = process.cwd(), dryRun = fa
     fail(`usage: mcode gen ${thing} <name> [--dry-run] [--force]`);
     process.exit(1);
   }
+  // CMD-012: names become path segments — reject traversal/separators.
+  if (/[/\\]|\.\.|^\.|\0/.test(name)) {
+    fail(`invalid name "${name}" — use a plain component/route name`);
+    process.exit(1);
+  }
   const target = gen.target(cwd, kebabToPascal(name));
   if (dryRun) {
     ok(`would generate ${target} (${gen.desc}) — no files written`);

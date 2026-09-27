@@ -64,9 +64,18 @@ export const DEFAULT_LAUNCH_JSON: LaunchJsonFormat = {
  */
 export function insertBreakpoints(code: string, lineNumbers: number[]): string {
   const lines = code.split("\n");
+  // 1206: track template-literal depth — inserting `debugger;` inside a
+  // multi-line template string would break its syntax at runtime.
+  let inTemplate = false;
+  const insideTemplate: boolean[] = lines.map((ln) => {
+    const was = inTemplate;
+    const ticks = (ln.match(/`+/g) || []).join("").length;
+    if (ticks % 2 === 1) inTemplate = !inTemplate;
+    return was;
+  });
   const sorted = [...lineNumbers].sort((a, b) => b - a);
   for (const lineNum of sorted) {
-    if (lineNum >= 1 && lineNum <= lines.length + 1) {
+    if (lineNum >= 1 && lineNum <= lines.length + 1 && !insideTemplate[lineNum - 1]) {
       lines.splice(lineNum - 1, 0, "debugger;");
     }
   }
@@ -203,7 +212,18 @@ export function RunDebugPanel({
       setWatchExpressions((prev) =>
         prev.map((item) => {
           try {
-            const val = win.eval(item.expr);
+            // Guard against parent window / credential leakage
+            if (/parent|top|document|cookie|localStorage|sessionStorage|fetch|XMLHttpRequest/i.test(item.expr)) {
+              return { ...item, result: '<blocked: access to sensitive globals>' };
+            }
+            const wrappedExpr = `(function() {
+              const window = undefined;
+              const document = undefined;
+              const parent = undefined;
+              const top = undefined;
+              return (${item.expr});
+            })()`;
+            const val = win.eval(wrappedExpr);
             return {
               ...item,
               result: typeof val === "object" ? JSON.stringify(val) : String(val),
@@ -274,11 +294,11 @@ export function RunDebugPanel({
     } catch (err: any) {
       onError(err.message || String(err));
     } finally {
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 50);
+      // 1208: remove synchronously — deferred removal piles up hidden
+      // iframes under rapid runs.
+      if (document.body.contains(iframe)) {
+        document.body.removeChild(iframe);
+      }
     }
   }
 
@@ -352,7 +372,7 @@ export function RunDebugPanel({
     socket.emit("project:run");
   }
 
-  function handleRun() {
+  async function handleRun() {
     let targetFilePath = activePath;
     let targetCode = activeContent;
 
@@ -361,9 +381,19 @@ export function RunDebugPanel({
       const cfg = launchConfig.configurations[selectedConfigIndex];
       if (cfg.program && cfg.program !== "${file}") {
         targetFilePath = cfg.program;
+        // 1209: fall back to a backend fetch when the file was never opened
+        // (cache miss ≠ missing file).
         targetCode = fileContentsCache[cfg.program] || "";
+        if (!targetCode && workspaceId) {
+          try {
+            const res = await api.get(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(cfg.program)}`);
+            targetCode = typeof res.data === "string" ? res.data : (res.data?.content ?? "");
+          } catch {
+            targetCode = "";
+          }
+        }
         if (!targetCode) {
-          toast.error(`Program file "${cfg.program}" not found in workspace cache.`);
+          toast.error(`Program file "${cfg.program}" not found in workspace.`);
           return;
         }
       }

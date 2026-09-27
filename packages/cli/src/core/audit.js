@@ -38,10 +38,10 @@ export function scoreRisk(operation, details = {}) {
 
   // File operations
   if (op === 'edit_file' || op === 'write_file') {
-    const path = String(details.path || '');
-    if (path.includes('package.json') || path.includes('tsconfig')) score = 4;
+    const path = String(details.path || '').toLowerCase();
+    if (path.includes('.env') || path.includes('dockerfile') || path.includes('.github/') || path.includes('.gitlab')) score = 8; // Critical/High
+    else if (path.includes('package.json') || path.includes('tsconfig') || path.includes('config') || path.includes('lock')) score = 6;
     else if (path.includes('src/') && path.endsWith('.js')) score = 3;
-    else if (path.includes('config') || path.includes('.env')) score = 6;
     else score = 2;
   }
   if (op === 'delete_file' || op === 'rm') score = 7;

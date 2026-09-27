@@ -77,7 +77,15 @@ export async function detectTechStack(projectPath) {
   if (pkg) {
     const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
     result.rawDeps = Object.keys(allDeps);
-    result.packageManager = pkg.packageManager?.includes('pnpm') ? 'pnpm' : pkg.packageManager?.includes('yarn') ? 'yarn' : 'npm';
+    // 722: lockfiles beat a missing packageManager field (and bun.lockb).
+    const { existsSync } = await import('node:fs');
+    if (pkg.packageManager?.includes('pnpm') || existsSync(join(projectPath, 'pnpm-lock.yaml'))) {
+      result.packageManager = 'pnpm';
+    } else if (pkg.packageManager?.includes('yarn') || existsSync(join(projectPath, 'yarn.lock'))) {
+      result.packageManager = 'yarn';
+    } else if (pkg.packageManager?.includes('bun') || existsSync(join(projectPath, 'bun.lockb')) || existsSync(join(projectPath, 'bun.lock'))) {
+      result.packageManager = 'bun';
+    }
   }
 
   // Read top-level files
@@ -148,8 +156,12 @@ async function _scanLanguages(root, depth = 0, maxDepth = 3) {
   } catch {
     return [...langs];
   }
+  // 723: skip dependency/build output dirs — otherwise every vendored
+  // language (Python, Go, C++) is falsely "detected" and I/O explodes.
+  const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', 'vendor', 'target', '.git']);
   for (const entry of entries) {
     if (entry.name.startsWith('.')) continue;
+    if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue;
     const full = join(root, entry.name);
     if (entry.isDirectory()) {
       const sub = await _scanLanguages(full, depth + 1, maxDepth);
@@ -177,10 +189,14 @@ export function smartDefaults(stack) {
   if (stack.buildTools.includes('Next.js')) defaults.devPort = 3000;
   if (stack.frontend.includes('Vue')) defaults.devPort = 5173;
 
-  if (stack.testFrameworks.includes('Vitest')) defaults.testCommand = 'npx vitest run';
-  if (stack.testFrameworks.includes('Jest')) defaults.testCommand = 'npx jest';
-  if (stack.testFrameworks.includes('Cypress')) defaults.testCommand = 'npx cypress run';
-  if (stack.testFrameworks.includes('Playwright')) defaults.testCommand = 'npx playwright test';
+  // 724: route through the project's own package manager — raw `npx` in a
+  // pnpm/yarn/bun workspace resolves the wrong tree (workspace: protocol).
+  const pm = stack.packageManager && stack.packageManager !== 'npm' ? stack.packageManager : 'npm';
+  const viaPm = (tool) => (pm === 'npm' ? `npx ${tool}` : `${pm} exec ${tool}`);
+  if (stack.testFrameworks.includes('Vitest')) defaults.testCommand = viaPm('vitest run');
+  if (stack.testFrameworks.includes('Jest')) defaults.testCommand = viaPm('jest');
+  if (stack.testFrameworks.includes('Cypress')) defaults.testCommand = viaPm('cypress run');
+  if (stack.testFrameworks.includes('Playwright')) defaults.testCommand = viaPm('playwright test');
 
   // Domain priority based on stack
   if (stack.databases.length > 0) defaults.domains.push('db');

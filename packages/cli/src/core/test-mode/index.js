@@ -39,7 +39,9 @@ export const TEST_TYPES = Object.freeze([
 /** Default safety target: local dev instances only. */
 export const DEFAULT_TARGET_URL = 'http://localhost:3000';
 
-const LOCAL_TARGET_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?/i;
+// 872: Docker/LAN dev hosts (host.docker.internal, *.local, RFC1918) are
+// local targets too — refusing them aborted legit container workflows.
+const LOCAL_TARGET_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0|host\.docker\.internal|[^/]*\.local|[^/]*\.localhost|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?/i;
 const STAGING_HINT_RE = /(staging|stage|test|qa|preview)\./i;
 
 /**

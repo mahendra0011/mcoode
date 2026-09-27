@@ -52,10 +52,8 @@ const COMMON_TECH_TYPOS = [
   [/\bmiddlewear\b/gi, 'middleware'],
   [/\bendpont\b/gi, 'endpoint'],
   [/\bendponts\b/gi, 'endpoints'],
-  [/\bfunctionality\b/gi, 'functionality'],
   [/\bimplment\b/gi, 'implement'],
   [/\bimplmentation\b/gi, 'implementation'],
-  [/\brefactor\b/gi, 'refactor'],
   [/\boptimze\b/gi, 'optimize'],
   [/\boptmize\b/gi, 'optimize'],
 ];
@@ -64,12 +62,15 @@ const COMMON_TECH_TYPOS = [
  * Perform local spelling/typo correction.
  */
 export function correctTypos(text = '') {
-  let result = text;
+  // SEC-028: bound input — 60 sequential regexes over megabytes of text
+  // would block the event loop; callers needing more should chunk.
+  let result = String(text || '').slice(0, 20000);
   const detectedCorrections = [];
 
   for (const [regex, replacement] of COMMON_TECH_TYPOS) {
-    if (regex.test(result)) {
-      result = result.replace(regex, replacement);
+    const next = result.replace(regex, replacement);
+    if (next !== result) {
+      result = next;
       detectedCorrections.push(replacement);
     }
   }

@@ -41,7 +41,21 @@ export async function godCommand({ prompt, yes, stack, deployTarget, noTests, co
       return confirm('approve plan and dispatch subagents?', { defaultYes: true });
     }
   });
-  if (!watchAfter) setTimeout(() => orchestrator.disconnect(), 500);
+  // 851: don't amputate the socket 500ms after the build — in-flight
+  // summary events would never reach the dashboard. Give the transport a
+  // bounded drain window, then disconnect (no-op when already offline).
+  if (!watchAfter) {
+    const sock = orchestrator.socket;
+    if (sock?.connected) {
+      await Promise.race([
+        new Promise((r) => {
+          const t = setTimeout(r, 2000);
+          t.unref?.();
+        }),
+      ]);
+    }
+    orchestrator.disconnect();
+  }
 
   if (!summary) return;
 
@@ -65,12 +79,15 @@ export async function godCommand({ prompt, yes, stack, deployTarget, noTests, co
     results: summary
   });
 
-  if (merged.clean?.autoDetectOnGodModeComplete) {
+  // 852: post-build clean stays out of non-interactive/JSON pipelines.
+  if (merged.clean?.autoDetectOnGodModeComplete && process.stdout.isTTY) {
     try {
       const { cleanCommand } = await import('./clean.js');
       info('\n[clean] running post-god-mode bloat & dead code detection...');
       await cleanCommand({ dryRun: true, thresholdLines: merged.clean?.bloatSizeThresholdLines || 30 });
-    } catch {}
+    } catch {
+      /* post-build clean is best-effort — never fail the god run for it */
+    }
   }
 
   if (watchAfter) {

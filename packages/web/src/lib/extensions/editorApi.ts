@@ -163,8 +163,9 @@ class EditorApiManager {
     };
   }
 
-  // Snippets
-  registerSnippets(language: string, snippets: MonacoSnippet[]) {
+  // Snippets. 746: providers are owner-tagged (extension id) so removing
+  // one pack disposes only its own providers — never a whole language.
+  registerSnippets(language: string, snippets: MonacoSnippet[], owner: string | null = null) {
     if (!this.monacoInstance?.languages?.registerCompletionItemProvider) return;
 
     try {
@@ -184,21 +185,38 @@ class EditorApiManager {
       });
 
       const current = this.snippetDisposables.get(language) || [];
-      current.push(provider);
+      current.push({ owner, dispose: () => provider.dispose?.() });
       this.snippetDisposables.set(language, current);
     } catch (e) {
       console.warn(`Failed to register snippets for ${language}:`, e);
     }
   }
 
-  unregisterSnippets(language?: string) {
+  unregisterSnippets(language?: string, owner?: string) {
+    const dropMatching = (list: Array<{ owner: string | null; dispose: () => void }>) => {
+      const kept: typeof list = [];
+      for (const entry of list) {
+        if (owner === undefined || entry.owner === owner) {
+          try { entry.dispose(); } catch { /* already disposed */ }
+        } else {
+          kept.push(entry);
+        }
+      }
+      return kept;
+    };
     if (language) {
-      const disposables = this.snippetDisposables.get(language) || [];
-      disposables.forEach((d) => d.dispose?.());
-      this.snippetDisposables.delete(language);
+      const rest = dropMatching(this.snippetDisposables.get(language) || []);
+      if (rest.length) this.snippetDisposables.set(language, rest);
+      else this.snippetDisposables.delete(language);
+    } else if (owner !== undefined) {
+      for (const [lang, list] of this.snippetDisposables) {
+        const rest = dropMatching(list);
+        if (rest.length) this.snippetDisposables.set(lang, rest);
+        else this.snippetDisposables.delete(lang);
+      }
     } else {
       this.snippetDisposables.forEach((disposables) => {
-        disposables.forEach((d) => d.dispose?.());
+        disposables.forEach((d) => { try { d.dispose(); } catch { /* already disposed */ } });
       });
       this.snippetDisposables.clear();
     }

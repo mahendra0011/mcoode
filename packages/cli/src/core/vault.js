@@ -1,21 +1,72 @@
 import { hostname, userInfo } from 'node:os';
 import { scryptSync, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 import { readFile, writeFile, chmod, rename } from 'node:fs/promises';
+import { readFileSync, existsSync } from 'node:fs';
 import { VAULT_PATH, ensureDirs } from './store.js';
 
 /**
  * Encrypted secrets vault ("secrets stay local").
- * AES-256-GCM; key derived via scrypt from a machine-bound passphrase
- * (hostname+user) plus a random per-vault salt stored in the file header.
- * No plaintext keys are ever written to disk.
+ * AES-256-GCM; key derived via scrypt from machine identity (machine-id when
+ * available, hostname+user fallback) plus a user master secret
+ * (MCODE_VAULT_PASSWORD env or per-call passphrase) plus a random per-vault
+ * salt stored in the file header. No plaintext keys are ever written to disk.
+ *
+ * SEC-003: hostname+username alone is guessable, so the key now mixes in a
+ * machine-unique id and WARNS when no master secret is configured.
  */
 const MAGIC = 'MCODEV2:';
 const SALT_LEN = 16;
 const IV_LEN = 12;
 const TAG_LEN = 16;
 
+let _machineIdCache = null;
+let _noMasterWarned = false;
+
+export function getMachineId() {
+  if (_machineIdCache !== null) return _machineIdCache;
+  for (const p of ['/etc/machine-id', '/var/lib/dbus/machine-id']) {
+    try {
+      if (existsSync(p)) {
+        const v = readFileSync(p, 'utf8').trim();
+        if (v) { _machineIdCache = v; return v; }
+      }
+    } catch { /* try next */ }
+  }
+  _machineIdCache = '';
+  return '';
+}
+
+function warnNoMasterSecret() {
+  if (_noMasterWarned) return;
+  _noMasterWarned = true;
+  process.stderr.write(
+    '[vault] WARNING: no master secret set (MCODE_VAULT_PASSWORD is empty and no passphrase given). ' +
+    'Vault key relies on machine identity only — set MCODE_VAULT_PASSWORD for real protection.\n'
+  );
+}
+
 function machinePassword(passphrase = '') {
-  return `mcode-vault-v2:${hostname()}:${userInfo().username}:${passphrase}`;
+  const masterSecret = process.env.MCODE_VAULT_PASSWORD || '';
+  if (!masterSecret && !passphrase) warnNoMasterSecret();
+  const machineId = getMachineId();
+  const machinePart = machineId || `${hostname()}:${userInfo().username}`;
+  return `mcode-vault-v2:${machinePart}:${hostname()}:${userInfo().username}:${masterSecret}:${passphrase}`;
+}
+
+/** Best-effort OS keychain lookup (macOS Keychain / Windows Credential Manager
+ *  via optional `keytar`). Returns stored secret or null. Never throws.
+ *  Usage: MCODE_VAULT_PASSWORD=$(keychain lookup) or
+ *  `const kc = await getKeychainMaster(); await loadVault(kc || '')`.
+ *  The `keytar` package is optional — install it to enable OS-keychain mode. */
+export async function keychainGet(account = 'mcode-vault-master') {
+  try {
+    const mod = await import('keytar').catch(() => null);
+    const keytar = mod?.default || mod;
+    if (!keytar?.getPassword) return null;
+    return await keytar.getPassword('mcode', account).catch(() => null);
+  } catch {
+    return null;
+  }
 }
 
 function legacyKey(passphrase = '') {

@@ -2,17 +2,23 @@
  *  Each entry is a regex matching the secret; the matched secret value
  *  (or capture group) is replaced with the redaction marker. */
 const SECRET_PATTERNS = [
-  // OpenAI / Claude API keys: sk-..., sk-proj-...
+  // OpenAI / Claude API keys: sk-..., sk-proj-..., sk-ant-...
   /\bsk-[A-Za-z0-9-_]{20,}/g,
   /\bsk-proj-[A-Za-z0-9-_]{20,}/g,
+  /\bsk-ant-[A-Za-z0-9-_]{20,}/g,
+  // Google API keys (AIza...) + OAuth tokens (ya29.)
+  /\bAIza[0-9A-Za-z-_]{35}\b/g,
+  /\bya29\.[A-Za-z0-9-_]{20,}/g,
   // GitHub tokens: ghp_, gho_, ghs_, ghu_
   /\bg[ghps]p?_?[A-Za-z0-9]{36}/g,
   // AWS access keys: AKIA...
   /\bAKIA[A-Z0-9]{16}/g,
   // Slack tokens: xox[bpoa]-...
   /\bxox[bpoa]-[A-Za-z0-9-]{10,}/g,
-  // Bearer tokens
-  /Bearer\s+[A-Za-z0-9._-]+/gi,
+  // Azure access keys
+  /\b[A-Za-z0-9+/]{86}==\b/g,
+  // Bearer tokens (min length — skips "Bearer abc" doc noise)
+  /Bearer\s+[A-Za-z0-9._-]{8,}/gi,
   // URL-embedded credentials: scheme://user:pass@host (pass may contain @)
   /(https?:\/\/)([^:]+):(.+)@([^/@\s]+)/gi,
   // Common env-style assignments
@@ -61,8 +67,17 @@ export function isNetworkAllowed(url, whitelist) {
     const parsed = new URL(url);
     const host = parsed.hostname;
     for (const entry of whitelist) {
-      // Support glob patterns like *.example.com
-      const pattern = entry.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+      // Support glob patterns like *.example.com.
+      // SEC-011: bound the translation — overlong entries or wildcard
+      // storms degrade to a plain suffix match instead of a ReDoS-prone
+      // `.*` chain.
+      const src = String(entry);
+      if (src.length > 100 || (src.match(/\*/g) || []).length > 3) {
+        const suffix = src.split('*').pop().toLowerCase();
+        if (suffix && (host.toLowerCase() === suffix || host.toLowerCase().endsWith(`.${suffix}`))) return true;
+        continue;
+      }
+      const pattern = src.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^.]*');
       if (new RegExp(`^${pattern}$`).test(host)) return true;
     }
     return false;

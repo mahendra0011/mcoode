@@ -1,0 +1,41 @@
+#!/bin/sh
+# mcode pre-commit hook — blocks accidental secret commits (SEC-001/SEC-002).
+# Installed by `node scripts/install-hooks.mjs` (also run from postinstall).
+# Blocks: .env, *.pem, *.key, and files containing likely live secrets.
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
+
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+BLOCKED_PATTERN='(^|/)\.env(\..+)?$|\.pem$|\.key$|\.pfx$|\.cert$'
+
+# .env.example files are placeholders by design — never block them.
+FILTERED=$(echo "$STAGED" | grep -Ev '(^|/)\.env\.example$' || true)
+
+echo "$FILTERED" | grep -Ei "$BLOCKED_PATTERN" >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+  echo "❌ [mcode] Commit blocked: staged files match secret patterns (.env / *.pem / *.key)." >&2
+  echo "$FILTERED" | grep -Ei "$BLOCKED_PATTERN" >&2
+  echo "" >&2
+  echo "  Only .env.example (placeholders) may be committed." >&2
+  echo "  Unstage with: git reset HEAD -- <file>" >&2
+  echo "  Bypass ONLY for rotation chores: git commit --no-verify" >&2
+  exit 1
+fi
+
+# Heuristic: staged .example files must not contain live-looking secrets
+# (e.g. pasted Atlas URI or sk- keys). Keep cheap — grep only.
+echo "$STAGED" | grep -Ei '\.env\.example$' >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+  LEAK=$(git diff --cached -- '*.env.example' 2>/dev/null | grep -Ei 'mongodb(\+srv)?://[^ ]+:[^ @]+@|sk-(ant|proj)-[A-Za-z0-9]|xox[bpoa]-|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}' | head -5)
+  if [ -n "$LEAK" ]; then
+    echo "❌ [mcode] Commit blocked: .env.example appears to contain a LIVE secret." >&2
+    echo "$LEAK" | cut -c1-80 >&2
+    echo "  Replace with placeholders before committing." >&2
+    exit 1
+  fi
+fi
+
+exit 0

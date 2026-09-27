@@ -257,6 +257,14 @@ export function AIChatPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // WEB-012: phones start with the side panel collapsed so the editor
+  // gets full width (expandable anytime via the sidebar toggle).
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 767px)').matches) {
+      useIDEStore.getState().setSidebarOpen(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'AI Code Editor') {
       useIDEStore.getState().setSecondarySideBarVisible(true);
@@ -344,17 +352,10 @@ export function AIChatPage() {
   const [cleanNetRemoved, setCleanNetRemoved] = useState(0);
   const [cleanStatusMessage, setCleanStatusMessage] = useState('');
 
-  // Auth guard — get token from localStorage (or URL params for dev)
+  // Auth guard — get token from localStorage
   const getTokens = () => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const accessParam = params.get('access');
-      const refreshParam = params.get('refresh');
-      if (accessParam && refreshParam) {
-        const tokens = { access: accessParam, refresh: refreshParam };
-        localStorage.setItem('mcode_tokens', JSON.stringify(tokens));
-        return tokens;
-      }
+      if (typeof window === 'undefined') return {};
       return JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
     } catch {
       return {};
@@ -374,7 +375,10 @@ export function AIChatPage() {
 
   useEffect(() => {
     if (!token) return;
-    api.get('/api/v1/sessions', { timeout: 15000 })
+    // 020: abort in-flight fetch on unmount so rapid project switches can't
+    // let a stale response overwrite the active session list.
+    const ctrl = new AbortController();
+    api.get('/api/v1/sessions', { timeout: 15000, signal: ctrl.signal })
       .then(res => res.data)
       .then(data => {
         if (data && data.items) {
@@ -388,10 +392,13 @@ export function AIChatPage() {
         }
       })
       .catch(err => {
+        // Aborts on unmount are expected — don't log them as errors.
+        if ((err as any)?.code === 'ERR_CANCELED') return;
         if ((err as any)?.response?.status !== 401) {
           console.error('Error fetching chats:', err);
         }
       });
+    return () => ctrl.abort();
   }, [activeWorkspaceId, isHistoryOpen, token]);
 
   const deleteChat = async (id: string, e: React.MouseEvent<HTMLElement>) => {
@@ -552,7 +559,14 @@ export function AIChatPage() {
     }));
 
     try {
-      const res = await api.post('/api/v1/clean/scan', { projectPath: '.' });
+      // BUG-19-02: never fall back to '.' (backend cwd) — require a workspace.
+      const targetPath = activeWorkspaceId ? (workspaces.find((w: any) => w._id === activeWorkspaceId)?.path || activeWorkspaceId) : '';
+      if (!targetPath) {
+        showToast('Open a workspace first — Clean Mode needs a target project', 'error');
+        setIsCleanScanning(false);
+        return;
+      }
+      const res = await api.post('/api/v1/clean/scan', { projectPath: targetPath });
       if (!res?.data?.ok) {
         throw new Error(res?.data?.error || 'Clean scan failed');
       }
@@ -569,7 +583,7 @@ export function AIChatPage() {
     } finally {
       setIsCleanScanning(false);
     }
-  }, [dispatch, showToast]);
+  }, [dispatch, showToast, activeWorkspaceId, workspaces]);
 
   const handleCleanSelected = useCallback(async (selectedIds: string[]) => {
     setIsCleaningItems(true);
@@ -579,8 +593,14 @@ export function AIChatPage() {
       const selectedFindings = (cleanReportData || []).filter((f: any) => selectedIds.includes(f.id));
 
       setCleanStatusMessage(`cleaning ${selectedFindings.length} items with equivalence verification...`);
+      const targetPath = activeWorkspaceId ? (workspaces.find((w: any) => w._id === activeWorkspaceId)?.path || activeWorkspaceId) : '';
+      if (!targetPath) {
+        showToast('Open a workspace first — Clean Mode needs a target project', 'error');
+        setIsCleaningItems(false);
+        return;
+      }
       const res = await api.post('/api/v1/clean/execute', {
-        projectPath: '.',
+        projectPath: targetPath,
         selectedFindings,
       });
 
@@ -699,8 +719,19 @@ export function AIChatPage() {
       }
     }
 
+    // BUG-19-03: cap client-side before building the multipart body
+    // (200 files / 200MB total — the server enforces the same limits).
+    const MAX_ATTACH_FILES = 200;
+    const MAX_ATTACH_BYTES = 200 * 1024 * 1024;
+    const picked = Array.from(files).slice(0, MAX_ATTACH_FILES);
+    const pickedBytes = picked.reduce((n: number, f: any) => n + (f.size || 0), 0);
+    if (files.length > MAX_ATTACH_FILES || pickedBytes > MAX_ATTACH_BYTES) {
+      showToast(`Too much to attach (max ${MAX_ATTACH_FILES} files / 200MB) — select fewer files`, 'error');
+      setIsUploading(false);
+      return;
+    }
     const formData = new FormData();
-    for (const file of files) {
+    for (const file of picked) {
       formData.append('files', file);
     }
 
@@ -903,10 +934,11 @@ export function AIChatPage() {
     // One silent retry after a short pause covers this without bothering the user;
     // if the second attempt also has no server to talk to, we surface the real error.
     const postWorkspace = (wsName: string) => {
+      const safeName = wsName.replace(/[^a-zA-Z0-9_\-\.]/g, '_').replace(/^(\.\.(\/|\\|$))+/, '');
       const fd = new FormData();
-      fd.append('name', wsName);
+      fd.append('name', safeName);
       fd.append('source', 'zip');
-      fd.append('zipfile', new File([zipBlob], `${wsName}.zip`, { type: 'application/zip' }));
+      fd.append('zipfile', new File([zipBlob], `${safeName}.zip`, { type: 'application/zip' }));
       return api.post('/api/v1/workspaces', fd, {
         timeout: WORKSPACE_UPLOAD_TIMEOUT_MS,
         onUploadProgress: (evt: any) => {
@@ -1006,7 +1038,9 @@ export function AIChatPage() {
 
     const firstFile = files[0];
     const rawPath = firstFile.webkitRelativePath || firstFile.name;
-    const folderName = rawPath.includes('/') ? rawPath.split('/')[0] : 'Uploaded-Folder';
+    // SEC-19-04: sanitize the folder-derived workspace/zip name — a crafted
+    // name like '../../payload' must never reach the backend as an identifier.
+    const folderName = (rawPath.includes('/') ? rawPath.split('/')[0] : 'Uploaded-Folder').replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 80) || 'Uploaded-Folder';
 
     setUploadProgressText(`Scanning folder '${folderName}'...`);
     showToast(`Scanning '${folderName}'...`, 'info');
@@ -2689,7 +2723,7 @@ export function AIChatPage() {
                       />
                     )}
                     {activeActivityBar === 'search' && (
-                      <SearchPanel />
+                      <SearchPanel workspaceId={activeWorkspaceId} />
                     )}
                     {activeActivityBar === 'source-control' && (
                       <SourceControlPanel />

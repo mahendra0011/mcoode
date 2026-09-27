@@ -40,7 +40,7 @@ export async function apiKeyAddCommand() {
     const isLive = await provider.testKey('');
     if (!isLive) {
       console.log(pc.red(`✗ Cannot reach local provider at ${provider.baseUrl}. Ensure it's running.`));
-      process.exit(1);
+      return;
     }
     console.log(pc.green(`✓ Local provider reachable`));
     return pickModels(provider);
@@ -66,7 +66,8 @@ async function promptForKey(provider) {
   }
 
   const secrets = await loadVault();
-  await saveVault({ ...secrets, [provider.envVar]: key });
+  const envKey = provider.envVar || `${provider.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+  await saveVault({ ...secrets, [envKey]: key });
   // Update provider's key in memory for listModels
   provider.apiKey = key;
   console.log(pc.green(`  ✓ ${provider.displayName} connected\n`));
@@ -132,8 +133,12 @@ async function assignRoles(provider, modelIds) {
   const config = await loadConfig();
   config.roles = config.roles || {};
 
-  const prefix = provider.id + '/';
-  const fullModelIds = modelIds.map(id => (id.includes('/') ? id : `${prefix}${id}`));
+  // 684: canonical refs are `provider:model` (colon). Normalize legacy
+  // slash refs so router.find() resolves them.
+  const fullModelIds = modelIds.map((id) => {
+    const norm = String(id).replace('/', ':');
+    return norm.includes(':') ? norm : `${provider.id}:${norm}`;
+  });
 
   for (const role of assign) {
     config.roles[role] = config.roles[role] || { preferredModels: [] };

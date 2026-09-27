@@ -32,17 +32,25 @@ export class OpenAICompatible extends HttpProvider {
       
       const hardcoded = new Map(this.models.map(m => [m.id, m]));
       const fallbackScores = { planning: 70, frontend: 70, backend: 70, db: 70, devops: 70, test: 70, docs: 70, bugfix: 70 };
-      
+
       return (body.data || []).map((m) => {
         if (hardcoded.has(m.id)) return hardcoded.get(m.id);
-        
+
+        // OAI-002: OpenRouter-style pricing is per-token (tiny fractions),
+        // but some gateways quote per-1K already — only scale up sub-unit
+        // values to avoid 1000x cost inflation.
+        const scale = (v) => {
+          const n = Number(v);
+          if (!Number.isFinite(n)) return undefined;
+          return n > 0.1 ? n : n * 1000;
+        };
         return {
           id: m.id,
           name: m.id,
           free: false,
           scores: fallbackScores,
-          costPer1kIn: m.pricing?.prompt ? Number(m.pricing.prompt) * 1000 : undefined,
-          costPer1kOut: m.pricing?.completion ? Number(m.pricing.completion) * 1000 : undefined
+          costPer1kIn: scale(m.pricing?.prompt),
+          costPer1kOut: scale(m.pricing?.completion)
         };
       });
     } catch {
@@ -60,10 +68,10 @@ export class OpenAICompatible extends HttpProvider {
         return false;
       }
     }
+    // OAI-001: probe reports liveness only — it must not permanently
+    // replace the curated static catalog with whatever the API returns.
     const filtered = await this.listModels();
-    if (filtered.length === 0) return false;
-    this.models = filtered;
-    return true;
+    return filtered.length > 0;
   }
 
   async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
@@ -85,6 +93,10 @@ export class OpenAICompatible extends HttpProvider {
       throw new Error(`${this.id} error ${res.status}: ${detail.slice(0, 400)}`);
     }
     const body = await res.json();
+    // OAI-004: empty choices array is a failure, not an empty string.
+    if (!Array.isArray(body.choices) || body.choices.length === 0) {
+      throw new Error(`${this.id} error: empty choices array for model ${model}`);
+    }
     const choice = body.choices?.[0];
     return {
       text: choice?.message?.content || '',
@@ -117,14 +129,24 @@ export class OpenAICompatible extends HttpProvider {
     if (!res.ok) {
       throw new Error(`${this.id} stream error ${res.status}`);
     }
+    // OAI-003: track malformed chunks — an all-garbage stream throws
+    // instead of completing silently with zero output.
+    let yielded = 0;
+    let malformed = 0;
     for await (const payload of streamSSE(res)) {
       try {
         const json = JSON.parse(payload);
         const delta = json.choices?.[0]?.delta?.content;
-        if (delta) yield delta;
+        if (delta) {
+          yielded++;
+          yield delta;
+        }
       } catch {
-        /* ignore malformed chunk */
+        malformed++;
       }
+    }
+    if (yielded === 0 && malformed > 0) {
+      throw new Error(`${this.id} stream error: ${malformed} malformed chunk(s), no usable deltas`);
     }
   }
 }

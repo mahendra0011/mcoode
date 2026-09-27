@@ -15,7 +15,10 @@ const S2C = SOCKET.SERVER_TO_CLIENT;
 const SIMPLE_PROMPT_RE = /^(hi\b|hello\b|hey\b|thanks?\b|ok(ay)?\b|yes\b|no\b|yep\b|nope\b|lol\b|undo\b|clear\b|help\b|new chat\b|stop\b|cancel\b|exit\b|restart\b|run tests?\b|build\b)/i;
 
 /** Keywords that trigger automatic web search in chat mode (like Claude/Perplexity). */
-const AUTO_SEARCH_RE = /\b(search|web\s*search|google|browse|internet|find|best|top\s*\d*|price|prices?|cost|under|cheapest|latest|current|new|news|review|tutorial|how to|where to|deal|discount|vs\b|comparison|who is|who was|who are|list of|presidents?|ministers?|capital of|when was|when did|history of|tell me about|what happened|today|weather|stocks?|score|results?)\b/i;
+// 044: tightened — bare words like "best", "cost", "review", "new" or
+// "find" fired searches for plain coding questions ("best way to sort").
+// Only explicit research signals trigger now.
+const AUTO_SEARCH_RE = /\b(web\s*search|google|browse|internet|prices?|cheapest|latest|current|news|tutorial|how to|where to|deal|discount|vs\b|comparison|who is|who was|who are|capital of|when was|when did|history of|tell me about|what happened|today|weather|stocks?|top\s+\d+)\b/i;
 
 /**
  * Determine whether a prompt warrants the planning step.
@@ -527,9 +530,10 @@ export class ChatSession {
       requireEditApproval: true,
       domain: isExplain ? 'chat' : (this.config.domain || 'chat'),
       mode,
-      // Send the FULL conversation on every turn (Claude-style: no memory
-      // between messages — the whole history goes into context fresh).
-      historyLimit: 0,
+      // Claude-style: the whole history goes into context fresh — but
+      // 046: bounded to the last 100 messages so marathon sessions can't
+      // blow past model context limits (400s on overflow).
+      historyLimit: 100,
       // Chat-style behavior: no filler greetings, answer directly.
       extraRules: isExplain
         ? `Explain code clearly to someone new to this codebase. Be concrete — reference actual function/file names, walk through the logic step by step where helpful, and explain WHY something is designed a certain way when it's not obvious, not just WHAT it does. No code changes, no opinions on quality — pure explanation.`
@@ -713,6 +717,8 @@ export class ChatSession {
   /** Clean up resources. */
   cleanup() {
     this.interrupt();
+    // 043: detach any bus listeners before dropping the reference.
+    try { this.bus?.removeAllListeners?.(); } catch { /* already gone */ }
     this.bus = null;
     this.chatAgent = null;
     this.running = false;

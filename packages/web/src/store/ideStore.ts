@@ -396,7 +396,9 @@ export const useIDEStore = create<IDEState>()(
       path = ext.startsWith(".") ? `main_${counter}${ext}` : `${ext}_${counter}`;
       counter++;
     }
-    const boilerplate = lang?.defaultBoilerplate || "";
+    // 1226: normalize to LF so created files don't trigger CRLF warnings
+    // on Windows checkouts (git autocrlf handles the rest).
+    const boilerplate = (lang?.defaultBoilerplate || "").replace(/\r\n/g, "\n");
     set((s) => ({
       openFiles: [...s.openFiles, path],
       activePath: path,
@@ -583,7 +585,8 @@ export const useIDEStore = create<IDEState>()(
   terminalInstances: [{ id: "term-1", name: "bash" }],
   activeTerminalId: "term-1",
   addTerminalInstance: (name = "bash") => {
-    const id = `term-${Date.now().toString(36)}`;
+    // 019: random suffix — same-ms rapid adds can no longer collide.
+    const id = `term-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     set((s) => ({
       terminalInstances: [...s.terminalInstances, { id, name }],
       activeTerminalId: id,
@@ -653,10 +656,23 @@ export const useIDEStore = create<IDEState>()(
     }),
     {
       name: 'mcode-ide-settings',
-      storage: createJSONStorage(() => localStorage),
+      // 009: quota-safe storage — a full localStorage must skip persistence,
+      // never throw QuotaExceededError into the app.
+      storage: createJSONStorage(() => ({
+        getItem: (k: string) => {
+          try { return localStorage.getItem(k); } catch { return null; }
+        },
+        setItem: (k: string, v: string) => {
+          try { localStorage.setItem(k, v); } catch { /* quota full — skip */ }
+        },
+        removeItem: (k: string) => {
+          try { localStorage.removeItem(k); } catch { /* ignore */ }
+        },
+      })),
       // Persist user preferences and open editor tabs across reloads
       partialize: (state) => ({
         activeTab: state.activeTab,
+        isSidebarOpen: state.isSidebarOpen,
         openFiles: state.openFiles,
         activePath: state.activePath,
         wordWrap: state.wordWrap,

@@ -16,7 +16,14 @@ export async function changedFiles(cwd = process.cwd()) {
   return stdout
     .split('\n')
     .filter(Boolean)
-    .map((line) => line.slice(3).trim())
+    .map((line) => {
+      let f = line.slice(3).trim();
+      if (f.includes(' -> ')) {
+        const parts = f.split(' -> ');
+        f = parts[parts.length - 1].trim();
+      }
+      return f;
+    })
     .filter((f) => f && !f.endsWith('/'));
 }
 
@@ -58,10 +65,12 @@ export async function repoRoot(cwd = process.cwd()) {
 }
 
 /** Read the dependency imports of a JS file (via acorn-compatible regex) so
- *  the watch daemon can build a quick import graph without a full parser dep. */
+ *  the watch daemon can build a quick import graph without a full parser dep.
+ *  GIT-002: also matches dynamic import() (`await import('./x')`,
+ *  `import('./x').then(...)`). */
 export function extractImports(source) {
   const imports = new Set();
-  const re = /(?:import\s+(?:[^'"]*?\s+from\s+)?|from\s+|require\s*\()\s*['"]([^'"]+)['"]/g;
+  const re = /(?:import\s+(?:[^'"]*?\s+from\s+)?|from\s+|require\s*\(|import\s*\()\s*['"]([^'"]+)['"]/g;
   let m;
   while ((m = re.exec(source)) !== null) imports.add(m[1]);
   return [...imports];
@@ -76,7 +85,13 @@ export async function walkTree(root, { ignore = [], maxDepth = 12 } = {}) {
       if (pattern.startsWith('!')) return false;
       const norm = pattern.replace(/\\/g, '/').replace(/\/$/, '');
       if (norm.includes('*')) {
-        const re = new RegExp(`^${norm.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}($|/)`);
+        // GIT-003: same ReDoS guard as the watch daemon — no `.*` chains,
+        // overlong/pathological patterns degrade to a suffix check.
+        if (norm.length > 200 || (norm.match(/\*/g) || []).length > 5) {
+          const suffix = norm.split('*').pop();
+          return suffix ? rel.endsWith(suffix) : false;
+        }
+        const re = new RegExp(`^${norm.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')}($|/)`);
         return re.test(rel);
       }
       return rel === norm || rel.startsWith(`${norm}/`) || rel.includes(`/${norm}/`);

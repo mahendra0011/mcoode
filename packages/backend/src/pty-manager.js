@@ -71,9 +71,12 @@ export function writeToPty(socketId, id, data) {
 
 export function resizePty(socketId, id, cols, rows) {
   const ptyProcess = sessions.get(socketId)?.get(id);
-  if (ptyProcess && cols > 0 && rows > 0) {
+  // 1056: clamp dimensions — negative/huge values crash node-pty.
+  const c = Math.min(500, Math.max(10, Number(cols) || 80));
+  const r = Math.min(200, Math.max(5, Number(rows) || 24));
+  if (ptyProcess) {
     try {
-      ptyProcess.resize(cols, rows);
+      ptyProcess.resize(c, r);
     } catch {}
   }
 }

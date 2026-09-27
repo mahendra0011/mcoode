@@ -1,0 +1,21 @@
+# BLD-002: CI — install, lint, unit tests, web typecheck.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint --if-present
+      - run: npm run typecheck --if-present
+      - run: npx vitest run
+      - run: npm --workspace=web run typecheck --if-present

@@ -42,8 +42,8 @@ const EXEC_MAP = {
   cjs:    { run: ['node', '{file}'] },
 
   // ── 3. TypeScript ──────────────────────────────────
-  ts:     { run: ['npx', '--yes', 'tsx', '{file}'] },
-  tsx:    { run: ['npx', '--yes', 'tsx', '{file}'] },
+  ts:     { run: ['npx', '--yes', 'tsx', '{file}'], localBin: 'tsx' },
+  tsx:    { run: ['npx', '--yes', 'tsx', '{file}'], localBin: 'tsx' },
 
   // ── 4. Java (Java 11+ runs .java directly) ────────
   java:   { run: ['java', '{file}'] },
@@ -264,12 +264,24 @@ function resolveArgs(args, vars) {
   );
 }
 
+const SENSITIVE_ENV_PATTERN = /(key|secret|token|password|auth|jwt|credential|conn|db_|database|mongo|redis)/i;
+
+function getSafeRunnerEnv(customEnv = {}) {
+  const safe = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (!SENSITIVE_ENV_PATTERN.test(k)) {
+      safe[k] = v;
+    }
+  }
+  return { ...safe, ...customEnv };
+}
+
 /**
  * Run a subprocess and capture stdout + stderr with timeout.
  * @returns {Promise<{ stdout: string, stderr: string, exitCode: number | null }>}
  */
 function runProcess(cmd, args, options = {}) {
-  const { timeout = RUN_TIMEOUT, cwd, stdin } = options;
+  const { timeout = RUN_TIMEOUT, cwd, stdin, env = {} } = options;
 
   return new Promise((resolve) => {
     let stdout = '';
@@ -280,7 +292,7 @@ function runProcess(cmd, args, options = {}) {
       cwd,
       timeout,
       shell: false,
-      env: { ...process.env },
+      env: getSafeRunnerEnv(env),
       stdio: ['pipe', 'pipe', 'pipe'],
       // Windows-specific: don't open a console window for each process
       windowsHide: true,
@@ -296,9 +308,16 @@ function runProcess(cmd, args, options = {}) {
       child.stdin.end();
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       killed = true;
-      try { child.kill('SIGKILL'); } catch {}
+      // 1032: tree-kill (taskkill on Windows) — bare SIGKILL orphans
+      // interpreter sub-threads on Windows.
+      try {
+        const { killTree } = await import('./kill-tree.js');
+        killTree(child, 'SIGKILL');
+      } catch {
+        try { child.kill('SIGKILL'); } catch {}
+      }
     }, timeout);
 
     child.on('error', (err) => {
@@ -376,11 +395,21 @@ export async function runOnHost(filename, code, stdin = '') {
     // ── Run step ───────────────────────────────────────────────
     const runArgs = resolveArgs(strategy.run, vars);
     const [runCmd, ...runRest] = runArgs;
-    const result = await runProcess(runCmd, runRest, {
-      timeout: RUN_TIMEOUT,
-      cwd: tmpDir,
-      stdin,
-    });
+    const runOpts = { timeout: RUN_TIMEOUT, cwd: tmpDir, stdin };
+    let result;
+    // 1029: prefer the binary straight off PATH (local/global install)
+    // instead of paying npx's 2-4s registry/cache round-trip every run.
+    if (strategy.localBin && runCmd === 'npx') {
+      const directArgs = runRest.filter((a) => a !== '--yes');
+      const bin = directArgs.shift();
+      result = await runProcess(bin, directArgs, runOpts);
+      const missing = result.exitCode === 1 && /Is '.*' installed/.test(result.stderr);
+      if (missing) {
+        result = await runProcess(runCmd, runRest, runOpts);
+      }
+    } else {
+      result = await runProcess(runCmd, runRest, runOpts);
+    }
 
     return {
       stdout: result.stdout,
@@ -391,8 +420,12 @@ export async function runOnHost(filename, code, stdin = '') {
 
   } finally {
     // ── Cleanup temp directory ──────────────────────────────────
+    // 1033: retry once after a short delay — AV/file locks often clear
+    // within a second; only then give up silently.
     if (tmpDir) {
-      rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      rm(tmpDir, { recursive: true, force: true }).catch(() => {
+        setTimeout(() => rm(tmpDir, { recursive: true, force: true }).catch(() => {}), 2000).unref?.();
+      });
     }
   }
 }

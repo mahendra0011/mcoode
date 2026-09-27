@@ -37,8 +37,14 @@ function extractOutline(code: string, filePath = ""): OutlineSymbol[] {
   const symbols: OutlineSymbol[] = [];
   const lines = code.split("\n");
   const ext = filePath.split(".").pop()?.toLowerCase() || "";
+  // 1205: track triple-quoted string state so `def`/`class` inside Python
+  // docstrings (or JS template literals) don't become phantom symbols.
+  let inTripleString = false;
 
   lines.forEach((line, idx) => {
+    const tripleTicks = (line.match(/""\"|'''/g) || []).length;
+    if ((ext === "py" && tripleTicks % 2 === 1)) inTripleString = !inTripleString;
+    if (inTripleString && ext === "py") return;
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("#") && ext !== "md" && ext !== "markdown") {
       // In python, check if it's a comment or code

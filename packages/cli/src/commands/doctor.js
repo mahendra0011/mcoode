@@ -26,14 +26,25 @@ export async function doctorCommand({ asJson = false } = {}) {
   }
 
   const providers = await getProviders({ secrets, config });
-  for (const provider of providers) {
-    const avail = await provider.isAvailable();
-    const models = avail ? await provider.listModels() : [];
-    rows.push([
-      `provider:${provider.id}`,
-      avail ? `ready (${models.length} models)` : 'unavailable',
-      avail ? 'ok' : 'warn'
-    ]);
+  const providerChecks = await Promise.allSettled(
+    providers.map(async (provider) => {
+      const avail = await provider.isAvailable();
+      const models = avail ? await provider.listModels() : [];
+      return [
+        `provider:${provider.id}`,
+        avail ? `ready (${models.length} models)` : 'unavailable',
+        avail ? 'ok' : 'warn'
+      ];
+    })
+  );
+
+  for (let i = 0; i < providers.length; i++) {
+    const res = providerChecks[i];
+    if (res.status === 'fulfilled') {
+      rows.push(res.value);
+    } else {
+      rows.push([`provider:${providers[i].id}`, 'error checking', 'warn']);
+    }
   }
 
   if (asJson) {

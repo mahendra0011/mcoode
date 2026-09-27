@@ -69,10 +69,14 @@ export function usageRoutes({ secret }) {
   });
 
   // GET /api/v1/usage/stats — Aggregated usage statistics for the Settings usage tab
+  // USG-001: bound the result set instead of loading every session ever.
   router.get('/stats', async (req, res, next) => {
     try {
       const { from, to } = req.query;
-      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 });
+      const USAGE_SESSION_CAP = 5000;
+      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 }, { limit: USAGE_SESSION_CAP + 1 });
+      const truncated = sessions.length > USAGE_SESSION_CAP;
+      if (truncated) sessions.length = USAGE_SESSION_CAP;
       const range = sessions.filter((s) => {
         const d = new Date(s.createdAt || 0);
         if (from && d < new Date(from)) return false;
@@ -177,6 +181,7 @@ export function usageRoutes({ secret }) {
 
       res.json({
         ok: true,
+        truncated,
         stats: {
           totalSessions: range.length,
           completedSessions,
@@ -203,8 +208,20 @@ export function usageRoutes({ secret }) {
 
   router.get('/report.pdf', async (req, res, next) => {
     try {
-      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 });
+      // USG-001/USG-002/SEC-035: bounded fetch + configurable page size
+      // (?limit=, 1-200). Abort generation if the client goes away so a
+      // slow/dead socket doesn't keep rendering into a closed stream.
+      const pdfLimit = Math.min(200, Math.max(1, Number(req.query.limit) || 30));
+      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 }, { limit: pdfLimit });
+      const totalAll = await db().session.countDocuments
+        ? await db().session.countDocuments({ userId: req.userId }).catch(() => sessions.length)
+        : sessions.length;
       const doc = new PDFDocument({ margin: 48 });
+      req.on('close', () => {
+        if (!res.writableEnded) {
+          try { doc.destroy(); } catch { /* already finished */ }
+        }
+      });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'attachment; filename="mcode-usage-report.pdf"');
       doc.pipe(res);
@@ -214,9 +231,9 @@ export function usageRoutes({ secret }) {
       doc.fontSize(11).fillColor('#555').text(`Generated ${new Date().toISOString()}`, { align: 'center' });
       doc.moveDown(2);
 
-      doc.fontSize(13).fillColor('#0d1117').text('Sessions');
+      doc.fontSize(13).fillColor('#0d1117').text(`Sessions (showing ${sessions.length} of ${totalAll})`);
       doc.moveDown(0.5);
-      sessions.slice(0, 30).forEach((s, i) => {
+      sessions.forEach((s, i) => {
         doc.fontSize(9).fillColor('#333').text(
           `${i + 1}. ${s.projectName || 'unnamed'}  ·  ${s.mode}  ·  ${s.status}  ·  ${new Date(s.createdAt || Date.now()).toISOString().slice(0, 16)}`
         );
@@ -234,6 +251,23 @@ export function usageRoutes({ secret }) {
       doc.fontSize(10).fillColor('#333').text(`Completed: ${completedSessions}  ·  Failed: ${failedSessions}`);
       doc.fontSize(10).fillColor(successRate >= 80 ? '#1a7f37' : successRate >= 50 ? '#b58900' : '#cb2431').text(`Success rate: ${successRate}%`);
       doc.fontSize(10).fillColor('#333').text(`Compliance status: ${successRate >= 50 ? 'compliant' : 'needs_review'}`);
+      // Model usage breakdown (from session plans).
+      const modelCounts = {};
+      for (const s of sessions) {
+        for (const t of s.plan?.todos || []) {
+          const m = t.assignedModel || 'unknown';
+          modelCounts[m] = (modelCounts[m] || 0) + 1;
+        }
+      }
+      const topModels = Object.entries(modelCounts).sort(([, a], [, b]) => b - a).slice(0, 10);
+      if (topModels.length > 0) {
+        doc.moveDown();
+        doc.fontSize(13).fillColor('#0d1117').text('Model usage');
+        doc.moveDown(0.5);
+        for (const [m, c] of topModels) {
+          doc.fontSize(10).fillColor('#333').text(`${m}: ${c} todo(s)`);
+        }
+      }
       doc.end();
     } catch (err) {
       next(err);
@@ -242,15 +276,17 @@ export function usageRoutes({ secret }) {
 
   router.get('/export.csv', async (req, res, next) => {
     try {
-      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 });
+      const sessions = await db().session.find({ userId: req.userId }, { createdAt: -1 }, { limit: 5001 });
       const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const lines = ['date,project,mode,status'];
+      // USG-003: quote the header exactly like data rows so parsers align.
+      const lines = [['date', 'project', 'mode', 'status', 'cost_usd'].map(esc).join(',')];
       for (const s of sessions) {
         lines.push([
           new Date(s.createdAt || 0).toISOString().slice(0, 10),
           esc(s.projectName || 'unnamed'),
           esc(s.mode || ''),
           esc(s.status || ''),
+          esc(s.results?.cost ?? s.cost ?? ''),
         ].join(','));
       }
       res.setHeader('Content-Type', 'text/csv');

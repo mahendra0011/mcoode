@@ -1,6 +1,12 @@
 import { listHistory } from './history.js';
 import { cache } from './cache.js';
 
+/** 725: call after a build finishes so /analytics never serves a stale
+ *  60s snapshot right when fresh numbers matter most. */
+export function invalidateAnalytics() {
+  cache.del('analytics');
+}
+
 /** Aggregate build metrics from persisted session history.
  * Results are cached for 60s to avoid re-reading all history files. */
 export async function computeAnalytics() {
@@ -19,12 +25,18 @@ export async function computeAnalytics() {
   const modelUsage = new Map();
   const dailyBuilds = new Map();
 
+  // 726: sanitize money math — a malformed "$0.05" string would NaN-poison
+  // every downstream total.
+  const num = (v) => {
+    const n = typeof v === 'string' && v.trim().startsWith('$') ? Number(v.trim().slice(1)) : Number(v || 0);
+    return Number.isFinite(n) ? n : 0;
+  };
   for (const entry of builds) {
     totalBuilds++;
     const data = entry.results || entry;
     const duration = data.elapsedSecs || 0;
     totalDuration += duration;
-    totalCost += Number(data.cost || 0);
+    totalCost += num(data.cost);
     totalTodos += data.total || 0;
     doneTodos += data.done || 0;
     failedTodos += data.failed || 0;
@@ -40,7 +52,7 @@ export async function computeAnalytics() {
     }
     const ps = projectStats.get(projName);
     ps.builds++;
-    ps.cost += Number(data.cost || 0);
+    ps.cost += num(data.cost);
     ps.lastBuild = entry.completedAt || entry.startedAt;
 
     // Model usage
@@ -58,14 +70,15 @@ export async function computeAnalytics() {
     const day = new Date(entry.startedAt || Date.now()).toISOString().slice(0, 10);
     const dayEntry = dailyBuilds.get(day) || { builds: 0, cost: 0, duration: 0 };
     dayEntry.builds++;
-    dayEntry.cost += Number(data.cost || 0);
+    dayEntry.cost += num(data.cost);
     dayEntry.duration += duration;
     dailyBuilds.set(day, dayEntry);
   }
 
   const avgBuildTime = totalBuilds > 0 ? Math.round(totalDuration / totalBuilds) : 0;
   const successRate = totalBuilds > 0 ? Math.round((successfulBuilds / totalBuilds) * 100) : 0;
-  const todoSuccessRate = totalTodos > 0 ? Math.round((doneTodos / totalTodos) * 100) : 0;
+  // 728: with zero todos, 0% is a lie — fall back to the build-level rate.
+  const todoSuccessRate = totalTodos > 0 ? Math.round((doneTodos / totalTodos) * 100) : successRate;
 
   // Sort model usage by count descending
   const topModels = [...modelUsage.entries()]
@@ -100,7 +113,7 @@ export async function computeAnalytics() {
         startedAt,
         completedAt,
         duration: data.elapsedSecs || 0,
-        cost: Number(data.cost || 0),
+        cost: num(data.cost),
         total: data.total || 0,
         done: data.done || 0,
         failed: data.failed || 0,
@@ -154,13 +167,15 @@ export async function computeAnalytics() {
     .slice(0, 10)
     .map(([pattern, stat]) => ({ pattern, count: stat.count, domains: [...stat.domains] }));
 
-  // Project health score: composite of success rate, todo rate, cost efficiency
+  // Project health score: composite of success rate, todo rate, cost efficiency.
+  // ANA-003: clamp both ends — ruinous average cost must floor at 0, not
+  // drag the score negative.
   const healthScore = totalBuilds > 0
-    ? Math.round(
+    ? Math.max(0, Math.min(100, Math.round(
       (successRate * 0.4) +
       (todoSuccessRate * 0.4) +
       (Math.min(100, 100 - (totalCost / Math.max(1, totalBuilds))) * 0.2)
-    )
+    )))
     : 0;
 
   // Throughput: builds per day

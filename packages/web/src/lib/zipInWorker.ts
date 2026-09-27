@@ -36,22 +36,32 @@ export async function zipFilesOffMainThread(
       type: 'module',
     });
 
-    worker.onmessage = (e: MessageEvent<{ type: string; percent?: number; blob?: Blob; message?: string }>) => {
-      const { type, percent, blob, message } = e.data;
+    // 750: watchdog — a throttled/hung worker must reject instead of
+    // spinning the upload modal forever.
+    const watchdog = setTimeout(() => {
+      worker.terminate();
+      reject(new Error('Zip worker timed out after 5 minutes — try a smaller folder'));
+    }, 5 * 60 * 1000);
+    const settle = (fn: () => void) => {
+      clearTimeout(watchdog);
+      worker.terminate();
+      fn();
+    };
+
+    worker.onmessage = (e: MessageEvent<{ type: string; percent?: number; blob?: Blob; buf?: Uint8Array; message?: string }>) => {
+      const { type, percent, blob, buf, message } = e.data;
       if (type === 'progress' && typeof percent === 'number') {
         onProgress?.(percent);
-      } else if (type === 'done' && blob) {
-        worker.terminate();
-        resolve(blob);
+      } else if (type === 'done' && (buf || blob)) {
+        const out = buf ? new Blob([buf as BlobPart], { type: 'application/zip' }) : (blob as Blob);
+        settle(() => resolve(out));
       } else if (type === 'error') {
-        worker.terminate();
-        reject(new Error(message || 'Zip worker failed'));
+        settle(() => reject(new Error(message || 'Zip worker failed')));
       }
     };
 
     worker.onerror = (err) => {
-      worker.terminate();
-      reject(err instanceof ErrorEvent ? new Error(err.message) : err);
+      settle(() => reject(err instanceof ErrorEvent ? new Error(err.message) : err));
     };
 
     worker.postMessage({ files: entries });

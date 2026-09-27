@@ -7,9 +7,10 @@ let base;
 
 beforeAll(async () => {
   process.env.MCODE_BCRYPT_ROUNDS = process.env.MCODE_BCRYPT_ROUNDS || '4';
+  process.env.MCODE_DEV_OTP = '1'; // AUTH-007: explicit opt-in for dev OTP echo
   server = await startServer({
     port: 0,
-    env: { ...process.env, MONGODB_URI: '', REDIS_URI: '', BREVO_API_KEY: '', NODE_ENV: 'test' }
+    env: { ...process.env, MONGODB_URI: '', REDIS_URI: '', BREVO_API_KEY: '', NODE_ENV: 'test', MCODE_DEV_OTP: '1' }
   });
   base = `http://127.0.0.1:${server.httpServer.address().port}`;
 });
@@ -64,7 +65,7 @@ describe('refresh rotation (BUG-31)', () => {
 
   it('resets a password via OTP and revokes sessions', async () => {    const email = 'rot4@user.dev';
     await signup(email);
-    const sent = await request(base).post('/api/v1/auth/send-otp').send({ email, intent: 'login' });
+    const sent = await request(base).post('/api/v1/auth/send-otp').send({ email, intent: 'reset' });
     expect(sent.status).toBe(200);
     const bad = await request(base).post('/api/v1/auth/reset-password').send({ email, otp: '000000', password: 'newsecret123' });
     expect(bad.status).toBe(401);

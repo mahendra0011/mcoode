@@ -52,22 +52,20 @@ mcode                                   # REPL with /god, /bugfix, /plan, /undo�
 | --- | --- |
 | `mcode` | Interactive TUI session (OpenTUI; `/god`, `/bugfix`, `/agents`, `/connect`, `/models`, `/init`, `/hooks`, `/help`, `/exit`, …) |
 | `mcode init [name] --template <t>` | Scaffold from `express`, `fastify`, `react-vite`, `full-stack` templates |
-| `mcode god "<prompt>" [--yes] [--model <ref>] [--verbose] [--watch-after]` | God Mode: plan → parallel subagents → integration pass |
+| `mcode god "<prompt>" [--auto-approve] [--model <ref>] [--verbose] [--watch-after]` | God Mode: plan → parallel subagents → integration pass |
 | `mcode run <script>` · `mcode test [--types unit,integration] [--target <url>]` | Run scripts / autonomous self-healing test agent |
 | `mcode env add\|remove\|list KEY [value]` | Encrypted secrets vault; `--plain` for CI `.env` |
 | `mcode connect [--provider <id> --key <k>]` | Connect a provider (wizard, or flags for CI) |
 | `mcode add <plugin>` | Install registry plugins (eslint, prettier, deploy-*) |
-| `mcode ship [--env prod]` | Build + verify + tag + deploy hook (targets below) |
+| `mcode ship [--env prod]` | Build + verify + tag + deploy hook (targets: netlify, vercel, docker, railway, flyio, cloudflare-pages, gh-pages) |
 | `mcode model list\|show\|set <domain> <provider:model>` | Inspect / pin the model catalog |
-
-Deploy targets (`ship` stage 4/4): `netlify`, `vercel`, `docker` (local build),
-`railway`, `flyio`, `cloudflare-pages`, `gh-pages` run locally; `render` and
-`aws-ecs` are git-push / manual-config flows and print guidance instead of deploying.
 | `mcode watch [--background]` · `watch-stop` · `watch-status` | Scan + auto-fix daemon |
 | `mcode serve [-p 3100]` | Local backend (Express + Socket.IO) for the dashboard (monorepo; global installs print a fallback hint) |
-| `mcode doctor` | Full environment diagnosis (Node 26.4+, config, vault, providers) |
+| `mcode doctor` | Full environment diagnosis (Node 20+, TUI needs 26.4+, config, vault, providers) |
 | `mcode history [--clear]` | Session history files |
 | `mcode security-check` · `audit [--pdf]` · `review` · `explain` · `migrate` · `clean` | Power commands: security scan, health audit, diff review, walkthrough, migration, dead-code clean |
+
+Deploy targets (`ship` stage 4/4): `netlify`, `vercel`, `docker` (local build), `railway`, `flyio`, `cloudflare-pages`, `gh-pages` run locally; `render` and `aws-ecs` are git-push / manual-config flows and print guidance instead of deploying.
 
 Global flags: `--json`, `--non-interactive`. `god` flags: `--model <ref>`, `--verbose`,
 `--concurrency <n>`, `--watch-after`.
@@ -97,7 +95,7 @@ mcode god "build a full-stack todo app with auth, postgres and a react dashboard
 
 ## Providers
 
-100+ adapters built in — auto-detected by the presence of their env key
+7 provider adapters supporting 100+ models via OpenRouter, Groq, Ollama, and direct APIs — auto-detected by the presence of their env key
 (top: OpenRouter, OpenCode Zen, OpenAI, Anthropic, Gemini, Groq, Together,
 Mistral, DeepSeek, xAI, Fireworks, Perplexity, Cerebras, Novita, HuggingFace,
 Qwen, Moonshot, Poolside, Ollama (local), LM Studio (local), **mock**).

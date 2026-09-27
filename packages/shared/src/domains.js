@@ -8,7 +8,8 @@ export const TASK_DOMAINS = Object.freeze([
   'docs',
   'bugfix',
   'reviewer',
-  'migration'
+  'migration',
+  'chat'
 ]);
 
 /** Hex colors shared 1:1 between terminal UI and web app. */
@@ -22,7 +23,8 @@ export const DOMAIN_COLORS = Object.freeze({
   docs: '#4ade80',
   bugfix: '#ff6b6b',
   reviewer: '#38bdf8',
-  migration: '#f59e0b'
+  migration: '#f59e0b',
+  chat: '#38bdf8'
 });
 
 export const DOMAIN_TAGS = Object.freeze({
@@ -35,16 +37,16 @@ export const DOMAIN_TAGS = Object.freeze({
   docs: 'docs',
   bugfix: 'bugfix',
   reviewer: 'reviewer',
-  migration: 'migration'
+  migration: 'migration',
+  chat: 'chat'
 });
 
 /** Aliases for task types used by callers that predate the domain list.
- *  `router.pick('general'|'build'|'chat')` now resolves deterministically
+ *  `router.pick('general'|'build')` now resolves deterministically
  *  instead of depending on CLI fallback behavior. */
 export const DOMAIN_ALIASES = Object.freeze({
   general: 'backend',
-  build: 'backend',
-  chat: 'planning',
+  build: 'backend'
 });
 
 export function resolveDomain(domain) {
@@ -115,6 +117,12 @@ export const DEFAULT_ROUTING = Object.freeze({
     'anthropic:claude-sonnet-5',
     'openai:gpt-5.5',
     'deepseek:deepseek-v4-pro',
+    'mock:mock'
+  ],
+  chat: [
+    'openai:gpt-5.6-luna',
+    'anthropic:claude-sonnet-5',
+    'deepseek:deepseek-v4-flash-0731',
     'mock:mock'
   ]
 });

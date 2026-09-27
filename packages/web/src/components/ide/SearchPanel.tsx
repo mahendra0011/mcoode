@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { useIDEStore } from "../../store/ideStore";
+import api from "../../lib/axios";
 import { toast } from "sonner";
 import {
   ContextMenu,
@@ -45,10 +46,16 @@ function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// 1210: reject catastrophic-backtracking constructs (nested quantifiers
+// like (a+)+$) and overlong patterns before compiling — a frozen tab helps
+// nobody. Returns null (no matcher) for dangerous input.
+const CATASTROPHIC_RE = /(\([^()]*[+*][^()]*\)[+*]|\{\d+,\}[+*?])/;
 function buildMatcher(query: string, options: SearchOptions): RegExp | null {
   if (!query) return null;
   try {
     let pattern = options.useRegex ? query : escapeRegex(query);
+    if (pattern.length > 200) return null;
+    if (options.useRegex && CATASTROPHIC_RE.test(pattern)) return null;
     if (options.wholeWord) pattern = `\\b${pattern}\\b`;
     return new RegExp(pattern, options.matchCase ? "g" : "gi");
   } catch {
@@ -56,7 +63,11 @@ function buildMatcher(query: string, options: SearchOptions): RegExp | null {
   }
 }
 
-export function SearchPanel() {
+export interface SearchPanelProps {
+  workspaceId?: string | null;
+}
+
+export function SearchPanel({ workspaceId }: SearchPanelProps = {}) {
   const [query, setQuery] = useState("");
   const [replaceText, setReplaceText] = useState("");
   const [showReplace, setShowReplace] = useState(true);
@@ -85,11 +96,14 @@ export function SearchPanel() {
   }, [query]);
 
   const [refreshCount, setRefreshCount] = useState(0);
+  const [backendMatches, setBackendMatches] = useState<SearchResult[]>([]);
+  const [isSearchingBackend, setIsSearchingBackend] = useState(false);
 
   const fileContentsCache = useIDEStore((s) => s.fileContentsCache);
   const addOpenFile = useIDEStore((s) => s.addOpenFile);
   const setTargetJump = useIDEStore((s) => s.setTargetJump);
   const setFileContent = useIDEStore((s) => s.setFileContent);
+  const setSavedContent = useIDEStore((s) => s.setSavedContent);
   const recordTimeline = useIDEStore((s) => s.recordTimeline);
   const globalSearchQuery = useIDEStore((s) => s.searchQuery);
 
@@ -103,7 +117,49 @@ export function SearchPanel() {
     setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Search across files with include/exclude filters (debounced 300ms)
+  // Search across workspace via backend endpoint when workspaceId is present
+  useEffect(() => {
+    const q = debouncedQuery.trim();
+    if (!q || !workspaceId) {
+      setBackendMatches([]);
+      setIsSearchingBackend(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsSearchingBackend(true);
+
+    api
+      .get(`/api/v1/workspaces/${workspaceId}/search`, {
+        params: {
+          q,
+          matchCase: options.matchCase,
+          wholeWord: options.wholeWord,
+          useRegex: options.useRegex,
+          include: includeFilter,
+          exclude: excludeFilter,
+        },
+      })
+      .then((res) => {
+        if (isMounted) {
+          setBackendMatches(Array.isArray(res.data?.results) ? res.data.results : []);
+        }
+      })
+      .catch((err) => {
+        console.error("Backend search failed:", err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsSearchingBackend(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [debouncedQuery, workspaceId, options, includeFilter, excludeFilter, refreshCount]);
+
+  // Search across in-memory open files and merge with disk results
   const results = useMemo(() => {
     const q = debouncedQuery.trim();
     if (!q) return [];
@@ -117,6 +173,8 @@ export function SearchPanel() {
     const excludes = excludeFilter
       ? excludeFilter.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
       : [];
+
+    const cachedPaths = new Set(Object.keys(fileContentsCache));
 
     for (const [path, content] of Object.entries(fileContentsCache)) {
       if (!content) continue;
@@ -149,9 +207,15 @@ export function SearchPanel() {
       });
     }
 
+    // Add backend matches for files not currently modified in memory cache
+    backendMatches.forEach((bm) => {
+      if (!cachedPaths.has(bm.path)) {
+        matches.push(bm);
+      }
+    });
+
     return matches.filter((m) => !dismissedMatches[`${m.path}:${m.line}:${m.matchStart}`]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, options, includeFilter, excludeFilter, fileContentsCache, refreshCount, dismissedMatches]);
+  }, [debouncedQuery, options, includeFilter, excludeFilter, fileContentsCache, backendMatches, dismissedMatches]);
 
   // Group by file path
   const grouped = useMemo(() => {
@@ -182,7 +246,7 @@ export function SearchPanel() {
     setTargetJump({ path, line });
   };
 
-  const handleReplaceAll = useCallback(() => {
+  const handleReplaceAll = useCallback(async () => {
     if (!query || results.length === 0) return;
     const matcher = buildMatcher(query, options);
     if (!matcher) return;
@@ -190,9 +254,20 @@ export function SearchPanel() {
     let totalReplacements = 0;
     let filesModified = 0;
 
-    Object.entries(grouped).forEach(([path, matches]) => {
-      const original = fileContentsCache[path];
-      if (!original) return;
+    for (const [path, matches] of Object.entries(grouped)) {
+      let original: string | undefined = fileContentsCache[path];
+
+      // If file not in cache, fetch it from workspace disk before replacing
+      if (original === undefined && workspaceId) {
+        try {
+          const res = await api.get(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`);
+          original = typeof res.data === "string" ? res.data : (res.data?.content ?? "");
+        } catch {
+          original = undefined;
+        }
+      }
+
+      if (original === undefined) continue;
 
       const replaced = original.replace(matcher, (match) => {
         totalReplacements++;
@@ -209,16 +284,23 @@ export function SearchPanel() {
       if (replaced !== original) {
         filesModified++;
         setFileContent(path, replaced);
+        setSavedContent(path, replaced);
         recordTimeline(path, `Replaced ${matches.length} occurrences`, replaced);
+
+        if (workspaceId) {
+          api
+            .put(`/api/v1/workspaces/${workspaceId}/file?path=${encodeURIComponent(path)}`, { content: replaced })
+            .catch((err) => console.error(`Failed to persist replace in ${path}:`, err));
+        }
       }
-    });
+    }
 
     toast.success(
       `Replaced ${totalReplacements} occurrence${totalReplacements === 1 ? "" : "s"} across ${filesModified} file${
         filesModified === 1 ? "" : "s"
       }`
     );
-  }, [query, replaceText, options, grouped, fileContentsCache, setFileContent, recordTimeline, results.length]);
+  }, [query, replaceText, options, grouped, fileContentsCache, workspaceId, setFileContent, setSavedContent, recordTimeline, results.length]);
 
   const handleOpenSearchEditor = () => {
     const reportPath = `Search: ${query || "results"}.txt`;
@@ -430,6 +512,9 @@ export function SearchPanel() {
           {results.length} {results.length === 1 ? "result" : "results"} in {Object.keys(grouped).length}{" "}
           {Object.keys(grouped).length === 1 ? "file" : "files"}
         </span>
+        {isSearchingBackend && (
+          <span className="text-[10px] text-blue-400 animate-pulse">Searching disk...</span>
+        )}
       </div>
 
       {/* Results Tree List */}

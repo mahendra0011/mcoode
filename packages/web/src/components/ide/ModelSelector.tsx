@@ -135,6 +135,9 @@ export function ModelSelector({ compact = false, onAuthRequired, onManageModels 
       <div className="relative" ref={dropdownRef}>
         <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
           type="button"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label={`Select AI model, current: ${selectedLabel}`}
           onClick={() => setOpen(!open)}
           className={`rounded-[10px] flex items-center gap-2 transition text-[13px] font-medium backdrop-blur-md ${
             compact
@@ -173,6 +176,8 @@ export function ModelSelector({ compact = false, onAuthRequired, onManageModels 
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 5 }}
               transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+              role="menu"
+              aria-label="Available AI models"
               className={`absolute ${compact ? 'bottom-full right-0' : 'bottom-full left-0'} mb-2 w-52 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 py-1.5`}
               onMouseLeave={() => setHoveredProvider(null)}
             >

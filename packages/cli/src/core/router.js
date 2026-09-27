@@ -44,14 +44,14 @@ export const MODE_REASONING = Object.freeze({
  * Historical scores persist in ~/.mcode/scores/{projectId}/model-scores.json
  */
 const STATIC_BENCHMARK = {
-  'anthropic:claude-3-5-sonnet':  { frontend: 0.88, backend: 0.91, db: 0.85, test: 0.87, bugfix: 0.90, planning: 0.92, docs: 0.80, devops: 0.83, reviewer: 0.90, migration: 0.91 },
-  'anthropic:claude-3-5-haiku':   { frontend: 0.75, backend: 0.80, db: 0.75, test: 0.82, bugfix: 0.78, planning: 0.70, docs: 0.75, devops: 0.72, reviewer: 0.76, migration: 0.78 },
-  'openai:gpt-4o':                { frontend: 0.92, backend: 0.88, db: 0.83, test: 0.91, bugfix: 0.86, planning: 0.85, docs: 0.88, devops: 0.85, reviewer: 0.85, migration: 0.88 },
-  'openai:gpt-4o-mini':           { frontend: 0.80, backend: 0.82, db: 0.78, test: 0.85, bugfix: 0.80, planning: 0.75, docs: 0.82, devops: 0.80, reviewer: 0.78, migration: 0.79 },
-  'google:gemini-2.0-flash':      { frontend: 0.85, backend: 0.89, db: 0.81, test: 0.88, bugfix: 0.83, planning: 0.80, docs: 0.84, devops: 0.89, reviewer: 0.82, migration: 0.83 },
-  'google:gemini-2.0-flash-thinking': { frontend: 0.88, backend: 0.92, db: 0.85, test: 0.90, bugfix: 0.88, planning: 0.85, docs: 0.80, devops: 0.87, reviewer: 0.86, migration: 0.89 },
-  'deepseek:deepseek-v4-flash':   { frontend: 0.82, backend: 0.88, db: 0.80, test: 0.85, bugfix: 0.88, planning: 0.78, docs: 0.75, devops: 0.80, reviewer: 0.80, migration: 0.82 },
-  'mock:default':                 { frontend: 0.5, backend: 0.5, db: 0.5, test: 0.5, bugfix: 0.5, planning: 0.5, docs: 0.5, devops: 0.5, reviewer: 0.5, migration: 0.5 }
+  'anthropic:claude-3-5-sonnet':  { frontend: 0.88, backend: 0.91, db: 0.85, test: 0.87, bugfix: 0.90, planning: 0.92, docs: 0.80, devops: 0.83, reviewer: 0.90, migration: 0.91, chat: 0.93 },
+  'anthropic:claude-3-5-haiku':   { frontend: 0.75, backend: 0.80, db: 0.75, test: 0.82, bugfix: 0.78, planning: 0.70, docs: 0.75, devops: 0.72, reviewer: 0.76, migration: 0.78, chat: 0.82 },
+  'openai:gpt-4o':                { frontend: 0.92, backend: 0.88, db: 0.83, test: 0.91, bugfix: 0.86, planning: 0.85, docs: 0.88, devops: 0.85, reviewer: 0.85, migration: 0.88, chat: 0.94 },
+  'openai:gpt-4o-mini':           { frontend: 0.80, backend: 0.82, db: 0.78, test: 0.85, bugfix: 0.80, planning: 0.75, docs: 0.82, devops: 0.80, reviewer: 0.78, migration: 0.79, chat: 0.85 },
+  'google:gemini-2.0-flash':      { frontend: 0.85, backend: 0.89, db: 0.81, test: 0.88, bugfix: 0.83, planning: 0.80, docs: 0.84, devops: 0.89, reviewer: 0.82, migration: 0.83, chat: 0.88 },
+  'google:gemini-2.0-flash-thinking': { frontend: 0.88, backend: 0.92, db: 0.85, test: 0.90, bugfix: 0.88, planning: 0.85, docs: 0.80, devops: 0.87, reviewer: 0.86, migration: 0.89, chat: 0.89 },
+  'deepseek:deepseek-v4-flash':   { frontend: 0.82, backend: 0.88, db: 0.80, test: 0.85, bugfix: 0.88, planning: 0.78, docs: 0.75, devops: 0.80, reviewer: 0.80, migration: 0.82, chat: 0.86 },
+  'mock:default':                 { frontend: 0.5, backend: 0.5, db: 0.5, test: 0.5, bugfix: 0.5, planning: 0.5, docs: 0.5, devops: 0.5, reviewer: 0.5, migration: 0.5, chat: 0.5 }
 };
 
 /**
@@ -260,7 +260,8 @@ export class ModelRouter {
   constructor({ secrets = null, config = null, ledger = null, providers = null, projectId = 'default' } = {}) {
     this.secrets = secrets;
     this.config = config;
-    this.ledger = ledger || new CostLedger();
+    const defaultLedgerPath = join(homedir(), '.mcode', 'ledger.json');
+    this.ledger = ledger || new CostLedger({ filePath: defaultLedgerPath });
     this.providers = providers;
     this.mode = MODES.includes(config?.mode) ? config.mode : 'medium';
     this.scorer = new ModelScorer(projectId);
@@ -281,10 +282,49 @@ export class ModelRouter {
   async _init() {
     if (!this.secrets) this.secrets = await loadVault();
     if (!this.config) this.config = await loadConfig();
+    // RTR-005: refresh remote score overrides (best-effort, never blocks).
+    if (this.config?.modelScoresUrl && !this._remoteScoresStarted) {
+      this._remoteScoresStarted = true;
+      const { refreshRemoteScores } = await import('../providers/index.js').catch(() => ({}));
+      refreshRemoteScores?.(this.config.modelScoresUrl)?.catch(() => {});
+    }
     if (!this.providers) this.providers = await getProviders({ secrets: this.secrets, config: this.config });
     if (!this._scorerInitialized) {
       await this.scorer.init();
       this._scorerInitialized = true;
+    }
+    if (this.ledger && typeof this.ledger.load === 'function' && !this._ledgerLoaded) {
+      await this.ledger.load();
+      this._ledgerLoaded = true;
+    }
+    this._startLedgerAutosave();
+  }
+
+  /** RTR-003: persist RPM/TPM usage so rate-limit tracking survives restarts.
+   *  Saves every 30s (unref'd — never keeps the process alive) plus a
+   *  best-effort flush on graceful shutdown signals. */
+  _startLedgerAutosave() {
+    if (this._ledgerAutosave || !this.ledger || typeof this.ledger.save !== 'function') return;
+    const save = () => this.ledger.save().catch(() => {});
+    this._ledgerAutosave = setInterval(save, 30_000);
+    this._ledgerAutosave.unref?.();
+    if (!ModelRouter._shutdownHookInstalled) {
+      ModelRouter._shutdownHookInstalled = true;
+      const flush = () => { try { save(); } catch { /* best-effort */ } };
+      process.once('beforeExit', flush);
+      process.once('SIGINT', () => { flush(); });
+      process.once('SIGTERM', () => { flush(); });
+    }
+  }
+
+  /** Stop the ledger autosave timer (e.g. in tests). Flushes once. */
+  async stopLedgerAutosave() {
+    if (this._ledgerAutosave) {
+      clearInterval(this._ledgerAutosave);
+      this._ledgerAutosave = null;
+    }
+    if (this.ledger && typeof this.ledger.save === 'function') {
+      await this.ledger.save().catch(() => {});
     }
   }
 

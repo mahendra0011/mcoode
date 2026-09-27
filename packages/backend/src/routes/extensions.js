@@ -93,6 +93,20 @@ function saveRegistry(list) {
   }
 }
 
+// EXT-003: serialize registry read-modify-write so concurrent installs can't
+// clobber each other's entries (last-writer-wins on a stale read).
+let registryChain = Promise.resolve();
+function updateRegistry(mutator) {
+  const run = registryChain.then(() => {
+    const list = readRegistry();
+    const next = mutator(list) || list;
+    saveRegistry(next);
+    return next;
+  });
+  registryChain = run.catch(() => {});
+  return run;
+}
+
 /**
  * Converts VS Code theme JSON into Monaco Editor defineTheme format
  */
@@ -186,13 +200,13 @@ export function extensionRoutes({ secret } = {}) {
     try {
       const { id, version, downloadUrl } = req.body;
       if (!id || typeof id !== 'string' || !/^[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+$/.test(id)) {
-        return res.status(400).json({ error: 'Extension id is required (e.g. "publisher.name")' });
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'Extension id is required (e.g. "publisher.name")' } });
       }
       if (downloadUrl !== undefined) {
         try {
           const u = new URL(String(downloadUrl));
           const host = u.hostname.toLowerCase();
-          if (!host.endsWith('open-vsx.org') && !host.endsWith('openvsx.org')) {
+          if (host !== 'open-vsx.org' && host !== 'openvsx.org' && !host.endsWith('.open-vsx.org') && !host.endsWith('.openvsx.org')) {
             return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'downloadUrl must be an Open VSX URL' } });
           }
         } catch {
@@ -202,7 +216,7 @@ export function extensionRoutes({ secret } = {}) {
 
       const parts = id.split('.');
       if (parts.length < 2) {
-        return res.status(400).json({ error: 'Invalid extension ID format. Expected "namespace.name"' });
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'Invalid extension ID format. Expected "namespace.name"' } });
       }
 
       const [publisher, name] = parts;
@@ -229,9 +243,19 @@ export function extensionRoutes({ secret } = {}) {
       console.log(`[extensions] Downloading from: ${targetDownloadUrl}`);
 
       // 2. Download .vsix binary
+      // EXT-004: bound download size (100MB) — arraybuffer holds it in RAM.
+      const headLength = await axios.head(targetDownloadUrl, { timeout: 10000 }).then(
+        (r) => Number(r.headers?.['content-length'] || 0),
+        () => 0
+      );
+      if (headLength > 100_000_000) {
+        return res.status(413).json({ error: { code: 'FILE_TOO_LARGE', message: 'Extension package exceeds the 100MB download limit' } });
+      }
       const downloadResponse = await axios.get(targetDownloadUrl, {
         responseType: 'arraybuffer',
         timeout: 30000,
+        maxContentLength: 100_000_000,
+        maxBodyLength: 100_000_000,
       });
 
       const buffer = Buffer.from(downloadResponse.data);
@@ -241,11 +265,13 @@ export function extensionRoutes({ secret } = {}) {
       const extTargetDir = path.join(INSTALLED_DIR, id);
 
       // Clean old directory if exists
+      const { rm, mkdir, writeFile, readFile } = await import('node:fs/promises');
       if (fs.existsSync(extTargetDir)) {
-        fs.rmSync(extTargetDir, { recursive: true, force: true });
+        await rm(extTargetDir, { recursive: true, force: true });
       }
-      fs.mkdirSync(extTargetDir, { recursive: true });
+      await mkdir(extTargetDir, { recursive: true });
 
+      // EXT-002: async writes — a 500-file extension must not block the loop.
       for (const file of directory.files) {
         if (file.type === 'Directory' || !file.path.startsWith('extension/')) continue;
         const relPath = file.path.replace(/^extension\//, '');
@@ -253,16 +279,16 @@ export function extensionRoutes({ secret } = {}) {
         const resolvedPath = path.resolve(extTargetDir, relPath);
         if (!resolvedPath.startsWith(extTargetDir)) continue;
 
-        fs.mkdirSync(path.dirname(resolvedPath), { recursive: true });
+        await mkdir(path.dirname(resolvedPath), { recursive: true });
         const fileContent = await file.buffer();
-        fs.writeFileSync(resolvedPath, fileContent);
+        await writeFile(resolvedPath, fileContent);
       }
 
       // 4. Parse extension package.json
       const pkgJsonPath = path.join(extTargetDir, 'package.json');
       let pkg = {};
       if (fs.existsSync(pkgJsonPath)) {
-        pkg = parseJsonc(fs.readFileSync(pkgJsonPath, 'utf-8'));
+        pkg = parseJsonc(await readFile(pkgJsonPath, 'utf-8'));
       }
 
       const contributes = pkg.contributes || {};
@@ -276,7 +302,7 @@ export function extensionRoutes({ secret } = {}) {
           if (themeRelPath) {
             const themeFullPath = path.resolve(extTargetDir, themeRelPath);
             if (fs.existsSync(themeFullPath) && themeFullPath.startsWith(extTargetDir)) {
-              const rawTheme = parseJsonc(fs.readFileSync(themeFullPath, 'utf-8'));
+              const rawTheme = parseJsonc(await readFile(themeFullPath, 'utf-8'));
               const monacoTheme = convertToMonacoTheme(rawTheme, themeItem.uiTheme);
               parsedThemes.push({
                 id: themeItem.id || themeItem.label || `${id}-theme`,
@@ -297,7 +323,7 @@ export function extensionRoutes({ secret } = {}) {
           if (snippetRelPath && language) {
             const snippetFullPath = path.resolve(extTargetDir, snippetRelPath);
             if (fs.existsSync(snippetFullPath) && snippetFullPath.startsWith(extTargetDir)) {
-              const rawSnippets = parseJsonc(fs.readFileSync(snippetFullPath, 'utf-8'));
+              const rawSnippets = parseJsonc(await readFile(snippetFullPath, 'utf-8'));
               const snippetList = [];
               for (const [sName, sData] of Object.entries(rawSnippets)) {
                 if (sData && (sData.prefix || sData.body)) {
@@ -338,9 +364,11 @@ export function extensionRoutes({ secret } = {}) {
         },
       };
 
-      const registry = readRegistry().filter((e) => e.id !== id);
-      registry.push(installedExtension);
-      saveRegistry(registry);
+      await updateRegistry((registry) => {
+        const next = registry.filter((e) => e.id !== id);
+        next.push(installedExtension);
+        return next;
+      });
 
       console.log(`[extensions] Successfully installed ${id}! Found ${parsedThemes.length} themes, ${parsedSnippets.length} snippet packs.`);
 
@@ -351,28 +379,30 @@ export function extensionRoutes({ secret } = {}) {
       });
     } catch (err) {
       console.error('[extensions] Install error:', err);
-      res.status(500).json({ error: `Failed to install extension: ${err.message}` });
+      res.status(500).json({ error: { code: 'INSTALL_FAILED', message: `Failed to install extension: ${err.message}` } });
     }
   });
 
   // DELETE /api/v1/extensions/uninstall/:id
-  router.delete('/uninstall/:id', (req, res) => {
+  router.delete('/uninstall/:id', async (req, res) => {
     try {
       const { id } = req.params;
+      if (!id || typeof id !== 'string' || !/^[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+$/.test(id)) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'Invalid extension ID format' } });
+      }
       const extTargetDir = path.join(INSTALLED_DIR, id);
 
       if (fs.existsSync(extTargetDir)) {
         fs.rmSync(extTargetDir, { recursive: true, force: true });
       }
 
-      const registry = readRegistry().filter((e) => e.id !== id);
-      saveRegistry(registry);
+      await updateRegistry((registry) => registry.filter((e) => e.id !== id));
 
       console.log(`[extensions] Uninstalled extension: ${id}`);
       res.json({ ok: true, id, message: `Extension ${id} uninstalled successfully` });
     } catch (err) {
       console.error('[extensions] Uninstall error:', err);
-      res.status(500).json({ error: `Failed to uninstall extension: ${err.message}` });
+      res.status(500).json({ error: { code: 'UNINSTALL_FAILED', message: `Failed to uninstall extension: ${err.message}` } });
     }
   });
 

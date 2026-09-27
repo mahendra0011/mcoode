@@ -84,7 +84,7 @@ export class Subagent {
     this.bus = bus;
     this.undoStack = undoStack;
     this.projectPath = projectPath;
-    this.maxTurns = config.maxTurnsPerSubagent || 25;
+    this.maxTurns = todo.maxTurns || config.maxTurnsPerSubagent || 25;
     this.allowShellAll = config.allowShellAll || false;
     this.networkWhitelist = config.networkWhitelist || null;
     this.auditLog = config.auditLog || null;
@@ -161,7 +161,7 @@ export class Subagent {
         if (this.interrupted) {
           return this._interrupted();
         }
-        this.ledger?.(res);
+        this.recordUsage(res);
         this.tokens.in += estimateTokens(this.messages.map((m) => m.content || '').join('\n'));
         this.tokens.out += estimateTokens(res.text);
 
@@ -251,7 +251,7 @@ export class Subagent {
     this.stopTimer();
   }
 
-  ledger(res) {
+  recordUsage(res) {
     this.assignment.ledger?.(res);
   }
 

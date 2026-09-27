@@ -48,7 +48,16 @@ export async function runExplain(question, { projectPath = process.cwd(), router
   let context;
   if (targetFile) {
     const filePath = resolve(projectPath, targetFile);
-    context = await readFile(filePath, 'utf8');
+    // 859: refuse binary targets (images, sqlite, wasm) — decoding them as
+    // UTF-8 wastes memory and earns an API 400.
+    const { stat } = await import('node:fs/promises');
+    const st = await stat(filePath).catch(() => null);
+    if (!st) throw new Error(`file not found: ${targetFile}`);
+    if (st.size > 500_000) throw new Error(`file too large to explain (${Math.round(st.size / 1024)}KB > 500KB)`);
+    const { readFile: rf } = await import('node:fs/promises');
+    const buf = await rf(filePath);
+    if (buf.includes(0)) throw new Error(`binary file — cannot explain ${targetFile} as text`);
+    context = buf.toString('utf8');
   } else {
     const { repoContext } = await comprehendCodebase(projectPath, { router, bus });
     context = repoContext;
@@ -148,6 +157,17 @@ know. Markdown, well-organized with headers.`
     const reportsDir = join(projectPath, '.mcode', 'reports');
     await mkdir(reportsDir, { recursive: true });
     await writeFile(join(reportsDir, 'project-tour.md'), tourContent, 'utf8');
+    // 860: keep tool state out of `git status` — ensure .mcode/ is ignored.
+    try {
+      const giPath = join(projectPath, '.gitignore');
+      const { readFile: readGi, appendFile } = await import('node:fs/promises');
+      const gi = await readGi(giPath, 'utf8').catch(() => null);
+      if (gi !== null && !/(^|\n)\.mcode\/?(\n|$)/.test(gi)) {
+        await appendFile(giPath, '\n# mcode tool state\n.mcode/\n', 'utf8');
+      }
+    } catch {
+      /* gitignore update is best-effort */
+    }
   } catch (err) {
     console.warn(`[explain:tour] Failed to write report file: ${err.message}`);
   }

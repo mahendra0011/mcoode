@@ -59,7 +59,12 @@ const api = axios.create({
 function tokenExpiresInSec(token) {
   try {
     const part = String(token).split('.')[1];
-    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+    if (!part) return Infinity;
+    let b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) {
+      b64 += '=';
+    }
+    const json = JSON.parse(atob(b64));
     if (!json.exp) return Infinity;
     return json.exp - Math.floor(Date.now() / 1000);
   } catch {
@@ -183,7 +188,10 @@ api.interceptors.response.use(
       }
       throw new Error('Refresh response missing access token');
     } catch {
-      // Refresh failed — clear invalid tokens, reject all queued requests, and redirect to /login
+      // Refresh failed — clear invalid tokens, reject all queued requests, and redirect to /login.
+      // 733: reset the flag BEFORE draining — requests arriving between the
+      // drain and the finally block would otherwise queue forever.
+      isRefreshing = false;
       const rejectList = pendingRequests;
       pendingRequests = [];
       rejectList.forEach((req) => req.reject(error));

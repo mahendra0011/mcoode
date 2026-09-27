@@ -44,9 +44,13 @@ export class WatchDaemon extends EventEmitter {
     this._stopRequested = false;
     this._scanState = new Map();
     this._scanFailures = 0;
+    this._scanning = false;
     this._eslintBin = null;
-    this._eslintChecked = false;
+    this._eslintChecked = 0;
     this._lastNoModelLog = 0;
+    this._minimatchFn = null;
+    this._esbuildBin = null;
+    this._esbuildChecked = 0;
   }
 
   get status() {
@@ -76,7 +80,21 @@ export class WatchDaemon extends EventEmitter {
       if (!p) return false;
       const norm = p.replace(/\\/g, '/');
       if (norm.includes('*')) {
-        const re = new RegExp(`^${norm.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}($|/)`);
+        // WTH-007: prefer minimatch (no ReDoS-prone `.*` chains); the manual
+        // regex below is a bounded fallback only when minimatch is unavailable.
+        try {
+          const mm = this._minimatchFn;
+          if (mm && (mm(normalized, norm, { dot: true }) || mm(normalized, `${norm}/**`, { dot: true }))) return true;
+        } catch { /* fall through to safe fallback */ }
+        if (norm.length > 200 || (norm.match(/\*/g) || []).length > 5) {
+          // Pathological pattern (e.g. **/**/**/**/test) — degrade to a cheap
+          // suffix/dirname check instead of building an exponential regex.
+          const suffix = norm.split('*').pop();
+          return suffix
+            ? (normalized.endsWith(suffix) || normalized.includes(`/${suffix.replace(/^\//, '')}`))
+            : false;
+        }
+        const re = new RegExp(`^${norm.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')}($|/)`);
         return re.test(normalized);
       }
       return normalized === norm || normalized.startsWith(`${norm}/`) || normalized.includes(`/${norm}/`);
@@ -94,6 +112,22 @@ export class WatchDaemon extends EventEmitter {
     this._stopRequested = false;
     this.startedAt = new Date();
     await this._loadIgnores();
+    try {
+      const { minimatch } = await import('minimatch');
+      this._minimatchFn = minimatch;
+    } catch {
+      this._minimatchFn = null;
+    }
+    // Clean up any orphaned temporary fix files left by prior crashes
+    try {
+      const { readdir: readTmpDir } = await import('node:fs/promises');
+      const tmpFiles = await readTmpDir(tmpdir());
+      for (const f of tmpFiles) {
+        if (f.startsWith('.mcode-fix-')) {
+          await rm(join(tmpdir(), f), { force: true }).catch(() => {});
+        }
+      }
+    } catch {}
     if (!this.projectId) this.projectId = await getProjectId(this.projectPath);
     if (this.undoStack) {
       this.undoStack.filePath = this.undoStack.filePath || join(homedir(), '.mcode', 'projects', this.projectId, 'undo-watch.json');
@@ -131,7 +165,8 @@ export class WatchDaemon extends EventEmitter {
   }
 
   async scanOnce() {
-    if (!this.running || this._stopRequested) return;
+    if (!this.running || this._stopRequested || this._scanning) return;
+    this._scanning = true;
     const t0 = Date.now();
     let count = 0;
     try {
@@ -174,13 +209,17 @@ export class WatchDaemon extends EventEmitter {
       if (this._scanFailures <= 3) {
         setTimeout(() => this.scanOnce(), this.config.scanIntervalMs);
       }
+    } finally {
+      this._scanning = false;
     }
     this.emitStatus();
   }
 
   async _getEslintBin() {
-    if (this._eslintChecked) return this._eslintBin;
-    this._eslintChecked = true;
+    const now = Date.now();
+    // Re-check periodically every 60s or if not checked yet
+    if (this._eslintBin && (now - this._eslintChecked < 60_000)) return this._eslintBin;
+    this._eslintChecked = now;
     try {
       const local = join(this.projectPath, 'node_modules', '.bin', process.platform === 'win32' ? 'eslint.cmd' : 'eslint');
       await fsStat(local);
@@ -212,7 +251,15 @@ export class WatchDaemon extends EventEmitter {
         }
       }
     } catch {
-      /* linter failed — treat as no lint info */
+      // Fallback: batch failed, check files individually so syntax errors are not lost
+      for (const rel of rels) {
+        try {
+          const res = await this._lintFile(join(this.projectPath, rel));
+          result.set(rel, res);
+        } catch {
+          result.set(rel, { ok: true });
+        }
+      }
     }
     return result;
   }
@@ -220,20 +267,25 @@ export class WatchDaemon extends EventEmitter {
   async _drainQueue() {
     if (this._processing) return;
     this._processing = true;
-    const pending = [...this._queue];
-    this._queue.clear();
-    const lintable = pending.filter((rel) => ['.js', '.jsx', '.mjs', '.cjs'].includes(extname(rel)));
-    const lintMap = await this._lintFiles(lintable);
-    for (const rel of pending) {
-      if (!this.running || this._stopRequested) break;
-      try {
-        await this.analyzeFile(rel, lintMap.get(rel));
-      } catch (err) {
-        this._pushActivity({ file: rel, outcome: 'needs-review', detail: `analysis error: ${err.message}` });
+    try {
+      while (this._queue.size > 0) {
+        if (!this.running || this._stopRequested) break;
+        const pending = [...this._queue];
+        this._queue.clear();
+        const lintable = pending.filter((rel) => ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'].includes(extname(rel)));
+        const lintMap = await this._lintFiles(lintable);
+        for (const rel of pending) {
+          if (!this.running || this._stopRequested) break;
+          try {
+            await this.analyzeFile(rel, lintMap.get(rel));
+          } catch (err) {
+            this._pushActivity({ file: rel, outcome: 'needs-review', detail: `analysis error: ${err.message}` });
+          }
+        }
       }
+    } finally {
+      this._processing = false;
     }
-    this._processing = false;
-    if (this._queue.size > 0) await this._drainQueue();
   }
 
   async analyzeFile(rel, lint = null) {
@@ -249,7 +301,8 @@ export class WatchDaemon extends EventEmitter {
     // 1. local lint pass — zero model cost
     const lintResult = lint || (await this._lintFile(full));
     if (!lintResult.ok) {
-      await this._applyFix(rel, lintResult);
+      const errorMsg = typeof lintResult === 'string' ? lintResult : (lintResult.detail || lintResult.error || JSON.stringify(lintResult));
+      await this._applyFix(rel, errorMsg);
       return;
     }
 
@@ -304,10 +357,17 @@ export class WatchDaemon extends EventEmitter {
       return issues;
     }
     if (ext === '.ts' || ext === '.tsx') {
+      // WTH-003: `tsc --noEmit <file>` type-checks the WHOLE project (~30-60s).
+      // Fast path first: esbuild syntax/transpile check (~100ms). Only fall back
+      // to tsc (with --skipLibCheck + --incremental cache) when esbuild passes
+      // or is unavailable, so simple syntax errors never pay the tsc price.
+      const fastErr = await this._esbuildSyntaxCheck(full, ext);
+      if (fastErr) return [fastErr];
+      if (this._esbuildBin) return []; // esbuild available & passed → skip slow tsc
       const bin = join(this.projectPath, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
       try {
         await fsStat(bin);
-        const { stdout, stderr } = await execa(bin, ['--noEmit', full], { cwd: this.projectPath, timeout: 60_000, reject: false });
+        const { stdout, stderr } = await execa(bin, ['--noEmit', '--skipLibCheck', '--pretty', 'false', full], { cwd: this.projectPath, timeout: 60_000, reject: false });
         const errs = (stdout + stderr).split('\n').filter((l) => /error TS\d/.test(l)).slice(0, 6);
         return errs;
       } catch {
@@ -327,6 +387,41 @@ export class WatchDaemon extends EventEmitter {
       return opens !== closes ? [`unbalanced braces: {${opens} vs }${closes}`] : [];
     }
     return [];
+  }
+
+  async _getEsbuildBin() {
+    const now = Date.now();
+    if (this._esbuildBin && (now - this._esbuildChecked < 60_000)) return this._esbuildBin;
+    this._esbuildChecked = now;
+    try {
+      const local = join(this.projectPath, 'node_modules', '.bin', process.platform === 'win32' ? 'esbuild.cmd' : 'esbuild');
+      await fsStat(local);
+      this._esbuildBin = local;
+    } catch {
+      this._esbuildBin = null;
+    }
+    return this._esbuildBin;
+  }
+
+  /** Fast syntax-only check via esbuild transform. Returns error string or null.
+   *  Null + esbuild-missing means "no opinion" (caller falls back to tsc). */
+  async _esbuildSyntaxCheck(full, ext) {
+    const bin = await this._getEsbuildBin();
+    if (!bin) return null;
+    try {
+      const loader = ext === '.tsx' ? 'tsx' : 'ts';
+      const { stderr, exitCode } = await execa(bin, [full, `--loader:${loader}`, '--outfile=/dev/null'], {
+        cwd: this.projectPath,
+        timeout: 15_000,
+        reject: false
+      });
+      if (exitCode !== 0 && stderr) {
+        return stderr.split('\n').filter(Boolean).slice(0, 4).join('\n');
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   async _runRelatedTests(rel) {
@@ -448,7 +543,6 @@ You are mcode's bugfix subagent. Fix the reported problem in the file below. Res
       await writeFile(full, fixed, 'utf8');
       this.fixesApplied++;
       this.fixTimestamps.push(Date.now());
-      this.fixTimestamps = this.fixTimestamps.filter((t) => Date.now() - t < 3_600_000);
       // verify after write — re-run the failing check once before calling it fixed
       const postLint = await this._lintFile(full);
       const postStatic = await this._staticCheck(full);

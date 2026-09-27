@@ -34,12 +34,16 @@ function WebSearchTab() {
       {state === 'error' && <p className="text-sm text-red-300">Search failed — is the backend running?</p>}
       {state === 'ready' && results.length === 0 && <p className="text-sm text-white/40">No results.</p>}
       <ul className="space-y-2">
-        {results.map((r: any, i: number) => (
-          <li key={i} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-            <a href={r.url || r.link} target="_blank" rel="noreferrer" className="text-sm text-sky-300 hover:underline">{r.title || r.url}</a>
-            {(r.snippet || r.description) && <p className="text-xs text-white/50 mt-1">{r.snippet || r.description}</p>}
-          </li>
-        ))}
+        {results.map((r: any, i: number) => {
+          const rawUrl = r.url || r.link || '';
+          const safeUrl = (typeof rawUrl === 'string' && (/^https?:\/\//i.test(rawUrl))) ? rawUrl : '#';
+          return (
+            <li key={i} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <a href={safeUrl} target="_blank" rel="noreferrer" className="text-sm text-sky-300 hover:underline">{r.title || r.url}</a>
+              {(r.snippet || r.description) && <p className="text-xs text-white/50 mt-1">{r.snippet || r.description}</p>}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -48,25 +52,53 @@ function WebSearchTab() {
 function PortsTab() {
   const [ports, setPorts] = useState<number[]>([]);
   const [state, setState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
+  // BUG-19-08: track liveness so late socket replies/timeouts never touch
+  // an unmounted tab, and always detach listeners + timer on cleanup.
+  const aliveRef = React.useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
   const refresh = () => {
     setState('loading');
+    let timer: any;
+    let handler: any;
+    const detach = () => {
+      try {
+        const socket = getSocket();
+        if (handler) {
+          socket?.off('ports:list-result', handler as any);
+          socket?.off('ports:list', handler as any);
+        }
+      } catch { /* socket gone */ }
+      if (timer) clearTimeout(timer);
+    };
     try {
       const socket = getSocket();
-      const handler = (list: any) => {
+      handler = (list: any) => {
+        detach();
+        if (!aliveRef.current) return;
         setPorts(Array.isArray(list) ? list : list?.ports || []);
         setState('ready');
-        socket.off('ports:list-result', handler as any);
-        socket.off('ports:list', handler as any);
       };
-      socket.on('ports:list-result' as any, handler as any);
-      socket.on('ports:list' as any, handler as any);
-      socket.emit('ports:list');
-      setTimeout(() => setState((s) => (s === 'loading' ? 'error' : s)), 8000);
+      socket?.on('ports:list-result' as any, handler as any);
+      socket?.on('ports:list' as any, handler as any);
+      socket?.emit('ports:list');
+      timer = setTimeout(() => {
+        detach();
+        if (!aliveRef.current) return;
+        setState((s) => (s === 'loading' ? 'error' : s));
+      }, 8000);
     } catch {
-      setState('error');
+      if (aliveRef.current) setState('error');
     }
+    return detach;
   };
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    const detach = refresh();
+    return () => { try { detach?.(); } catch { /* already detached */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div>
       <button type="button" onClick={refresh}

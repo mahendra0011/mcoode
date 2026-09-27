@@ -22,15 +22,68 @@ export function hasCallSite(ctx, regex) {
   return false;
 }
 
+/** Mask comments with spaces (offsets preserved) so pattern rules can't
+ *  match commented-out code (869). String literals are KEPT — secret
+ *  patterns live inside strings, masking them would blind every rule. */
+export function maskNonCode(content) {
+  const src = String(content || '');
+  let out = '';
+  let i = 0;
+  let str = null; // ', ", `
+  while (i < src.length) {
+    const ch = src[i];
+    const two = src.slice(i, i + 2);
+    if (str) {
+      out += ch;
+      if (ch === '\\') {
+        out += src[i + 1] || '';
+        i += 2;
+        continue;
+      }
+      if (ch === str) str = null;
+      i++;
+      continue;
+    }
+    if (two === '//') {
+      const end = src.indexOf('\n', i);
+      const stop = end === -1 ? src.length : end;
+      out += ' '.repeat(stop - i);
+      i = stop;
+      continue;
+    }
+    if (two === '/*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      out += src.slice(i, stop).replace(/[^\n]/g, ' ');
+      i = stop;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') { str = ch; out += ch; i++; continue; }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
+const TEST_CONTEXT_RE = /mock|test|example|sample|fake|specimen|fixture|placeholder|dummy/i;
+
 export function hasPattern(ctx, regex) {
   if (!ctx.codeFiles || ctx.codeFiles.length === 0) return false;
+  const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`;
   for (const file of ctx.codeFiles) {
-    const match = regex.exec(file.content);
-    if (match) {
-      // Find line number
+    // 869: match against comment/string-masked source.
+    const masked = maskNonCode(file.content);
+    const re = new RegExp(regex.source, flags);
+    let match;
+    while ((match = re.exec(masked)) !== null) {
+      // 870: skip matches that only exist to illustrate tests/mocks.
+      const lineStart = file.content.lastIndexOf('\n', match.index) + 1;
+      const lineEnd = file.content.indexOf('\n', match.index);
+      const lineText = file.content.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+      if (TEST_CONTEXT_RE.test(lineText)) continue;
       const pre = file.content.slice(0, match.index);
       const line = pre.split('\n').length;
-      return { file: file.relPath, line, match: match[0] };
+      return { file: file.relPath, line, match: file.content.substr(match.index, match[0].length) };
     }
   }
   return false;

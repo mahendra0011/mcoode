@@ -1,24 +1,51 @@
 import { Client } from 'ssh2';
+import { StringDecoder } from 'node:string_decoder';
 
 const connections = new Map();
 
 export function connectSSH(socketId, { host, port, username, password, privateKey }, onData, onReady, onError) {
+  if (!host || !username || (!password && !privateKey)) {
+    onError('host, username, and a password or privateKey are required');
+    return;
+  }
   const conn = new Client();
+  // 1023: streaming decoder keeps multi-byte chars split across TCP
+  // packets intact (chunk.toString() would mangle them).
+  const decoder = new StringDecoder('utf8');
+  const cleanup = () => {
+    decoder.end();
+    if (connections.get(socketId)?.conn === conn) connections.delete(socketId);
+    try { conn.end(); } catch { /* already closed */ }
+  };
   conn.on('ready', () => {
     conn.shell((err, stream) => {
-      if (err) return onError(err.message);
-      connections.set(socketId, { conn, stream });
+      if (err) {
+        cleanup();
+        return onError(err.message);
+      }
+      connections.set(socketId, { conn, stream, decoder });
       onReady();
-      stream.on('data', (data) => onData(data.toString()));
+      stream.on('data', (data) => onData(decoder.write(data)));
+      stream.on('close', cleanup);
     });
   });
-  conn.on('error', (err) => onError(err.message));
-  
-  const connectConfig = { host, port: port || 22, username };
+  // 1022: failed/timeout connections are removed instead of dangling.
+  conn.on('error', (err) => {
+    cleanup();
+    onError(err.message);
+  });
+  conn.on('close', cleanup);
+
+  const connectConfig = { host, port: port || 22, username, readyTimeout: 15000 };
   if (privateKey) connectConfig.privateKey = privateKey;
   else connectConfig.password = password;
-  
-  conn.connect(connectConfig);
+
+  try {
+    conn.connect(connectConfig);
+  } catch (err) {
+    cleanup();
+    onError(err.message);
+  }
 }
 
 export function sendToSSH(socketId, data) {

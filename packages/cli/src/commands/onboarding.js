@@ -44,7 +44,9 @@ export async function migrateLegacyRefreshToken(config) {
   if (!config?.account?.refresh) return false;
   try {
     await saveVault({ ...(await loadVault()), MCCODE_REFRESH_TOKEN: config.account.refresh });
-  } catch {
+  } catch (err) {
+    // 690: shout — a silent keep-plaintext fallback defeats the migration.
+    process.stderr.write(`[onboarding] WARNING: vault migration failed (${err.message}) — refresh token stays in plaintext config.json\n`);
     return false; // keep the plaintext copy if the vault write fails
   }
   await saveConfig({ account: { email: config.account.email, name: config.account.name } });
@@ -87,8 +89,12 @@ async function api(method, path, body, token = null) {
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data?.error?.message || `request failed (${res.status})`);
+    // 691: surface Retry-After so rate-limit waits are actionable.
+    const retryAfter = res.headers?.get?.('retry-after');
+    const suffix = res.status === 429 && retryAfter ? ` (retry after ${retryAfter}s)` : '';
+    const err = new Error(`${data?.error?.message || `request failed (${res.status})`}${suffix}`);
     err.code = data?.error?.code;
+    err.status = res.status;
     throw err;
   }
   return data;
@@ -166,7 +172,8 @@ export async function runOnboarding({ interactive = true } = {}) {
       output.write('  (you can skip — mock + local providers still work, and add keys later with `mcode api-key`)\n');
       const keyChoice = (await rl.question('  add an API key now? [y/N]: ')).trim().toLowerCase();
       if (keyChoice === 'y' || keyChoice === 'yes') {
-        rl.close();
+        // 692: do NOT close readline first — clack prompts need stdin and
+        // crash on a closed interface. finally{} below closes it once.
         await apiKeyAddCommand();
         return;
       } else {

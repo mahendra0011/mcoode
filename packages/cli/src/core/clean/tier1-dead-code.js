@@ -225,7 +225,27 @@ async function findUnusedExports(projectPath, codeFiles) {
     } catch {}
   }
 
+  // 875: a file referenced by ANY import (static, dynamic import(),
+  // require, export-from) is a live boundary — its exports may be reached
+  // dynamically, so none of them are flagged.
+  const referencedFiles = new Set();
+  for (const { file, content } of fileContents) {
+    for (const other of fileContents) {
+      if (other.file === file) continue;
+      const base = other.file.split(/[\\/]/).pop().replace(/\.(js|jsx|ts|tsx|mjs|cjs)$/, '');
+      if (base && new RegExp(`(from\\s+['"]|import\\s*\\(\\s*['"]|require\\s*\\(\\s*['"])[^'"]*${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(content)) {
+        referencedFiles.add(other.file);
+      }
+    }
+  }
+
+  // 875: entry files are execution roots, not libraries — their exports
+  // are consumed by runtimes/bundlers, not by imports.
+  const ENTRY_BASENAMES = new Set(['index', 'main', 'app', 'server', 'cli', 'bin']);
   for (const exp of fileExports) {
+    if (referencedFiles.has(exp.file)) continue;
+    const base = exp.file.split(/[\\/]/).pop().replace(/\.(js|jsx|ts|tsx|mjs|cjs)$/, '').toLowerCase();
+    if (ENTRY_BASENAMES.has(base)) continue;
     const isImported = fileContents.some(({ file, content }) => {
       if (file === exp.file) return false;
       return content.includes(exp.name);

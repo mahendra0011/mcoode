@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
-import { findDeadCode } from '../../../cli/src/core/clean/tier1-dead-code.js';
-import { findBloat } from '../../../cli/src/core/clean/tier2-bloat.js';
-import { runClean } from '../../../cli/src/core/clean/run-clean.js';
+import { findDeadCode, findBloat, runClean } from 'mcode-cli/clean';
 
 export function cleanRoutes({ secret } = {}) {
   const router = Router();
@@ -14,7 +12,8 @@ export function cleanRoutes({ secret } = {}) {
    */
   router.post('/scan', async (req, res) => {
     try {
-      const projectPath = req.body?.projectPath || process.cwd();
+      // CLN-001: never default to process.cwd() (the backend's own source).
+      const projectPath = await resolveTargetPath(req);
       const deadCodeOnly = Boolean(req.body?.deadCodeOnly);
       const thresholdLines = req.body?.thresholdLines || 30;
 
@@ -27,7 +26,8 @@ export function cleanRoutes({ secret } = {}) {
         try {
           tier2Findings = await findBloat(projectPath, { projectPath, thresholdLines });
         } catch (err) {
-          console.warn('[clean:scan] Tier 2 AI scan warning:', err.message);
+          // 1051: sanitize control characters before logging.
+          console.warn('[clean:scan] Tier 2 AI scan warning:', String(err.message || err).replace(/[\x00-\x1f\x7f]/g, '?').slice(0, 300));
         }
       }
 
@@ -54,7 +54,7 @@ export function cleanRoutes({ secret } = {}) {
    */
   router.post('/execute', async (req, res) => {
     try {
-      const projectPath = req.body?.projectPath || process.cwd();
+      const projectPath = await resolveTargetPath(req);
       const selectedFindings = req.body?.selectedFindings || [];
 
       const result = await runClean(projectPath, {
@@ -72,4 +72,49 @@ export function cleanRoutes({ secret } = {}) {
   });
 
   return router;
+}
+
+/** CLN-001 / SEC-029: resolve the scan target scoped to the caller's OWN
+ *  workspaces. An explicit projectPath is accepted only when it exists AND
+ *  sits inside one of the user's workspace diskPaths (or the default user
+ *  workspace) — never the backend cwd or system dirs. */
+async function resolveTargetPath(req) {
+  const { join, resolve, sep } = await import('node:path');
+  const { homedir } = await import('node:os');
+  const { mkdir } = await import('node:fs/promises');
+  const fallback = join(homedir(), '.mcode', 'workspaces', 'default');
+  let allowedRoots = [fallback];
+  try {
+    const owned = await db().workspace.find({ userId: req.userId });
+    if (Array.isArray(owned)) {
+      for (const w of owned) {
+        if (w?.diskPath) allowedRoots.push(w.diskPath);
+      }
+    }
+  } catch {
+    /* scope check degrades to default workspace only */
+  }
+  const insideAllowed = (p) => {
+    const abs = resolve(p);
+    return allowedRoots.some((r) => abs === resolve(r) || abs.startsWith(resolve(r) + sep));
+  };
+  if (req.body?.projectPath) {
+    const { existsSync } = await import('node:fs');
+    if (existsSync(req.body.projectPath) && insideAllowed(req.body.projectPath)) {
+      return req.body.projectPath;
+    }
+    const err = new Error('projectPath is not inside one of your workspaces');
+    err.status = 400;
+    throw err;
+  }
+  if (req.body?.projectId) {
+    try {
+      const ws = await db().workspace.findOne({ _id: String(req.body.projectId) });
+      if (ws?.diskPath && insideAllowed(ws.diskPath)) return ws.diskPath;
+    } catch {
+      /* fall through to default workspace */
+    }
+  }
+  await mkdir(fallback, { recursive: true });
+  return fallback;
 }

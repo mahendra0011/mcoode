@@ -10,7 +10,8 @@ import { EventEmitter } from 'node:events';
 async function askConfirmation(question = 'proceed with migration? [Y/n]') {
   if (process.env.CI || process.env.NON_INTERACTIVE) return true;
 
-  const width = 45;
+  // 676: size the box to the question instead of wrapping borders wrong.
+  const width = Math.min(100, Math.max(45, question.length + 8));
   const topBorder = '┌ ' + '─ '.repeat(Math.floor((width - 4) / 2)) + ' ┐';
   const botBorder = '└ ' + '─ '.repeat(Math.floor((width - 4) / 2)) + ' ┘';
 

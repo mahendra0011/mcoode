@@ -104,7 +104,11 @@ export function getSocket(): Socket {
       path: '/live',
       auth: { token },
       reconnection: true,
-      reconnectionDelayMax: 2000,
+      // WEB-006: exponential backoff (1s → 15s cap) instead of hammering
+      // a recovering server every second.
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 15000,
+      randomizationFactor: 0.5,
       transports: ['websocket', 'polling'],
     });
   } else {
@@ -209,6 +213,10 @@ export function useChatSocket(workspaceId: string | null = null) {
 
     const onConnect = () => {
       dispatch(setStatus('connecting'));
+      if (!wasConnected) {
+        wasConnected = true;
+        dispatch(addToast({ id: `backend-ok-${Date.now()}`, kind: 'ok', text: 'Backend reconnected' }));
+      }
       // Emit chat:start with current workspace + model (use refs for latest values)
       socket.emit('chat:start', { workspaceId: workspaceIdRef.current, modelRef: selectedModelRef.current });
     };
@@ -303,12 +311,33 @@ export function useChatSocket(workspaceId: string | null = null) {
       }
     };
 
+    // WEB-002: visible connection health — offline banner state via toasts
+    // (throttled) instead of a silently dead dashboard.
+    let wasConnected = socket.connected;
+    let lastOfflineToastAt = 0;
+    const offlineToast = (text: string) => {
+      const now = Date.now();
+      if (now - lastOfflineToastAt < 30000) return;
+      lastOfflineToastAt = now;
+      dispatch(addToast({ id: `backend-${now}`, kind: 'warn', text }));
+    };
+
     const onDisconnect = () => {
       dispatch(setStatus('idle'));
       // If the backend crashed or restarted mid-response, isStreaming can be
       // stuck true (chat:done was never sent). Reset it so the ThinkingIndicator
       // stops spinning and the user can send a new message.
       dispatch(resetStreaming());
+      if (wasConnected) {
+        wasConnected = false;
+        offlineToast('Backend disconnected — retrying automatically… (start it with `mcode serve`)');
+      }
+    };
+
+    const onConnectError = () => {
+      dispatch(setStatus('idle'));
+      wasConnected = false;
+      offlineToast('Backend unreachable — retrying automatically… (start it with `mcode serve`)');
     };
 
     // ── God-mode socket event handlers ──
@@ -570,6 +599,7 @@ export function useChatSocket(workspaceId: string | null = null) {
     socket.on('chat:undo_result', onUndoResult);
     socket.on('chat:shell_stream', onShellStream);
     socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
 
     // God-mode events
     socket.on('subagent:created', onSubagentCreated);
@@ -704,6 +734,7 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off('chat:undo_result', onUndoResult);
       socket.off('chat:shell_stream', onShellStream);
       socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
 
       // God-mode cleanup
       socket.off('subagent:created', onSubagentCreated);

@@ -11,7 +11,7 @@
  * @property {boolean} free       — is this a free-tier model?
  * @property {Object<string, number>} scores — per task-type score 0..100
  * @property {string} [contextWindow]
- * @property {string} [costPer1k] — approx USD per 1k tokens (input/output)
+ * @property {string} [costPer1k] - approx USD per 1k tokens (input/output)
  *
  * @typedef {Object} ChatMessage
  * @property {'system'|'user'|'assistant'} role
@@ -40,6 +40,7 @@ export class ModelProvider {
     this.id = options.id || this.constructor.name.toLowerCase();
     this.displayName = options.displayName || this.id;
     this.kind = options.kind || 'remote';
+    this.apiKey = options.apiKey || '';
     this.config = options.config || {};
     this.available = null; // tri-state: null=unknown, true/false after probe
     this.availableAt = null; // last probe timestamp — isAvailable() re-probes after TTL
@@ -51,17 +52,34 @@ export class ModelProvider {
     return true;
   }
 
+  /** RTR-010: whether this provider is configured well enough to be routed.
+   *  Remote providers need a non-empty API key; local providers are probed
+   *  for liveness via isAvailable() instead. */
+  isConfigured() {
+    if (this.kind === 'local') return true;
+    return Boolean(this.apiKey && this.apiKey !== '');
+  }
+
   /** True when this provider should be considered for routing right now.
-   *  Result is cached for `availableTtlMs` so transient blips don't thrash. */
+   *  Result is cached for `availableTtlMs` so transient blips don't thrash.
+   *  BUG-19-20: concurrent callers share one in-flight probe (no thundering
+   *  herd of duplicate network probes on a cold cache). */
   async isAvailable() {
     if (this.available === null || Date.now() - (this.availableAt || 0) > (this.availableTtlMs ?? 60_000)) {
-      try {
-        this.available = await this.probe();
-        this.availableAt = Date.now();
-      } catch {
-        this.available = false;
-        this.availableAt = Date.now();
+      if (!this._probing) {
+        this._probing = (async () => {
+          try {
+            this.available = await this.probe();
+          } catch {
+            this.available = false;
+          }
+          this.availableAt = Date.now();
+          return this.available;
+        })().finally(() => {
+          this._probing = null;
+        });
       }
+      return this._probing;
     }
     return this.available;
   }
@@ -73,8 +91,8 @@ export class ModelProvider {
 
   /**
    * Non-streaming completion (chat + optional tool calling).
-   * @param {string} model
-   * @param {CompleteOptions} opts
+   * @param {string} _model
+   * @param {CompleteOptions} _opts
    * @returns {Promise<CompletionResult>}
    */
   async complete(_model, _opts) {

@@ -30,15 +30,29 @@ export function LoginPage() {
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
 
-  // OAuth-login return: backend redirects to /login#access=..&refresh=..
+  // OAuth-login return: backend redirects to /login?code=.. (single-use;
+  // exchanged over POST — tokens never touch URLs). Legacy #access=..&..
+  // fragments from older backends still work as a fallback.
   useEffect(() => {
-    const hash = window.location.hash || '';
-    if (!hash.includes('access=')) {
-      const q = new URLSearchParams(window.location.search);
-      const err = q.get('oauth_error');
-      if (err) setError(err);
+    const q = new URLSearchParams(window.location.search);
+    const err = q.get('oauth_error');
+    if (err) setError(err);
+    const code = q.get('code');
+    if (code) {
+      api.post('/api/v1/auth/github/exchange', { code })
+        .then((res) => {
+          if (res.data?.access) {
+            setTokens({ access: res.data.access, refresh: res.data.refresh });
+            router.replace('/ai/chat');
+          } else {
+            setError('GitHub login expired — please try again');
+          }
+        })
+        .catch(() => setError('GitHub login expired — please try again'));
       return;
     }
+    const hash = window.location.hash || '';
+    if (!hash.includes('access=')) return;
     const p = new URLSearchParams(hash.slice(1));
     const access = p.get('access');
     const refresh = p.get('refresh');

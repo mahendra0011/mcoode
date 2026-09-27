@@ -191,7 +191,9 @@ export async function runSingleFile(filename, code, stdin = '') {
     run_timeout: 5000,
   };
 
-  const { data } = await axios.post(`${PISTON_URL}/api/v2/execute`, payload);
+  const { data } = await axios.post(`${PISTON_URL}/api/v2/execute`, payload, {
+    timeout: 20000
+  });
 
   return {
     stdout: data.run?.stdout || '',
@@ -241,8 +243,16 @@ export async function runSmart(filename, code, stdin = '') {
       const result = await runSingleFile(filename, code, stdin);
       return { ...result, backend: 'piston' };
     } catch (err) {
-      // Piston failed (unsupported language, timeout, etc.) — fall through to host
-      console.warn(`[runSmart] Piston failed for ${filename}: ${err.message}, trying host runner`);
+      // 1036: fall back to host ONLY on infrastructure failures (timeout,
+      // DNS, connection refused, 5xx). Code-level failures (bad request,
+      // unsupported language) must surface — re-running broken code on the
+      // host doubles latency and exposure for nothing.
+      const infra = err.code === 'ECONNABORTED' || err.code === 'ENOTFOUND' ||
+        err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' ||
+        (err.response && err.response.status >= 500) || !err.response;
+      if (err.message?.startsWith('Language not supported')) throw err;
+      if (!infra) throw err;
+      console.warn(`[runSmart] Piston infra failure for ${filename}: ${err.message}, trying host runner`);
     }
   }
 

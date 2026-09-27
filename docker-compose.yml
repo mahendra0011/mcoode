@@ -1,0 +1,21 @@
+# BLD-001: local stack — backend (+ optional Piston sandbox).
+services:
+  backend:
+    build: .
+    ports:
+      - "3100:3100"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PISTON_URL: http://piston:2000
+    depends_on:
+      - piston
+    restart: unless-stopped
+
+  # Piston code-execution sandbox (optional; host runner is the fallback).
+  piston:
+    image: ghcr.io/engineer-man/piston
+    ports:
+      - "2000:2000"
+    restart: unless-stopped

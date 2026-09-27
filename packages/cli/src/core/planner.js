@@ -28,14 +28,53 @@ export function parsePlanOutput(text) {
   const raw = match?.[1] || match?.[2] || match?.[3] || text;
   const start = raw.indexOf('{');
   if (start === -1) throw new Error('no JSON object found in planner output');
-  let end = start;
-  while ((end = raw.indexOf('}', end)) !== -1) {
-    try {
-      return normalizePlan(JSON.parse(raw.slice(start, end + 1)));
-    } catch {
-      end += 1;
+
+  let inString = false;
+  let escape = false;
+  let depth = 0;
+  let end = -1;
+
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (ch === '{') {
+        depth++;
+      } else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
     }
   }
+
+  if (end !== -1) {
+    try {
+      return normalizePlan(JSON.parse(raw.slice(start, end + 1)));
+    } catch {}
+  }
+
+  // Fallback: search backwards from last closing brace
+  const lastBrace = raw.lastIndexOf('}');
+  if (lastBrace > start) {
+    try {
+      return normalizePlan(JSON.parse(raw.slice(start, lastBrace + 1)));
+    } catch {}
+  }
+
   throw new Error('no valid JSON object found in planner output');
 }
 
@@ -74,11 +113,8 @@ export class Planner {
         reasoning: this.router?.reasoning || null
       });
     } catch (err) {
-      // fall back to the mock provider so planning never hard-fails
-      const { MockProvider } = await import('../providers/mock.js');
-      const mock = new MockProvider();
-      raw = await mock.complete('mock', { messages: [{ role: 'user', content: user }] });
-      this.bus?.emit('MESSAGE', { kind: 'planning', text: `planner model failed (${err.message}) — using mock plan` });
+      this.bus?.emit('MESSAGE', { kind: 'planning', text: `planner model failed: ${err.message}` });
+      throw new Error(`planning failed: ${err.message}`);
     }
 
     const plan = parsePlanOutput(raw.text);

@@ -24,24 +24,50 @@ function parseJsonArray(text) {
 }
 
 /**
- * Fetch uncommitted git diff (both staged and unstaged changes).
+ * Fetch uncommitted git diff (staged + unstaged + untracked file contents).
  */
 export async function getUncommittedDiff(cwd = process.cwd()) {
   try {
     const res = await execa('git', ['diff', 'HEAD'], { cwd, reject: false });
     if (res.stdout && res.stdout.trim()) {
-      return res.stdout;
+      return res.stdout + (await untrackedAsDiff(cwd));
     }
     const unstaged = await execa('git', ['diff'], { cwd, reject: false });
     if (unstaged.stdout && unstaged.stdout.trim()) {
-      return unstaged.stdout;
+      return unstaged.stdout + (await untrackedAsDiff(cwd));
     }
     const cached = await execa('git', ['diff', '--cached'], { cwd, reject: false });
     if (cached.stdout && cached.stdout.trim()) {
-      return cached.stdout;
+      return cached.stdout + (await untrackedAsDiff(cwd));
     }
   } catch {}
-  return '';
+  return await untrackedAsDiff(cwd);
+}
+
+/** 857: brand-new (untracked) files are invisible to `git diff` — render
+ *  them as new-file pseudo-diff so review never reports a false "clean". */
+async function untrackedAsDiff(cwd) {
+  try {
+    const { stdout } = await execa('git', ['ls-files', '--others', '--exclude-standard'], { cwd, reject: false });
+    const files = stdout.split('\n').map((f) => f.trim()).filter(Boolean).slice(0, 20);
+    if (files.length === 0) return '';
+    const parts = ['\n--- untracked files (not yet git-added) ---'];
+    for (const f of files) {
+      try {
+        const content = await readFile(resolve(cwd, f), 'utf8');
+        if (content.length > 20000) {
+          parts.push(`\n+++ new file: ${f} (too large to inline, ${content.length} chars)`);
+        } else {
+          parts.push(`\n+++ new file: ${f}\n${content}`);
+        }
+      } catch {
+        /* unreadable — skip */
+      }
+    }
+    return parts.join('\n');
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -138,14 +164,16 @@ JSON array of { "file", "line", "severity", "category", "comment" }.`
   try {
     return parseJsonArray(raw.text);
   } catch (err) {
+    // 858: mark unparsed model output honestly (general/unlocated) instead
+    // of a misleading `style` hit on line 1.
     if (typeof raw.text === 'string' && raw.text.trim()) {
       return [
         {
           file: target || 'project',
-          line: 1,
+          line: null,
           severity: 'info',
-          category: 'style',
-          comment: raw.text.trim().slice(0, 200)
+          category: 'general',
+          comment: `[unparsed model output] ${raw.text.trim().slice(0, 200)}`
         }
       ];
     }

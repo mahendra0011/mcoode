@@ -14,9 +14,12 @@ export function McodeTurnMachineTab() {
   const [demoPhase, setDemoPhase] = useState<TurnPhase>('idle');
   const [elapsed, setElapsed] = useState(0);
 
+  // 879: real start-time ref (was Date.now() - Date.now() === 0 forever).
+  const startedAtRef = React.useRef(0);
   React.useEffect(() => {
     if (demoPhase === 'idle') { setElapsed(0); return; }
-    const id = setInterval(() => setElapsed(Date.now() - Date.now()), 100);
+    startedAtRef.current = Date.now();
+    const id = setInterval(() => setElapsed(Date.now() - startedAtRef.current), 100);
     return () => clearInterval(id);
   }, [demoPhase]);
 

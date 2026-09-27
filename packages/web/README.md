@@ -1,16 +1,37 @@
-# React + Vite
+# mcode Web Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The browser-based IDE and control center for **mcode**, built with Next.js 16, React 19, Monaco Editor, XTerm.js, Redux Toolkit, and Socket.IO.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **AI Code Editor**: Multi-tab Monaco editor with syntax highlighting, autocomplete, and inline diffing.
+- **Agent Chat & Turn Machine**: Real-time streaming AI conversation with live tool-call cards, subagent dispatch, and undo capability.
+- **File Explorer**: Virtualized file tree (`react-arborist`) with drag-and-drop archive uploading and off-main-thread zipping.
+- **Integrated Terminal**: Full-featured PTY terminal via `@xterm/xterm` with ANSI colors and fit addon.
+- **Provider & Model Settings**: Configure API keys, local models (Ollama/LM Studio), routing rules, and CLI governance.
+- **Watch & Live Monitor**: Real-time event monitoring of background watch daemon fixes and agent execution waves.
 
-## React Compiler
+## Running Locally
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Run from the monorepo root:
 
-## Expanding the Oxlint configuration
+```bash
+# Start backend server
+npm run dev:backend
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+# Start web dashboard (port 3000)
+npm run dev:web
+```
+
+Or run directly inside this workspace:
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser.
+
+## Environment Variables
+
+- `NEXT_PUBLIC_API_URL`: Backend server URL (default: `http://localhost:4000` or `http://localhost:3100`)
+- `PORT`: Web dev server port (default: `3000`)

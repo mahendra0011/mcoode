@@ -1,0 +1,145 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "mcode Backend API",
+    "version": "2.4.6",
+    "description": "Generated from packages/backend/src/routes/*.js — see docs/API.md for the annotated table."
+  },
+  "servers": [{ "url": "http://localhost:3100" }],
+  "components": {
+    "securitySchemes": {
+      "bearer": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [{ "bearer": [] }],
+  "paths": {
+    "/health": { "get": { "security": [], "summary": "Health + execution capabilities" } },
+    "/metrics": { "get": { "security": [], "summary": "Runtime metrics" } },
+    "/api/v1/version": { "get": { "security": [], "summary": "Package version" } },
+    "/api/v1/auth/send-otp": { "post": { "security": [], "summary": "Send OTP (signup|login|reset)" } },
+    "/api/v1/auth/verify-otp": { "post": { "security": [], "summary": "Verify OTP (signup|login only)" } },
+    "/api/v1/auth/signup": { "post": { "security": [], "summary": "Signup" } },
+    "/api/v1/auth/login": { "post": { "security": [], "summary": "Login" } },
+    "/api/v1/auth/reset-password": { "post": { "security": [], "summary": "Reset with reset-intent OTP" } },
+    "/api/v1/auth/refresh": { "post": { "security": [], "summary": "Rotate refresh token" } },
+    "/api/v1/auth/sessions": { "get": { "summary": "List refresh sessions" } },
+    "/api/v1/auth/sessions/{jti}": { "delete": { "summary": "Revoke one session" } },
+    "/api/v1/auth/me": {
+      "get": { "summary": "Profile" },
+      "delete": { "summary": "Delete account (requires currentPassword)" },
+      "patch": { "summary": "Update name/settings" }
+    },
+    "/api/v1/auth/change-password": { "post": { "summary": "Change password (currentPassword or login OTP)" } },
+    "/api/v1/auth/github/login": { "get": { "security": [], "summary": "Start GitHub login" } },
+    "/api/v1/auth/github": { "get": { "security": [], "summary": "Connect flow (?token=)" } },
+    "/api/v1/auth/github/callback": { "get": { "security": [], "summary": "OAuth callback (signed state)" } },
+    "/api/v1/auth/github/exchange": { "post": { "security": [], "summary": "Redeem single-use login code" } },
+    "/api/v1/github/status": { "get": { "summary": "Connection status" } },
+    "/api/v1/github/disconnect": { "post": { "summary": "Disconnect GitHub" } },
+    "/api/v1/github/repos": { "get": { "summary": "List repos (?page&per_page)" } },
+    "/api/v1/workspaces": {
+      "get": { "summary": "List workspaces" },
+      "post": { "summary": "Create from zip|git|duplicate" }
+    },
+    "/api/v1/workspaces/{id}/files": { "get": { "summary": "File tree" } },
+    "/api/v1/workspaces/{id}/search": { "get": { "summary": "Code search" } },
+    "/api/v1/workspaces/{id}/file": {
+      "get": { "summary": "Read file" },
+      "post": { "summary": "Create file" },
+      "put": { "summary": "Write file" },
+      "delete": { "summary": "Delete file (never workspace root)" }
+    },
+    "/api/v1/workspaces/{id}/folder": { "post": { "summary": "Create directory" } },
+    "/api/v1/workspaces/{id}/rename-file": { "post": { "summary": "Rename (409 if target exists)" } },
+    "/api/v1/workspaces/{id}/ports/{port}/check": { "get": { "summary": "Port probe" } },
+    "/api/v1/workspaces/{id}/export": { "get": { "summary": "Export ZIP (1GB cap)" } },
+    "/api/v1/workspaces/{id}/branches": { "get": { "summary": "List branches" } },
+    "/api/v1/workspaces/{id}/checkout": { "post": { "summary": "Checkout (fetches first)" } },
+    "/api/v1/workspaces/{id}/diff": { "get": { "summary": "Git diff" } },
+    "/api/v1/workspaces/{id}/hunks": { "post": { "summary": "Apply diff hunks" } },
+    "/api/v1/workspaces/{id}/push": { "post": { "summary": "Commit+push (header auth, tracked-only)" } },
+    "/api/v1/workspaces/{id}/upload": { "post": { "summary": "Upload files (200 max)" } },
+    "/api/v1/keys": {
+      "get": { "summary": "List masked keys" },
+      "post": { "summary": "Save key (200 update / 201 create)" }
+    },
+    "/api/v1/keys/{id}": { "delete": { "summary": "Delete key" } },
+    "/api/v1/keys/models": { "get": { "summary": "Model catalog (60s cache)" } },
+    "/api/v1/keys/test": { "post": { "summary": "One-shot key check" } },
+    "/api/v1/sessions": {
+      "get": { "summary": "Paginated sessions" },
+      "post": { "summary": "Create session" }
+    },
+    "/api/v1/sessions/{id}": {
+      "get": { "summary": "Session detail" },
+      "patch": { "summary": "Update session" },
+      "delete": { "summary": "Delete session" }
+    },
+    "/api/v1/sessions/{id}/replay": { "get": { "summary": "Session replay" } },
+    "/api/v1/plugins": {
+      "get": { "security": [], "summary": "Public registry (intentional)" },
+      "post": { "summary": "Publish (semver + SSRF-checked URL)" }
+    },
+    "/api/v1/plugins/{name}": { "get": { "security": [], "summary": "Plugin detail (intentional)" } },
+    "/api/v1/watch/{projectId}/status": { "get": { "summary": "Watch status" } },
+    "/api/v1/watch/{projectId}/start": { "post": { "summary": "Start (idempotent)" } },
+    "/api/v1/watch/{projectId}/stop": { "post": { "summary": "Stop" } },
+    "/api/v1/watch/{projectId}/activity": { "get": { "summary": "Activity (paginated)" } },
+    "/api/v1/usage/quotas": { "get": { "summary": "Quotas" } },
+    "/api/v1/usage/compliance": { "get": { "summary": "Compliance" } },
+    "/api/v1/usage": { "get": { "summary": "Usage overview" } },
+    "/api/v1/usage/stats": { "get": { "summary": "Stats (5000-cap)" } },
+    "/api/v1/usage/report.pdf": { "get": { "summary": "PDF (?limit≤200)" } },
+    "/api/v1/usage/export.csv": { "get": { "summary": "CSV export" } },
+    "/api/v1/usage/coverage": { "get": { "summary": "Repo coverage artifact" } },
+    "/api/v1/uploads/project": { "post": { "summary": "Project ZIP upload" } },
+    "/api/v1/settings": {
+      "get": { "summary": "Settings" },
+      "put": { "summary": "Update (allowlisted keys)" }
+    },
+    "/api/v1/settings/providers": { "get": { "security": [], "summary": "Provider catalog (intentional)" } },
+    "/api/v1/settings/permissions": {
+      "get": { "summary": "Permission settings" },
+      "put": { "summary": "Update permissions" }
+    },
+    "/api/v1/settings/models": {
+      "get": { "summary": "Model overrides" },
+      "put": { "summary": "Update overrides" },
+      "delete": { "summary": "Reset overrides" }
+    },
+    "/api/v1/search": { "post": { "summary": "Web search + LLM answer" } },
+    "/api/v1/extensions/search": { "get": { "summary": "Open VSX search" } },
+    "/api/v1/extensions/installed": { "get": { "summary": "Installed list" } },
+    "/api/v1/extensions/install": { "post": { "summary": "Install VSIX (100MB cap)" } },
+    "/api/v1/extensions/uninstall/{id}": { "delete": { "summary": "Uninstall" } },
+    "/api/v1/languages": { "get": { "security": [], "summary": "Piston runtimes" } },
+    "/api/v1/android/devices": { "get": { "summary": "ADB devices" } },
+    "/api/v1/android/devices/{id}/start": { "post": { "summary": "Start emulator (tracked)" } },
+    "/api/v1/android/devices/{id}/stop": { "post": { "summary": "Stop emulator" } },
+    "/api/v1/pair/suggest": { "post": { "summary": "Inline completion" } },
+    "/api/v1/pair/structural": { "post": { "summary": "Structural suggestion" } },
+    "/api/v1/pair-suggest": { "post": { "summary": "Legacy suggest alias" } },
+    "/api/v1/prompt/library": {
+      "get": { "summary": "Prompt templates" },
+      "post": { "summary": "Save template" }
+    },
+    "/api/v1/prompt/library/{id}": { "delete": { "summary": "Delete template" } },
+    "/api/v1/prompt/enhance": { "post": { "summary": "Enhance prompt" } },
+    "/api/v1/clean/scan": { "post": { "summary": "Dead-code/bloat scan (workspace-scoped)" } },
+    "/api/v1/clean/execute": { "post": { "summary": "Apply selected fixes" } }
+  }
+}

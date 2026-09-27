@@ -300,6 +300,18 @@ export async function executeScriptWithSelfHeal(page, script, feature, ctx) {
     const consoleLogs = await collectConsoleErrors(page);
     const failedRequests = await collectFailedRequests(page);
 
+    // 873: if the failure is "no server" (connection refused/timeout on
+    // navigation), fixing SOURCE code is wrong — verify reachability first
+    // and report instead of dispatching a fix subagent at valid code.
+    const looksOffline = /ECONNREFUSED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_TIMED_OUT|net::ERR_|timeout.*(exceeded|navigat)|NS_ERROR_CONNECTION_REFUSED/i.test(
+      `${outcome.error || ''} ${(failedRequests || []).map((r) => r.url || r.failure || '').join(' ')}`
+    );
+    if (looksOffline) {
+      stepResults.push({ index: i, step, desc, status: 'infra', error: 'target server is not running — start it first, then re-run' });
+      bus?.emit('TEST_STEP_FAILED', { feature: feature.name, featureId: feature.id, index: i + 1, total: script.length, desc, error: 'target server not running (infra, not a code bug) — skipping auto-fix' });
+      continue;
+    }
+
     let fixed = false;
     let lastDiagnosis = null;
     for (let attempt = 1; attempt <= maxAttempts && !fixed; attempt++) {

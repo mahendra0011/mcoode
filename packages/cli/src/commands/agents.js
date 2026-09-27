@@ -23,8 +23,12 @@ export async function agentsCommand({ asJson = false } = {}) {
     try {
       const state = JSON.parse(await readFile(join(agentsDir, f), 'utf8'));
       if (state.kind !== 'god') continue;
-      // Drop snapshots older than 2h (stale runs).
-      if (Date.now() - new Date(state.updatedAt || 0).getTime() > 2 * 3600 * 1000) continue;
+      // Drop snapshots older than 2h (stale runs) — but a MISSING
+      // timestamp means "unknown age", not "stale": keep it (688).
+      if (state.updatedAt) {
+        const age = Date.now() - new Date(state.updatedAt).getTime();
+        if (Number.isFinite(age) && age > 2 * 3600 * 1000) continue;
+      }
       rows.push([
         `${state.project || f} (god ${state.done ?? 0}/${state.total ?? 0})`,
         state.status,

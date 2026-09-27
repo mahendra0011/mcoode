@@ -214,6 +214,14 @@ export async function run(argv) {
       await modelModesCommand();
     });
 
+  model
+    .command('benchmark')
+    .description('live latency/availability check per configured model')
+    .action(async () => {
+      const { modelBenchmarkCommand } = await import('./commands/model.js');
+      await modelBenchmarkCommand();
+    });
+
   model.action(async () => {
     const { modelListCommand } = await import('./commands/model.js');
     await modelListCommand();
@@ -289,10 +297,11 @@ export async function run(argv) {
     .description('list session history')
     .option('--clear', 'clear history', false)
     .option('--json', 'machine-readable output', false)
+    .option('-n, --limit <n>', 'show only the last N entries', '50')
     .action(async (opts) => {
       setJsonMode(Boolean(opts.json));
       const { historyCommand } = await import('./commands/history.js');
-      await historyCommand({ asJson: opts.json, clear: opts.clear });
+      await historyCommand({ asJson: opts.json, clear: opts.clear, limit: Number(opts.limit) || 50 });
     });
 
   // ── Add / ship ────────────────────────────────────────────────────────
@@ -346,9 +355,10 @@ export async function run(argv) {
     .description('build + verify + tag + deploy hook')
     .option('-e, --env <env>', 'environment label', 'prod')
     .option('-y, --yes', 'skip confirmations', false)
+    .option('--skip-tests', 'skip the test stage', false)
     .action(async (opts) => {
       const { shipCommand } = await import('./commands/ship.js');
-      await shipCommand({ env: opts.env, yes: opts.yes });
+      await shipCommand({ env: opts.env, yes: opts.yes, skipTests: opts.skipTests });
     });
 
   // ── Security checkup ──────────────────────────────────────────────────

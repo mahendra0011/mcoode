@@ -276,12 +276,14 @@ export function BottomPanel({
     };
 
     const handleProjectReady = (payload: any) => {
-      if (payload.previewUrl) {
-        toast.success(`Project running in Docker container: ${payload.previewUrl}`, {
+      // 015: only open http(s) preview URLs — never javascript:/data: schemes.
+      const raw = String(payload.previewUrl || '');
+      if (/^https?:\/\//i.test(raw)) {
+        toast.success(`Project running in Docker container: ${raw}`, {
           action: {
             label: 'Open Preview',
             onClick: () =>
-              window.open(`/preview?url=${encodeURIComponent(payload.previewUrl)}`, '_blank'),
+              window.open(`/preview?url=${encodeURIComponent(raw)}`, '_blank'),
           },
         });
       }

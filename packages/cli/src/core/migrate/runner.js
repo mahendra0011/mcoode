@@ -71,13 +71,25 @@ export async function runMigrate(prompt, {
     message: `executing migration... ${plan.todos.length} todo${plan.todos.length !== 1 ? 's' : ''}`
   });
 
+  // 862: crash-safe checkpoint — a disk-backed undo stack (not just
+  // in-memory) so Ctrl+C / failure mid-migration stays reversible via undo.
+  const { UndoStack } = await import('../tools.js');
+  const { homedir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { mkdir } = await import('node:fs/promises');
+  const migrateUndoDir = join(homedir(), '.mcode', 'migrate');
+  await mkdir(migrateUndoDir, { recursive: true }).catch(() => {});
+  const migrateUndo = new UndoStack({
+    filePath: join(migrateUndoDir, `undo-${Date.now().toString(36)}.json`),
+    projectPath,
+  });
   const subagentManager = new SubagentManager({
     plan,
     router,
     projectPath,
     config,
     bus: eventBus,
-    options: { skipIntegrationTests: true }
+    options: { skipIntegrationTests: true, undoStack: migrateUndo }
   });
 
   const executionResults = await subagentManager.run(plan.todos);

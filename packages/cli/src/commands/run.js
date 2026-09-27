@@ -7,8 +7,14 @@ export async function runCommand(script, { cwd = process.cwd() } = {}) {
   const pkgPath = join(cwd, 'package.json');
   let pkg;
   try {
-    pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
-  } catch {
+    const raw = await readFile(pkgPath, 'utf8');
+    try {
+      pkg = JSON.parse(raw);
+    } catch (parseErr) {
+      fail(`failed to parse package.json: ${parseErr.message}`);
+      process.exit(1);
+    }
+  } catch (readErr) {
     fail('no package.json found in this directory');
     process.exit(1);
   }
@@ -18,9 +24,17 @@ export async function runCommand(script, { cwd = process.cwd() } = {}) {
     fail(`script "${script}" not found (available: ${available})`);
     process.exit(1);
   }
-  ok(`npm run ${script} \u2192 ${cmd}`);
+
+  // Detect package manager from lockfiles
+  let pm = 'npm';
+  const { existsSync } = await import('node:fs');
+  if (existsSync(join(cwd, 'pnpm-lock.yaml'))) pm = 'pnpm';
+  else if (existsSync(join(cwd, 'yarn.lock'))) pm = 'yarn';
+  else if (existsSync(join(cwd, 'bun.lockb')) || existsSync(join(cwd, 'bun.lock'))) pm = 'bun';
+
+  ok(`${pm} run ${script} \u2192 ${cmd}`);
   try {
-    await execa('npm', ['run', script], {
+    await execa(pm, ['run', script], {
       cwd,
       stdio: 'inherit',
       env: { ...process.env, FORCE_COLOR: '1' }

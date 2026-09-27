@@ -69,27 +69,36 @@ export async function runClean(projectPath = process.cwd(), {
     current: 0,
   });
 
+  // 874: batch in groups of 5 through ONE manager run each — 40 findings
+  // meant 40 sequential LLM sessions; waves parallelize safe todos while
+  // file-conflict chaining keeps shared-file edits ordered.
   let estimatedLinesRemoved = 0;
-  for (let i = 0; i < fixTodos.length; i++) {
-    const todo = fixTodos[i];
-    const finding = todo.finding;
-    const linesDiff = Math.max(0, (finding.currentLines || 1) - (finding.estimatedCleanLines || 0));
-    estimatedLinesRemoved += linesDiff;
+  let doneCount = 0;
+  const CHUNK = 5;
+  for (let i = 0; i < fixTodos.length; i += CHUNK) {
+    const chunk = fixTodos.slice(i, i + CHUNK);
+    for (const todo of chunk) {
+      const finding = todo.finding;
+      estimatedLinesRemoved += Math.max(0, (finding.currentLines || 1) - (finding.estimatedCleanLines || 0));
+    }
 
     if (subagentManager && typeof subagentManager.run === 'function') {
       try {
-        await subagentManager.run([todo]);
+        await subagentManager.run(chunk);
       } catch (err) {
-        // continue
+        // continue with next chunk
       }
     }
 
-    bus?.emit('CLEAN_ITEM_DONE', {
-      index: i + 1,
-      total: fixTodos.length,
-      title: todo.title,
-      linesRemoved: linesDiff,
-    });
+    for (const todo of chunk) {
+      doneCount++;
+      bus?.emit('CLEAN_ITEM_DONE', {
+        index: doneCount,
+        total: fixTodos.length,
+        title: todo.title,
+        linesRemoved: 0,
+      });
+    }
   }
 
   // 3. Verify behavioral equivalence (Doc 51/55 loop)

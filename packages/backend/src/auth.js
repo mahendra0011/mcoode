@@ -1,16 +1,17 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
 
-export function hashPassword(plain) {
-  // Cost is env-tunable so the parallel test suite (and low-power hosts)
-  // don't stall on 2-3s sync hashes; production default stays at 10.
+export async function hashPassword(plain) {
+  // RTR-009: async (libuv threadpool) so password hashing never blocks the
+  // event loop for ~100ms per call. Cost stays env-tunable so the parallel
+  // test suite (and low-power hosts) don't stall; production default is 10.
   const rounds = Math.min(12, Math.max(4, Number(process.env.MCODE_BCRYPT_ROUNDS) || 10));
-  return bcrypt.hashSync(plain, rounds);
+  return bcrypt.hash(plain, rounds);
 }
 
-export function verifyPassword(plain, hash) {
-  return bcrypt.compareSync(plain, hash);
+export async function verifyPassword(plain, hash) {
+  return bcrypt.compare(plain, hash);
 }
 
 export function signTokens(userId, { secret, accessTtl = '15m', refreshTtl = '30d' } = {}) {
@@ -19,19 +20,35 @@ export function signTokens(userId, { secret, accessTtl = '15m', refreshTtl = '30
   return { access, refresh };
 }
 
-/** Issue + persist a refresh token (rotation allowlist). Returns {access, refresh}. */
+/** AUTH-001: OTP codes are hashed with HMAC-SHA256 (keyed, ~µs) instead of
+ *  bcrypt (~100ms for a 6-digit code — 1000x waste). The digest is bound to
+ *  the server secret; legacy bcrypt hashes still verify (one-time compat). */
+export function hashOtpCode(code, secret) {
+  return `hmac-sha256:${createHmac('sha256', String(secret)).update(`otp:${code}`).digest('hex')}`;
+}
+
+export async function verifyOtpCode(code, stored, secret) {
+  if (typeof stored === 'string' && stored.startsWith('hmac-sha256:')) {
+    const a = Buffer.from(hashOtpCode(code, secret));
+    const b = Buffer.from(stored);
+    return a.length === b.length && timingSafeEqual(a, b);
+  }
+  return bcrypt.compare(code, stored); // legacy bcrypt-hashed OTPs
+}
+
+/** Issue + persist a refresh token (rotation allowlist). Returns {access, refresh}.
+ *  AUTH-019: the JTI write is REQUIRED, not best-effort — returning an
+ *  untracked refresh token would get all of the user's sessions revoked on
+ *  first use (rotateRefreshToken treats unknown JTIs as reuse). Callers map
+ *  DB errors to 503 so clients retry instead of failing closed. */
 export async function signTrackedTokens(db, userId, { secret } = {}) {
   const tokens = signTokens(userId, { secret });
   const { jti, exp } = jwt.decode(tokens.refresh) || {};
-  try {
-    await db.refreshToken.create({
-      jti,
-      userId,
-      expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 3600 * 1000),
-    });
-  } catch {
-    /* allowlist write is best-effort — JWT itself stays valid */
-  }
+  await db.refreshToken.create({
+    jti,
+    userId,
+    expiresAt: exp ? new Date(exp * 1000) : new Date(Date.now() + 30 * 24 * 3600 * 1000),
+  });
   return tokens;
 }
 
@@ -87,7 +104,12 @@ export function readAuthCookies(req) {
   for (const part of String(header).split(';')) {
     const i = part.indexOf('=');
     if (i < 0) continue;
-    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    const raw = part.slice(i + 1).trim();
+    try {
+      out[part.slice(0, i).trim()] = decodeURIComponent(raw);
+    } catch {
+      out[part.slice(0, i).trim()] = raw; // AUTH-015: stray % must not kill parsing
+    }
   }
   return out;
 }

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import axios from 'axios';
+import jwt from 'jsonwebtoken';
+import crypto from 'node:crypto';
 import { authMiddleware } from '../auth.js';
 import { db } from '../db.js';
 import { deriveMasterKey, encryptKey, decryptKey } from '../secret-enc.js';
@@ -22,7 +24,8 @@ export function githubAuthRoutes({ secret }) {
       return res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'GITHUB_CLIENT_ID not set' } });
     }
     const loginRedirect = process.env.GITHUB_REDIRECT_URI || `http://localhost:3100/api/v1/auth/github/callback`;
-    const loginUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(loginRedirect)}&scope=${encodeURIComponent('read:user user:email')}&state=${encodeURIComponent('login')}`;
+    const stateToken = jwt.sign({ purpose: 'github_login', nonce: crypto.randomUUID() }, secret, { expiresIn: '10m' });
+    const loginUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(loginRedirect)}&scope=${encodeURIComponent('read:user user:email')}&state=${encodeURIComponent(stateToken)}`;
     res.redirect(loginUrl);
   });
 
@@ -34,30 +37,65 @@ export function githubAuthRoutes({ secret }) {
     }
     const redirectUri = process.env.GITHUB_REDIRECT_URI || `http://localhost:3100/api/v1/auth/github/callback`;
     const scope = 'repo user'; // We need repo access for cloning private repos and pushing
-    // Pass the token we received from the frontend as state so we know who they are on callback
-    const state = req.query.token || ''; 
-    const url = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(state)}`;
+    let userState = '';
+    if (req.query.token) {
+      try {
+        const decoded = jwt.verify(req.query.token, secret);
+        userState = jwt.sign({ sub: decoded.sub, purpose: 'github_connect', nonce: crypto.randomUUID() }, secret, { expiresIn: '10m' });
+      } catch {
+        return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } });
+      }
+    } else {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Token required to connect GitHub' } });
+    }
+    const url = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${encodeURIComponent(userState)}`;
     res.redirect(url);
   });
 
+  // GH-004: redeem a single-use login code for tokens (one POST, no URLs).
+  router.post('/exchange', async (req, res) => {
+    try {
+      const code = String(req.body?.code || '');
+      if (!code) return res.status(400).json({ error: { code: 'VALIDATION', message: 'code is required' } });
+      const entry = pendingLogins.get(code);
+      pendingLogins.delete(code);
+      if (!entry || entry.expires < Date.now()) {
+        return res.status(401).json({ error: { code: 'INVALID_CODE', message: 'login code expired or already used' } });
+      }
+      res.json({ access: entry.access, refresh: entry.refresh });
+    } catch {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'invalid exchange request' } });
+    }
+  });
+
   router.get('/callback', async (req, res, next) => {
-    const { code, state: authToken } = req.query;
+    const { code, state: rawState } = req.query;
     if (!code) {
       return res.status(400).send('Missing code');
     }
-    // Passwordless login flow (state === 'login'): no session yet.
-    if (authToken === 'login') {
+    if (!rawState) {
+      return res.status(400).send('Missing state parameter');
+    }
+
+    // GH-001: state is REQUIRED and must be server-signed (purpose-bound JWT
+    // with nonce). The old `state=login` constant bypass defeated CSRF
+    // protection entirely — removed. /login always issues signed state.
+    let statePayload;
+    try {
+      statePayload = jwt.verify(rawState, secret);
+    } catch {
+      return res.status(401).send('Invalid or expired state token for authentication');
+    }
+
+    if (statePayload.purpose === 'github_login') {
       return githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_SECRET, code });
     }
+
     try {
-      // 1. Verify the state/authToken to get userId
-      let userId;
-      try {
-        const { verify } = await import('jsonwebtoken');
-        const decoded = verify(authToken, secret);
-        userId = decoded.sub;
-      } catch (err) {
-        return res.status(401).send('Invalid or missing state token for authentication');
+      // 1. Verify the state payload to get userId
+      const userId = statePayload.sub;
+      if (!userId) {
+        return res.status(401).send('Invalid state payload');
       }
 
       // 2. Exchange code for access token
@@ -94,7 +132,7 @@ export function githubAuthRoutes({ secret }) {
       }
 
       // 5. Redirect back to frontend IDE
-      res.redirect(process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/ai/chat?github_connected=1` : 'http://localhost:5173/ai/chat?github_connected=1');
+      res.redirect(process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/ai/chat?github_connected=1` : 'http://localhost:3000/ai/chat?github_connected=1');
 
     } catch (err) {
       next(err);
@@ -108,7 +146,7 @@ export function githubAuthRoutes({ secret }) {
  *  find-or-create user → link github account → tracked tokens in fragment. */
 async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_SECRET, code }) {
   try {
-    const front = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const front = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
     const fail = (msg) => res.redirect(`${front}/login?oauth_error=${encodeURIComponent(msg)}`);
     const tokenResponse = await axios.post('https://github.com/login/oauth/access_token', {
       client_id: CLIENT_ID,
@@ -131,7 +169,7 @@ async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_S
     if (!user) {
       user = await db().user.create({
         email,
-        passwordHash: hashPassword(randomBytes(16).toString('hex')),
+        passwordHash: await hashPassword(randomBytes(16).toString('hex')),
         name: me.name || me.login || email.split('@')[0],
         plan: 'free',
         settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
@@ -146,11 +184,25 @@ async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_S
       await db().githubAccount.create({ userId: user._id, accessToken: encryptedToken, username: me.login, avatarUrl: me.avatar_url });
     }
     const tokens = await signTrackedTokens(db(), user._id, { secret });
-    res.redirect(`${front}/login#access=${encodeURIComponent(tokens.access)}&refresh=${encodeURIComponent(tokens.refresh)}`);
+    // GH-004: tokens never travel in URL fragments (history/extensions can
+    // read them). Issue a single-use login code; the SPA exchanges it for
+    // tokens over POST. Codes live 60s and burn on first read.
+    const loginCode = randomBytes(32).toString('hex');
+    pendingLogins.set(loginCode, { ...tokens, expires: Date.now() + 60_000 });
+    if (pendingLogins.size > 1000) {
+      for (const [k, v] of pendingLogins) {
+        if (v.expires < Date.now()) pendingLogins.delete(k);
+      }
+    }
+    res.redirect(`${front}/login?code=${loginCode}`);
   } catch (err) {
     next(err);
   }
 }
+
+// Single-use OAuth login codes (GH-004). In-memory: a restart invalidates
+// unredeemed codes, which is the safe direction.
+const pendingLogins = new Map();
 
 export function githubApiRoutes({ secret }) {
   const router = Router();
@@ -187,7 +239,9 @@ export function githubApiRoutes({ secret }) {
       const masterKey = deriveMasterKey(secret, req.userId);
       const accessToken = decryptKey(account.accessToken, masterKey);
       
-      const response = await axios.get('https://api.github.com/user/repos?sort=updated&per_page=100', {
+      const page = Math.max(1, Number(req.query.page) || 1);
+      const perPage = Math.min(100, Math.max(1, Number(req.query.per_page) || 100));
+      const response = await axios.get(`https://api.github.com/user/repos?sort=updated&per_page=${perPage}&page=${page}`, {
          headers: { Authorization: `Bearer ${accessToken}` }
       });
 

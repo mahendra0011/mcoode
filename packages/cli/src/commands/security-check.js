@@ -129,8 +129,15 @@ export async function securityCheckCommand({ category = null, asJson = false, no
   let fixIndex = 1;
   for (const id of selected) {
     const finding = findings.find((f) => f.id === id);
+    // 685: never pass a bare id string into the fixer (it expects a finding
+    // object) — fail loudly instead of crashing on property access.
+    if (!finding) {
+      console.log(`  [${fixIndex}/${selected.length}] ${id} — skipped (no longer in findings, re-run scan)`);
+      fixIndex++;
+      continue;
+    }
     const label = finding?.label || id;
-    const res = await fixFinding(finding || id, projectPath);
+    const res = await fixFinding(finding, projectPath);
     console.log(`  [${fixIndex}/${selected.length}] ${label} — ${res.detail || 'fixed'} ✓`);
     fixIndex++;
   }

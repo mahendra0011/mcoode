@@ -1,5 +1,10 @@
 # ZCode Tools & Dependencies — From Actual App Source
 
+> Legacy scope: package lists below (including `lexical`, `echarts`,
+> `zrender`) were extracted from legacy ZCode Electron v3 binaries — they are
+> NOT dependencies of `packages/web` (which uses Next.js, Recharts, and
+> native inputs). Do not import them based on this document.
+
 > ✅ Extracted from `ZCode/resources/app-extracted/node_modules/` — actual installed packages in the ZCode Electron app.
 
 ---

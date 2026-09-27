@@ -38,7 +38,14 @@ export function WatchActivityFeed({ projectId, live = [] }: { projectId?: string
       .finally(() => setLoading(false));
   }, [projectId]);
 
-  const merged = [...live, ...history.filter((h) => !live.some((l) => l.timestamp === h.timestamp))].slice(0, 30);
+  // 1220: dedupe by stable identity (id or file/detail/outcome), not raw
+  // timestamps — socket vs DB timestamps differ by milliseconds, which
+  // duplicated every row on refetch. 5-minute window lets re-fixes resurface.
+  const dedupeKey = (x: any) => String(x._id || x.id || `${x.file}:${x.detail}:${x.outcome}`);
+  const cutoff = Date.now() - 5 * 60 * 1000;
+  const liveFresh = live.filter((l: any) => new Date(l.timestamp || l.at || Date.now()).getTime() >= cutoff);
+  const liveKeys = new Set(liveFresh.map(dedupeKey));
+  const merged = [...liveFresh, ...history.filter((h: any) => !liveKeys.has(dedupeKey(h)))].slice(0, 30);
 
   return (
     <div className="h-full flex flex-col bg-[#111]">

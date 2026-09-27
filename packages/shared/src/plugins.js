@@ -2,6 +2,7 @@
  * Official mcode plugin registry — single source of truth for the CLI
  * (`mcode add`) and the backend plugin catalog (seed script + `/api/plugins`).
  * Keep this list honest: the web app advertises "40+ official plugins".
+ * @type {Record<string, { category: string, desc: string, config: object }>}
  */
 export const PLUGIN_REGISTRY = {
   // lint
@@ -70,9 +71,20 @@ export const PLUGIN_REGISTRY = {
   'pwa-preset': { category: 'frontend', desc: 'PWA manifest + service worker preset', config: { frontend: { pwa: true } } }
 };
 
+/**
+ * @typedef {{ category: string, desc: string, config: object }} PluginEntry
+ * @typedef {PluginEntry & { name: string }} PluginInfo
+ */
 export const PLUGIN_CATEGORIES = [...new Set(Object.values(PLUGIN_REGISTRY).map((p) => p.category))];
 
+/** @param {{ category?: string }} [opts] @returns {PluginInfo[]} */
 export function listPlugins({ category } = {}) {
-  const all = Object.entries(PLUGIN_REGISTRY).map(([name, p]) => ({ name, ...p }));
+  /** @type {PluginInfo[]} */
+  const all = [];
+  for (const name of Object.keys(PLUGIN_REGISTRY)) {
+    /** @type {import('./plugins.js').PluginEntry} */
+    const entry = PLUGIN_REGISTRY[name];
+    all.push({ name, ...entry });
+  }
   return category ? all.filter((p) => p.category === category) : all;
 }

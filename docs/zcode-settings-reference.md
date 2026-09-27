@@ -1,6 +1,10 @@
 # ZCode Settings Reference
 
-Complete documentation of all ZCode `setting.json` keys, CLI config schema, and credential storage, sourced from the actual settings file at `C:\Users\mahen\.zcode\v2\` and cross-referenced with `McodeSettingsTab.tsx` documentation.
+Complete documentation of all ZCode `setting.json` keys, CLI config schema, and credential storage, sourced from the actual settings file at `%USERPROFILE%\.zcode\v2\` and cross-referenced with `McodeSettingsTab.tsx` documentation.
+
+> Legacy note: keys ending in `MigrationInitialized` / `Migrated` are one-shot
+> upgrade flags from the legacy ZCode Electron builds. The `mcode` CLI and
+> dashboard do not consume them — do not add them to new code.
 
 ---
 
@@ -8,12 +12,12 @@ Complete documentation of all ZCode `setting.json` keys, CLI config schema, and 
 
 | File | Purpose |
 |------|---------|
-| `C:\Users\mahen\.zcode\v2\setting.json` | User-level settings/preferences (~33 keys) |
-| `C:\Users\mahen\.zcode\v2\config.json` | Model provider configuration (API keys, base URLs, model metadata) |
-| `C:\Users\mahen\.zcode\v2\credentials.json` | Encrypted OAuth tokens (AES-256-GCM) |
-| `C:\Users\mahen\.zcode\v2\bot-state.v2.json` | Bot state (conversations, memory) |
-| `C:\Users\mahen\.zcode\v2\telemetry-state.json` | Telemetry opt-in/opt-out state |
-| `C:\Users\mahen\.zcode\v2\tasks-index.sqlite` | Tasks database |
+| `%USERPROFILE%\.zcode\v2\setting.json` | User-level settings/preferences (~33 keys) |
+| `%USERPROFILE%\.zcode\v2\config.json` | Model provider configuration (API keys, base URLs, model metadata) |
+| `%USERPROFILE%\.zcode\v2\credentials.json` | Encrypted OAuth tokens (AES-256-GCM) |
+| `%USERPROFILE%\.zcode\v2\bot-state.v2.json` | Bot state (conversations, memory) |
+| `%USERPROFILE%\.zcode\v2\telemetry-state.json` | Telemetry opt-in/opt-out state |
+| `%USERPROFILE%\.zcode\v2\tasks-index.sqlite` | Tasks database |
 
 ---
 

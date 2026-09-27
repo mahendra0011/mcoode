@@ -25,6 +25,9 @@ export function watchRoutes({ secret }) {
       let project = await projects.findOne({ _id: req.params.projectId, userId: req.userId });
       if (!project) {
         project = await projects.create({ _id: req.params.projectId, userId: req.userId, status: 'running', scansRun: 0, fixesApplied: 0 });
+      } else if (project.status === 'running') {
+        // WCH-001: idempotent start — no redundant DB write when already live.
+        return res.json({ ...project, alreadyRunning: true });
       } else {
         project = await projects.findByIdAndUpdate(project._id, { status: 'running' }, { new: true });
       }

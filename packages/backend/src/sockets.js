@@ -85,33 +85,225 @@ async function getDefaultWorkspacePath(socket) {
 }
 
 /**
+ * BKD-001: real bugcheck tier implementations (static analysis, no AI).
+ * Each returns an array of findings: { tier, file, line, rule, message, severity }.
+ * All tools run with tight timeouts and degrade to [] when unavailable.
+ */
+const BUGCHECK_MAX_FINDINGS = 50;
+
+function bugcheckBin(projectPath, name) {
+  const exe = process.platform === 'win32' ? `${name}.cmd` : name;
+  return path.join(projectPath, 'node_modules', '.bin', exe);
+}
+
+async function bugcheckBinExists(projectPath, name) {
+  try {
+    await fs.promises.stat(bugcheckBin(projectPath, name));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Tier 1: ESLint (errors only) + tsc --noEmit error lines. */
+async function runBugcheckTier1(projectPath) {
+  const findings = [];
+  const { execa } = await import('execa');
+  if (await bugcheckBinExists(projectPath, 'eslint')) {
+    try {
+      const { stdout } = await execa(bugcheckBin(projectPath, 'eslint'), ['.', '--format', 'json'], {
+        cwd: projectPath, timeout: 90_000, reject: false,
+      });
+      const reports = JSON.parse(stdout || '[]');
+      for (const r of reports) {
+        const rel = path.relative(projectPath, r.filePath);
+        for (const msg of (r.messages || []).filter((x) => x.severity === 2)) {
+          findings.push({ tier: 1, file: rel, line: msg.line || 0, rule: msg.ruleId || 'eslint', message: msg.message, severity: 'high' });
+          if (findings.length >= BUGCHECK_MAX_FINDINGS) return findings;
+        }
+      }
+    } catch {
+      /* eslint unavailable/failed — tsc below is the backstop */
+    }
+  }
+  if (await bugcheckBinExists(projectPath, 'tsc')) {
+    try {
+      const { stdout, stderr } = await execa(bugcheckBin(projectPath, 'tsc'), ['--noEmit', '--pretty', 'false'], {
+        cwd: projectPath, timeout: 90_000, reject: false,
+      });
+      for (const line of String(stdout + stderr).split('\n')) {
+        const mt = /(.+?)\((\d+),\d+\):\s*error\s*(TS\d+):\s*(.*)/.exec(line);
+        if (mt) {
+          findings.push({ tier: 1, file: mt[1], line: Number(mt[2]), rule: mt[3], message: mt[4], severity: 'high' });
+          if (findings.length >= BUGCHECK_MAX_FINDINGS) break;
+        }
+      }
+    } catch {
+      /* tsc unavailable — eslint results stand */
+    }
+  }
+  return findings;
+}
+
+/** Tier 2: known crash-prone patterns via bounded source scan. */
+async function runBugcheckTier2(projectPath) {
+  const findings = [];
+  const PATTERNS = [
+    { re: /\beval\s*\(/, rule: 'no-eval', message: 'eval() enables code injection', severity: 'high' },
+    { re: /new\s+Function\s*\(/, rule: 'no-new-function', message: 'new Function() enables code injection', severity: 'high' },
+    { re: /exec\w*\(\s*[`'"][^`'"]*\$\{/, rule: 'shell-injection', message: 'possible shell injection via template-built command', severity: 'high' },
+    { re: /JSON\.parse\s*\(\s*req\./, rule: 'unsafe-json-parse', message: 'unvalidated JSON.parse on request data (throws on malformed input)', severity: 'medium' },
+    { re: /process\.exit\s*\(/, rule: 'process-exit', message: 'process.exit() in library code crashes the host', severity: 'medium' },
+    { re: /\.innerHTML\s*=\s*[^'"]*\+/, rule: 'xss-concat', message: 'innerHTML built via concatenation (XSS risk)', severity: 'medium' },
+  ];
+  const stack = [projectPath];
+  let filesSeen = 0;
+  while (stack.length && filesSeen < 500 && findings.length < BUGCHECK_MAX_FINDINGS) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (['node_modules', '.git', 'dist', 'build', 'coverage'].includes(e.name)) continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        stack.push(full);
+      } else if (/\.(js|jsx|ts|tsx|mjs|cjs)$/.test(e.name)) {
+        filesSeen++;
+        let src;
+        try {
+          const st = await fs.promises.stat(full);
+          if (st.size > 200_000) continue;
+          src = await fs.promises.readFile(full, 'utf8');
+        } catch {
+          continue;
+        }
+        const rel = path.relative(projectPath, full);
+        const lines = src.split('\n');
+        for (let i = 0; i < lines.length && findings.length < BUGCHECK_MAX_FINDINGS; i++) {
+          for (const p of PATTERNS) {
+            if (p.re.test(lines[i])) {
+              findings.push({ tier: 2, file: rel, line: i + 1, rule: p.rule, message: p.message, severity: p.severity });
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  return findings;
+}
+
+/** Tier 3: `npm audit --json` (best-effort; [] when offline/no package.json). */
+async function runBugcheckTier3(projectPath) {
+  const findings = [];
+  try {
+    await fs.promises.stat(path.join(projectPath, 'package.json'));
+  } catch {
+    return findings;
+  }
+  try {
+    const { execa } = await import('execa');
+    const { stdout } = await execa('npm', ['audit', '--json'], {
+      cwd: projectPath, timeout: 60_000, reject: false,
+    });
+    const data = JSON.parse(stdout || '{}');
+    const advisories = data.advisories || data.vulnerabilities || {};
+    for (const [name, adv] of Object.entries(advisories)) {
+      const sev = String(adv.severity || 'medium').toLowerCase();
+      findings.push({
+        tier: 3, file: 'package.json', line: 0, rule: `npm-audit:${name}`,
+        message: `${adv.title || name} (${adv.severity || 'unknown'}${adv.url ? ` — ${adv.url}` : ''})`,
+        severity: sev === 'critical' || sev === 'high' ? 'high' : 'medium',
+      });
+      if (findings.length >= 30) break;
+    }
+  } catch {
+    /* offline or npm missing — honest empty, not fake clean */
+  }
+  return findings;
+}
+
+/**
  * Socket.IO server — clients connect with `{ path: '/live' }`, which maps to
  * the default namespace '/' (path is the engine.io URL path, not a namespace).
  * CLI agents connect without a token and only EMIT; web clients
  * authenticate so they can join rooms.
  */
-export function attachSockets(httpServer, { secret, ioOptions = {} }) {
+export function attachSockets(httpServer, { secret, env = process.env, ioOptions = {} }) {
+  const allowedOrigins = String(env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000,http://localhost:5174')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const io = new Server(httpServer, {
     path: '/live',
     cors: {
       origin: (origin, callback) => {
-        // Allow all localhost dev ports (Vite may use 5173-5177+)
-        if (!origin || origin.startsWith('http://localhost:')) {
-          callback(null, true);
-        } else {
-          callback(null, false);
+        // Allow requests with no origin (server-to-server, Electron, CLI emitter)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        // Allow local dev origins when not in production
+        if (env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+          return callback(null, true);
         }
+        return callback(new Error('CORS blocked: origin not allowed for socket connection'));
       },
       credentials: true
     },
     ...ioOptions
   });
 
+  // SEC-008: CLI → backend emitter auth. When CLI_SHARED_SECRET is configured,
+  // unauthenticated sockets may connect (backward compat) but their broadcast
+  // events are dropped unless they present the shared secret.
+  const cliSecret = String(env.CLI_SHARED_SECRET || env.MCODE_CLI_SECRET || '');
+  let noSecretWarned = false;
+  // BKD-006: GLOBAL rate limiting (per userId, or per IP when unauthenticated)
+  // plus a per-IP connection cap. Per-socket buckets alone let an attacker
+  // multiply their budget by opening N connections.
+  const GLOBAL_RATE_WINDOW_MS = 60_000;
+  const GLOBAL_RATE_MULTIPLIER = 5; // global budget = 5x the per-socket budget
+  const MAX_CONN_PER_IP = 20;
+  const globalBuckets = new Map(); // `${key}:${event}` -> { windowStart, count }
+  const connByIp = new Map(); // ip -> live connection count
+  const socketIp = (socket) => String(socket.handshake.address || socket.handshake.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || 'unknown');
+  const globalCheckRate = (key, event, max) => {
+    if (!max) return true;
+    const now = Date.now();
+    // SOCK-036: opportunistic sweep so idle keys never accumulate.
+    if (globalBuckets.size > 5000) {
+      for (const [k, v] of globalBuckets) {
+        if (now - v.windowStart > GLOBAL_RATE_WINDOW_MS) globalBuckets.delete(k);
+        if (globalBuckets.size <= 4000) break;
+      }
+    }
+    const gkey = `${key}:${event}`;
+    const row = globalBuckets.get(gkey) || { windowStart: now, count: 0 };
+    if (now - row.windowStart > GLOBAL_RATE_WINDOW_MS) {
+      row.windowStart = now;
+      row.count = 0;
+    }
+    row.count += 1;
+    globalBuckets.set(gkey, row);
+    return row.count <= max * GLOBAL_RATE_MULTIPLIER;
+  };
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
     if (!token) {
       socket.userId = null;
       socket.role = 'emitter';
+      const presented = String(socket.handshake.auth?.cliSecret || socket.handshake.headers?.['x-cli-secret'] || '');
+      socket.emitterAuthed = Boolean(cliSecret && presented && presented === cliSecret);
+      if (cliSecret && !socket.emitterAuthed) {
+        console.warn('[SOCKET] unauthenticated emitter connected (missing/invalid CLI_SHARED_SECRET) — its events will be dropped');
+      } else if (!cliSecret && !noSecretWarned) {
+        noSecretWarned = true;
+        console.warn('[SOCKET] CLI_SHARED_SECRET not configured — emitter events are unauthenticated (set it in backend .env)');
+      }
       return next();
     }
     try {
@@ -126,6 +318,19 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
 
   io.on('connection', (socket) => {
     console.log('[SOCKET] connection:', socket.id, 'role:', socket.role, 'url:', socket.handshake.url);
+    // BKD-006: per-IP connection cap + per-key identity for global budgets.
+    const ip = socketIp(socket);
+    socket.rateKey = socket.userId ? `user:${socket.userId}` : `ip:${ip}`;
+    connByIp.set(ip, (connByIp.get(ip) || 0) + 1);
+    if (connByIp.get(ip) > MAX_CONN_PER_IP) {
+      connByIp.set(ip, connByIp.get(ip) - 1);
+      socket.emit('error', { code: 'TOO_MANY_CONNECTIONS', message: `too many connections from ${ip} — slow down` });
+      socket.disconnect(true);
+      return;
+    }
+    socket.on('disconnect', () => {
+      connByIp.set(ip, Math.max(0, (connByIp.get(ip) || 1) - 1));
+    });
     // Per-socket token buckets (BUG-37): cheap DoS guard for expensive events.
     // Limits are per minute; over-limit callers get a `rate_limited` error.
     const buckets = new Map();
@@ -142,6 +347,10 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     const checkRate = (event) => {
       const max = SOCKET_LIMITS[event];
       if (!max) return true;
+      if (!globalCheckRate(socket.rateKey, event, max)) {
+        socket.emit('error', { code: 'RATE_LIMITED', message: `${event} rate-limited globally — slow down` });
+        return false;
+      }
       const now = Date.now();
       const row = buckets.get(event) || { windowStart: now, count: 0 };
       if (now - row.windowStart > 60_000) {
@@ -173,26 +382,39 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       socket.join(`project:${projectId}`);
     });
 
+    const requireEmitterAuth = (event) => {
+      if (socket.role === 'emitter' && cliSecret && !socket.emitterAuthed) {
+        socket.emit('error', { code: 'EMITTER_UNAUTH', message: `${event} requires CLI_SHARED_SECRET` });
+        return false;
+      }
+      return true;
+    };
     // CLI → server events, broadcast to connected web clients.
     // (Room-based fan-out is optional; web clients don't always join rooms yet.)
     for (const event of ['session:start', 'plan:generated', 'agent:started', 'agent:step', 'agent:file', 'agent:done', 'agent:failed', 'agent:needs_review', 'integration:pass', 'build:complete', 'toast']) {
-      socket.on(event, (payload = {}) => {
+      socket.on(event, async (payload = {}) => {
+        if (!requireEmitterAuth(event)) return;
         io.emit(event, payload);
-        // best-effort persistence for build results
+        // persistence for build results
         if (event === 'build:complete' && payload.sessionId) {
-          db().session.create({
-            userId: socket.userId,
-            projectName: payload.projectName || 'mcode build',
-            mode: 'god',
-            status: 'completed',
-            plan: payload.plan || null,
-            results: payload
-          }).catch(() => {});
+          try {
+            await db().session.create({
+              userId: socket.userId,
+              projectName: payload.projectName || 'mcode build',
+              mode: 'god',
+              status: 'completed',
+              plan: payload.plan || null,
+              results: payload
+            });
+          } catch (err) {
+            console.error('[SOCKET] Failed to persist build:complete session:', err.message);
+          }
         }
       });
     }
     for (const event of ['watch:scan', 'watch:fix', 'watch:status', 'watch:activity']) {
-      socket.on(event, (payload = {}) => {
+      socket.on(event, async (payload = {}) => {
+        if (!requireEmitterAuth(event)) return;
         io.emit(event, payload);
         if (payload.projectId) {
           io.to(`project:${payload.projectId}`).emit(event, payload);
@@ -213,12 +435,17 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
               io.to(`project:${payload.projectId}`).emit('watch:activity', item);
             }
           }
-          db().watchActivity.create(item).catch(() => {});
+          try {
+            await db().watchActivity.create(item);
+          } catch {
+            /* best-effort persistence — event was already broadcast */
+          }
         }
       });
     }
 
     socket.on('watch:start', (payload = {}) => {
+      if (!requireEmitterAuth('watch:start')) return;
       const projectId = payload.projectId;
       if (projectId) {
         io.to(`project:${projectId}`).emit('watch:start-signal', payload);
@@ -228,6 +455,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     });
 
     socket.on('watch:stop', (payload = {}) => {
+      if (!requireEmitterAuth('watch:stop')) return;
       const projectId = payload.projectId;
       if (projectId) {
         io.to(`project:${projectId}`).emit('watch:stop-signal', payload);
@@ -239,6 +467,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     // ── Bug Check mode events (doc 44) ──────────────────────────
     for (const event of ['bugcheck:tier-start', 'bugcheck:tier-done', 'bugcheck:done']) {
       socket.on(event, (payload = {}) => {
+        if (!requireEmitterAuth(event)) return;
         io.emit(event, payload);
         if (payload.projectId) {
           io.to(`project:${payload.projectId}`).emit(event, payload);
@@ -246,80 +475,70 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       });
     }
 
-    socket.on('bugcheck:start', (payload = {}) => {
+    // BKD-001: REAL static analysis (was a hardcoded setTimeout cascade that
+    // always reported "0 findings"). Tiers 1-3 run actual tools; tier 4 is
+    // reported honestly as unavailable when no AI path is wired.
+    socket.on('bugcheck:start', async (payload = {}) => {
+      if (!requireEmitterAuth('bugcheck:start')) return;
       const projectId = payload.projectId;
       if (projectId) {
-        io.to(`project:${projectId}`).emit('bugcheck:start-signal', payload);
+        io.to(`project:${payload.projectId}`).emit('bugcheck:start-signal', payload);
       }
       io.emit('bugcheck:start', payload);
 
-      // Default progression so web UI has immediate real-time tier execution feedback
+      const session = chatSessions.get(socket.id);
+      let projectPath = session?.workspacePath;
+      if (!projectPath && payload.projectId) {
+        try {
+          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
+          if (ws?.diskPath) projectPath = ws.diskPath;
+        } catch {}
+      }
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
       const noAI = !!payload.noAI;
       const emitTier = (ev, data) => {
         io.emit(ev, data);
         if (projectId) io.to(`project:${projectId}`).emit(ev, data);
       };
 
-      setTimeout(() => {
-        // Tier 1: Syntax & Type Errors
+      try {
         emitTier('bugcheck:tier-start', { tier: 1, label: 'Syntax & Type Errors', costsAI: false, projectId });
-        setTimeout(() => {
-          emitTier('bugcheck:tier-done', {
-            tier: 1,
-            projectId,
-            findings: [],
-            isProblemEntry: true
-          });
+        const t1 = await runBugcheckTier1(projectPath);
+        emitTier('bugcheck:tier-done', { tier: 1, projectId, findings: t1, isProblemEntry: true });
 
-          // Tier 2: Known Crash Patterns
-          emitTier('bugcheck:tier-start', { tier: 2, label: 'Known Crash Patterns', costsAI: false, projectId });
-          setTimeout(() => {
-            emitTier('bugcheck:tier-done', {
-              tier: 2,
-              projectId,
-              findings: [],
-              isProblemEntry: true
-            });
+        emitTier('bugcheck:tier-start', { tier: 2, label: 'Known Crash Patterns', costsAI: false, projectId });
+        const t2 = await runBugcheckTier2(projectPath);
+        emitTier('bugcheck:tier-done', { tier: 2, projectId, findings: t2, isProblemEntry: true });
 
-            // Tier 3: Dependency Vulnerabilities
-            emitTier('bugcheck:tier-start', { tier: 3, label: 'Dependency Vulnerabilities', costsAI: false, projectId });
-            setTimeout(() => {
-              emitTier('bugcheck:tier-done', {
-                tier: 3,
-                projectId,
-                findings: [],
-                isProblemEntry: true
-              });
+        emitTier('bugcheck:tier-start', { tier: 3, label: 'Dependency Vulnerabilities', costsAI: false, projectId });
+        const t3 = await runBugcheckTier3(projectPath);
+        emitTier('bugcheck:tier-done', { tier: 3, projectId, findings: t3, isProblemEntry: true });
 
-              if (noAI) {
-                emitTier('bugcheck:done', {
-                  projectId,
-                  reportUrl: null,
-                  totalFindings: 0,
-                  crashRiskCount: 0
-                });
-              } else {
-                // Tier 4: Deep Logic & Flow Analysis (AI)
-                emitTier('bugcheck:tier-start', { tier: 4, label: 'Deep Logic & Flow Analysis', costsAI: true, projectId });
-                setTimeout(() => {
-                  emitTier('bugcheck:tier-done', {
-                    tier: 4,
-                    projectId,
-                    findings: [],
-                    isProblemEntry: false
-                  });
-                  emitTier('bugcheck:done', {
-                    projectId,
-                    reportUrl: null,
-                    totalFindings: 0,
-                    crashRiskCount: 0
-                  });
-                }, 400);
-              }
-            }, 300);
-          }, 300);
-        }, 300);
-      }, 100);
+        const staticFindings = [...t1, ...t2, ...t3];
+        const crashRiskCount = staticFindings.filter((f) => f.severity === 'high').length;
+
+        if (noAI) {
+          emitTier('bugcheck:done', { projectId, reportUrl: null, totalFindings: staticFindings.length, crashRiskCount });
+          return;
+        }
+        // Tier 4: Deep Logic & Flow Analysis (AI) — no model is wired into the
+        // backend for this; report honestly instead of faking "all clear".
+        emitTier('bugcheck:tier-start', { tier: 4, label: 'Deep Logic & Flow Analysis', costsAI: true, projectId });
+        emitTier('bugcheck:tier-done', {
+          tier: 4,
+          projectId,
+          findings: [],
+          isProblemEntry: false,
+          note: 'AI deep analysis is not wired to a model in this backend build — use chat/god mode for AI review. Tiers 1-3 above are real static results.'
+        });
+        emitTier('bugcheck:done', { projectId, reportUrl: null, totalFindings: staticFindings.length, crashRiskCount });
+      } catch (err) {
+        socket.emit('chat:error', { message: `Bug check failed: ${err.message}` });
+        emitTier('bugcheck:done', { projectId, reportUrl: null, totalFindings: 0, crashRiskCount: 0, error: err.message });
+      }
     });
 
     // ── Security Checkup Mode (doc 47) ───────────────────────────
@@ -608,6 +827,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     // ── Clean Mode (doc 55) — Dead code & AI bloat detection + removal ──
     for (const event of ['clean:scan-start', 'clean:tier1-done', 'clean:tier2-done', 'clean:findings', 'clean:status', 'clean:pass-result', 'clean:done']) {
       socket.on(event, (payload = {}) => {
+        if (!requireEmitterAuth(event)) return;
         io.emit(event, payload);
         if (payload.projectId) {
           io.to(`project:${payload.projectId}`).emit(event, payload);
@@ -878,7 +1098,23 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, code, 'utf8');
 
-        const port = 9229 + Math.floor(Math.random() * 1000);
+        // 041: probe candidates until a free inspector port is found
+        // instead of gambling on one random draw.
+        const { default: net } = await import('node:net');
+        const probeFree = (p) => new Promise((resolve) => {
+          const s = net.createServer();
+          s.once('error', () => resolve(false));
+          s.once('listening', () => s.close(() => resolve(true)));
+          s.listen(p, '127.0.0.1');
+        });
+        let port = 0;
+        for (let i = 0; i < 5 && !port; i++) {
+          const cand = 9229 + Math.floor(Math.random() * 1000);
+          if (await probeFree(cand)) port = cand;
+        }
+        if (!port) {
+          return socket.emit('debug:error', { message: 'no free inspector port found — try again' });
+        }
         const child = spawn(process.execPath, [`--inspect-brk=${port}`, filePath], {
           cwd: workspace,
         });
@@ -904,11 +1140,13 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
     });
 
-    socket.on('debug:stop', () => {
+    socket.on('debug:stop', async () => {
       if (!requireAuth('debug:stop')) return;
       const session = activeDebugSessions.get(socket.id);
       if (session && session.child) {
-        session.child.kill('SIGTERM');
+        // 042: tree-kill (taskkill on Windows) instead of bare SIGTERM.
+        const { killTree } = await import('./kill-tree.js');
+        killTree(session.child);
         activeDebugSessions.delete(socket.id);
       }
       socket.emit('debug:stopped');
@@ -1057,10 +1295,12 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
     });
 
-    socket.on('task:terminate', () => {
+    socket.on('task:terminate', async () => {
       const child = activeProjectProcesses.get(socket.id);
       if (child) {
-        child.kill('SIGTERM');
+        // 042: tree-kill so npm/python subtrees don't linger as zombies.
+        const { killTree } = await import('./kill-tree.js');
+        killTree(child);
         activeProjectProcesses.delete(socket.id);
         socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Task terminated]\x1b[0m\r\n' });
       } else {
@@ -1068,10 +1308,11 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       }
     });
 
-    socket.on('task:restart', () => {
+    socket.on('task:restart', async () => {
       const child = activeProjectProcesses.get(socket.id);
       if (child) {
-        child.kill('SIGTERM');
+        const { killTree } = await import('./kill-tree.js');
+        killTree(child);
         activeProjectProcesses.delete(socket.id);
       }
       socket.emit('project:run', {});
@@ -1084,6 +1325,16 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
       if (!requireAuth('terminal:command')) return;
       const { command } = payload;
       if (!command || !command.trim()) return;
+
+      // SOCK-037: destructive patterns are rejected BEFORE any execution
+      // path (a container-side rejection must never fall through to host).
+      try {
+        const { assertSafeCommand } = await import('./docker-runner.js');
+        assertSafeCommand(command);
+      } catch (err) {
+        socket.emit('chat:shell_stream', { chunk: `\r\n\x1b[31mBlocked: ${err.message}\x1b[0m\r\n` });
+        return;
+      }
 
       // Try container execution if active
       try {
@@ -1272,8 +1523,11 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     });
 
     // ── SSH Remote Explorer ────────────────────────
+    // 1021: authenticated users only — unauthenticated sockets must not
+    // be able to make the server dial arbitrary hosts (SSRF/pivot).
     socket.on('ssh:connect', (payload = {}) => {
-      connectSSH(socket.id, payload, 
+      if (!requireAuth('ssh:connect')) return;
+      connectSSH(socket.id, payload,
         (data) => socket.emit('ssh:data', { data }),
         () => socket.emit('ssh:ready'),
         (error) => socket.emit('ssh:error', { error })
@@ -1281,6 +1535,7 @@ export function attachSockets(httpServer, { secret, ioOptions = {} }) {
     });
 
     socket.on('ssh:input', ({ data }) => {
+      if (!requireAuth('ssh:input')) return;
       sendToSSH(socket.id, data);
     });
 

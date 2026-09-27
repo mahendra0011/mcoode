@@ -5,6 +5,7 @@ import Link from 'next/link'; import { useRouter } from 'next/navigation';
 const MotionLink = motion.create(Link);
 import { ArrowDownRight } from 'lucide-react';
 import robotBg from '../../assets/robot-bg-new.png';
+import api from '../../lib/axios';
 
 export function ForgotPasswordPage() {
   const router = useRouter();
@@ -20,16 +21,12 @@ export function ForgotPasswordPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/v1/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, intent: 'login' }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error?.message || 'failed to send code');
+      // BUG-19-12: backend /reset-password requires a dedicated 'reset'
+      // intent (login/signup codes are rejected there).
+      await api.post('/api/v1/auth/send-otp', { email, intent: 'reset' });
       setStep('reset');
     } catch (err: any) {
-      setError(err.message || 'failed to send code');
+      setError(err?.response?.data?.error?.message || err.message || 'failed to send code');
     } finally {
       setLoading(false);
     }
@@ -40,16 +37,10 @@ export function ForgotPasswordPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/v1/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp, password }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error?.message || 'reset failed');
+      await api.post('/api/v1/auth/reset-password', { email, otp, password });
       setStep('done');
     } catch (err: any) {
-      setError(err.message || 'reset failed');
+      setError(err?.response?.data?.error?.message || err.message || 'reset failed');
     } finally {
       setLoading(false);
     }

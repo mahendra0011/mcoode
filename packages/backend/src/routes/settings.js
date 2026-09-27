@@ -61,26 +61,42 @@ export function settingsRoutes({ secret }) {
     }
   });
 
+  // SET-001: single shared patch builder — PUT / and PUT /permissions used
+  // to duplicate coercion logic with subtle differences. One function now.
+  const buildSettingsPatch = (body) => {
+    const allowed = [
+      'accentColor',
+      'networkWhitelist',
+      'watchDefaults',
+      'godModeDefaults',
+      'permissionMode',
+      'autoApproveHighRisk',
+      'networkTimeout',
+      'allowShellAll',
+      'requireEditApproval',
+      'rewindCheckpointing',
+      'conversationCompaction'
+    ];
+    const patch = {};
+    for (const k of allowed) {
+      if (body[k] !== undefined) {
+        if (k === 'networkTimeout') {
+          const val = Number(body[k]);
+          patch[k] = Number.isFinite(val) ? Math.min(600000, Math.max(1000, val)) : 180000;
+        } else if (k === 'allowShellAll' || k === 'requireEditApproval' || k === 'autoApproveHighRisk') {
+          patch[k] = Boolean(body[k]);
+        } else {
+          patch[k] = body[k];
+        }
+      }
+    }
+    return patch;
+  };
+
   // PUT /api/v1/settings -> Generic update (merges any allowed keys)
   r.put('/', async (req, res) => {
     try {
-      const allowed = [
-        'accentColor',
-        'networkWhitelist',
-        'watchDefaults',
-        'godModeDefaults',
-        'permissionMode',
-        'autoApproveHighRisk',
-        'networkTimeout',
-        'allowShellAll',
-        'requireEditApproval',
-        'rewindCheckpointing',
-        'conversationCompaction'
-      ];
-      const patch = {};
-      for (const k of allowed) {
-        if (req.body[k] !== undefined) patch[k] = req.body[k];
-      }
+      const patch = buildSettingsPatch(req.body);
       let settings = await db().userSettings.findOne({ userId: req.userId });
       if (!settings) {
         settings = await db().userSettings.create({ userId: req.userId, ...DEFAULTS, ...patch });
@@ -105,16 +121,16 @@ export function settingsRoutes({ secret }) {
   });
 
   // PUT /api/v1/settings/permissions -> Update permission settings
+  // (subset of the generic endpoint — same builder, unknown keys ignored)
   r.put('/permissions', async (req, res) => {
     try {
-      const { allowShellAll, requireEditApproval, permissionMode, autoApproveHighRisk, networkTimeout } = req.body;
       let settings = await db().userSettings.findOne({ userId: req.userId });
-      const patch = {};
-      if (allowShellAll !== undefined) patch.allowShellAll = Boolean(allowShellAll);
-      if (requireEditApproval !== undefined) patch.requireEditApproval = Boolean(requireEditApproval);
-      if (permissionMode !== undefined) patch.permissionMode = permissionMode;
-      if (autoApproveHighRisk !== undefined) patch.autoApproveHighRisk = Boolean(autoApproveHighRisk);
-      if (networkTimeout !== undefined) patch.networkTimeout = Number(networkTimeout);
+      const full = buildSettingsPatch(req.body);
+      const patch = Object.fromEntries(
+        ['allowShellAll', 'requireEditApproval', 'permissionMode', 'autoApproveHighRisk', 'networkTimeout']
+          .filter((k) => full[k] !== undefined)
+          .map((k) => [k, full[k]])
+      );
 
       if (!settings) {
         settings = await db().userSettings.create({

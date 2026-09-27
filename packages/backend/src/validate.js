@@ -12,12 +12,12 @@ const schemas = {
   }),
   sendOtp: Joi.object({
     email: Joi.string().email().required(),
-    intent: Joi.string().valid('signup', 'login').required()
+    intent: Joi.string().valid('signup', 'login', 'reset').required()
   }),
   verifyOtp: Joi.object({
     email: Joi.string().email().required(),
     otp: Joi.string().pattern(/^\d{6}$/).required(),
-    intent: Joi.string().valid('signup', 'login').required(),
+    intent: Joi.string().valid('signup', 'login', 'reset').required(),
     name: Joi.string().min(2).max(60).when('intent', { is: 'signup', then: Joi.required() }),
     password: Joi.string().min(8).when('intent', { is: 'signup', then: Joi.required() })
   }),

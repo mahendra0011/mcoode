@@ -3,7 +3,7 @@ import { authMiddleware } from '../auth.js';
 import { deriveMasterKey, decryptKey } from '../secret-enc.js';
 import { uploadSingle, uploadFieldArray, UPLOADS_DIR } from '../upload-config.js';
 import { db } from '../db.js';
-import { join } from 'node:path';
+import { join, resolve as resolvePath, sep as pathSep } from 'node:path';
 import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { createReadStream, existsSync, symlinkSync, rmSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -11,21 +11,34 @@ import { randomBytes } from 'node:crypto';
 
 const WORKSPACE_ROOT = join(homedir(), 'mcode-workspaces');
 
-// Ensure destination directories exist on disk before Multer streams files
+// Ensure destination directories exist on disk before Multer streams files.
+// WS-003: 0700 — on a shared server, other users must not browse workspaces.
 try {
-  mkdirSync(WORKSPACE_ROOT, { recursive: true });
-  mkdirSync(UPLOADS_DIR, { recursive: true });
+  mkdirSync(WORKSPACE_ROOT, { recursive: true, mode: 0o700 });
+  mkdirSync(UPLOADS_DIR, { recursive: true, mode: 0o700 });
 } catch {}
+import('node:fs/promises').then(({ chmod }) => {
+  chmod(WORKSPACE_ROOT, 0o700).catch(() => {});
+  chmod(UPLOADS_DIR, 0o700).catch(() => {});
+});
 
+// WS-004: remember attempted junctions so GET / doesn't redo O(n) fs probes
+// on every request (existsSync results never change for a live workspace).
+const junctionCache = new Set();
 function ensureNamedJunction(name, diskPath) {
   if (!name || !diskPath) return;
   try {
     const sanitized = String(name).trim().replace(/[\\/:*?"<>|]/g, '-');
-    if (!sanitized) return;
+    // SEC-023: Windows reserved device names (COM1, LPT1, AUX, NUL, …)
+    // lock up the filesystem — never use them as link names.
+    if (!sanitized || junctionCache.has(sanitized) || /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i.test(sanitized)) return;
     const linkPath = join(WORKSPACE_ROOT, sanitized);
+    // WS-005: the 'junction' type is Windows-only in name — Node ignores it
+    // elsewhere and creates a regular symlink. No action needed.
     if (!existsSync(linkPath) && existsSync(diskPath)) {
       symlinkSync(diskPath, linkPath, 'junction');
     }
+    junctionCache.add(sanitized);
   } catch {}
 }
 
@@ -89,14 +102,28 @@ export function workspaceRoutes({ secret }) {
         branchResult = branch;
         await cloneRepo(repoUrl, diskPath, { branch: branchResult, branchName });
       } else if (source === 'duplicate') {
-        const files = Array.isArray(req.body.files) ? req.body.files : [];
+        // WS-012: bound the inline-file body (count + per-file + total).
+        const files = Array.isArray(req.body.files) ? req.body.files.slice(0, 1000) : [];
         const { writeFile } = await import('node:fs/promises');
         const { dirname } = await import('node:path');
+        let writtenBytes = 0;
         for (const f of files) {
           if (f && f.path) {
+            const text = String(f.content || '');
+            if (text.length > 5_000_000) {
+              const err = new Error('duplicate file exceeds 5MB inline limit');
+              err.status = 413;
+              throw err;
+            }
+            writtenBytes += text.length;
+            if (writtenBytes > 100_000_000) {
+              const err = new Error('duplicate body exceeds 100MB total');
+              err.status = 413;
+              throw err;
+            }
             const target = safeJoin(diskPath, f.path);
             await mkdir(dirname(target), { recursive: true });
-            await writeFile(target, f.content || '', 'utf8');
+            await writeFile(target, text, 'utf8');
           }
         }
       }
@@ -152,6 +179,79 @@ export function workspaceRoutes({ secret }) {
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const files = await walkDir(ws.diskPath);
       res.json({ files });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /workspaces/:id/search — search file contents on disk across workspace
+  router.get('/:id/search', async (req, res, next) => {
+    try {
+      const q = typeof req.query.q === 'string' ? req.query.q : '';
+      if (!q.trim()) return res.json({ results: [] });
+
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+
+      const matchCase = req.query.matchCase === 'true';
+      const wholeWord = req.query.wholeWord === 'true';
+      const useRegex = req.query.useRegex === 'true';
+      const includeFilter = typeof req.query.include === 'string' ? req.query.include : '';
+      const excludeFilter = typeof req.query.exclude === 'string' ? req.query.exclude : '';
+
+      const includes = includeFilter ? includeFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+      const excludes = excludeFilter ? excludeFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+
+      let regex;
+      try {
+        let pattern = useRegex ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (wholeWord) pattern = `\\b${pattern}\\b`;
+        regex = new RegExp(pattern, matchCase ? 'g' : 'gi');
+      } catch {
+        return res.status(400).json({ error: { code: 'INVALID_REGEX', message: 'Invalid search expression' } });
+      }
+
+      const files = await walkDir(ws.diskPath);
+      const results = [];
+      const MAX_TOTAL_MATCHES = 2000;
+      const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit per file
+
+      for (const file of files) {
+        if (results.length >= MAX_TOTAL_MATCHES) break;
+        const lowerPath = file.path.toLowerCase();
+        if (includes.length > 0 && !includes.some(inc => lowerPath.includes(inc))) continue;
+        if (excludes.length > 0 && excludes.some(exc => lowerPath.includes(exc))) continue;
+
+        try {
+          const fullPath = safeJoin(ws.diskPath, file.path);
+          const content = await readFile(fullPath, 'utf8');
+          if (content.length > MAX_FILE_SIZE) continue;
+
+          const lines = content.split('\n');
+          for (let idx = 0; idx < lines.length; idx++) {
+            if (results.length >= MAX_TOTAL_MATCHES) break;
+            const lineText = lines[idx];
+            regex.lastIndex = 0;
+            let match;
+            while ((match = regex.exec(lineText)) !== null) {
+              results.push({
+                path: file.path,
+                fileName: file.name || file.path.split('/').pop() || file.path,
+                line: idx + 1,
+                lineText,
+                matchStart: match.index,
+                matchEnd: match.index + match[0].length,
+              });
+              if (!regex.global) break;
+              if (results.length >= MAX_TOTAL_MATCHES) break;
+            }
+          }
+        } catch {
+          // Skip unreadable or binary files
+        }
+      }
+
+      res.json({ results });
     } catch (err) {
       next(err);
     }
@@ -264,6 +364,11 @@ export function workspaceRoutes({ secret }) {
       const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const full = safeJoin(ws.diskPath, path);
+      // WS-013: safeJoin already rejects `..`/absolute/empty, but refuse the
+      // workspace root itself explicitly — rm -rf on it must be impossible.
+      if (resolvePath(full) === resolvePath(ws.diskPath)) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'refusing to delete the workspace root — delete files inside it' } });
+      }
       const { rm } = await import('node:fs/promises');
       await rm(full, { recursive: true, force: true });
       res.json({ ok: true, deleted: path });
@@ -282,6 +387,11 @@ export function workspaceRoutes({ secret }) {
       const oldFull = safeJoin(ws.diskPath, oldPath);
       const newFull = safeJoin(ws.diskPath, newPath);
       const { rename, mkdir: mkDir } = await import('node:fs/promises');
+      const { existsSync: existsSyncFs } = await import('node:fs');
+      // WS-014: never silently clobber the rename target.
+      if (existsSyncFs(newFull)) {
+        return res.status(409).json({ error: { code: 'TARGET_EXISTS', message: 'target path already exists — delete or rename it first' } });
+      }
       await mkDir(join(newFull, '..'), { recursive: true });
       await rename(oldFull, newFull);
       res.json({ ok: true, oldPath, newPath });
@@ -313,11 +423,17 @@ export function workspaceRoutes({ secret }) {
   });
 
   // GET /workspaces/:id/export - export workspace as ZIP
+  // WS-010: refuse absurd workspaces (1GB+ on disk) instead of streaming
+  // gigabytes into a response and exhausting memory/bandwidth.
   router.get('/:id/export', async (req, res, next) => {
     try {
       const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
-      
+      const tooBig = await workspaceExceedsBytes(ws.diskPath, 1_000_000_000);
+      if (tooBig) {
+        return res.status(413).json({ error: { code: 'WORKSPACE_TOO_LARGE', message: 'workspace exceeds the 1GB export limit — remove build artifacts and retry' } });
+      }
+
       const archiver = (await import('archiver')).default;
       const archive = archiver('zip', { zlib: { level: 9 } });
       
@@ -369,6 +485,13 @@ export function workspaceRoutes({ secret }) {
       if (create) {
         await git(ws.diskPath).checkoutLocalBranch(branch);
       } else {
+        // WS-008: shallow clones lack remote branches — fetch first so
+        // checkout works instead of failing on missing history.
+        try {
+          await git(ws.diskPath).fetch('origin', branch);
+        } catch {
+          /* already local or offline — checkout below decides */
+        }
         await git(ws.diskPath).checkout(branch);
       }
       
@@ -469,18 +592,16 @@ export function workspaceRoutes({ secret }) {
       await git.addConfig('user.name', githubAcc.username);
       await git.addConfig('user.email', `${githubAcc.username}@users.noreply.github.com`);
 
-      // Determine the target repo URL
-      let authUrl;
+      // Determine the target repo URL (plain — auth travels via header, WS-006)
       const repoUrl = ws.gitUrl || githubRepo;
       if (!repoUrl) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'No repository URL — provide githubRepo or clone from git' }});
       }
-      authUrl = repoUrl.replace('https://', `https://${token}@`);
 
       // For zip-uploaded workspaces, initialize git repo and set remote
       if (!ws.gitUrl) {
         await git.init();
-        await git.addRemote('origin', authUrl);
+        await git.addRemote('origin', repoUrl);
         // Update the workspace with the new git URL so future pushes work
         await db().workspace.updateOne(
           { _id: ws._id },
@@ -488,19 +609,35 @@ export function workspaceRoutes({ secret }) {
         );
       }
 
-      await git.add('.');
+      // WS-006: authenticate via http.extraHeader (base64 x-access-token),
+      // never via a token-bearing remote URL (which leaks into `git remote -v`,
+      // process listings, and shell history).
+      const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+      await git.addConfig('http.extraHeader', `AUTHORIZATION: basic ${basic}`);
+      let statusSummary = null;
+      try {
+        // WS-007: stage tracked modifications only (-u), never untracked
+        // files (secrets, dumps, build artifacts). Report what stayed out.
+        statusSummary = await git.status();
+        await git.add(['-u']);
+      } finally {
+        await git.addConfig('http.extraHeader', '').catch(() => {});
+      }
       await git.commit(message);
-      
-      await git.push(authUrl, branch);
-      
-      res.json({ ok: true });
+
+      await git.push('origin', branch);
+      const untracked = statusSummary?.not_added?.length || 0;
+
+      res.json({ ok: true, untrackedLeftOut: untracked });
     } catch (err) {
       next(err);
     }
   });
 
   // POST /workspaces/:id/upload - upload arbitrary files or entire folder tree
-  router.post('/:id/upload', uploadFieldArray('files', 2000), async (req, res, next) => {
+  // WS-015: 200 files/request max (multer uses disk storage, but 2000×50MB
+  // would still allow 100GB per request).
+  router.post('/:id/upload', uploadFieldArray('files', 200), async (req, res, next) => {
     try {
       const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
@@ -607,8 +744,9 @@ function isIgnoredExtractionPath(normPath) {
 }
 
 /** Walk a directory tree and return relative file paths (excludes node_modules, .git, etc.). */
-async function walkDir(dir, base = '') {
+async function walkDir(dir, base = '', depth = 0, maxDepth = 25) {
   const files = [];
+  if (depth > maxDepth) return files;
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
@@ -617,10 +755,13 @@ async function walkDir(dir, base = '') {
   }
   for (const entry of entries) {
     if (GLOBAL_SKIP_DIRS.has(entry.name) || GLOBAL_SKIP_DIRS.has(entry.name.toLowerCase())) continue;
+    // WS-009: never follow symlinks — a crafted loop (a/b -> a) must not
+    // cause infinite recursion.
+    if (entry.isSymbolicLink()) continue;
     const full = join(dir, entry.name);
     const rel = base ? `${base}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
-      files.push(...await walkDir(full, rel));
+      files.push(...await walkDir(full, rel, depth + 1, maxDepth));
     } else {
       if (GLOBAL_SKIP_EXACT_FILES.has(entry.name) || GLOBAL_SKIP_EXACT_FILES.has(entry.name.toLowerCase())) continue;
       const dotIndex = entry.name.lastIndexOf('.');
@@ -631,10 +772,24 @@ async function walkDir(dir, base = '') {
   return files;
 }
 
-/** Join and ensure the path stays within the workspace root (fail-closed on traversal). */
+/** Join and ensure the path stays within the workspace root (fail-closed on traversal).
+ *  SEC-021: percent-decoding happens BEFORE segment checks, so %2e%2e%2f,
+ *  double-encoding (%252e) and full-width slashes (%uff0f) can't smuggle `..`
+ *  past the filter. Decodes repeatedly (max 3 rounds) to catch nesting.
+ *  WS-001: the root itself is canonicalized with path.resolve so mixed
+ *  separators can't produce a non-comparable base. */
 function safeJoin(root, p) {
-  const rootResolved = root.replace(/\\/g, '/');
-  const rel = String(p || '').replace(/\\/g, '/');
+  const rootResolved = resolvePath(root);
+  let rel = String(p || '').replace(/\\/g, '/');
+  for (let i = 0; i < 3; i++) {
+    try {
+      const decoded = decodeURIComponent(rel).replace(/\\/g, '/').replace(/％|／|＼/g, (c) => (c === '／' || c === '＼' ? '/' : '%'));
+      if (decoded === rel) break;
+      rel = decoded;
+    } catch {
+      break;
+    }
+  }
   if (!rel || rel.startsWith('/') || /^[A-Za-z]:\//.test(rel)) {
     const err = new Error('invalid path: absolute paths not allowed');
     err.status = 400;
@@ -659,11 +814,49 @@ function safeJoin(root, p) {
   return join(rootResolved, ...stack);
 }
 
+/** WS-010 helper: true when a tree exceeds `maxBytes` (early-abort walk). */
+async function workspaceExceedsBytes(root, maxBytes) {
+  const { stat } = await import('node:fs/promises');
+  const stack = [root];
+  let total = 0;
+  let seen = 0;
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of entries) {
+      if (e.isSymbolicLink()) continue;
+      const full = join(dir, e.name);
+      if (e.isDirectory()) {
+        stack.push(full);
+      } else {
+        try {
+          total += (await stat(full)).size;
+        } catch {
+          continue;
+        }
+        if (total > maxBytes) return true;
+        if (++seen > 100_000) return true;
+      }
+    }
+  }
+  return false;
+}
+
 /** Extract a ZIP archive to a directory using parallel 32-concurrency STREAMED disk writes.
  *  Streaming (entry.stream().pipe(writeStream)) instead of entry.buffer() avoids holding
  *  each file's full decompressed content in memory before writing it — measurably faster
  *  for projects with many/large files, and the main reason extraction used to noticeably
- *  stall after the upload bar hit 100%. */
+ *  stall after the upload bar hit 100%.
+ *  WS-002: zip-bomb guards — per-file, total-output, and entry-count caps. */
+const ZIP_MAX_FILE_BYTES = 50_000_000;
+const ZIP_MAX_TOTAL_BYTES = 500_000_000;
+const ZIP_MAX_ENTRIES = 20_000;
+
 async function extractZipTo(zipPath, destDir) {
   const { Open } = await import('unzipper');
   const { createWriteStream } = await import('node:fs');
@@ -672,7 +865,13 @@ async function extractZipTo(zipPath, destDir) {
   const directory = await Open.file(zipPath);
   const CONCURRENCY = 32;
   const entries = directory.files;
+  if (entries.length > ZIP_MAX_ENTRIES) {
+    const err = new Error(`archive has too many entries (${entries.length} > ${ZIP_MAX_ENTRIES})`);
+    err.status = 413;
+    throw err;
+  }
 
+  let totalBytes = 0;
   for (let i = 0; i < entries.length; i += CONCURRENCY) {
     const chunk = entries.slice(i, i + CONCURRENCY);
     await Promise.all(
@@ -680,12 +879,45 @@ async function extractZipTo(zipPath, destDir) {
         const normPath = entry.path.replace(/\\/g, '/');
         if (isIgnoredExtractionPath(normPath)) return;
 
+        const declared = Number(entry.uncompressedSize || 0);
+        if (declared > ZIP_MAX_FILE_BYTES) {
+          const err = new Error(`archive entry too large: ${entry.path}`);
+          err.status = 413;
+          throw err;
+        }
+        totalBytes += declared;
+        if (totalBytes > ZIP_MAX_TOTAL_BYTES) {
+          const err = new Error('archive expands beyond the 500MB limit (possible zip bomb)');
+          err.status = 413;
+          throw err;
+        }
+
         const fullPath = safeJoin(destDir, entry.path);
         if (entry.type === 'Directory') {
           await mkdir(fullPath, { recursive: true });
         } else {
           await mkdir(join(fullPath, '..'), { recursive: true });
+          // SEC-022: verify the PARENT resolves inside destDir BEFORE
+          // streaming — a symlink inside the zip pointing outside must abort
+          // the extraction, not overwrite host files.
+          const { realpath, rm: rmFile } = await import('node:fs/promises');
+          const realDest = await realpath(destDir).catch(() => destDir);
+          const realParent = await realpath(join(fullPath, '..')).catch(() => null);
+          if (!realParent || (realParent !== realDest && !realParent.startsWith(realDest + pathSep))) {
+            const err = new Error(`archive entry escapes destination (possible zip-slip/symlink): ${entry.path}`);
+            err.status = 413;
+            throw err;
+          }
           await pipeline(entry.stream(), createWriteStream(fullPath));
+          // Post-write check: if the written file resolves outside destDir
+          // (symlink swapped in mid-extraction), remove it and abort.
+          const realFile = await realpath(fullPath).catch(() => null);
+          if (!realFile || (realFile !== fullPath && !realFile.startsWith(realDest + pathSep))) {
+            await rmFile(realFile || fullPath, { force: true }).catch(() => {});
+            const err = new Error(`archive entry escapes destination after write: ${entry.path}`);
+            err.status = 413;
+            throw err;
+          }
         }
       })
     );

@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.4.6",
   "type": "module",
   "scripts": {
     "dev": "next dev",
@@ -12,9 +12,7 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
-    "preview": "next start",
-    "build:vite": "vite build",
-    "dev:vite": "vite"
+    "preview": "next start"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -36,8 +34,8 @@
     "framer-motion": "^11.18.2",
     "jszip": "^3.10.2",
     "jwt-decode": "^4.0.0",
+    "lucide-react": "^0.469.0",
     "next": "^16.3.4",
-    "prettier": "^3.9.6",
     "react": "^19.3.0",
     "react-arborist": "^3.16.0",
     "react-dom": "^19.3.0",
@@ -46,7 +44,6 @@
     "react-markdown": "^10.1.0",
     "react-redux": "^9.3.0",
     "react-resizable-panels": "^4.12.4",
-    "react-router-dom": "^7.18.2",
     "recharts": "^3.10.1",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
@@ -59,13 +56,12 @@
     "@playwright/test": "^1.62.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.4",
     "autoprefixer": "^10.5.4",
-    "lucide-react": "^0.469.0",
     "oxlint": "^1.75.0",
     "postcss": "^8.5.26",
+    "prettier": "^3.9.6",
     "tailwindcss": "^3.4.19",
     "typescript": "^7.0.2",
-    "vite": "^8.2.0"
+    "vitest": "^2.1.9"
   }
 }

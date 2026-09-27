@@ -38,8 +38,10 @@ export function GoToLineModal() {
     const trimmed = inputVal.trim();
     if (!trimmed) return;
     const parts = trimmed.split(/[:;,]/);
-    const line = parseInt(parts[0], 10);
-    const column = parts[1] ? parseInt(parts[1], 10) : 1;
+    // 1222: clamp to [1, totalLines] — negatives/out-of-range must not
+    // send Monaco to an invalid position.
+    const line = Math.min(Math.max(parseInt(parts[0], 10) || 1, 1), Math.max(1, totalLines));
+    const column = Math.max(parseInt(parts[1], 10) || 1, 1);
 
     if (isNaN(line) || line < 1) return;
 
@@ -69,6 +71,9 @@ export function GoToLineModal() {
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Go to line or column"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/60 backdrop-blur-sm"
       onClick={() => setIsOpen(false)}
     >
@@ -87,6 +92,7 @@ export function GoToLineModal() {
           </div>
           <button
             onClick={() => setIsOpen(false)}
+            aria-label="Close go-to-line dialog"
             className="text-white/40 hover:text-white p-1 rounded"
           >
             <X className="w-4 h-4" />
@@ -98,6 +104,7 @@ export function GoToLineModal() {
             <input
               ref={inputRef}
               type="text"
+              aria-label="Line number, optionally followed by a column"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
               onKeyDown={handleKeyDown}

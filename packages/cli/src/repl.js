@@ -33,6 +33,21 @@ export async function startRepl({ watchAfter = null } = {}) {
     process.exit(1);
   }
 
+  // CLI-001: graceful shutdown — Ctrl+C / SIGTERM restores the terminal
+  // (leaves the alternate screen, re-enables echo) instead of stranding it
+  // in raw mode when the renderer cannot tear itself down.
+  const restoreTerminalAndExit = (code = 130) => {
+    try { renderer.destroy?.(); } catch {
+      if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
+        try { process.stdin.setRawMode(false); } catch { /* raw mode already off */ }
+      }
+      process.stdout.write('\x1b[?1049l\x1b[?25h');
+    }
+    process.exit(code);
+  };
+  process.once('SIGINT', () => restoreTerminalAndExit(130));
+  process.once('SIGTERM', () => restoreTerminalAndExit(143));
+
   const config = await loadConfig();
   const accountExists = Boolean(config?.account?.email);
   const keyExists = await hasApiKey(config);
@@ -49,10 +64,10 @@ export async function startRepl({ watchAfter = null } = {}) {
     await new Promise((resolve) => {
       const base = backendUrl(config);
 
-      async function apiCall(method, path, body, token = null) {
+      async function apiCall(method, url, body, token = null) {
         let res;
         try {
-          res = await fetch(path, {
+          res = await fetch(url, {
             method,
             headers: {
               'Content-Type': 'application/json',
@@ -198,7 +213,15 @@ export async function startRepl({ watchAfter = null } = {}) {
       status: 'completed'
     });
 
-    renderer.destroy?.();
+    try {
+      renderer.destroy?.();
+    } catch {
+      // Emergency terminal restore if renderer.destroy throws
+      if (process.stdin.isTTY && typeof process.stdin.setRawMode === 'function') {
+        try { process.stdin.setRawMode(false); } catch { /* raw mode already off */ }
+      }
+      process.stdout.write('\x1b[?1049l\x1b[?25h');
+    }
     process.exit(0);
   }
 }

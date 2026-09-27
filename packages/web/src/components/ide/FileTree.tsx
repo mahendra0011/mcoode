@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef, createContext, useContext } from "react";
+import React, { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -735,9 +735,21 @@ export function FileTree({ workspaceId }: FileTreeProps) {
       return;
     }
 
-    const targetPath = creatingItem.parentPath
-      ? `${creatingItem.parentPath}/${trimmed}`.replace(/\\/g, "/").replace(/\/+/g, "/")
-      : trimmed.replace(/\\/g, "/").replace(/\/+/g, "/");
+    // 1202: normalize segments (drop '', '.', '..') so '.../', '..\\x'
+    // tricks can never escape the parent dir (backend safeJoin enforces too).
+    const sanitizedName = trimmed
+      .split(/[/\\]+/)
+      .filter((seg) => seg && seg !== '.' && seg !== '..')
+      .join('/');
+    if (!sanitizedName) {
+      setCreatingItem(null);
+      return;
+    }
+
+    const rawTarget = creatingItem.parentPath
+      ? `${creatingItem.parentPath}/${sanitizedName}`
+      : sanitizedName;
+    const targetPath = rawTarget.replace(/\\/g, "/").replace(/\/+/g, "/");
 
     const isFolder = creatingItem.type === "folder";
     setCreatingItem(null);
@@ -789,14 +801,25 @@ export function FileTree({ workspaceId }: FileTreeProps) {
       });
       toast.success(`Renamed to "${trimmed}"`);
 
-      // Update open files state in store
-      const openFiles = useIDEStore.getState().openFiles;
-      const activePath = useIDEStore.getState().activePath;
+      // Update open files and fileContentsCache in store
+      const store = useIDEStore.getState();
+      const openFiles = store.openFiles;
+      const activePath = store.activePath;
+      const fileContentsCache = { ...store.fileContentsCache };
+
+      if (fileContentsCache[oldPath] !== undefined) {
+        fileContentsCache[newPath] = fileContentsCache[oldPath];
+        delete fileContentsCache[oldPath];
+      }
+
       if (openFiles.includes(oldPath)) {
         useIDEStore.setState({
           openFiles: openFiles.map((p) => (p === oldPath ? newPath : p)),
           activePath: activePath === oldPath ? newPath : activePath,
+          fileContentsCache,
         });
+      } else {
+        useIDEStore.setState({ fileContentsCache });
       }
       bumpRefresh();
       refetch();
@@ -822,25 +845,27 @@ export function FileTree({ workspaceId }: FileTreeProps) {
   };
 
   // Convert flat array [{path, name}] to a nested tree (folders first).
-  const tree: TreeNodeData = { name: "root", path: "", children: [] };
-  for (const file of files) {
-    const normPath = (file.path || "").replace(/\\/g, "/");
-    const parts = normPath.split("/");
-    let current = tree;
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const path = parts.slice(0, i + 1).join("/");
-      const isLeaf = i === parts.length - 1;
-      let child = current.children!.find((c) => c.path === path);
-      if (!child) {
-        child = { name: part, path, children: isLeaf ? undefined : [] };
-        current.children!.push(child);
+  const rootNodes = useMemo(() => {
+    const tree: TreeNodeData = { name: "root", path: "", children: [] };
+    for (const file of files) {
+      const normPath = (file.path || "").replace(/\\/g, "/");
+      const parts = normPath.split("/");
+      let current = tree;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const path = parts.slice(0, i + 1).join("/");
+        const isLeaf = i === parts.length - 1;
+        let child = current.children!.find((c) => c.path === path);
+        if (!child) {
+          child = { name: part, path, children: isLeaf ? undefined : [] };
+          current.children!.push(child);
+        }
+        if (!isLeaf && !child.children) child.children = [];
+        current = child;
       }
-      if (!isLeaf && !child.children) child.children = [];
-      current = child;
     }
-  }
-  const rootNodes = tree.children!.sort(sortNodes);
+    return (tree.children || []).sort(sortNodes);
+  }, [files]);
 
   if (!workspaceId) {
     return <div className="p-4 text-xs text-white/40 italic">Select or create a workspace to begin.</div>;

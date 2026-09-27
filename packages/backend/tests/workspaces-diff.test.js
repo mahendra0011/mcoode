@@ -15,9 +15,10 @@ const diskPath = mkdtempSync(join(tmpdir(), 'mcode-diff-test-'));
 
 beforeAll(async () => {
   process.env.MCODE_BCRYPT_ROUNDS = process.env.MCODE_BCRYPT_ROUNDS || '4';
+  process.env.MCODE_DEV_OTP = '1'; // AUTH-007: explicit opt-in for dev OTP echo
   server = await startServer({
     port: 0,
-    env: { ...process.env, MONGODB_URI: '', REDIS_URI: '', BREVO_API_KEY: '', NODE_ENV: 'test' }
+    env: { ...process.env, MONGODB_URI: '', REDIS_URI: '', BREVO_API_KEY: '', NODE_ENV: 'test', MCODE_DEV_OTP: '1' }
   });
   base = `http://127.0.0.1:${server.httpServer.address().port}`;
   const sent = await request(base).post('/api/v1/auth/send-otp').send({ email: 'diff@user.dev', intent: 'signup' });

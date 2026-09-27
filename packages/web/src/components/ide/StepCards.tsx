@@ -87,7 +87,11 @@ export function StepCard({ msg, undo }: StepCardProps) {
       try {
         const p = JSON.parse(rawArgs);
         if (typeof p.content === 'string') return p.content.split('\n').length;
-      } catch {}
+      } catch {
+        // 1221: truncated streaming JSON — estimate instead of 0 so the
+        // progress bar doesn't flicker between 0 and the true total.
+        return Math.max(1, Math.ceil(rawArgs.length / 80));
+      }
     }
     return 0;
   }

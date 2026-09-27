@@ -35,6 +35,28 @@ export interface TestCase {
 /**
  * Minimal Test Runner Helpers (no external Jest/Mocha dependencies needed)
  */
+/** Execute a test body inside an isolated sandbox iframe (opaque origin:
+ *  scripts only, no same-origin — the body cannot reach parent storage).
+ *  Shared by discovered file tests and god-mode generated tests. */
+export function runBodyInSandbox(testBody: string) {
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.sandbox.add("allow-scripts");
+  document.body.appendChild(iframe);
+  const win = iframe.contentWindow as any;
+
+  win.expect = expect;
+  win.defineTest = defineTest;
+
+  try {
+    win.eval(`(function() { ${testBody} })()`);
+  } finally {
+    if (document.body.contains(iframe)) {
+      document.body.removeChild(iframe);
+    }
+  }
+}
+
 export function defineTest(name: string, fn: () => void | Promise<void>) {
   return { name, fn };
 }
@@ -177,25 +199,7 @@ export function TestingPanel({
             name: testName,
             fileId: filePath,
             status: "idle",
-            fn: () => {
-              // Execute inside an isolated sandbox with expect injected
-              const iframe = document.createElement("iframe");
-              iframe.style.display = "none";
-              iframe.sandbox.add("allow-scripts");
-              document.body.appendChild(iframe);
-              const win = iframe.contentWindow as any;
-
-              win.expect = expect;
-              win.defineTest = defineTest;
-
-              try {
-                win.eval(`(function() { ${testBody} })()`);
-              } finally {
-                if (document.body.contains(iframe)) {
-                  document.body.removeChild(iframe);
-                }
-              }
-            },
+            fn: () => runBodyInSandbox(testBody),
           });
         }
       }
@@ -234,15 +238,22 @@ export function TestingPanel({
       const generatedList = data?.tests || (Array.isArray(data) ? data : []);
       if (generatedList.length > 0) {
         setTestSuite((prev) => {
-          const mapped: TestCase[] = generatedList.map((t: any) => ({
-            id: t.id || `god-mode-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            name: t.name || 'Auto Test',
-            fileId: t.fileId || 'tests/auto.test.js',
-            fn: () => {},
-            status: 'idle' as const,
-            source: 'god-mode' as const,
-            todoId: t.todoId,
-          }));
+          // 1217: run the generated body for real when present — never map
+          // to a no-op fn that would auto-"pass" without asserting anything.
+          const mapped: TestCase[] = generatedList.map((t: any) => {
+            const code = t.body || t.code || t.test || '';
+            return {
+              id: t.id || `god-mode-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              name: t.name || 'Auto Test',
+              fileId: t.fileId || 'tests/auto.test.js',
+              fn: code && typeof code === 'string'
+                ? () => runBodyInSandbox(code)
+                : () => { throw new Error('auto-generated test has no executable body yet — add assertions first'); },
+              status: 'idle' as const,
+              source: 'god-mode' as const,
+              todoId: t.todoId,
+            };
+          });
           return [...prev, ...mapped];
         });
         toast.success(`${generatedList.length} tests generated — see Testing panel`);

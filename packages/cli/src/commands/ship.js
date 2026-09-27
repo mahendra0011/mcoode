@@ -25,7 +25,7 @@ const DEPLOY_RUNNERS = {
   'gh-pages': async (cwd) => execa('npx', ['gh-pages', '-d', 'dist'], { cwd, stdio: 'inherit' })
 };
 
-export async function shipCommand({ env = 'prod', cwd = process.cwd(), yes = false } = {}) {
+export async function shipCommand({ env = 'prod', cwd = process.cwd(), yes = false, skipTests = false } = {}) {
   const pkgPath = join(cwd, 'package.json');
   let pkg;
   try {
@@ -37,14 +37,29 @@ export async function shipCommand({ env = 'prod', cwd = process.cwd(), yes = fal
 
   info('stage 1/4 \u2014 build');
   if (pkg.scripts?.build) {
-    await execa('npm', ['run', 'build'], { cwd, stdio: 'inherit' });
+    try {
+      await execa('npm', ['run', 'build'], { cwd, stdio: 'inherit' });
+    } catch (err) {
+      fail(`build failed: ${err.message}`);
+      process.exit(1);
+    }
   } else {
     warn('no build script \u2014 skipping');
   }
 
   info('stage 2/4 \u2014 verify');
-  if (pkg.scripts?.test) {
-    await execa('npm', ['test'], { cwd, stdio: 'inherit' });
+  if (skipTests) {
+    warn('tests skipped via --skip-tests');
+  } else if (pkg.scripts?.test) {
+    try {
+      await execa('npm', ['test'], { cwd, stdio: 'inherit' });
+    } catch (err) {
+      fail(`tests failed: ${err.message}`);
+      const proceed = yes || (await confirm('tests failed. Continue shipping anyway?', { defaultYes: false }));
+      if (!proceed) {
+        process.exit(1);
+      }
+    }
   } else {
     warn('no test script \u2014 skipping');
   }
@@ -56,7 +71,24 @@ export async function shipCommand({ env = 'prod', cwd = process.cwd(), yes = fal
     const tag = `v${pkg.version}-${env}`;
     const wantTag = yes || (await confirm(`tag and push ${tag}?`, { defaultYes: true }));
     if (wantTag) {
-      await git.add(['-A']);
+      // CLI-004: show what is about to be committed and NEVER stage untracked
+      // files (they may be secrets / debug dumps / binaries).
+      try {
+        const status = await git.status();
+        const untracked = status.not_added || [];
+        if (untracked.length > 0) {
+          warn(`leaving ${untracked.length} untracked file(s) unstaged: ${untracked.slice(0, 5).join(', ')}${untracked.length > 5 ? '…' : ''}`);
+        }
+        const diff = await git.diffSummary(['--staged']).catch(() => git.diffSummary());
+        if (diff && (diff.files || []).length > 0) {
+          info(`staged changes: ${diff.files.length} file(s), +${diff.insertions}/-${diff.deletions}`);
+        }
+      } catch {
+        /* status display is best-effort */
+      }
+      // Stage tracked files and package.json safely without blindly adding untracked secret files
+      await git.add(['-u']).catch(() => {});
+      await git.add(['package.json']).catch(() => {});
       await git.commit(`chore: ship ${tag}`).catch(() => {});
       try {
         await git.addTag(tag);

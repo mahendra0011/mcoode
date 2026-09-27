@@ -48,20 +48,10 @@ export function SessionDetailPage() {
           >
             Replay in chat (copies prompts)
           </button>
-          {(!data.transcripts || data.transcripts.length === 0) && (!data.messages || data.messages.length === 0) ? (
-            <p className="text-sm text-white/40">No transcript messages recorded for this session.</p>
-          ) : (
+          {((data.transcripts && data.transcripts.length > 0) || (data.messages && data.messages.length > 0)) ? (
             <div className="space-y-4">
-              {(data.messages || []).map((t: any, i: number) => (
-                <div key={t._id || `m-${i}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                  <p className="text-[11px] uppercase tracking-wide text-white/30 mb-2">{t.role || 'message'}</p>
-                  <div className="prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown>{String(t.content || '')}</ReactMarkdown>
-                  </div>
-                </div>
-              ))}
-              {data.transcripts.map((t: any, i: number) => (
-                <div key={t._id || i} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              {(data.transcripts || data.messages || []).map((t: any, i: number) => (
+                <div key={t._id || `msg-${i}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                   <p className="text-[11px] uppercase tracking-wide text-white/30 mb-2">{t.role || 'message'}</p>
                   <div className="prose prose-invert prose-sm max-w-none">
                     <ReactMarkdown>{String(t.content || '')}</ReactMarkdown>
@@ -69,6 +59,8 @@ export function SessionDetailPage() {
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="text-sm text-white/40">No transcript messages recorded for this session.</p>
           )}
         </div>
       )}

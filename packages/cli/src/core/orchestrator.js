@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { io } from 'socket.io-client';
-import { EVENTS, SOCKET, DEFAULT_CONFIG, CostLedger } from '@mcode/shared';
+import { EVENTS, SOCKET, EVENT_TO_SOCKET, DEFAULT_CONFIG, CostLedger } from '@mcode/shared';
 import { Planner } from './planner.js';
 import { ModelRouter, MODES } from './router.js';
 import { detectTechStack, smartDefaults } from './techstack.js';
@@ -11,24 +11,7 @@ import { getProviders } from '../providers/index.js';
 import { loadVault } from './vault.js';
 import { loadConfig, getProjectId } from './store.js';
 
-const EVENT_TO_SOCKET = {
-  [EVENTS.PLAN_GENERATED]: SOCKET.CLIENT_TO_SERVER.PLAN_GENERATED,
-  [EVENTS.SUBAGENT_STARTED]: SOCKET.CLIENT_TO_SERVER.AGENT_STARTED,
-  [EVENTS.SUBAGENT_STEP]: SOCKET.CLIENT_TO_SERVER.AGENT_STEP,
-  [EVENTS.SUBAGENT_FILE]: SOCKET.CLIENT_TO_SERVER.AGENT_FILE,
-  [EVENTS.SUBAGENT_DONE]: SOCKET.CLIENT_TO_SERVER.AGENT_DONE,
-  [EVENTS.SUBAGENT_FAILED]: SOCKET.CLIENT_TO_SERVER.AGENT_FAILED,
-  [EVENTS.SUBAGENT_NEEDS_REVIEW]: SOCKET.CLIENT_TO_SERVER.AGENT_NEEDS_REVIEW,
-  [EVENTS.WAVE_START]: SOCKET.CLIENT_TO_SERVER.WAVE_START,
-  [EVENTS.WAVE_COMPLETE]: SOCKET.CLIENT_TO_SERVER.WAVE_COMPLETE,
-  [EVENTS.INTEGRATION_PASS]: SOCKET.CLIENT_TO_SERVER.INTEGRATION_PASS,
-  [EVENTS.BUILD_COMPLETE]: SOCKET.CLIENT_TO_SERVER.BUILD_COMPLETE,
-  [EVENTS.TOAST]: SOCKET.CLIENT_TO_SERVER.TOAST,
-  [EVENTS.WATCH_SCAN]: SOCKET.CLIENT_TO_SERVER.WATCH_SCAN,
-  [EVENTS.WATCH_FIX]: SOCKET.CLIENT_TO_SERVER.WATCH_FIX,
-  [EVENTS.WATCH_STATUS]: SOCKET.CLIENT_TO_SERVER.WATCH_STATUS
-};
-
+// SHR-003: bus→socket mapping lives in @mcode/shared (EVENT_TO_SOCKET) —
 export class Orchestrator extends EventEmitter {
   constructor({ projectPath = process.cwd(), config = null, options = {} } = {}) {
     super();
@@ -170,12 +153,22 @@ export class Orchestrator extends EventEmitter {
 
   _tryConnectBackend() {
     const url = this.config?.backend?.url || DEFAULT_CONFIG.backend.url;
+    // SEC-008: present the CLI shared secret so the backend can verify emitter identity.
+    const cliSecret = this.config?.backend?.cliSecret
+      || this.config?.cliSecret
+      || process.env.CLI_SHARED_SECRET
+      || process.env.MCODE_CLI_SECRET
+      || '';
     try {
       this.socket = io(url, {
         path: '/live',
         timeout: 1500,
-        reconnection: false,
-        transports: ['websocket', 'polling']
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        transports: ['websocket', 'polling'],
+        auth: cliSecret ? { cliSecret } : undefined,
+        extraHeaders: cliSecret ? { 'x-cli-secret': cliSecret } : undefined,
       });
       this.socket.on('connect', () => {
         this.connectedToBackend = true;
@@ -271,7 +264,8 @@ export class Orchestrator extends EventEmitter {
         undoStack: this.undoStack,
         skipIntegrationTests: Boolean(noTests),
         forceRef: this.modelOverride,
-        maxAgents: this.options.maxAgents
+        maxAgents: this.options.maxAgents,
+        orchestratorManaged: true
       }
     });
     return this.manager.runAll();
@@ -322,9 +316,12 @@ export class Orchestrator extends EventEmitter {
     return { text: full, interrupted: false };
   }
 
-  /** Cancel an in-flight chat run or specialized agents (Esc / Ctrl+C mid-turn). */
+  /** Cancel an in-flight chat run, god-mode waves, or specialized agents.
+   *  877: previously a god→chat switch left subagent waves running in the
+   *  background — the manager is stopped too now. */
   interrupt() {
     this.chatAgent?.abort();
+    try { this.manager?.stop(); } catch { /* already settled */ }
     // Interrupt any running specialized agents in god-mode
     if (this._specializedAgents) {
       for (const agent of this._specializedAgents.values()) {

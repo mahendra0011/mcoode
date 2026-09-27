@@ -23,4 +23,4 @@ All notable changes to mcode are documented here. Format follows
 ## [Unreleased]
 ### Planned
 - `/docs`, `/commands`, `/live` monitor, `/sessions` web pages (in progress).
-- See `docs/audit/MASTER-TODOS-PHASES.md` for the full phase plan.
+- See `audit-reports/MASTER_SUMMARY.md` for the full phase plan.

@@ -50,6 +50,9 @@ class ExtensionInstallerManager {
     try {
       const res = await api.get('/api/v1/extensions/installed');
       const list: InstalledExtension[] = res.data?.extensions || [];
+      // 745: only replace local state on a well-formed response — a 404 or
+      // reboot must never wipe installed themes/snippets from the editor.
+      if (!Array.isArray(res.data?.extensions)) return this.getInstalledList();
       this.installed.clear();
 
       for (const ext of list) {
@@ -139,10 +142,10 @@ class ExtensionInstallerManager {
         const ext = this.installed.get(id);
         this.installed.delete(id);
 
-        // Clean up snippets if any
+        // Clean up only this extension's snippets (owner-tagged).
         if (ext?.contributes?.snippets) {
           for (const s of ext.contributes.snippets) {
-            editorApi.unregisterSnippets?.(s.language);
+            editorApi.unregisterSnippets?.(s.language, id);
           }
         }
 
@@ -171,18 +174,22 @@ class ExtensionInstallerManager {
     // 1. Register Themes into Monaco
     if (ext.contributes?.themes && Array.isArray(ext.contributes.themes)) {
       for (const t of ext.contributes.themes) {
-        if (t.themeData) {
+        // 747: validate theme shape before handing it to Monaco — a bad
+        // themeData must not break editor init.
+        if (t.themeData && t.id && (t.themeData.rules || t.themeData.colors || t.themeData.base)) {
           editorApi.defineMonacoTheme?.(t.id, t.themeData);
           console.log(`[installer] Registered Monaco theme "${t.label}" (${t.id})`);
+        } else {
+          console.warn(`[installer] Skipping invalid theme "${t?.label || t?.id}" from ${ext.id}`);
         }
       }
     }
 
-    // 2. Register Snippets into Monaco
+    // 2. Register Snippets into Monaco (owner-tagged per 746)
     if (ext.contributes?.snippets && Array.isArray(ext.contributes.snippets)) {
       for (const s of ext.contributes.snippets) {
         if (s.language && Array.isArray(s.snippets)) {
-          editorApi.registerSnippets?.(s.language, s.snippets);
+          editorApi.registerSnippets?.(s.language, s.snippets, ext.id);
           console.log(`[installer] Registered ${s.snippets.length} snippets for ${s.language}`);
         }
       }

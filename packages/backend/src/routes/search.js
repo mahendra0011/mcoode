@@ -25,22 +25,30 @@ export function searchRoutes({ secret }) {
       try {
         const { getProviders } = await import('mcode-cli/providers');
         const { ModelRouter } = await import('mcode-cli/router');
-        const secrets = process.env;
+        // SRCH-002: narrow allowlist — never forward JWT_SECRET or unrelated
+        // env (PATH/HOME/MONGODB_URI) into provider construction.
+        const secrets = Object.fromEntries(
+          Object.entries(process.env).filter(([k, v]) => v && k !== 'JWT_SECRET' && (k.endsWith('_KEY') || k.endsWith('_TOKEN') || k.endsWith('_HOST')))
+        );
         const providers = await getProviders({ secrets });
         const router = new ModelRouter({ secrets, providers });
-        const best = await router.find('anthropic:claude-3-5-sonnet-latest') || 
-                     await router.find('openai:gpt-4o') || 
-                     await router.find('google:gemini-2.5-flash');
+        // SRCH-003/1050: prefer known-good refs, then fall back to the
+        // router's pick() over WHATEVER the user actually configured
+        // (local Ollama/DeepSeek/etc.) — never a dead placeholder answer.
+        const best = await router.find('anthropic:claude-sonnet-5') ||
+                     await router.find('openai:gpt-5.6-luna') ||
+                     await router.find('google:gemini-3.6-flash') ||
+                     await router.pick('docs').catch(() => null);
         
         if (best) {
-          const res = await best.provider.complete(best.model.id, {
+          const completionRes = await best.provider.complete(best.model.id, {
             messages: [
               { role: 'system', content: 'You are a helpful assistant. Use the provided search context to answer the user query concisely. Cite sources where possible.' },
               { role: 'user', content: `Query: ${query}\n\nContext:\n${context}` }
             ]
           });
-          if (res.text) {
-            answer = res.text;
+          if (completionRes?.text) {
+            answer = completionRes.text;
           }
         }
       } catch (llmErr) {

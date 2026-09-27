@@ -98,14 +98,17 @@ describe('undoId threading (Bug #18, #25, #26)', () => {
     expect(content).toBe('v2\n');
   });
 
-  it('UndoStack.undo(unknownId) falls back to LIFO', async () => {
+  it('UndoStack.undo(unknownId) returns null instead of reverting another file (TOOL-003)', async () => {
     const undoStack = new UndoStack({ projectPath: tmp });
     await writeFile(join(tmp, 'a.txt'), 'v1\n', 'utf8');
     await undoStack.snapshot('a.txt', 'v1\n');
     await writeFile(join(tmp, 'a.txt'), 'v2\n', 'utf8');
 
     const reverted = await undoStack.undo('nonexistent-id');
-    expect(reverted).toBe('a.txt');
+    expect(reverted).toBe(null);
+    // nothing was reverted — latest content untouched
+    const content = await readFile(join(tmp, 'a.txt'), 'utf8');
+    expect(content).toBe('v2\n');
   });
 
   it('Orchestrator.undo(id) accepts and passes id parameter', async () => {

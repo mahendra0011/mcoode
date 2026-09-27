@@ -66,6 +66,59 @@ const ACTION_FENCE = /```mcode-action\s*([\s\S]*?)```/g;
 const TOOL_CALL_XML = /<tool_call>\s*([\w_-]+)([\s\S]*?)<\/tool_call>/g;
 const ARG_PAIR = /<arg_key>\s*([^<]+?)\s*<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g;
 
+function parseJsonSubstring(str) {
+  if (!str) return null;
+  const start = str.indexOf('{');
+  if (start === -1) return null;
+
+  let inString = false;
+  let escape = false;
+  let depth = 0;
+  let end = -1;
+
+  for (let i = start; i < str.length; i++) {
+    const ch = str[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (ch === '{') {
+        depth++;
+      } else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (end !== -1) {
+    try {
+      return JSON.parse(str.slice(start, end + 1));
+    } catch {}
+  }
+
+  // Fallback: try parsing up to last closing brace
+  const lastBrace = str.lastIndexOf('}');
+  if (lastBrace > start) {
+    try {
+      return JSON.parse(str.slice(start, lastBrace + 1));
+    } catch {}
+  }
+  return null;
+}
+
 export function extractAction(text) {
   const actions = extractActions(text);
   return actions[0] || null;
@@ -84,44 +137,12 @@ export function extractActions(text) {
   const fenceRegex = /```mcode-action\s*([\s\S]*?)```/g;
   for (const match of source.matchAll(fenceRegex)) {
     const raw = match[1].trim();
-    const start = raw.indexOf('{');
-    if (start === -1) continue;
-
-    // Find matching closing brace
-    let depth = 0;
-    let end = start;
-    for (let i = start; i < raw.length; i++) {
-      if (raw[i] === '{') depth++;
-      if (raw[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
-
-    try {
-      const parsed = JSON.parse(raw.slice(start, end + 1));
-      if (parsed && typeof parsed.tool === 'string') {
-        actions.push({
-          tool: parsed.tool,
-          args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
-        });
-      }
-    } catch {
-      /* JSON parse failed — try next brace position */
-      try {
-        const parsed = JSON.parse(raw.slice(start, raw.lastIndexOf('}') + 1));
-        if (parsed && typeof parsed.tool === 'string') {
-          actions.push({
-            tool: parsed.tool,
-            args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
-          });
-        }
-      } catch {
-        /* skip this action fence */
-      }
+    const parsed = parseJsonSubstring(raw);
+    if (parsed && typeof parsed.tool === 'string') {
+      actions.push({
+        tool: parsed.tool,
+        args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
+      });
     }
   }
 
@@ -132,15 +153,13 @@ export function extractActions(text) {
   if (actions.length === 0) {
     const jsonFenceRegex = /```json\s*([\s\S]*?)```/gi;
     for (const match of source.matchAll(jsonFenceRegex)) {
-      try {
-        const parsed = JSON.parse(match[1].trim());
-        if (parsed && typeof parsed.tool === 'string') {
-          actions.push({
-            tool: parsed.tool,
-            args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
-          });
-        }
-      } catch { /* not an action — skip */ }
+      const parsed = parseJsonSubstring(match[1].trim());
+      if (parsed && typeof parsed.tool === 'string') {
+        actions.push({
+          tool: parsed.tool,
+          args: parsed.args && typeof parsed.args === 'object' ? parsed.args : {}
+        });
+      }
     }
   }
 
@@ -227,10 +246,20 @@ function canParallelize(toolName, args, changedFiles) {
   const readOnly = ['read_file', 'list_files', 'search_code', 'web_search', 'web_fetch', 'git_status', 'memory_read'];
   if (readOnly.includes(toolName)) return true;
 
+  // CAG-002: normalize before comparing — changedFiles mixes relative
+  // (tool result) and absolute (fallback) paths, and the model may write
+  // ./src/x.js vs src\x.js. Suffix match errs toward serializing (safe).
+  const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+/g, '/');
+  const sameFile = (a, b) => {
+    const x = norm(a);
+    const y = norm(b);
+    return Boolean(x) && (x === y || x.endsWith(`/${y}`) || y.endsWith(`/${x}`));
+  };
+
   // write_file/edit_file depend on file state — parallelize only if different files
   if (toolName === 'write_file' || toolName === 'edit_file') {
     const targetPath = args?.path || args?.file || '';
-    const conflict = changedFiles.some(f => f.path === targetPath);
+    const conflict = changedFiles.some((f) => sameFile(f.path, targetPath));
     return !conflict;
   }
 
@@ -292,13 +321,16 @@ export class ChatAgent {
     const hl = Number(config.historyLimit);
     this.historyLimit = hl === 0 ? null : (Number.isFinite(hl) && hl > 0 ? hl : 20);
     this.history = history ? this._capHistory(history) : [];
-    this.maxTurns = Math.max(1, Number(config.chatAgentTurns) || config.maxTurnsPerAgent || 12);
+    // CAG-001: a single turn can never complete real work — floor at 3.
+    this.maxTurns = Math.max(3, Number(config.chatAgentTurns) || config.maxTurnsPerAgent || 12);
     this.allowShellAll = Boolean(config.allowShellAll);
     this.requireEditApproval = Boolean(config.requireEditApproval);
     this.networkWhitelist = config.networkWhitelist || null;
     this.auditLog = config.auditLog || null;
     this.requirePermission = config.requirePermission !== false;
-    this.permissionTimeoutMs = Math.max(5_000, Number(config.permissionTimeoutMs) || 120_000);
+    // CAG-005: 2 minutes of hanging is too long — 60s default (still
+    // configurable), the prompt auto-denies with a countdown message.
+    this.permissionTimeoutMs = Math.max(5_000, Number(config.permissionTimeoutMs) || 60_000);
     this.onTool = onTool;
     this.turn = 0;
     this.narration = [];
@@ -317,7 +349,13 @@ export class ChatAgent {
 
   _capHistory(history) {
     if (this.historyLimit === null) return [...history];
-    return history.slice(-this.historyLimit);
+    // CAG-007: always retain leading system message(s) — slicing them off
+    // silently drops the agent's instructions after ~20 turns.
+    const keep = [];
+    let rest = [...history];
+    while (rest.length && rest[0]?.role === 'system') keep.push(rest.shift());
+    const tail = rest.slice(-Math.max(0, this.historyLimit - keep.length));
+    return [...keep, ...tail];
   }
 
   /** Cancel the current run (user pressed escape/Ctrl+C). */
@@ -689,6 +727,18 @@ export class ChatAgent {
       if (actions.length === 0) {
         this.narration.push(stripActions(text));
         break;
+      }
+
+      // CAG-003/004: when NOTHING in the batch is a real tool (hallucinated
+      // names like <tool_call>Hello</tool_call>), skip execution and hand
+      // the model the real list — one recovery turn instead of N errors.
+      // (Mixed batches still execute; each unknown errors cleanly per-action.)
+      const knownToolNames = Object.keys(tools.tools());
+      if (actions.length > 0 && actions.every((a) => !knownToolNames.includes(a.tool))) {
+        const hint = `Unknown tool(s): ${[...new Set(actions.map((a) => a.tool))].join(', ')}. Available tools: ${knownToolNames.join(', ')}. Reply with exactly one valid JSON action.`;
+        messages.push({ role: 'user', content: hint });
+        this.history.push({ role: 'user', content: hint });
+        continue;
       }
 
       const toolText = stripActions(text);

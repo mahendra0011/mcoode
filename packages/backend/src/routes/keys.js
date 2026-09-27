@@ -118,7 +118,7 @@ export function keyRoutes({ secret }) {
       }
       // Invalidate model cache so the new key's models are fetched on next request
       invalidateModelsCache(req.userId);
-      res.status(201).json({ ok: true });
+      res.status(existing ? 200 : 201).json({ ok: true });
     } catch (err) {
       next(err);
     }
@@ -208,7 +208,11 @@ export function keyRoutes({ secret }) {
     }
   });
 
-  // POST /keys/test — verify a key against a provider
+  // POST /keys/test — verify a key against a provider.
+  // KEY-002 note: the plaintext key must travel to the server for a live
+  // check by design; it is auth-gated (router-level JWT), used once via
+  // testKey(), never persisted and never logged. TLS terminates at the
+  // platform ingress (HSTS enforced via helmet).
   router.post('/test', async (req, res, next) => {
     try {
       const { providerId, apiKey } = req.body;
