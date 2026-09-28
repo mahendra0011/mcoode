@@ -126,7 +126,7 @@ export function readAuthCookies(req) {
  * Only genuine auth failures (bad/expired token) return 401.
  */
 export function authMiddleware({ secret }) {
-  return async (req, res, next) => {
+  const mw = async (req, res, next) => {
     const header = req.headers.authorization || '';
     const bearer = header.startsWith('Bearer ') ? header.slice(7) : null;
     const token = bearer || readAuthCookies(req).mcode_access || null;
@@ -147,4 +147,8 @@ export function authMiddleware({ secret }) {
       return res.status(401).json({ error: { code: 'INVALID_TOKEN', message: 'invalid token' } });
     }
   };
+  // BSEC-002: machine-readable marker so route-policy tests can assert that
+  // every non-public mount actually installs this middleware.
+  mw._mcodeAuth = true;
+  return mw;
 }

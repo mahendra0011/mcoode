@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { SUBAGENT_STATUS, EVENTS, planWaves, isEligible, isBlocked, resolveFileConflicts, mergeResults, estimateTokens } from '@mcode/shared';
+import { SUBAGENT_STATUS, EVENTS, planWaves, isEligible, isBlocked, resolveFileConflicts, mergeResults, estimateTokens, estimateCallCost, COST_RATES } from '@mcode/shared';
 import { Subagent } from './subagent.js';
 import { UndoStack } from './tools.js';
 import { join, basename } from 'node:path';
@@ -9,15 +9,13 @@ import { saveHistory } from './history.js';
 import { CostLedger } from '@mcode/shared';
 import { loadHooks } from './hooks.js';
 
-/** Rough USD/M-token rates used only for the summary "est. cost" line. */
-const RATES = {
-  openai: { in: 0.15, out: 0.6 },
-  anthropic: { in: 3, out: 15 },
-  google: { in: 0.5, out: 1.5 },
-  github: { in: 0.1, out: 0.4 },
-  deepseek: { in: 0.27, out: 1.1 },
-  default: { in: 1, out: 3 }
-};
+/** USD/M-token fallback rates live in @mcode/shared (MF-002) so the summary,
+ *  the ledger attribution and the history/doctor reports agree. */
+const RATES = COST_RATES;
+
+/** Domains that normally write code — used to flag planner todos with no
+ *  declared `files` (a lead cause of lost updates between parallel agents). */
+const WRITING_DOMAINS = new Set(['frontend', 'backend', 'db', 'devops', 'test', 'bugfix', 'migration', 'docs']);
 
 /**
  * FileLockManager — runtime lock queue for shared files (configs, types, indexes).
@@ -55,13 +53,25 @@ class FileLockManager {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         const entry = this.locks.get(filePath);
+        const lockedBy = entry?.ownerId || null;
         if (entry) {
           entry.waiters = entry.waiters.filter((w) => w.agentId !== agentId);
           if (!entry.ownerId && entry.waiters.length === 0) {
             this.locks.delete(filePath);
           }
         }
-        reject(new Error(`lock timeout: could not acquire ${filePath} for ${agentId} after ${timeout}ms`));
+        // MF-004: classify lock timeouts as *conflicts* (not generic failures)
+        // and name the competing writer so the report can explain the collision.
+        const err = new Error(
+          lockedBy
+            ? `file lock timeout: ${filePath} is held by ${lockedBy} (waited ${timeout}ms for ${agentId}) — serialize the two todos (add the file to both todos' "files") or run with --concurrency 1`
+            : `file lock timeout: could not acquire ${filePath} for ${agentId} after ${timeout}ms`
+        );
+        err.code = 'FILE_LOCK_TIMEOUT';
+        err.filePath = filePath;
+        err.lockedBy = lockedBy;
+        err.waitedMs = timeout;
+        reject(err);
       }, timeout);
 
       this.locks.get(filePath).waiters.push({
@@ -171,6 +181,137 @@ export class SubagentManager {
     this._totalWaves = 0;
     this._checkpointPending = null;
     this._checkpointWarned = false;
+    // MF-002: spend accrual + budget ceiling. Only *explicit* ceilings apply
+    // (`--max-cost` / `cost.budgetPerRunUsd` in the user's config) — the
+    // documented DEFAULT_CONFIG value is not force-injected here, so an
+    // existing project never gets its run silently aborted by a default.
+    this._spendUsd = 0;
+    this._budgetLimitUsd = Math.max(0, Number(options.maxCost ?? 0) || 0);
+    this.budgetAbort = null;
+    // MF-004: per-file writer audit + conflict observability.
+    this._writers = new Map(); // normalized file -> [{ todoId, at, undoId }]
+    this._overlaps = []; // [{ file, writers: [todoId] }]
+    this._lockConflicts = []; // [{ file, todoId, lockedBy, at }]
+    this._emptyFileTodos = []; // [{ id, domain, title }]
+  }
+
+  /** MF-002: money spent by this run (sum of per-call estimates, USD). */
+  get spendUsd() {
+    return this._spendUsd;
+  }
+
+  /**
+   * MF-002: ledger recorder for one subagent — attributes every call to its
+   * mode (the todo domain) with an estimated cost, and accrues the run total so
+   * the wave loop can enforce the budget ceiling. Before this, both call sites
+   * passed only tokens, so `ledger.spendByMode()` was always empty and the
+   * `cost.budgetPerRunUsd` setting had no reader at all.
+   */
+  _ledgerRecorder(assignment, mode) {
+    const model = { ...(assignment?.model || {}), ref: assignment?.ref, provider: assignment?.provider?.id };
+    return (res) => {
+      const usage = {
+        inputTokens: res?.usage?.inputTokens || 0,
+        outputTokens: res?.usage?.outputTokens || 0
+      };
+      const cost = estimateCallCost(model, usage);
+      this._spendUsd += cost;
+      try {
+        this.ledger.record(assignment?.provider?.id || 'default', { ...usage, mode, cost });
+      } catch {
+        /* accounting must never break a build */
+      }
+      this._checkBudget();
+    };
+  }
+
+  /** MF-002: budget ceiling — abort *dispatching* once the limit is crossed. */
+  _checkBudget() {
+    if (this._budgetLimitUsd <= 0 || this.budgetAbort) return;
+    if (this._spendUsd < this._budgetLimitUsd) return;
+    this.budgetAbort = {
+      limitUsd: this._budgetLimitUsd,
+      spentUsd: Number(this._spendUsd.toFixed(4)),
+      at: new Date().toISOString()
+    };
+    this.emit(EVENTS.TOAST, {
+      kind: 'warn',
+      text: `budget reached: spent ~$${this._spendUsd.toFixed(2)} of $${this._budgetLimitUsd.toFixed(2)} — no new todos dispatched (in-flight agents finish; remaining todos stay pending)`
+    });
+  }
+
+  /** MF-004: record every file a subagent wrote (writer audit trail). */
+  _recordWrite(todoId, file, undoId = null) {
+    if (!file || !todoId) return;
+    const key = String(file).replace(/\\/g, '/');
+    const list = this._writers.get(key) || [];
+    const last = list[list.length - 1];
+    if (last && last.todoId === todoId) {
+      last.at = new Date().toISOString();
+      if (undoId) last.undoId = undoId;
+    } else {
+      list.push({ todoId, at: new Date().toISOString(), undoId });
+    }
+    this._writers.set(key, list);
+  }
+
+  /** MF-004: files written by 2+ distinct todos (last-writer-wins candidates). */
+  overlappingWrites() {
+    const out = [];
+    for (const [file, writers] of this._writers) {
+      const todoIds = [...new Set(writers.map((w) => w.todoId))];
+      if (todoIds.length > 1) out.push({ file, writers: todoIds });
+    }
+    return out.sort((a, b) => a.file.localeCompare(b.file));
+  }
+
+  /** MF-004: emit a conflict report at every wave boundary. */
+  _reportOverlaps(waveIndex = null) {
+    const overlaps = this.overlappingWrites();
+    if (overlaps.length === 0) return overlaps;
+    this._overlaps = overlaps;
+    const preview = overlaps
+      .slice(0, 3)
+      .map((o) => `${o.file} (${o.writers.join(', ')})`)
+      .join(' · ');
+    this.emit(EVENTS.TOAST, {
+      kind: 'warn',
+      text: `overlapping writes${waveIndex ? ` in wave ${waveIndex}` : ''}: ${preview}${overlaps.length > 3 ? ` (+${overlaps.length - 3} more)` : ''} — last write wins; add the shared file to both todos' "files" to force ordering`
+    });
+    return overlaps;
+  }
+
+  /**
+   * MF-004 (phase 4): act on a reported overlap.
+   * `decisions` maps a file to `'keep-first'` (roll the later writer's last edit
+   * back through the undo stack) or `'keep-last'` (default: last write wins).
+   * Sequential re-apply is the plan-level fix — list the shared file in both
+   * todos' `files` so `resolveFileConflicts()` chains them next time.
+   *
+   * @returns {Promise<Array<{ file: string, action: string, todoId?: string }>>}
+   */
+  async resolveOverlaps({ undoStack = this.undoStack, decisions = {} } = {}) {
+    const actions = [];
+    for (const overlap of this.overlappingWrites()) {
+      const laterTodo = overlap.writers[overlap.writers.length - 1];
+      if (decisions[overlap.file] !== 'keep-first') {
+        actions.push({ file: overlap.file, action: 'kept-later', todoId: laterTodo });
+        continue;
+      }
+      const writes = this._writers.get(overlap.file) || [];
+      const last = [...writes].reverse().find((w) => w.todoId === laterTodo && w.undoId);
+      if (!last?.undoId || !undoStack) {
+        actions.push({ file: overlap.file, action: 'no-snapshot', todoId: laterTodo });
+        continue;
+      }
+      const restored = await undoStack.undo(last.undoId).catch(() => null);
+      actions.push({
+        file: overlap.file,
+        action: restored ? 'rolled-back' : 'undo-failed',
+        todoId: laterTodo
+      });
+    }
+    return actions;
   }
 
   get activeSubagents() {
@@ -375,6 +516,13 @@ export class SubagentManager {
       this._notifyDrain();
       return;
     }
+    // MF-002: budget ceiling — stop dispatching new todos (in-flight agents
+    // finish; dropped todos stay without a result so they resume as pending).
+    if (this.budgetAbort) {
+      this.queue = [];
+      this._notifyDrain();
+      return;
+    }
     while (this.running < this.concurrency && this.queue.length > 0) {
       const todo = this.queue.shift();
       this._spawn(todo);
@@ -447,16 +595,17 @@ export class SubagentManager {
         todo: { ...todo, maxTurns: this.config.maxTurnsPerSubagent },
         assignment: {
           ...assignment,
-          ledger: (res) => this.ledger.record(assignment.provider.id, {
-            inputTokens: res?.usage?.inputTokens || 0,
-            outputTokens: res?.usage?.outputTokens || 0
-          })
+          // MF-002: attribute every call to the todo's mode with an estimated
+          // cost (was tokens-only, leaving spendByMode() permanently empty).
+          ledger: this._ledgerRecorder(assignment, todo.domain)
         },
         projectPath: this.projectPath,
         bus: this.bus,
         undoStack: this.undoStack,
         config: this.config,
         reasoning: this.router?.reasoning || null,
+        // MF-004: writer-audit — attribute each successful write to this todo.
+        onWrite: (info) => this._recordWrite(info?.todoId || todo.id, info?.file, info?.undoId),
         onEvent: () => {}
       });
       this.subagents.set(todo.id, sub);
@@ -470,7 +619,23 @@ export class SubagentManager {
           const release = await this.fileLocks.acquireLock(todo.id, filePath, 30000);
           releaseFuncs.push(release);
         } catch (lockErr) {
-          this.emit(EVENTS.TOAST, { kind: 'warn', text: `lock timeout for ${filePath} on ${todo.id}` });
+          // MF-004: lock timeouts are writer conflicts — classify + remember
+          // who held the file so the wave-boundary report can explain it.
+          const isConflict = lockErr?.code === 'FILE_LOCK_TIMEOUT';
+          if (isConflict) {
+            this._lockConflicts.push({
+              file: filePath,
+              todoId: todo.id,
+              lockedBy: lockErr.lockedBy || null,
+              at: new Date().toISOString()
+            });
+          }
+          this.emit(EVENTS.TOAST, {
+            kind: 'warn',
+            text: isConflict
+              ? `file conflict: ${filePath} held by ${lockErr.lockedBy || 'another todo'} while ${todo.id} waited ${lockErr.waitedMs || 30000}ms — continuing without the lock; verify both writes in the diff`
+              : `lock timeout for ${filePath} on ${todo.id}`
+          });
         }
       }
 
@@ -617,6 +782,20 @@ export class SubagentManager {
     }
 
     const waves = planWaves(this.plan);
+    // MF-004: flag planner todos that declare no files although their domain
+    // normally writes — undeclared writes are invisible to both the file
+    // locks and resolveFileConflicts, which is how parallel agents clobber
+    // each other's work without ever appearing in the conflict report.
+    this._emptyFileTodos = (this.plan?.todos || [])
+      .filter((t) => (!t.files || t.files.length === 0) && WRITING_DOMAINS.has(t.domain))
+      .map((t) => ({ id: t.id, domain: t.domain, title: t.title }));
+    if (this._emptyFileTodos.length > 0) {
+      const ids = this._emptyFileTodos.slice(0, 4).map((t) => `${t.id}[${t.domain}]`).join(', ');
+      this.emit(EVENTS.TOAST, {
+        kind: 'warn',
+        text: `planner wrote no files for ${this._emptyFileTodos.length} writing todo(s): ${ids}${this._emptyFileTodos.length > 4 ? '…' : ''} — parallel writes to the same file can't be detected; add "files" to those todos`
+      });
+    }
     // MF-001: a resumed run re-attaches DONE todos (never re-dispatched) and
     // checkpoints immediately so a crash during the first wave is resumable too.
     if (this._resumeState) this._applyResumeState(this._resumeState);
@@ -670,6 +849,8 @@ export class SubagentManager {
       this._schedule();
       // GOD-007: promise-based drain (resolves via _notifyDrain, incl. on stop)
       await this._waitForWave();
+      // MF-004: conflict report at every wave boundary (writer audit).
+      this._reportOverlaps(idx + 1);
       this.emit(EVENTS.WAVE_COMPLETE, {
         wave: idx + 1,
         totalWaves: allWaves.length,
@@ -697,6 +878,21 @@ export class SubagentManager {
       // MF-001: wave boundary — persist plan + per-todo status so a crash here
       // resumes from this wave instead of re-planning and re-billing the DAG.
       await this._checkpoint({ status: 'running', waveIndex: idx + 1, totalWaves: allWaves.length });
+
+      // MF-002: budget reached mid-run — the remaining waves are left pending
+      // (checkpoint flips to 'interrupted', so `god --resume` can continue
+      // with a higher --max-cost).
+      if (this.budgetAbort) {
+        const left = allWaves.length - (idx + 1);
+        if (left > 0) {
+          this.emit(EVENTS.TOAST, {
+            kind: 'warn',
+            text: `stopping: ${left} remaining wave(s) skipped (budget $${this.budgetAbort.limitUsd.toFixed(2)} reached at ~$${this.budgetAbort.spentUsd.toFixed(2)})`
+          });
+        }
+        this._stopped = true;
+        break;
+      }
     }
 
     let integration = { ran: false };
@@ -869,16 +1065,16 @@ export class SubagentManager {
       },
       assignment: {
         ...assignment,
-        ledger: (res) => this.ledger.record(assignment.provider.id, {
-          inputTokens: res?.usage?.inputTokens || 0,
-          outputTokens: res?.usage?.outputTokens || 0
-        })
+        // MF-002: bugfix calls are attributed to the 'bugfix' mode too.
+        ledger: this._ledgerRecorder(assignment, 'bugfix')
       },
       projectPath: this.projectPath,
       bus: this.bus,
       undoStack: this.undoStack,
       config: this.config,
       reasoning: this.router?.reasoning || null,
+      // MF-004: writer-audit for auto-fix writes (attributed to the fix todo).
+      onWrite: (info) => this._recordWrite(info?.todoId || `${todo.id}-fix`, info?.file, info?.undoId),
       onEvent: () => {}
     });
     const result = await sub.run();
@@ -929,10 +1125,22 @@ export class SubagentManager {
       tokensIn,
       tokensOut,
       cost: Number(cost.toFixed(2)),
+      // MF-002: actual ledger-attributed spend + the per-mode breakdown that
+      // `history --cost` / `doctor` render (cost above stays the legacy
+      // rate-table estimate so existing consumers keep working).
+      spendUsd: Number(this._spendUsd.toFixed(4)),
+      spendByMode: this.ledger?.spendByMode?.() || {},
+      // MF-002: budget ceiling outcome (null when no ceiling or not reached).
+      budget: this.budgetAbort ? { ...this.budgetAbort, spentUsd: this._spendUsd } : null,
+      // MF-004: conflict observability for the god summary.
+      overlaps: this.overlappingWrites(),
+      lockConflicts: [...this._lockConflicts],
+      emptyFileTodos: [...this._emptyFileTodos],
       models,
       integration
     };
     merged.cost = buildSummary.cost;
+    merged.spendUsd = buildSummary.spendUsd;
     merged.tokensIn = tokensIn;
     merged.tokensOut = tokensOut;
     merged.elapsedSecs = elapsedSecs;

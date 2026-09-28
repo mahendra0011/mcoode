@@ -1,8 +1,34 @@
 import { readdir, readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-import { HISTORY_DIR } from './store.js';
+import { HISTORY_DIR, MCCODE_DIR } from './store.js';
 
 const MAX_HISTORY_FILES = 100;
+
+/**
+ * MF-002: read the persisted CostLedger (`~/.mcode/ledger.json`, written by
+ * ModelRouter's autosave) and roll its per-mode accounting up into totals.
+ * A missing/corrupt file is zero spend — never throws.
+ *
+ * @returns {Promise<{ totalUsd: number, tokens: number, runs: number, byMode: Record<string, {tokens: number, cost: number, runs: number}> }>}
+ */
+export async function readSpendLedger() {
+  try {
+    const raw = await readFile(join(MCCODE_DIR, 'ledger.json'), 'utf8');
+    const data = JSON.parse(raw);
+    const byMode = (data && typeof data.modes === 'object' && data.modes) || {};
+    let totalUsd = 0;
+    let tokens = 0;
+    let runs = 0;
+    for (const m of Object.values(byMode)) {
+      totalUsd += Number(m?.cost) || 0;
+      tokens += Number(m?.tokens) || 0;
+      runs += Number(m?.runs) || 0;
+    }
+    return { totalUsd, tokens, runs, byMode };
+  } catch {
+    return { totalUsd: 0, tokens: 0, runs: 0, byMode: {} };
+  }
+}
 
 export async function saveHistory(entry) {
   const { mkdir } = await import('node:fs/promises');

@@ -1,6 +1,6 @@
 import { Orchestrator } from '../core/orchestrator.js';
 import { loadConfig } from '../core/store.js';
-import { ok, info, warn, fail, confirm, table, json, isJsonMode } from '../core/logger.js';
+import { ok, info, warn, fail, confirm, table, json, isJsonMode, isInteractive } from '../core/logger.js';
 import { saveHistory } from '../core/history.js';
 import {
   loadResumableState,
@@ -11,7 +11,7 @@ import {
 } from '../core/session-state.js';
 import { DEFAULT_CONFIG } from '@mcode/shared';
 
-export async function godCommand({ prompt, yes, stack, deployTarget, noTests, concurrency, watchAfter, model = null, verbose = false, resume = null, listSessions = false, revertInterrupted = false }) {
+export async function godCommand({ prompt, yes, stack, deployTarget, noTests, concurrency, watchAfter, model = null, verbose = false, resume = null, listSessions = false, revertInterrupted = false, dryRun = false, executePlan = false, maxCost = null }) {
   // MF-001: `mcode god --list-sessions` is a pure read — never plans, never writes.
   if (listSessions) return listSessionsCommand();
 
@@ -40,7 +40,8 @@ export async function godCommand({ prompt, yes, stack, deployTarget, noTests, co
   const orchestrator = new Orchestrator({
     projectPath: process.cwd(),
     config: merged,
-    options: { modelOverride: model, verbose }
+    // MF-002: --max-cost rides along as the default ceiling for this run.
+    options: { modelOverride: model, verbose, ...(maxCost != null ? { maxCost } : {}) }
   });
   await orchestrator.init();
 
@@ -82,6 +83,11 @@ export async function godCommand({ prompt, yes, stack, deployTarget, noTests, co
       noTests,
       deployTarget,
       resumeState,
+      // MF-003: preview-only / execute-the-previewed-plan modes.
+      dryRun: Boolean(dryRun),
+      executePlan: Boolean(executePlan),
+      // MF-002: explicit budget ceiling for this run.
+      maxCost: maxCost ?? null,
       confirmFn: yes ? null : async (plan) => {
         info(`${plan.summary}`);
         table(plan.todos.map((t) => [t.id, t.domain, t.title]), {
@@ -116,8 +122,44 @@ export async function godCommand({ prompt, yes, stack, deployTarget, noTests, co
 
   if (!summary) return;
 
+  // MF-003: dry-run stops before history/session bookkeeping — it ran nothing.
+  if (summary.dryRun) {
+    ok(`dry run — ${summary.todos} todos in ${summary.waves} wave(s) across ${summary.domains.length} domain(s), nothing dispatched`);
+    info('execute with: mcode god --execute-plan');
+    orchestrator.disconnect();
+    return;
+  }
+
   const duration = formatDuration(summary.elapsedSecs);
-  ok(`build complete — ${summary.done}/${summary.total} todos · ${duration}`);
+  const spendUsd = Number(summary.spendUsd ?? summary.cost ?? 0);
+  ok(`build complete — ${summary.done}/${summary.total} todos \u00b7 ${duration} \u00b7 $${spendUsd.toFixed(2)}`);
+  // MF-002: per-run money + token line — the "kitna kharcha hua?" answer.
+  info(`  spend: $${spendUsd.toFixed(2)}${summary.budget ? ` of $${Number(summary.budget.limitUsd).toFixed(2)} budget` : ''} \u00b7 tokens ${summary.tokensIn ?? 0} in / ${summary.tokensOut ?? 0} out`);
+
+  // MF-002: budget ceiling hit — todos are pending, checkpoint is resumable.
+  if (summary.budget) {
+    warn(`budget ceiling reached (~$${Number(summary.budget.spentUsd).toFixed(2)} of $${Number(summary.budget.limitUsd).toFixed(2)}) - remaining todos left pending`);
+    info(`resume with a higher cap: mcode god --resume ${orchestrator.sessionId} --max-cost <usd>`);
+    process.exitCode = 1;
+  }
+
+  // MF-004: conflict report — parallel todos that wrote the same file.
+  if (summary.overlaps?.length) {
+    warn(`${summary.overlaps.length} overlapping write(s) detected (last write wins):`);
+    for (const o of summary.overlaps.slice(0, 5)) {
+      info(`  ${o.file} \u2190 ${o.writers.join(', ')}`);
+    }
+    if (summary.overlaps.length > 5) info(`  \u2026 +${summary.overlaps.length - 5} more`);
+    info('to chain them next time, list the shared file in both todos\' "files"');
+    await offerConflictResolution(summary.overlaps, orchestrator);
+  }
+  if (summary.lockConflicts?.length) {
+    warn(`${summary.lockConflicts.length} file-lock conflict(s) - verify the diffs:`);
+    for (const c of summary.lockConflicts.slice(0, 5)) {
+      info(`  ${c.file} (${c.todoId} waited on ${c.lockedBy || 'unknown'})`);
+    }
+  }
+
   for (const t of summary.todos) {
     if (t.status === 'failed' || t.status === 'needs_review') {
       console.error(`  \u2717 ${t.id} [${t.domain}] ${t.title} — ${t.status}`);
@@ -149,6 +191,34 @@ export async function godCommand({ prompt, yes, stack, deployTarget, noTests, co
 
   if (watchAfter) {
     info('\u25c9 watch daemon started — continuous monitoring active (mcode watch-stop to end)');
+  }
+}
+
+/**
+ * MF-004 (phase 4): interactive resolution for overlapping writes — for each
+ * reported file the user can keep the later write (default) or roll it back
+ * and keep the first. Non-interactive / JSON runs report and move on.
+ */
+async function offerConflictResolution(overlaps, orchestrator, { maxPrompts = 3 } = {}) {
+  if (!isInteractive() || isJsonMode() || !orchestrator?.manager) return;
+  const undoStack = orchestrator.manager.undoStack;
+  if (!undoStack?.undo) return;
+
+  const decisions = {};
+  for (const o of overlaps.slice(0, maxPrompts)) {
+    const keepFirst = await confirm(
+      `${o.file}: ${o.writers.join(' then ')} — roll back the later write and keep the first?`,
+      { defaultYes: false }
+    );
+    if (keepFirst) decisions[o.file] = 'keep-first';
+  }
+  if (Object.keys(decisions).length === 0) return;
+
+  const actions = await orchestrator.manager.resolveOverlaps({ undoStack, decisions });
+  for (const a of actions) {
+    if (a.action === 'rolled-back') ok(`rolled back ${a.todoId}'s write to ${a.file} (kept the earlier version)`);
+    else if (a.action === 'no-snapshot') warn(`${a.file}: ${a.todoId}'s write had no snapshot — cannot roll it back automatically; check the diff`);
+    else if (a.action === 'undo-failed') fail(`${a.file}: rollback of ${a.todoId} failed — check the diff manually`);
   }
 }
 

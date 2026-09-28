@@ -2,36 +2,46 @@ import { readdir, readFile, stat, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-// Works in both bundled (CJS, __dirname defined) and source (ESM) contexts.
+// Resolve the bundled template directory. Three shapes are supported:
+//   source : src/core/templates.js → ../../templates/
+//   bundle : dist/mcode.mjs        → ../templates/  (build copies them next to the bundle)
+//   exotic : __dirname probes, then the repo path.
+//
+// NOTE: `__dirname` must NOT be the primary probe — bundlers/transforms (and
+// vitest's SSR runtime) can define it even in ESM, which previously pointed
+// TEMPLATE_DIR at a non-existent `src/templates/` and made `mcode init` report
+// "template not bundled" for perfectly good templates.
 let TEMPLATE_DIR;
-{
-  if (typeof __dirname !== 'undefined') {
-    // bundled: dist/templates/ (dist/ also contains the bundle itself)
-    TEMPLATE_DIR = existsSync(join(__dirname, 'templates'))
-      ? join(__dirname, 'templates')
-      : join(__dirname, '..', 'templates');
-  } else {
-    // source: packages/cli/templates/ relative to this file
-    const srcCandidate = fileURLToPath(new URL('../../templates/', import.meta.url));
-    TEMPLATE_DIR = existsSync(srcCandidate)
-      ? srcCandidate
-      : join(process.cwd(), 'packages', 'cli', 'templates');
-  }
+if (typeof import.meta.url === 'string') {
+  const candidates = [
+    fileURLToPath(new URL('../templates/', import.meta.url)),
+    fileURLToPath(new URL('../../templates/', import.meta.url)),
+    fileURLToPath(new URL('./templates/', import.meta.url))
+  ];
+  TEMPLATE_DIR = candidates.find((dir) => existsSync(dir))
+    || join(process.cwd(), 'packages', 'cli', 'templates');
+} else if (typeof __dirname !== 'undefined') {
+  TEMPLATE_DIR = existsSync(join(__dirname, 'templates'))
+    ? join(__dirname, 'templates')
+    : join(__dirname, '..', 'templates');
+} else {
+  TEMPLATE_DIR = join(process.cwd(), 'packages', 'cli', 'templates');
 }
 
 export const TEMPLATES = {
   express: {
     name: 'express',
-    description: 'Minimal Express API with ESM + vitest setup',
-    deps: ['express'],
+    description: 'Minimal Express API with ESM + vitest setup (helmet + cors + rate-limit on)',
+    // SEC/MF-008: security middleware ships with the template, so the deps must
+    // too — a scaffold that fails to boot teaches users to delete middleware.
+    deps: ['express', 'helmet', 'cors', 'express-rate-limit'],
     devDeps: ['vitest'],
     hooks: {}
   },
   fastify: {
     name: 'fastify',
-    description: 'Minimal Fastify API with ESM + vitest setup',
-    deps: ['fastify'],
+    description: 'Minimal Fastify API with ESM + vitest setup (helmet + cors + rate-limit on)',
+    deps: ['fastify', '@fastify/helmet', '@fastify/cors', '@fastify/rate-limit'],
     devDeps: ['vitest'],
     hooks: {}
   },
@@ -44,8 +54,8 @@ export const TEMPLATES = {
   },
   'full-stack': {
     name: 'full-stack',
-    description: 'React + Vite frontend with an Express API backend',
-    deps: ['express', 'react', 'react-dom'],
+    description: 'React + Vite frontend with an Express API backend (helmet + cors + rate-limit on)',
+    deps: ['express', 'helmet', 'cors', 'express-rate-limit', 'react', 'react-dom'],
     devDeps: ['vite', '@vitejs/plugin-react', 'vitest', 'concurrently'],
     hooks: {
       postWrite: async ({ dir }) => {
@@ -61,6 +71,35 @@ export const TEMPLATES = {
     }
   }
 };
+
+/**
+ * MF-008: the safety net behind "every template ships a .gitignore".
+ *
+ * A scaffold without `.gitignore` is a secret-leak waiting to happen: the user
+ * fills `.env` with real keys, runs `git add .` and commits `node_modules/`
+ * plus the secrets. If a template (or a future one) forgets the file, we write
+ * a minimal one instead of shipping the trap.
+ */
+export const FALLBACK_GITIGNORE = `# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+out/
+
+# env / secrets — NEVER commit real values
+.env
+.env.*
+!.env.example
+
+# logs / coverage
+*.log
+coverage/
+
+# mcode local state
+.mcode/
+`;
 
 /** Copy a bundled template directory into `targetDir` (non-destructive). */
 export async function applyTemplate(name, targetDir, { overwrite = false } = {}) {
@@ -89,6 +128,11 @@ export async function applyTemplate(name, targetDir, { overwrite = false } = {})
     }
   };
   await walk(src);
+  // MF-008: never hand back a project without secret hygiene.
+  if (!(await stat(join(targetDir, '.gitignore')).catch(() => null))) {
+    await writeFile(join(targetDir, '.gitignore'), FALLBACK_GITIGNORE, 'utf8');
+    copied.push('.gitignore');
+  }
   await meta.hooks?.postWrite?.({ dir: targetDir });
   return { meta, files: copied };
 }

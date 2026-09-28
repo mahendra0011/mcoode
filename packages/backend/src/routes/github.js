@@ -180,7 +180,7 @@ async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_S
         return fail('an account with this email already exists — link GitHub from settings or login with your password first');
       }
     }
-    const encryptedToken = keyManagerFromEnv({ secret, env }).encrypt(ghToken, user._id);
+    const encryptedToken = keyManagerFromEnv({ secret }).encrypt(ghToken, user._id);
     const existing = await db().githubAccount.findOne({ userId: user._id });
     if (existing) {
       await db().githubAccount.updateOne({ _id: existing._id }, { accessToken: encryptedToken, username: me.login, avatarUrl: me.avatar_url });

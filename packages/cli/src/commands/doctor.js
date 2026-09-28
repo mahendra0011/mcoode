@@ -1,6 +1,8 @@
 import { getProviders } from '../providers/index.js';
 import { loadVault } from '../core/vault.js';
 import { loadConfig, getLastConfigError } from '../core/store.js';
+import { readSpendLedger } from '../core/history.js';
+import { CLI_VERSION } from '../core/version.js';
 import { table, ok, warn, json } from '../core/logger.js';
 
 const REQUIRED_KEYS = [
@@ -17,7 +19,7 @@ export async function doctorCommand({ asJson = false } = {}) {
 
   const rows = [];
   rows.push(['Node.js', process.version, 'ok']);
-  rows.push(['mcode version', '2.4.6', 'ok']);
+  rows.push(['mcode version', CLI_VERSION, 'ok']);
   rows.push(['Config', '~/.mcode/config.json', config ? 'present' : 'missing']);
   // MF-007: config-schema row — loud when the file on disk is unparsable or
   // fails zod validation (the old store swallowed both into `{}`).
@@ -51,6 +53,36 @@ export async function doctorCommand({ asJson = false } = {}) {
     }
   }
 
+  // MF-002: lifetime spend — the persisted CostLedger (~/.mcode/ledger.json)
+  // carries a per-mode breakdown that was previously never read anywhere.
+  const spend = await readSpendLedger();
+  rows.push([
+    'spend (lifetime)',
+    spend.totalUsd > 0
+      ? `$${spend.totalUsd.toFixed(2)} · ${spend.tokens.toLocaleString()} tokens · ${spend.runs} calls`
+      : 'no recorded usage yet (runs a god build first)',
+    'ok'
+  ]);
+  const topModes = Object.entries(spend.byMode)
+    .sort((a, b) => (b[1].cost || 0) - (a[1].cost || 0))
+    .slice(0, 5);
+  for (const [mode, m] of topModes) {
+    rows.push([
+      `spend:${mode}`,
+      `$${(Number(m.cost) || 0).toFixed(2)} · ${Number(m.tokens) || 0} tok · ${Number(m.runs) || 0} runs`,
+      'ok'
+    ]);
+  }
+  // MF-002: budget ceiling — only enforced when the user sets it explicitly.
+  const hasBudget = config?.cost?.budgetPerRunUsd != null;
+  rows.push([
+    'budget / run',
+    hasBudget
+      ? `$${Number(config.cost.budgetPerRunUsd).toFixed(2)} (cost.budgetPerRunUsd; --max-cost overrides)`
+      : 'not set — use --max-cost <usd> or cost.budgetPerRunUsd in config',
+    'ok'
+  ]);
+
   if (asJson) {
     json(rows.map(([name, value, status]) => ({ name, value, status })));
     return;
@@ -62,3 +94,8 @@ export async function doctorCommand({ asJson = false } = {}) {
   if (issues === 0) ok('environment healthy');
   else warn(`${issues} check(s) need attention`);
 }
+
+/**
+ * MF-002: read the persisted CostLedger (written by ModelRouter's autosave).
+ * Missing/corrupt files count as zero spend — doctor must never fail on them.
+ */

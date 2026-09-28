@@ -25,24 +25,7 @@ import { connectRedis, cache, getRedisClient } from './cache.js';
 import { connectQueue, jobQueue, startWorker } from './queue.js';
 import { attachSockets } from './sockets.js';
 import { configureMailer, sendMail } from './mailer.js';
-import { authMiddleware } from './auth.js';
-import { authRoutes } from './routes/auth.js';
-import { sessionRoutes } from './routes/sessions.js';
-import { pluginRoutes } from './routes/plugins.js';
-import { watchRoutes } from './routes/watch.js';
-import { usageRoutes } from './routes/usage.js';
-import { uploadRoutes } from './routes/uploads.js';
-import { keyRoutes } from './routes/keys.js';
-import { workspaceRoutes } from './routes/workspaces.js';
-import { settingsRoutes } from './routes/settings.js';
-import { githubAuthRoutes, githubApiRoutes } from './routes/github.js';
-import { searchRoutes } from './routes/search.js';
-import { extensionRoutes } from './routes/extensions.js';
-import { languageRoutes } from './routes/languages.js';
-import { androidRoutes } from './routes/android.js';
-import { pairRoutes, handlePairSuggest } from './routes/pair.js';
-import { promptRoutes } from './routes/prompt.js';
-import { cleanRoutes } from './routes/clean.js';
+import { mountApiRoutes, logRoutePolicy } from './route-policy.js';
 import { validateEnv } from './config/envValidator.js';
 import { isPistonAvailable } from './piston-client.js';
 import { detectAvailableLanguages } from './host-runner.js';
@@ -74,6 +57,10 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   const mongoUri = env.MONGODB_URI || null;
   // connectDb() calls process.exit(1) if connection fails — no memory fallback
   const storage = await connectDb(mongoUri);
+
+  // Logger is created before the checks below so the warnings can use it
+  // (previously declared after them → TDZ crash on a missing secret).
+  const logger = pino({ level: env.LOG_LEVEL || 'info' });
 
   // ── BSEC-001: dedicated at-rest encryption secret ──────────────────────────
   // API keys / OAuth tokens at rest must NOT be encrypted with the JWT secret.
@@ -108,7 +95,6 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   });
 
   // ─── Express ────────────────────────────────────────────────────────────────
-  const logger = pino({ level: env.LOG_LEVEL || 'info' });
   const app = express();
   app.disable('x-powered-by');
   app.use((req, _res, next) => {
@@ -206,26 +192,12 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   // ─── Swagger UI ─────────────────────────────────────────────────────────────
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
 
-  // ─── Routes (all auth-protected routes use authMiddleware) ───────────────────
-  app.use('/api/v1/auth', authRoutes({ secret }));
-  app.use('/api/v1/sessions', sessionRoutes({ secret }));
-  app.use('/api/v1/plugins', pluginRoutes({ secret }));
-  app.use('/api/v1/watch', watchRoutes({ secret }));
-  app.use('/api/v1/usage', usageRoutes({ secret }));
-  app.use('/api/v1/uploads', uploadRoutes({ secret }));
-  app.use('/api/v1/keys', keyRoutes({ secret, env }));
-  app.use('/api/v1/workspaces', workspaceRoutes({ secret, env }));
-  app.use('/api/v1/settings', settingsRoutes({ secret }));
-  app.use('/api/v1/auth/github', githubAuthRoutes({ secret, env }));
-  app.use('/api/v1/github', githubApiRoutes({ secret, env }));
-  app.use('/api/v1/search', searchRoutes({ secret }));
-  app.use('/api/v1/extensions', extensionRoutes({ secret }));
-  app.use('/api/v1/languages', languageRoutes());
-  app.use('/api/v1/android', androidRoutes({ secret }));
-  app.use('/api/v1/pair', pairRoutes({ secret, env }));
-  app.post('/api/v1/pair-suggest', authMiddleware({ secret }), (req, res) => handlePairSuggest(req, res, { secret, env }));
-  app.use('/api/v1/prompt', promptRoutes({ secret }));
-  app.use('/api/v1/clean', cleanRoutes({ secret }));
+  // ─── Routes (BSEC-002: every /api/v1/* mount comes from ROUTE_POLICY) ──────
+  // Protected-by-default: a route file cannot be mounted without a policy
+  // entry, missing secrets fail closed, and `languages` is the only
+  // explicitly-allowlisted public router.
+  const routeReport = mountApiRoutes(app, { secret, env });
+  logRoutePolicy(routeReport);
 
   app.get('/api/v1/version', async (_req, res) => {
     let pkgVersion = '0.1.0';

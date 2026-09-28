@@ -327,12 +327,23 @@ no markdown fences. If nothing sensible completes here, return an empty string.`
  * Express router for Pair Mode endpoints.
  */
 /** @param {{ secret?: string }} [opts] */
+/**
+ * BSEC-002: single guarded chain shared by BOTH aliases of this endpoint —
+ * `POST /api/v1/pair/suggest` (inside pairRoutes) and the legacy
+ * `POST /api/v1/pair-suggest` (mounted by route-policy.js). One definition,
+ * so the auth guard can never drift between the two registrations.
+ */
+export function pairSuggestMiddleware({ secret, env = process.env } = {}) {
+  return [authMiddleware({ secret }), (req, res) => handlePairSuggest(req, res, { secret, env })];
+}
+
+
 export function pairRoutes({ secret, env = process.env } = {}) {
   const router = Router();
   router.use(authMiddleware({ secret }));
 
-  // POST /api/v1/pair/suggest & /api/v1/pair-suggest
-  router.post('/suggest', (req, res) => handlePairSuggest(req, res, { secret, env }));
+  // POST /api/v1/pair/suggest (legacy alias /api/v1/pair-suggest → route-policy.js)
+  router.post('/suggest', ...pairSuggestMiddleware({ secret, env }));
 
   // POST /api/v1/pair/structural
   router.post('/structural', async (req, res) => {

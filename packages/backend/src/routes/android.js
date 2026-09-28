@@ -22,7 +22,10 @@ function getAdbClient() {
 /** @param {{ secret?: string }} [opts] */
 export function androidRoutes({ secret } = {}) {
   const router = Router();
-  if (secret) router.use(authMiddleware({ secret }));
+  // BSEC-002: fail closed — a missing secret must crash the mount, never
+  // silently downgrade these routes to public.
+  if (!secret) throw new Error('[route-policy] androidRoutes requires a secret (BSEC-002: fail closed)');
+  router.use(authMiddleware({ secret }));
 
   router.get('/devices', async (req, res) => {
     try {

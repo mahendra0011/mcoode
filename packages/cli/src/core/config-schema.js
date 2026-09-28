@@ -58,11 +58,19 @@ export const ConfigSchema = z.object({
   cliSecret: z.string().optional(),
   roles: RolesSchema.optional(),
   routing: z.record(z.string(), z.array(z.string())).optional(),
+  // MF-005: installed plugin presets + their provenance. Must survive
+  // validate-before-write (store.saveConfig) or installs would be dropped.
+  plugins: z.record(z.string(), z.any()).optional(),
+  pluginsRegistryUrl: z.string().url().optional(),
   modelScores: z.record(z.string(), z.record(z.string(), z.number())).optional(),
   modelScoresUrl: z.string().url().optional(),
   enabledProviders: z.array(z.string()).optional(),
   disabledProviders: z.array(z.string()).optional(),
-});
+  // Unknown keys are PRESERVED, not stripped: plugin installs merge arbitrary
+  // config blocks (`lint`, `deploy`, `frontend`, …) and `saveConfig` validates
+  // on every write, so a strict object would silently delete every install
+  // (MF-005). Known keys above are still fully type-checked (MF-007).
+}).passthrough();
 
 export function validateConfig(config) {
   const result = ConfigSchema.safeParse(config);

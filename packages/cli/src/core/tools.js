@@ -106,7 +106,7 @@ export async function fetchWithTimeout(url, opts = {}, ms = 7000) {
  * diff-preview layer so `/undo` can revert any todo's changes.
  */
 export class ToolExecutor {
-  constructor({ projectPath = process.cwd(), bus = null, undoStack = null, allowShellAll = false, requireEditApproval = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null, memoryDir = null, mode = null, readOnly = false } = {}) {
+  constructor({ projectPath = process.cwd(), bus = null, undoStack = null, allowShellAll = false, requireEditApproval = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null, memoryDir = null, mode = null, readOnly = false, onWrite = null } = {}) {
     this.projectPath = resolve(projectPath);
     this.bus = bus;
     this.undoStack = undoStack;
@@ -121,6 +121,15 @@ export class ToolExecutor {
     this.mode = mode;
     this.readOnly = Boolean(readOnly || mode === 'review' || mode === 'explain' || mode === 'plan');
     this.browserTool = null; // lazily created
+    /** MF-004: writer-audit hook — called after every successful file write. */
+    this.onWrite = onWrite;
+  }
+
+  /** MF-004: notify the writer audit (never let bookkeeping fail a write). */
+  _notifyWrite(file, undoId, tool) {
+    try {
+      this.onWrite?.({ file, undoId: undoId || null, todoId: this.todoId, tool });
+    } catch { /* audit is best-effort */ }
   }
 
   tools() {
@@ -391,6 +400,7 @@ export class ToolExecutor {
       language: rel.split('.').pop() || 'txt',
       timestamp: Date.now()
     });
+    this._notifyWrite(rel, undoId, 'write_file');
     return { ok: true, file: rel, created, diff, diffLines: diff?.lines || [], content, undoId };
   }
 
@@ -436,6 +446,7 @@ export class ToolExecutor {
       language: path.split('.').pop() || 'txt',
       timestamp: Date.now()
     });
+    this._notifyWrite(path, undoId, 'edit_file');
     return { ok: true, file: path, diff, diffLines: diff?.lines || [], content, undoId };
   }
 

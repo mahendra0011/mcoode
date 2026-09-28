@@ -124,6 +124,45 @@ export class CostLedger {
   }
 }
 
+/** Rough USD-per-1M-token fallback rates (MF-002). Only used when a model has
+ *  no catalog pricing (`costPer1kIn/Out`); provider catalogs are preferred. */
+export const COST_RATES = {
+  openai: { in: 0.15, out: 0.6 },
+  anthropic: { in: 3, out: 15 },
+  google: { in: 0.5, out: 1.5 },
+  github: { in: 0.1, out: 0.4 },
+  deepseek: { in: 0.27, out: 1.1 },
+  default: { in: 1, out: 3 }
+};
+
+/**
+ * MF-002: estimate the USD cost of one provider call.
+ *
+ * Catalog pricing wins (providers ship `costPer1kIn`/`costPer1kOut` per 1K
+ * tokens); otherwise the provider's fallback rate (per 1M tokens) applies.
+ * Kept in @mcode/shared so the CLI summary, the ledger attribution and the
+ * `history`/`doctor` reports all compute money the same way.
+ *
+ * @param {{ costPer1kIn?: number, costPer1kOut?: number, provider?: string, id?: string }|string|null} model
+ * @param {{ inputTokens?: number, outputTokens?: number }|null} usage
+ * @param {{ rates?: Record<string, { in: number, out: number }> }} [opts]
+ * @returns {number} USD (0 when there is no usage)
+ */
+export function estimateCallCost(model = null, usage = null, { rates = COST_RATES } = {}) {
+  const input = Number(usage?.inputTokens) || 0;
+  const output = Number(usage?.outputTokens) || 0;
+  if (input <= 0 && output <= 0) return 0;
+  const inPer1k = Number(model?.costPer1kIn);
+  const outPer1k = Number(model?.costPer1kOut);
+  if (Number.isFinite(inPer1k) && Number.isFinite(outPer1k)) {
+    return (input / 1000) * inPer1k + (output / 1000) * outPer1k;
+  }
+  const ref = typeof model === 'string' ? model : String(model?.ref || model?.id || '');
+  const provider = String(model?.provider?.id || model?.provider || ref.split(':')[0] || 'default');
+  const rate = rates[provider] || rates.default;
+  return (input / 1e6) * rate.in + (output / 1e6) * rate.out;
+}
+
 /** Rough token estimation — fallback only (subagents prefer provider-reported
  *  `usage` when the API returns it). ~4 chars/token holds for English prose
  *  and code, but CJK/emoji run ~1-3 tokens per char, so non-ASCII is counted

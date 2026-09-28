@@ -1,15 +1,16 @@
 import { Command } from 'commander';
-import { setJsonMode, setInteractive, setQuiet, isJsonMode, out, ok, fail, json } from './core/logger.js';
+import { setJsonMode, setInteractive, setQuiet, isJsonMode, out, ok, fail, warn, json } from './core/logger.js';
 import { startRepl } from './repl.js';
 import { checkForUpdate } from './core/update-check.js';
 import { initCrashReporter, setupCrashHooks } from './core/crash-reporter.js';
+import { CLI_VERSION } from './core/version.js';
 
 export async function run(argv) {
   await initCrashReporter();
   setupCrashHooks();
 
   const program = new Command('mcode')
-    .version('2.4.6')
+    .version(CLI_VERSION)
     .description('terminal-first, multi-model AI coding CLI')
     .option('--json', 'machine-readable output', false)
     .option('--non-interactive', 'disable TUI, plain stdout, no prompts (CI mode)', false)
@@ -93,11 +94,14 @@ export async function run(argv) {
     .option('--resume [sessionId]', 'MF-001: resume a saved run (default: latest for this project)')
     .option('--list-sessions', 'MF-001: list resumable runs and exit', false)
     .option('--revert-interrupted', 'when resuming, roll back files an interrupted subagent already wrote', false)
+    .option('--dry-run', 'MF-003: plan + print the DAG without dispatching any subagent', false)
+    .option('--execute-plan', 'MF-003: run the plan saved by --dry-run (no re-planning)', false)
+    .option('--max-cost <usd>', 'MF-002: stop dispatching when estimated spend reaches this USD (checkpoint is kept)', (v) => Math.max(0, Number(v) || 0))
     .action(async (prompt, opts) => {
       const { godCommand } = await import('./commands/god.js');
       const wantsResume = opts.resume !== undefined && opts.resume !== false;
-      if (!prompt && !wantsResume && !opts.listSessions) {
-        fail('god needs a task prompt - `mcode god "add billing"`, or use --resume / --list-sessions');
+      if (!prompt && !wantsResume && !opts.listSessions && !opts.executePlan) {
+        fail('god needs a task prompt - `mcode god "add billing"`, or use --resume / --execute-plan / --list-sessions');
         process.exitCode = 1;
         return;
       }
@@ -114,7 +118,10 @@ export async function run(argv) {
         verbose: opts.verbose,
         resume: wantsResume ? opts.resume : null,
         listSessions: Boolean(opts.listSessions),
-        revertInterrupted: Boolean(opts.revertInterrupted)
+        revertInterrupted: Boolean(opts.revertInterrupted),
+        dryRun: Boolean(opts.dryRun),
+        executePlan: Boolean(opts.executePlan),
+        maxCost: opts.maxCost ?? null
       });
     });
 
@@ -332,28 +339,44 @@ export async function run(argv) {
     .option('--clear', 'clear history', false)
     .option('--json', 'machine-readable output', false)
     .option('-n, --limit <n>', 'show only the last N entries', '50')
+    .option('--cost', 'MF-002: lifetime per-mode spend breakdown from ~/.mcode/ledger.json', false)
     .action(async (opts) => {
       setJsonMode(Boolean(opts.json));
       const { historyCommand } = await import('./commands/history.js');
-      await historyCommand({ asJson: opts.json, clear: opts.clear, limit: Number(opts.limit) || 50 });
+      await historyCommand({
+        asJson: opts.json,
+        clear: opts.clear,
+        limit: Number(opts.limit) || 50,
+        cost: Boolean(opts.cost)
+      });
     });
 
   // ── Add / ship ────────────────────────────────────────────────────────
   program
     .command('add <plugin>')
-    .description('install a registry plugin (eslint, prettier, deploy-*)')
-    .action(async (plugin) => {
+    .description('install a registry plugin (eslint, prettier, deploy-*, or name@version from a remote registry)')
+    .option('--registry <url>', 'remote registry.json URL (overrides config pluginsRegistryUrl)')
+    .option('--offline', 'do not hit the network — use the 24h cache / bundled list', false)
+    .action(async (plugin, opts) => {
       const { addCommand } = await import('./commands/add.js');
-      await addCommand(plugin);
+      await addCommand(plugin, { registry: opts.registry || null, offline: Boolean(opts.offline) });
     });
 
   program
     .command('plugins')
     .description('list available registry plugins')
     .option('-c, --category <cat>', 'filter by category')
+    .option('--installed', 'list what this machine has installed (with source/version)', false)
+    .option('--registry <url>', 'remote registry.json URL (overrides config pluginsRegistryUrl)')
+    .option('--offline', 'do not hit the network — use the 24h cache / bundled list', false)
     .action(async (opts) => {
       const { pluginsListCommand } = await import('./commands/add.js');
-      await pluginsListCommand({ category: opts.category });
+      await pluginsListCommand({
+        category: opts.category,
+        installed: Boolean(opts.installed),
+        registry: opts.registry || null,
+        offline: Boolean(opts.offline)
+      });
     });
 
   const plugin = program
@@ -382,6 +405,20 @@ export async function run(argv) {
     .action(async (name) => {
       const { setPluginEnabled } = await import('./commands/add.js');
       await setPluginEnabled(name, true);
+    });
+
+  plugin
+    .command('upgrade [name]')
+    .description('MF-005: re-resolve installed plugins against their registry and install newer versions')
+    .option('--registry <url>', 'registry.json URL to check (defaults to each plugin\'s recorded source)')
+    .option('--offline', 'do not hit the network — use the 24h cache', false)
+    .action(async (name, opts) => {
+      const { pluginUpgradeCommand } = await import('./commands/add.js');
+      await pluginUpgradeCommand({
+        name: name || null,
+        registry: opts.registry || null,
+        offline: Boolean(opts.offline)
+      });
     });
 
   program
@@ -572,15 +609,16 @@ export async function run(argv) {
 
   await program.parseAsync(argv);
 
-  checkForUpdate('2.4.6').then((latest) => {
+  // MF-006: same CLI_VERSION the rest of the CLI reports — no second literal.
+  checkForUpdate(CLI_VERSION).then((latest) => {
     if (latest) {
-      process.stderr.write(`\nmcode update available: ${latest} (current: 2.4.6)\nRun: npm update -g mcode-cli\n\n`);
+      process.stderr.write(`\nmcode update available: ${latest} (current: ${CLI_VERSION})\nRun: npm update -g mcode-cli\n\n`);
     }
   }).catch(() => {});
 }
 
 /** One-shot non-interactive God Mode run: plan, dispatch subagents, print summary. */
-async function runGodOnce(prompt, maxAgents, { watchAfter = false, noTests = false, confirm = null, model = null, mode = null, deployTarget = null } = {}) {
+async function runGodOnce(prompt, maxAgents, { watchAfter = false, noTests = false, confirm = null, model = null, mode = null, deployTarget = null, dryRun = false, executePlan = false, maxCost = null } = {}) {
   const { Orchestrator } = await import('./core/orchestrator.js');
   const { loadConfig } = await import('./core/store.js');
   try {
@@ -593,7 +631,9 @@ async function runGodOnce(prompt, maxAgents, { watchAfter = false, noTests = fal
         maxAgents: Number(maxAgents) || 5,
         watchAfter: Boolean(watchAfter),
         modelOverride: model || config.modelOverride || null,
-        mode: mode || undefined
+        mode: mode || undefined,
+        // MF-002: ceiling for this run (also read by runPlan's fallback chain).
+        ...(maxCost != null ? { maxCost } : {})
       }
     });
     await orchestrator.init();
@@ -602,6 +642,9 @@ async function runGodOnce(prompt, maxAgents, { watchAfter = false, noTests = fal
     const summary = await orchestrator.runGod(prompt, {
       noTests: Boolean(noTests),
       deployTarget: deployTarget || null,
+      dryRun: Boolean(dryRun),
+      executePlan: Boolean(executePlan),
+      maxCost: maxCost ?? null,
       confirmFn: confirm ? async () => true : null,
       addMessage: (m) => {
         const line = String(m.text || '');
@@ -615,11 +658,26 @@ async function runGodOnce(prompt, maxAgents, { watchAfter = false, noTests = fal
       else fail('god run cancelled or failed');
       return 1;
     }
-    if (isJsonMode()) {
-      json({ ok: true, ...summary });
-      return summary.failed > 0 ? 1 : 0;
+    if (summary.dryRun) {
+      if (isJsonMode()) json({ ok: true, dryRun: true, todos: summary.todos, waves: summary.waves, domains: summary.domains });
+      else ok(`dry run — ${summary.todos} todos in ${summary.waves} wave(s), nothing dispatched (run: mcode god --execute-plan)`);
+      orchestrator.disconnect();
+      return 0;
     }
-    ok(`build complete — ${summary.done}/${summary.total} todos \u00b7 ${summary.elapsedSecs.toFixed(1)}s \u00b7 ${summary.files || 0} files \u00b7 est. $${Number(summary.cost || 0).toFixed(2)}`);
+    if (isJsonMode()) {
+      json({ ok: !summary.budget, ...summary });
+      if (summary.failed > 0 || summary.budget) return 1;
+      return 0;
+    }
+    const spendUsd = Number(summary.spendUsd ?? summary.cost ?? 0);
+    ok(`build complete — ${summary.done}/${summary.total} todos \u00b7 ${summary.elapsedSecs.toFixed(1)}s \u00b7 ${summary.files || 0} files \u00b7 $${spendUsd.toFixed(2)} (tokens ${summary.tokensIn ?? 0}/${summary.tokensOut ?? 0})`);
+    if (summary.budget) {
+      warn(`budget ceiling reached (~$${Number(summary.budget.spentUsd).toFixed(2)} of $${Number(summary.budget.limitUsd).toFixed(2)}) — resume: mcode god --resume ${orchestrator.sessionId} --max-cost <usd>`);
+      return 1;
+    }
+    if (summary.overlaps?.length) {
+      warn(`${summary.overlaps.length} overlapping write(s) — last write wins: ${summary.overlaps.slice(0, 3).map((o) => o.file).join(', ')}`);
+    }
     for (const m of summary.models || []) {
       out(`  ${m.domain.padEnd(10)} \u2192 ${m.model} (${m.count} todo${m.count === 1 ? '' : 's'})`);
     }

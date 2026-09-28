@@ -1,6 +1,8 @@
 import { EventEmitter } from 'node:events';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { io } from 'socket.io-client';
-import { EVENTS, SOCKET, EVENT_TO_SOCKET, DEFAULT_CONFIG, CostLedger, SUBAGENT_STATUS, normalizePlan, validatePlan } from '@mcode/shared';
+import { EVENTS, SOCKET, EVENT_TO_SOCKET, DEFAULT_CONFIG, CostLedger, SUBAGENT_STATUS, normalizePlan, validatePlan, planWaves } from '@mcode/shared';
 import { Planner } from './planner.js';
 import { ModelRouter, MODES } from './router.js';
 import { detectTechStack, smartDefaults } from './techstack.js';
@@ -23,7 +25,9 @@ export class Orchestrator extends EventEmitter {
     super();
     this.projectPath = projectPath;
     this.config = config;
-    this.ledger = new CostLedger();
+    // MF-002: persist to ~/.mcode/ledger.json (same file ModelRouter uses as
+    // its default) so `doctor`/`history` can report lifetime spend across runs.
+    this.ledger = new CostLedger({ filePath: join(homedir(), '.mcode', 'ledger.json') });
     this.secrets = null;
     this.providers = null;
     this.router = null;
@@ -253,12 +257,17 @@ export class Orchestrator extends EventEmitter {
     return out.join('\n\n');
   }
 
-  async runPlan(plan, { confirmFn = null, noTests = false, resumeState = null, sessionMeta = null } = {}) {
+  async runPlan(plan, { confirmFn = null, noTests = false, resumeState = null, sessionMeta = null, maxCost = null } = {}) {
     if (confirmFn && !(await confirmFn(plan))) {
       this.emit(EVENTS.TOAST, { kind: 'warn', text: 'plan cancelled' });
       return null;
     }
     this.emit(EVENTS.PLAN_APPROVED, plan);
+    // MF-002: explicit --max-cost wins, else the user's own config setting
+    // (never DEFAULT_CONFIG's documented default — see SubagentManager).
+    const cfgBudget = Number(this.config?.cost?.budgetPerRunUsd);
+    const budgetUsd = maxCost ?? this.options.maxCost
+      ?? (Number.isFinite(cfgBudget) && cfgBudget > 0 ? cfgBudget : null);
     this.manager = new SubagentManager({
       plan,
       router: this.router,
@@ -272,6 +281,8 @@ export class Orchestrator extends EventEmitter {
         forceRef: this.modelOverride,
         maxAgents: this.options.maxAgents,
         orchestratorManaged: true,
+        // MF-002: budget ceiling for this run (null = unlimited).
+        maxCost: budgetUsd,
         // MF-001: pass the checkpoint handle + run metadata down to the manager.
         resumeState,
         session: sessionMeta
@@ -371,7 +382,7 @@ export class Orchestrator extends EventEmitter {
    *   4. Integration tests + bugfix rounds
    *   5. Start watch mode daemon for continuous monitoring
    */
-  async runGod(prompt, { confirmFn = null, addMessage = null, fresh = false, deployTarget = null, noTests = false, resumeState = null } = {}) {
+  async runGod(prompt, { confirmFn = null, addMessage = null, fresh = false, deployTarget = null, noTests = false, resumeState = null, dryRun = false, executePlan = false, maxCost = null } = {}) {
     const t0 = Date.now();
     // Clear any existing specialized agents to free context windows
     this.clearSpecializedAgents();
@@ -402,6 +413,36 @@ export class Orchestrator extends EventEmitter {
       if (addMessage) {
         addMessage({ kind: 'ok', text: `\u21ba resumed session ${resumeState.sessionId} — ${done}/${plan.todos.length} todos already done, retrying the rest` });
       }
+    } else if (executePlan) {
+      // MF-003: execute exactly what `--dry-run` previewed — no second,
+      // non-deterministic (and paid) planning call.
+      const { readDryRunPlan } = await import('./session-state.js');
+      const sid = this.sessionId || (await getProjectId(this.projectPath));
+      const saved = await readDryRunPlan(sid);
+      if (!saved) {
+        throw new Error(
+          `no saved dry-run plan for this project — run \`mcode god --dry-run "<prompt>"\` first`
+        );
+      }
+      plan = normalizePlan(saved.plan, { maxTodos: Infinity });
+      const check = validatePlan(plan);
+      if (!check.ok) {
+        throw new Error(`saved dry-run plan is invalid (${check.error}) — re-run \`mcode god --dry-run\``);
+      }
+      prompt = prompt || saved.prompt || plan.prompt || plan.summary || 'executed dry-run plan';
+      sessionMeta = {
+        prompt,
+        stackHint: saved.stackHint || null,
+        startedAt: new Date().toISOString(),
+        mode: 'god'
+      };
+      this.emit(EVENTS.MESSAGE, {
+        kind: 'system',
+        text: `\u25b8 executing previewed plan: ${plan.todos.length} todos (saved ${saved.savedAt})`
+      });
+      if (addMessage) {
+        addMessage({ kind: 'ok', text: `\u2713 executing previewed plan — ${plan.todos.length} todos, no re-plan` });
+      }
     } else {
       this.emit(EVENTS.MESSAGE, { kind: 'system', text: `\u25b8 god mode: "${String(prompt).slice(0, 100)}"` });
       plan = await this.plan(prompt, { fresh });
@@ -414,10 +455,36 @@ export class Orchestrator extends EventEmitter {
       };
     }
 
+    // MF-003: dry-run stops here — persist the plan, render it, dispatch nothing.
+    if (dryRun) {
+      const { writeDryRunPlan } = await import('./session-state.js');
+      const { renderPlan } = await import('./plan-view.js');
+      const sid = this.sessionId || (await getProjectId(this.projectPath));
+      await writeDryRunPlan(sid, {
+        prompt,
+        stackHint: this.config?.stackHint || null,
+        plan
+      });
+      const text = renderPlan(plan);
+      this.emit(EVENTS.MESSAGE, { kind: 'system', text });
+      if (addMessage) {
+        addMessage({ kind: 'ok', text });
+        addMessage({ kind: 'system', text: 'dry run — nothing dispatched. Run it with: mcode god --execute-plan' });
+      }
+      const waves = planWaves(plan);
+      return {
+        dryRun: true,
+        todos: plan.todos.length,
+        waves: waves.length,
+        domains: [...new Set(plan.todos.map((t) => t.domain).filter(Boolean))],
+        plan
+      };
+    }
+
     let metrics = null;
     const onBuild = (p) => { metrics = p; };
     this.on(EVENTS.BUILD_COMPLETE, onBuild);
-    const results = await this.runPlan(plan, { confirmFn, noTests, resumeState, sessionMeta });
+    const results = await this.runPlan(plan, { confirmFn, noTests, resumeState, sessionMeta, maxCost });
     this.off(EVENTS.BUILD_COMPLETE, onBuild);
     if (!results) return null;
 

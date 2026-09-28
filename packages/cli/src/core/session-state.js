@@ -39,6 +39,56 @@ export function statePathFor(projectId) {
   return join(sessionDirFor(projectId), STATE_FILE);
 }
 
+/* ── MF-003: dry-run plan persistence ───────────────────────────────────
+ * A `god --dry-run` must NOT overwrite `state.json` — that file is a live
+ * resume checkpoint for an interrupted run. The previewed plan gets its own
+ * `plan.json` next to it, which `--execute-plan` reads back so the executed
+ * run re-uses the exact previewed DAG instead of paying for a second,
+ * non-deterministic LLM plan. */
+export const PLAN_FILE = 'plan.json';
+
+export function planPathFor(projectId) {
+  return join(sessionDirFor(projectId), PLAN_FILE);
+}
+
+/** Atomic write, same tmp+rename pattern as writeSessionState(). */
+export async function writeDryRunPlan(projectId, payload = {}) {
+  const id = String(projectId ?? '').replace(/[^a-zA-Z0-9._-]/g, '') || 'unknown';
+  const dir = sessionDirFor(id);
+  await mkdir(dir, { recursive: true });
+  const file = planPathFor(id);
+  const body = {
+    ...payload,
+    v: STATE_VERSION,
+    projectId: id,
+    dryRun: true,
+    savedAt: new Date().toISOString()
+  };
+  const tmp = `${file}.tmp.${process.pid}`;
+  try {
+    await writeFile(tmp, JSON.stringify(body, null, 2), 'utf8');
+    await rename(tmp, file);
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => {});
+    throw err;
+  }
+  await chmod(file, 0o600).catch(() => {});
+  return file;
+}
+
+/** Read the last dry-run plan. Missing/corrupt → null (caller fails loudly). */
+export async function readDryRunPlan(projectId) {
+  try {
+    const raw = await readFile(planPathFor(projectId), 'utf8');
+    const payload = JSON.parse(raw);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    if (!payload.plan || !Array.isArray(payload.plan.todos) || payload.plan.todos.length === 0) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 /** Errors that callers surface as "nothing to resume" + a `--list-sessions` hint. */
 export class SessionStateError extends Error {
   constructor(message, { code = 'SESSION_STATE_ERROR', sessions = [] } = {}) {

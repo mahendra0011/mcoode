@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/mahendra0011/mcode/main/registry.schema.json",
+  "title": "mcode plugin registry",
+  "description": "MF-005: remote registry consumed by `mcode add` / `mcode plugin upgrade`. Plugins are config-only presets — a registry never distributes executable code.",
+  "type": "object",
+  "required": ["plugins"],
+  "additionalProperties": true,
+  "properties": {
+    "version": { "type": "integer", "minimum": 1, "default": 1 },
+    "updatedAt": { "type": ["string", "null"], "format": "date-time" },
+    "plugins": {
+      "oneOf": [
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/entryOrVersions" } },
+        { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+      ]
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["name", "version", "config"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "pattern": "^\\d+(\\.\\d+){0,2}(-[0-9A-Za-z.-]+)?$" },
+        "category": { "type": "string" },
+        "desc": { "type": "string" },
+        "homepage": { "type": "string" },
+        "config": { "type": "object", "description": "Config blocks merged into ~/.mcode/config.json" },
+        "integrity": {
+          "type": "string",
+          "pattern": "^sha256-[0-9a-f]{64}$",
+          "description": "REQUIRED for remote entries: sha256 of JSON.stringify(config) with the key order as published. `node scripts/registry-integrity.mjs <entry.json>` prints it."
+        },
+        "signature": { "type": "string", "description": "Optional detached signature (documented in docs/CODE-SIGNING.md)" },
+        "minCliVersion": { "type": "string" },
+        "versions": { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+      }
+    },
+    "entryOrVersions": {
+      "oneOf": [
+        { "$ref": "#/$defs/entry" },
+        { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+      ]
+    }
+  }
+}

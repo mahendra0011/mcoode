@@ -87,7 +87,7 @@ export class Subagent {
    * @param {Function|null} [args.onEvent]
    * @param {Record<string, any>|null} [args.reasoning]
    */
-  constructor({ todo, assignment, projectPath, bus, undoStack, config = {}, onEvent = null, reasoning = null }) {
+  constructor({ todo, assignment, projectPath, bus, undoStack, config = {}, onEvent = null, reasoning = null, onWrite = null }) {
     this.todo = todo;
     this.assignment = assignment; // { provider, model, ref }
     this.reasoning = reasoning;
@@ -99,6 +99,8 @@ export class Subagent {
     this.networkWhitelist = config.networkWhitelist || null;
     this.auditLog = config.auditLog || null;
     this.onEvent = onEvent;
+    /** MF-004: writer-audit callback ({ file, undoId, todoId }) on every successful write. */
+    this.onWrite = onWrite;
     /** @type {import('@mcode/shared').SubagentStatus} */
     this.status = SUBAGENT_STATUS.PENDING;
     this.step = 0;
@@ -149,6 +151,7 @@ export class Subagent {
       auditLog: this.auditLog,
       domain: this.todo.domain,
       todoId: this.todo.id,
+      onWrite: this.onWrite,
       cancelSignal: this.abortController.signal
     });
 

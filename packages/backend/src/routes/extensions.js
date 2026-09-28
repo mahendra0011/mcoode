@@ -146,7 +146,10 @@ function convertToMonacoTheme(themeData, uiTheme) {
 /** @param {{ secret?: string }} [opts] */
 export function extensionRoutes({ secret } = {}) {
   const router = Router();
-  if (secret) router.use(authMiddleware({ secret }));
+  // BSEC-002: fail closed — a missing secret must crash the mount, never
+  // silently downgrade these routes to public.
+  if (!secret) throw new Error('[route-policy] extensionRoutes requires a secret (BSEC-002: fail closed)');
+  router.use(authMiddleware({ secret }));
 
   // GET /api/v1/extensions/search?q=eslint&category=...
   router.get('/search', async (req, res, next) => {

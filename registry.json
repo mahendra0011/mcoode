@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "updatedAt": null,
+  "//": "MF-005 remote plugin registry. Entries are CONFIG-ONLY presets (never code). Every entry MUST carry `integrity: sha256-<hex>` computed over JSON.stringify(entry.config) — `node scripts/registry-integrity.mjs <entry.json>` prints the value. Publish guide: docs/PLUGIN-REGISTRY.md.",
+  "plugins": {}
+}
