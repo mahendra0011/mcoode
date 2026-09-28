@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { io } from 'socket.io-client';
-import { EVENTS, SOCKET, EVENT_TO_SOCKET, DEFAULT_CONFIG, CostLedger } from '@mcode/shared';
+import { EVENTS, SOCKET, EVENT_TO_SOCKET, DEFAULT_CONFIG, CostLedger, SUBAGENT_STATUS, normalizePlan, validatePlan } from '@mcode/shared';
 import { Planner } from './planner.js';
 import { ModelRouter, MODES } from './router.js';
 import { detectTechStack, smartDefaults } from './techstack.js';
@@ -253,7 +253,7 @@ export class Orchestrator extends EventEmitter {
     return out.join('\n\n');
   }
 
-  async runPlan(plan, { confirmFn = null, noTests = false } = {}) {
+  async runPlan(plan, { confirmFn = null, noTests = false, resumeState = null, sessionMeta = null } = {}) {
     if (confirmFn && !(await confirmFn(plan))) {
       this.emit(EVENTS.TOAST, { kind: 'warn', text: 'plan cancelled' });
       return null;
@@ -271,7 +271,10 @@ export class Orchestrator extends EventEmitter {
         skipIntegrationTests: Boolean(noTests),
         forceRef: this.modelOverride,
         maxAgents: this.options.maxAgents,
-        orchestratorManaged: true
+        orchestratorManaged: true,
+        // MF-001: pass the checkpoint handle + run metadata down to the manager.
+        resumeState,
+        session: sessionMeta
       }
     });
     return this.manager.runAll();
@@ -368,18 +371,53 @@ export class Orchestrator extends EventEmitter {
    *   4. Integration tests + bugfix rounds
    *   5. Start watch mode daemon for continuous monitoring
    */
-  async runGod(prompt, { confirmFn = null, addMessage = null, fresh = false, deployTarget = null, noTests = false } = {}) {
+  async runGod(prompt, { confirmFn = null, addMessage = null, fresh = false, deployTarget = null, noTests = false, resumeState = null } = {}) {
     const t0 = Date.now();
     // Clear any existing specialized agents to free context windows
     this.clearSpecializedAgents();
-    this.emit(EVENTS.MESSAGE, { kind: 'system', text: `\u25b8 god mode: "${String(prompt).slice(0, 100)}"` });
-    const plan = await this.plan(prompt, { fresh });
-    if (addMessage) addMessage({ kind: 'ok', text: `\u2713 plan generated — ${plan.todos.length} todos across ${new Set(plan.todos.map((t) => t.domain)).size} domains` });
+
+    let plan;
+    let sessionMeta;
+    if (resumeState) {
+      // MF-001: resume rebuilds the DAG from the checkpoint — no re-planning
+      // (non-deterministic + paid) and no re-dispatch of already-DONE todos.
+      plan = normalizePlan(resumeState.plan, { maxTodos: Infinity });
+      const check = validatePlan(plan);
+      if (!check.ok) {
+        throw new Error(`cannot resume session ${resumeState.sessionId}: saved plan is invalid (${check.error})`);
+      }
+      prompt = prompt || resumeState.prompt || plan.prompt || plan.summary || 'resumed run';
+      sessionMeta = {
+        prompt,
+        stackHint: resumeState.stackHint || null,
+        startedAt: resumeState.startedAt || null,
+        mode: 'god'
+      };
+      const done = Object.values(resumeState.todoStatus || {})
+        .filter((s) => s === SUBAGENT_STATUS.DONE).length;
+      this.emit(EVENTS.MESSAGE, {
+        kind: 'system',
+        text: `\u21ba resuming session ${resumeState.sessionId} — ${done}/${plan.todos.length} todos already done`
+      });
+      if (addMessage) {
+        addMessage({ kind: 'ok', text: `\u21ba resumed session ${resumeState.sessionId} — ${done}/${plan.todos.length} todos already done, retrying the rest` });
+      }
+    } else {
+      this.emit(EVENTS.MESSAGE, { kind: 'system', text: `\u25b8 god mode: "${String(prompt).slice(0, 100)}"` });
+      plan = await this.plan(prompt, { fresh });
+      if (addMessage) addMessage({ kind: 'ok', text: `\u2713 plan generated — ${plan.todos.length} todos across ${new Set(plan.todos.map((t) => t.domain)).size} domains` });
+      sessionMeta = {
+        prompt,
+        stackHint: this.config?.stackHint || null,
+        startedAt: new Date().toISOString(),
+        mode: 'god'
+      };
+    }
 
     let metrics = null;
     const onBuild = (p) => { metrics = p; };
     this.on(EVENTS.BUILD_COMPLETE, onBuild);
-    const results = await this.runPlan(plan, { confirmFn, noTests });
+    const results = await this.runPlan(plan, { confirmFn, noTests, resumeState, sessionMeta });
     this.off(EVENTS.BUILD_COMPLETE, onBuild);
     if (!results) return null;
 

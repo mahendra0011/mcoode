@@ -80,7 +80,7 @@ export async function run(argv) {
 
   // ── God mode ──────────────────────────────────────────────────────────
   program
-    .command('god <prompt>')
+    .command('god [prompt]')
     .description('god mode: plan + parallel subagents + integration pass')
     .option('-y, --yes', 'skip plan confirmation', false)
     .option('--stack <stack>', 'stack hint for the planner')
@@ -90,8 +90,17 @@ export async function run(argv) {
     .option('--watch-after', 'start the watch daemon after the run', false)
     .option('-m, --model <ref>', 'force provider:model')
     .option('--verbose', 'verbose subagent output', false)
+    .option('--resume [sessionId]', 'MF-001: resume a saved run (default: latest for this project)')
+    .option('--list-sessions', 'MF-001: list resumable runs and exit', false)
+    .option('--revert-interrupted', 'when resuming, roll back files an interrupted subagent already wrote', false)
     .action(async (prompt, opts) => {
       const { godCommand } = await import('./commands/god.js');
+      const wantsResume = opts.resume !== undefined && opts.resume !== false;
+      if (!prompt && !wantsResume && !opts.listSessions) {
+        fail('god needs a task prompt - `mcode god "add billing"`, or use --resume / --list-sessions');
+        process.exitCode = 1;
+        return;
+      }
       setInteractive(!opts.yes);
       await godCommand({
         prompt,
@@ -102,7 +111,10 @@ export async function run(argv) {
         concurrency: opts.concurrency,
         watchAfter: opts.watchAfter,
         model: opts.model,
-        verbose: opts.verbose
+        verbose: opts.verbose,
+        resume: wantsResume ? opts.resume : null,
+        listSessions: Boolean(opts.listSessions),
+        revertInterrupted: Boolean(opts.revertInterrupted)
       });
     });
 

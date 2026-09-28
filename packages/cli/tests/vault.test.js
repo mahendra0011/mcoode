@@ -40,7 +40,8 @@ describe('vault roundtrip (isolated HOME)', () => {
     expect(await vaultList()).toContainEqual(
       expect.objectContaining({ key: 'OPENROUTER_API_KEY', set: true })
     );
-  });
+    // scrypt + file I/O is slow on Windows CI — the 5s default is too tight.
+  }, 30000);
 
   it('deletes keys', async () => {
     await vaultSet('K', 'v');

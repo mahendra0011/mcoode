@@ -2,8 +2,9 @@ import { EventEmitter } from 'node:events';
 import { SUBAGENT_STATUS, EVENTS, planWaves, isEligible, isBlocked, resolveFileConflicts, mergeResults, estimateTokens } from '@mcode/shared';
 import { Subagent } from './subagent.js';
 import { UndoStack } from './tools.js';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { getProjectId } from './store.js';
+import { writeSessionState } from './session-state.js';
 import { saveHistory } from './history.js';
 import { CostLedger } from '@mcode/shared';
 import { loadHooks } from './hooks.js';
@@ -159,6 +160,17 @@ export class SubagentManager {
     this._models = new Map(); // domain -> Map(model -> { provider, count })
     this.hooks = null; // loaded lazily in runAll()
     this.fileLocks = new FileLockManager(); // runtime lock queue for shared files
+    // MF-001: resumable checkpoint state. `options.session` carries the prompt/
+    // stack hint of the run; `options.resumeState` is a previous state.json when
+    // this manager was started by `mcode god --resume`.
+    this.sessionMeta = options.session || {};
+    this._resumeState = options.resumeState || null;
+    this._projectId = null;
+    this._stateStatus = null;
+    this._waveIndex = 0;
+    this._totalWaves = 0;
+    this._checkpointPending = null;
+    this._checkpointWarned = false;
   }
 
   get activeSubagents() {
@@ -181,6 +193,122 @@ export class SubagentManager {
     const map = new Map();
     for (const [id, sub] of this.subagents) map.set(id, sub.status);
     return map;
+  }
+
+  /**
+   * MF-001: persist a resumable checkpoint (`~/.mcode/sessions/<id>/state.json`)
+   * at a wave boundary or on interrupt. Best-effort by design — a checkpoint
+   * failure must never abort a build, so it degrades to a single warning.
+   */
+  async _checkpoint({ status = null, waveIndex = null, totalWaves = null } = {}) {
+    const run = (async () => {
+      try {
+        this._projectId = this._projectId || (await getProjectId(this.projectPath));
+        if (status) this._stateStatus = status;
+        if (waveIndex !== null) this._waveIndex = waveIndex;
+        if (totalWaves !== null) this._totalWaves = totalWaves;
+
+        const todoStatus = {};
+        for (const todo of this.plan?.todos || []) {
+          todoStatus[todo.id] =
+            this.results.get(todo.id)?.status
+            || this.subagents.get(todo.id)?.status
+            || todo.status
+            || SUBAGENT_STATUS.PENDING;
+        }
+
+        // In-flight subagents already wrote files to disk — record which todos
+        // were mid-write so `--resume` can offer keep/revert instead of
+        // silently re-applying edits on top of them.
+        const inflight = {};
+        for (const [id, sub] of this.subagents) {
+          if (sub?.status !== SUBAGENT_STATUS.RUNNING) continue;
+          inflight[id] = {
+            files: this._declaredFiles(id),
+            startedAt: sub.startedAt ? new Date(sub.startedAt).toISOString() : null
+          };
+        }
+
+        await writeSessionState(this._projectId, {
+          sessionId: this._projectId,
+          projectName: basename(this.projectPath),
+          projectPath: this.projectPath,
+          mode: this.sessionMeta.mode || 'god',
+          prompt: this.sessionMeta.prompt || this.plan?.prompt || this.plan?.summary || '',
+          stackHint: this.sessionMeta.stackHint || null,
+          status: this._stateStatus || 'running',
+          plan: this.plan,
+          todoStatus,
+          inflight,
+          waveIndex: this._waveIndex,
+          totalWaves: this._totalWaves,
+          startedAt: this.sessionMeta.startedAt || new Date(this._t0).toISOString()
+        });
+      } catch (err) {
+        if (!this._checkpointWarned) {
+          this._checkpointWarned = true;
+          this.emit(EVENTS.TOAST, { kind: 'warn', text: `session checkpoint failed: ${err.message}` });
+        }
+      }
+      return null;
+    })();
+    this._checkpointPending = run;
+    return run;
+  }
+
+  /** Declared output files of a todo — used to reconcile an interrupted write. */
+  _declaredFiles(todoId) {
+    const todo = (this.plan?.todos || []).find((t) => t.id === todoId);
+    const files = todo?.files?.length ? todo.files : todo?.filePath ? [todo.filePath] : [];
+    return files.map((f) => String(f).replace(/\\/g, '/'));
+  }
+
+  /** Awaitable handle for the last checkpoint write (SIGINT flush + tests). */
+  get pendingCheckpoint() {
+    return this._checkpointPending || Promise.resolve(null);
+  }
+
+  /** Force a checkpoint now (SIGINT flush, `--dry-run` handoff). */
+  async flushCheckpoint(status = 'interrupted') {
+    await this._checkpoint({ status });
+    return this.pendingCheckpoint;
+  }
+
+  /**
+   * MF-001: seed a run from a saved checkpoint. DONE todos are re-attached as
+   * results — so they are never re-dispatched, never re-written and never
+   * re-billed — while everything else (pending, failed, needs-review, or a todo
+   * that was mid-flight when the process died) goes back to PENDING and is
+   * retried in its wave.
+   */
+  _applyResumeState(state) {
+    const saved = state?.todoStatus || {};
+    let restored = 0;
+    let retry = 0;
+    for (const todo of this.plan?.todos || []) {
+      const prev = saved[todo.id];
+      if (prev === SUBAGENT_STATUS.DONE) {
+        todo.status = SUBAGENT_STATUS.DONE;
+        this.results.set(todo.id, {
+          todoId: todo.id,
+          status: SUBAGENT_STATUS.DONE,
+          resumed: true,
+          model: null,
+          files: todo.completedFiles || [],
+          error: null
+        });
+        restored += 1;
+        continue;
+      }
+      todo.status = SUBAGENT_STATUS.PENDING;
+      if (prev) retry += 1;
+    }
+    this._resumeInfo = { restored, retry, total: this.plan?.todos?.length || 0 };
+    this.emit(EVENTS.TOAST, {
+      kind: 'info',
+      text: `resume: ${restored} todo(s) already done — retrying ${retry}`
+    });
+    return this._resumeInfo;
   }
 
   /**
@@ -489,6 +617,10 @@ export class SubagentManager {
     }
 
     const waves = planWaves(this.plan);
+    // MF-001: a resumed run re-attaches DONE todos (never re-dispatched) and
+    // checkpoints immediately so a crash during the first wave is resumable too.
+    if (this._resumeState) this._applyResumeState(this._resumeState);
+    await this._checkpoint({ status: 'running', waveIndex: 0, totalWaves: waves.length });
     const statusById = () => {
       const map = new Map();
       for (const [id, result] of this.results) {
@@ -561,6 +693,10 @@ export class SubagentManager {
           hook: 'postWave', wave: idx + 1, ok: !res.error, error: res.error || null, ms: res.ms,
         });
       }
+
+      // MF-001: wave boundary — persist plan + per-todo status so a crash here
+      // resumes from this wave instead of re-planning and re-billing the DAG.
+      await this._checkpoint({ status: 'running', waveIndex: idx + 1, totalWaves: allWaves.length });
     }
 
     let integration = { ran: false };
@@ -613,6 +749,12 @@ export class SubagentManager {
         });
       }
     }
+
+    // MF-001: final checkpoint — flips status to completed/interrupted so
+    // `mcode god --list-sessions` shows what still needs a resume.
+    await this._checkpoint({
+      status: this._stopped ? 'interrupted' : merged.failed > 0 ? 'failed' : 'completed'
+    });
 
     return merged;
   }
@@ -813,6 +955,9 @@ export class SubagentManager {
       this.fileLocks.releaseAllFor(sub.id);
     }
     this.queue = [];
+    // MF-001: Ctrl+C / interrupt must leave a resumable checkpoint behind
+    // (`pendingCheckpoint` lets the SIGINT handler await the flush).
+    this._checkpointPending = this._checkpoint({ status: 'interrupted' });
   }
 }
 

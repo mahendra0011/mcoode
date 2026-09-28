@@ -124,6 +124,33 @@ one.
 
 ## [MF-001] Session Resume / Continue — No Way to Recover a Crashed or Cap-Hit God Run
 
+> **✅ Status (2026-09-28, working tree): FIXED — implemented + tested.**
+> New `packages/cli/src/core/session-state.js` owns a versioned, atomically written (`tmp` + `rename`,
+> `0600`) checkpoint at `~/.mcode/sessions/<projectId>/state.json`
+> (`{ v: 1, sessionId, projectId, projectName, projectPath, prompt, stackHint, status, plan, todoStatus,
+> inflight, waveIndex, totalWaves, startedAt, updatedAt }`). `SubagentManager` rewrites it **before the
+> first dispatch and after every wave**, and `stop()` (Ctrl+C) flushes `status: 'interrupted'` — the
+> `pendingCheckpoint` promise is awaitable, so the SIGINT handler in `commands/god.js` flushes, prints the
+> `--resume` hint and exits 130. `mcode god --resume [sessionId]` (default: latest for this project; also
+> resolves by unique id prefix, project path, or project name) rebuilds the DAG with `normalizePlan()` +
+> `validatePlan()` — **the planner never runs again** — and re-attaches DONE todos as results, so they are
+> never re-dispatched, re-written or re-billed; failed / needs-review / mid-flight todos go back to PENDING
+> and are retried in their wave. `mcode god --list-sessions` prints
+> SESSION/PROJECT/STATUS/DONE/WAVE/PROMPT/UPDATED (raw JSON with `--json`); a target that cannot be
+> resolved fails loudly (`SESSION_NOT_FOUND` + the available sessions) instead of silently re-planning.
+> Interrupted-subagent reconciliation: the `inflight` map records which todos were mid-write and their
+> declared files, reported on resume, **kept by default**, and rolled back through the existing per-project
+> undo stack with `--revert-interrupted` (files without a snapshot are reported, never silently ignored).
+> Guardrails: corrupt state = "no session", a state written by a newer CLI is refused
+> (`SESSION_STATE_TOO_NEW`) and skipped by the listing, and checkpoint failures degrade to a single warning
+> so they can never abort a build. Tests: 15 cases in `packages/cli/tests/session-resume.test.js` — atomic +
+> versioned write, corrupt/too-new handling, listing order, resume-target resolution, keep/revert
+> reconciliation, wave-boundary checkpointing, "DONE todos are not re-dispatched" (stubbed dispatch),
+> end-to-end resume that only rewrites the remaining todo's file, mid-flight → retried, SIGINT flush, and
+> "resume never re-plans" — all passing.
+> Remaining (by choice): `mcode history --resume <file>` sugar (primary surface stays the `god` command) and
+> the USER-GUIDE section.
+
 - **Description**: There is **no `--resume`/`--continue` anywhere in the CLI** (verified: no `resume` token in `packages/cli/src` outside unrelated UI hints like `replay`). If a god run hits the 25-turn subagent cap, the process crashes, or the terminal closes mid-wave, the user must re-run the whole task from scratch — already-DONE todos get re-planned and re-dispatched, re-spending the user's own API budget and re-writing files. Ironically, the **data needed for resume is already persisted**: `god.js:70-80` saves `{ plan, results, projectPath, status }` to `~/.mcode/history/*.json`, and `subagent-manager.js:824-839` `persistSession()` saves the same shape — but nothing ever **reads it back** to continue.
 - **Current vs Expected Behavior**:
   - **Current**: `mcode history` lists past runs read-only (`commands/history.js:4-36`). A re-run starts from planning again; `plan()` is called fresh and `runAll()` dispatches every todo. Wave state, per-todo status, and the undo stack exist only in memory.
@@ -143,13 +170,13 @@ one.
 - **Priority**: High
 - **Phase**: Phase 2 (pairs naturally with MF-002 budget-abort: an aborted run should be resumable)
 - **TODOs**:
-  - [ ] Wave-boundary checkpoint writer (atomic, versioned `~/.mcode/sessions/<projectId>/state.json`)
-  - [ ] `--resume [sessionId]` + `--list-sessions` flags in `index.js` + `godCommand`
-  - [ ] Resume path in `subagent-manager.runAll()`: skip DONE, re-plan waves, re-acquire locks
-  - [ ] Interrupted-subagent reconciliation prompt (keep/revert already-written changes)
-  - [ ] SIGINT/crash-hook checkpoint flush
-  - [ ] Tests: mid-wave crash → resume; schema-version mismatch handling
-  - [ ] Docs: USER-GUIDE.md + CLI.md resume workflow
+  - [x] Wave-boundary checkpoint writer (atomic, versioned `~/.mcode/sessions/<projectId>/state.json`) — `core/session-state.js`; written before wave 1 and after every wave
+  - [x] `--resume [sessionId]` + `--list-sessions` flags in `index.js` + `godCommand` — plus `--revert-interrupted`; `god [prompt]` is now optional (prompt-less + no resume/flag = usage error, exit 1)
+  - [x] Resume path in `subagent-manager.runAll()`: DONE re-attached as results (never re-dispatched), waves recomputed by `planWaves()`, file locks re-acquired per dispatch
+  - [x] Interrupted-subagent reconciliation prompt (keep/revert already-written changes) — `inflight` map → reported on resume; `--revert-interrupted` rolls back via `UndoStack`, unsnapshotted files reported
+  - [x] SIGINT/crash-hook checkpoint flush — `god.js` SIGINT handler awaits `manager.pendingCheckpoint` + prints the `--resume` hint (exit 130); `stop()` flushes `interrupted`
+  - [x] Tests: mid-wave crash → resume; schema-version mismatch handling — 15 cases in `tests/session-resume.test.js` (incl. `SESSION_STATE_TOO_NEW` refuse + corrupt = "no session")
+  - [x] Docs: CLI.md + GOD_MODE.md resume workflow (USER-GUIDE section still open)
 
 ---
 
@@ -393,10 +420,10 @@ one.
 
 ## Phase 2 — Foundation (Resume, Cost Enforcement, Fail-Closed, Config)
 
-- [ ] **MF-001** Wave-boundary checkpoint writer (atomic, versioned `~/.mcode/sessions/<projectId>/state.json`)
-- [ ] **MF-001** `--resume [sessionId]` + `--list-sessions` flags; skip DONE todos on resume
-- [ ] **MF-001** Interrupted-subagent reconciliation (keep/revert already-written changes) + SIGINT flush
-- [ ] **MF-001** Tests: mid-wave crash → resume; no duplicate dispatch/writes
+- [x] **MF-001** Wave-boundary checkpoint writer (atomic, versioned `~/.mcode/sessions/<projectId>/state.json`) — `core/session-state.js` + `SubagentManager._checkpoint()` (before wave 1, after every wave)
+- [x] **MF-001** `--resume [sessionId]` + `--list-sessions` flags; skip DONE todos on resume — + `--revert-interrupted`; DONE re-attached as results (never re-dispatched)
+- [x] **MF-001** Interrupted-subagent reconciliation (keep/revert already-written changes) + SIGINT flush — `inflight` map + `--revert-interrupted` via `UndoStack`; SIGINT awaits `pendingCheckpoint` (exit 130)
+- [x] **MF-001** Tests: mid-wave crash → resume; no duplicate dispatch/writes — 15 cases in `tests/session-resume.test.js`
 - [ ] **MF-002** Pass `mode` + `cost` at `subagent-manager.js:322` & `:730`; shared `estimateCallCost()` helper
 - [ ] **MF-002** `--max-cost <usd>` + enforce `cost.budgetPerRunUsd` in wave loop (graceful abort → checkpoint → resume hint)
 - [ ] **MF-002** Tests: attribution per mode; budget abort leaves remaining todos pending

@@ -6,6 +6,8 @@ Generated from `packages/cli/src/index.js` (commander). Global: `mcode`
 | Command | Purpose |
 |---|---|
 | `mcode god <prompt>` | Plan → parallel subagents → tests → bugfix (`--yes`, `--model`, `--watch-after`, `--concurrency`) |
+| `mcode god --list-sessions` | List resumable god runs (session, project, status, done/total, wave, prompt, updated) |
+| `mcode god --resume [sessionId]` | Continue an interrupted run: checkpoint plan, skip DONE todos, retry the rest (`--revert-interrupted` rolls back files the killed subagent wrote) |
 | `mcode run <script>` | Run a package.json script (auto pm: npm/pnpm/yarn/bun) |
 | `mcode test` | Project tests or autonomous self-healing agent |
 | `mcode gen <thing> <name>` | Scaffold route/component/controller (`--dry-run`, `--force`) |

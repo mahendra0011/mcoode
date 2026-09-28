@@ -68,6 +68,57 @@ BUILD_COMPLETE event → summary with:
 - file changes (undo stack count)
 ```
 
+### Phase 6.5: Interrupts & Resume (MF-001)
+
+A run never has to be restarted from scratch — not after a crash, a closed terminal, a 25-turn subagent
+cap, or Ctrl+C:
+
+```bash
+mcode god "add billing"                      # wave 3 crashes / cap hit / Ctrl+C
+mcode god --list-sessions                    # SESSION  PROJECT  STATUS       DONE  WAVE  PROMPT  UPDATED
+mcode god --resume                           # latest session for this project
+mcode god --resume a1b2c3d4e5f6              # or an id / unique prefix / project path / project name
+mcode god --resume a1b2c3d4e5f6 --revert-interrupted   # roll back the killed subagent's files first
+```
+
+Checkpoint file: `~/.mcode/sessions/<projectId>/state.json` — written atomically (`tmp` + `rename`) before
+the first dispatch and after **every wave**, and flushed on `stop()`/Ctrl+C with `status: "interrupted"`:
+
+```json
+{
+  "v": 1,
+  "sessionId": "a1b2c3d4e5f6",
+  "prompt": "add billing",
+  "status": "running",
+  "plan": { "todos": [ "…" ] },
+  "todoStatus": { "t1": "done", "t2": "pending" },
+  "inflight": { "t2": { "files": ["src/billing.js"], "startedAt": "2026-09-28T10:00:00.000Z" } },
+  "waveIndex": 2,
+  "totalWaves": 5,
+  "startedAt": "2026-09-28T09:58:00.000Z",
+  "updatedAt": "2026-09-28T10:00:00.000Z"
+}
+```
+
+On resume:
+
+- **DONE todos are re-attached, not re-dispatched** — no duplicate provider spend on your own key, and no
+  edits re-applied over an already-modified tree.
+- PENDING / FAILED / NEEDS_REVIEW todos **and** any todo that was `running` at crash time go back to
+  PENDING and are retried inside their recomputed wave (`planWaves()` + `isEligible()`); shared-file locks
+  are re-acquired per dispatch.
+- **The planner is never called again.** The saved DAG is re-validated with `normalizePlan()` /
+  `validatePlan()`, so a resumed run executes exactly the plan that was approved — no non-deterministic
+  re-planning.
+- `inflight` todos are reported as *"already on disk"*: keep them (default) or pass
+  `--revert-interrupted` to roll them back through the per-project undo stack
+  (`~/.mcode/projects/<projectId>/undo.json`); files written without a snapshot are reported, never
+  silently dropped.
+- Guardrails: a corrupt state counts as "no session"; a state written by a newer CLI is refused
+  (`SESSION_STATE_TOO_NEW`) and skipped by `--list-sessions`; an unresolvable target fails loudly with the
+  available sessions instead of silently re-planning; checkpoint I/O failures only warn — they can never
+  abort a build.
+
 ---
 
 ## 3. Layered Model Scoring System

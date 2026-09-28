@@ -10,6 +10,11 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...os, homedir: () => home };
 });
 
+// SEC-003: the vault fails closed without a passphrase — give the suite one
+// (mirrors vault.test.js). Set before vault.js is imported below.
+const prevVaultPassword = process.env.MCODE_VAULT_PASSWORD;
+process.env.MCODE_VAULT_PASSWORD = 'test-vault-passphrase';
+
 const { envCommand, envListCommand } = await import('../src/commands/env.js');
 const { loadVault } = await import('../src/core/vault.js');
 
@@ -22,6 +27,8 @@ describe('env command (isolated HOME)', () => {
 
   afterAll(async () => {
     process.chdir(origCwd);
+    if (prevVaultPassword === undefined) delete process.env.MCODE_VAULT_PASSWORD;
+    else process.env.MCODE_VAULT_PASSWORD = prevVaultPassword;
     await rm(home, { recursive: true, force: true }).catch(() => {});
     await rm(cwd, { recursive: true, force: true }).catch(() => {});
   });

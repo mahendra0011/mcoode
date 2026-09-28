@@ -46,7 +46,8 @@ describe('SEC-004 run_shell enforcement', () => {
     const r = await exec().run_shell({ command: 'npm --version' });
     expect(r.ok).toBe(true);
     expect(r.stdout).toMatch(/\d+\.\d+/);
-  });
+    // spawning npm through the .cmd shim needs >5s on Windows
+  }, 30000);
 
   it('blocks absolute-path rm (denylist bypass)', async () => {
     const r = await exec().run_shell({ command: '/bin/rm -rf /tmp/test' });
