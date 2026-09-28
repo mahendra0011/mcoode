@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { db } from '../db.js';
-import { deriveMasterKey, decryptKey } from '../secret-enc.js';
+import { keyManagerFromEnv } from '../secret-enc.js';
 import { CostLedger } from '@mcode/shared';
 
 // LRU/Map cache for user ModelRouter instances to avoid re-decrypting keys on every single keystroke.
@@ -92,7 +92,7 @@ export function cleanCompletionText(rawText = '') {
 /**
  * Resolves or builds a cached ModelRouter for a user.
  */
-export async function getOrCreateUserRouter(userId, secret) {
+export async function getOrCreateUserRouter(userId, secret, env = process.env) {
   const cacheKey = userId || 'default';
   const cached = routerCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < ROUTER_CACHE_TTL_MS) {
@@ -112,10 +112,10 @@ export async function getOrCreateUserRouter(userId, secret) {
     if (!secret) return null;
     try {
       const keys = await db().apiKey.find({ userId });
-      const masterKey = deriveMasterKey(secret, userId);
+      const km = keyManagerFromEnv({ secret, env });
       for (const k of keys) {
         try {
-          const dec = decryptKey(k.encryptedKey, masterKey);
+          const dec = km.decrypt(k.encryptedKey, userId);
           if (dec && !/[\u2022\u25cf\u2219]/.test(dec) && dec !== 'existing-key') {
             secrets[k.envVar] = dec;
           }
@@ -125,7 +125,7 @@ export async function getOrCreateUserRouter(userId, secret) {
   }
 
   // Fallback to process.env
-  for (const [envK, envV] of Object.entries(process.env)) {
+  for (const [envK, envV] of Object.entries(env || {})) {
     if (envV && !secrets[envK] && (envK.endsWith('_API_KEY') || envK.endsWith('_KEY') || envK.endsWith('_HOST') || envK.endsWith('_TOKEN'))) {
       secrets[envK] = envV;
     }
@@ -278,7 +278,7 @@ export async function checkForStructuralSuggestion({ fileContent = '', cursorLin
  * Generates an inline pair completion suggestion.
  */
 /** @param {any} req @param {any} res @param {{ secret?: string }} [opts] */
-export async function handlePairSuggest(req, res, { secret } = {}) {
+export async function handlePairSuggest(req, res, { secret, env = process.env } = {}) {
   const { fileContent = '', cursorLine = 1, cursorColumn = 1, filePath = '' } = req.body || {};
 
   if (!fileContent && fileContent !== '') {
@@ -286,7 +286,7 @@ export async function handlePairSuggest(req, res, { secret } = {}) {
   }
 
   try {
-    const router = await getOrCreateUserRouter(req.userId, secret);
+    const router = await getOrCreateUserRouter(req.userId, secret, env);
     if (!router) {
       return res.json({ text: '' });
     }
@@ -327,18 +327,18 @@ no markdown fences. If nothing sensible completes here, return an empty string.`
  * Express router for Pair Mode endpoints.
  */
 /** @param {{ secret?: string }} [opts] */
-export function pairRoutes({ secret } = {}) {
+export function pairRoutes({ secret, env = process.env } = {}) {
   const router = Router();
   router.use(authMiddleware({ secret }));
 
   // POST /api/v1/pair/suggest & /api/v1/pair-suggest
-  router.post('/suggest', (req, res) => handlePairSuggest(req, res, { secret }));
+  router.post('/suggest', (req, res) => handlePairSuggest(req, res, { secret, env }));
 
   // POST /api/v1/pair/structural
   router.post('/structural', async (req, res) => {
     try {
       const { fileContent = '', cursorLine = 1, filePath = '', recentEdits = [] } = req.body || {};
-      const modelRouter = await getOrCreateUserRouter(req.userId, secret);
+      const modelRouter = await getOrCreateUserRouter(req.userId, secret, env);
       const suggestion = await checkForStructuralSuggestion(
         { fileContent, cursorLine, filePath, recentEdits },
         { router: modelRouter }

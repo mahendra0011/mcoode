@@ -134,7 +134,7 @@ export function WaveProgress({
               </span>
             )}
             {activeWave && (
-              <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                 Wave {activeWave.wave} active
               </span>
             )}
@@ -150,7 +150,7 @@ export function WaveProgress({
               const pct = w.total > 0 ? Math.round((w.completed / w.total) * 100) : 0;
               const isActive = w.status === 'running';
               const isDone = w.status === 'complete' || w.status === 'done';
-              const barColor = isDone ? 'bg-emerald-500' : isActive ? 'bg-blue-400' : 'bg-white/10';
+              const barColor = isDone ? 'bg-emerald-500' : isActive ? 'bg-emerald-400' : 'bg-white/10';
 
               return (
                 <div key={w.wave} className="space-y-1.5">

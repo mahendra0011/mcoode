@@ -107,11 +107,45 @@ async function killDaemonPid(pid) {
   }
 }
 
+/**
+ * SECURITY-3: verify the PID actually belongs to an mcode watch daemon
+ * before signalling it. Prevents killing an unrelated process after a
+ * stale PID is reused by the OS.
+ */
+async function verifyDaemonPid(pid) {
+  try {
+    // Check the process exists first
+    process.kill(pid, 0);
+  } catch {
+    return false; // process doesn't exist
+  }
+  // Verify it's a node process running mcode
+  try {
+    if (process.platform === 'win32') {
+      const { execa } = await import('execa');
+      const { stdout } = await execa('wmic', ['process', 'where', `ProcessId=${pid}`, 'get', 'CommandLine', '/value'], { reject: false });
+      return /mcode|watch/i.test(stdout);
+    }
+    // Linux/macOS: read /proc/<pid>/cmdline or use ps
+    const { execa } = await import('execa');
+    const { stdout } = await execa('ps', ['-p', String(pid), '-o', 'command='], { reject: false });
+    return /mcode|watch|node/i.test(stdout);
+  } catch {
+    return false;
+  }
+}
+
 export async function watchStopCommand({ cwd = process.cwd() } = {}) {
   const sp = await statePath(cwd);
   try {
     const state = JSON.parse(await readFile(sp, 'utf8'));
     if (state.pid) {
+      const verified = await verifyDaemonPid(state.pid);
+      if (!verified) {
+        warn(`stale state file — pid ${state.pid} is not an mcode watch daemon, not stopping it`);
+        await unlink(sp).catch(() => {});
+        return;
+      }
       await killDaemonPid(state.pid);
       await unlink(sp).catch(() => {});
       ok(`watch daemon stopped (pid ${state.pid})`);
@@ -124,6 +158,12 @@ export async function watchStopCommand({ cwd = process.cwd() } = {}) {
     }
     const match = daemons.find((d) => d.project === cwd);
     if (match?.pid) {
+      const verified = await verifyDaemonPid(match.pid);
+      if (!verified) {
+        warn(`stale state file — pid ${match.pid} is not an mcode watch daemon, not stopping it`);
+        await unlink(match.stateFile).catch(() => {});
+        return;
+      }
       const dead = await killDaemonPid(match.pid);
       if (dead) {
         ok(`watch daemon stopped (pid ${match.pid})`);

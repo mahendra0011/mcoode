@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { db } from '../db.js';
 import { cache } from '../cache.js';
-import { deriveMasterKey, encryptKey, decryptKey, maskSecret } from '../secret-enc.js';
+import { keyManagerFromEnv, maskSecret } from '../secret-enc.js';
 
 // TTL for cached model listings (seconds). Models don't change frequently,
 // and refetching from every provider API on each call is the bottleneck.
@@ -16,19 +16,38 @@ function invalidateModelsCache(userId) {
   cache().del(modelsCacheKey(userId));
 }
 
-export function keyRoutes({ secret }) {
+export function keyRoutes({ secret, encSecret, encKeyId, encPreviousSecret, encPreviousKeyId, env = process.env } = {}) {
   const router = Router();
   router.use(authMiddleware({ secret }));
+  // BSEC-001: at-rest encryption uses the dedicated secret when configured
+  // (env fallback handled inside keyManagerFromEnv) — never the JWT secret alone.
+  // Built per request so rotation via env/config takes effect without restart.
+  const keyManager = () => keyManagerFromEnv({ secret, encSecret, encKeyId, encPreviousSecret, encPreviousKeyId, env });
 
   // GET /keys — list user's saved API keys (masked)
   router.get('/', async (req, res, next) => {
     try {
-      const keys = await db().apiKey.find({ userId: req.userId });
-      const masterKey = deriveMasterKey(secret, req.userId);
-      const masked = keys.map((k) => {
+      const rows = await db().apiKey.find({ userId: req.userId });
+      const masked = [];
+      for (const k of rows) {
         let m = '';
-        try { m = maskSecret(decryptKey(k.encryptedKey, masterKey)); } catch { /* skip */ }
-        return {
+        try {
+          const plain = keyManager().decrypt(k.encryptedKey, req.userId);
+          m = maskSecret(plain);
+          // BSEC-001: lazily re-encrypt legacy/older-keyring blobs under the
+          // current key. Best-effort — rotation failure must not break listing.
+          if (keyManager().needsRotation(k.encryptedKey)) {
+            try {
+              await db().apiKey.updateOne({ _id: k._id }, { $set: { encryptedKey: keyManager().encrypt(plain, req.userId) } });
+            } catch (rotErr) {
+              console.warn(`[keys] KEY_ROTATION_FAILED id=${k._id}: ${rotErr.message}`);
+            }
+          }
+        } catch (err) {
+          // BSEC-001: make silent key loss visible (never logs key material).
+          console.warn(`[keys] KEY_DECRYPT_FAILED id=${k._id} provider=${k.providerId}: ${err.message}`);
+        }
+        masked.push({
           id: k._id,
           providerId: k.providerId,
           envVar: k.envVar || k.providerId,
@@ -38,8 +57,8 @@ export function keyRoutes({ secret }) {
           baseUrl: k.baseUrl,
           apiFormat: k.apiFormat,
           createdAt: k.createdAt
-        };
-      });
+        });
+      }
       res.json({ keys: masked });
     } catch (err) {
       next(err);
@@ -87,8 +106,7 @@ export function keyRoutes({ secret }) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'API key contains invalid characters.' } });
       }
 
-      const masterKey = deriveMasterKey(secret, req.userId);
-      const encrypted = encryptKey(apiKey.trim(), masterKey);
+      const encrypted = keyManager().encrypt(apiKey.trim(), req.userId);
 
       if (existing) {
         await db().apiKey.updateOne(
@@ -149,16 +167,15 @@ export function keyRoutes({ secret }) {
         return res.json(cached);
       }
 
-      const masterKey = deriveMasterKey(secret, req.userId);
       const secrets = {};
       for (const k of keys) {
         try {
-          const dec = decryptKey(k.encryptedKey, masterKey);
+          const dec = keyManager().decrypt(k.encryptedKey, req.userId);
           if (dec && !/[\u2022\u25cf\u2219]/.test(dec) && dec !== 'existing-key') {
             secrets[k.envVar] = dec;
           }
-        } catch {
-          /* skip undecryptable key */
+        } catch (err) {
+          console.warn(`[keys] KEY_DECRYPT_FAILED id=${k._id} provider=${k.providerId}: ${err.message}`);
         }
       }
 
@@ -209,10 +226,10 @@ export function keyRoutes({ secret }) {
   });
 
   // POST /keys/test — verify a key against a provider.
-  // KEY-002 note: the plaintext key must travel to the server for a live
-  // check by design; it is auth-gated (router-level JWT), used once via
-  // testKey(), never persisted and never logged. TLS terminates at the
-  // platform ingress (HSTS enforced via helmet).
+  // KEY-002: the plaintext key must travel to the server for a live check by
+  // design. It is auth-gated (router-level JWT), used once via testKey(),
+  // never persisted, never logged, and never returned in the response.
+  // The key is sent in the body (not URL) to avoid leaking into access logs.
   router.post('/test', async (req, res, next) => {
     try {
       const { providerId, apiKey } = req.body;

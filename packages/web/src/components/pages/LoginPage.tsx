@@ -1,16 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link'; import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import robotBg from '../../assets/robot-bg-new.png';
 import api from '../../lib/axios';
 import { setTokens } from '../../lib/api';
+import { loginSchema, otpSchema } from '../../lib/validation';
 
 const MotionLink = motion.create(Link);
 
 const formVariants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.3 } }
+};
+
+const otpBoxVariants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 300, damping: 25 } }
 };
 
 export function LoginPage() {
@@ -23,12 +29,52 @@ export function LoginPage() {
   const connectGithub = () => {
     // Full OAuth login (no session needed) — backend links/creates the
     // account and returns here with tokens in the fragment.
-    window.location.href = '/api/v1/auth/github/login';
+    // BUG-19-09: build from api.defaults.baseURL so cross-port deployments
+    // (frontend :3000 / backend :3100 without a Next rewrite) hit the API.
+    const base = (api.defaults.baseURL || '').replace(/\/+$/, '');
+    window.location.href = `${base}/api/v1/auth/github/login`;
   };
 
   const [mode, setMode] = useState<'password' | 'otp'>('password');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [devOtp, setDevOtp] = useState('');
+
+  const OTP_LENGTH = 6;
+  const inputRefs = [
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+  ];
+
+  const focusBox = (idx: number) => {
+    inputRefs[idx]?.current?.focus();
+  };
+
+  const handleOtpChange = (idx: number, value: string) => {
+    const newOtp = otp.padEnd(OTP_LENGTH, ' ').split('');
+    newOtp[idx] = value.slice(-1) || ' ';
+    setOtp(newOtp.join('').trim());
+    if (value && idx < OTP_LENGTH - 1) focusBox(idx + 1);
+  };
+
+  const handleOtpKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otp[idx] && idx > 0) focusBox(idx - 1);
+    if (e.key === 'ArrowLeft' && idx > 0) focusBox(idx - 1);
+    if (e.key === 'ArrowRight' && idx < OTP_LENGTH - 1) focusBox(idx + 1);
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').slice(0, OTP_LENGTH);
+    if (new RegExp(`^\\d{${OTP_LENGTH}}$`).test(pasted)) {
+      setOtp(pasted);
+      inputRefs[OTP_LENGTH - 1]?.current?.blur();
+    }
+  };
 
   // OAuth-login return: backend redirects to /login?code=.. (single-use;
   // exchanged over POST — tokens never touch URLs). Legacy #access=..&..
@@ -65,6 +111,11 @@ export function LoginPage() {
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const parsed = loginSchema.safeParse({ email: form.email, password: form.password });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message || 'Invalid input');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -82,10 +133,17 @@ export function LoginPage() {
   };
 
   const sendOtp = async () => {
+    const parsed = loginSchema.pick({ email: true }).safeParse({ email: form.email });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message || 'Invalid email');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      await api.post('/api/v1/auth/send-otp', { email: form.email, intent: 'login' });
+      const res = await api.post('/api/v1/auth/send-otp', { email: form.email, intent: 'login' });
+      // SEC-19-11: only capture devOtp on localhost — never store it in production
+      if (res.data?.devOtp && /^(localhost|127\.0\.0\.1)/.test(typeof window !== 'undefined' ? window.location.hostname : '')) setDevOtp(res.data.devOtp);
       setOtpSent(true);
     } catch (err) {
       setError((err as any).response?.data?.error?.message || (err as any).message);
@@ -96,6 +154,11 @@ export function LoginPage() {
 
   const submitOtp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const parsed = otpSchema.safeParse({ email: form.email, otp });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message || 'Invalid code');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -202,11 +265,11 @@ export function LoginPage() {
           )}
 
           {/* Login Form */}
-          <div className="flex gap-1 mb-4 bg-[#eff4fb] rounded-xl p-1" role="tablist" aria-label="Login method">
+          <div className="flex items-center justify-center gap-2 p-1 mb-4 bg-[#eff4fb] rounded-xl" aria-label="Login method">
             {(['password', 'otp'] as const).map((m) => (
-              <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => { setMode(m); setError(''); }}
+              <button key={m} type="button" aria-selected={mode === m} onClick={() => { setMode(m); setError(''); }}
                 className={`flex-1 py-2 rounded-lg text-sm font-bold ${mode === m ? 'bg-white text-zinc-900 shadow' : 'text-zinc-500'}`}>
-                {m === 'password' ? 'Password' : 'Email code'}
+                {m === 'password' ? 'Password' : 'Send Code'}
               </button>
             ))}
           </div>
@@ -307,24 +370,52 @@ export function LoginPage() {
               required
             />
             {otpSent && (
-              <input
-                inputMode="numeric"
-                value={otp}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                className="w-full bg-[#eff4fb] border border-transparent rounded-xl py-3.5 px-4 text-zinc-900 placeholder:text-zinc-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all tracking-[0.3em] text-center"
-                placeholder="••••••"
-                required
-              />
+              <>
+                <motion.div
+                  className="flex items-center justify-center gap-2 py-4"
+                  variants={otpBoxVariants}
+                >
+                  {Array.from({ length: OTP_LENGTH }).map((_, idx) => (
+                    <motion.input
+                      key={idx}
+                      ref={inputRefs[idx]}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      maxLength={1}
+                      value={otp[idx] || ''}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOtpChange(idx, e.target.value)}
+                      onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => handleOtpKeyDown(idx, e)}
+                      onPaste={idx === 0 ? handleOtpPaste : undefined}
+                      className="w-12 h-12 text-center text-xl font-bold text-zinc-900 bg-[#eff4fb] border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.15 + idx * 0.05, type: 'spring', stiffness: 300 }}
+                    />
+                  ))}
+                </motion.div>
+
+                {devOtp && /^(localhost|127\.0\.0\.1)/.test(typeof window !== 'undefined' ? window.location.hostname : '') && (
+                  <motion.div
+                    className="text-center text-xs text-zinc-400 font-mono bg-zinc-50 py-2 rounded-lg"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    Dev code: {devOtp}
+                  </motion.div>
+                )}
+              </>
             )}
             {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
             <motion.button
               type="submit"
-              disabled={loading}
+              disabled={loading || (otpSent && otp.length !== OTP_LENGTH)}
               className="w-full bg-[#4ade80] hover:bg-[#22c55e] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-green-500/20 mt-4 disabled:opacity-50"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              {loading ? 'Please wait…' : otpSent ? 'Verify & Login' : 'Send Code'}
+              {loading ? (otpSent ? 'Verifying...' : 'Sending code...') : (otpSent ? 'Verify & Login' : 'Send Verification Code')}
             </motion.button>
             {otpSent && (
               <button type="button" onClick={sendOtp} className="w-full text-xs font-semibold text-zinc-500 hover:text-zinc-800">

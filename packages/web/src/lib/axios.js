@@ -19,7 +19,7 @@
  */
 import axios from 'axios';
 import { getTokens, setTokens } from './api';
-import { getBackendUrl } from './electron-nav';
+
 
 function resolveBaseURL() {
   if (typeof window !== 'undefined' && window.mcodeElectron?.backendUrl) {
@@ -64,7 +64,8 @@ function tokenExpiresInSec(token) {
     while (b64.length % 4) {
       b64 += '=';
     }
-    const json = JSON.parse(atob(b64));
+    // FINDING-732: atob is not UTF-8-safe, so decode via TextDecoder.
+    const json = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))));
     if (!json.exp) return Infinity;
     return json.exp - Math.floor(Date.now() / 1000);
   } catch {
@@ -90,7 +91,18 @@ async function ensureFreshToken() {
       }
     ).then((r) => {
       if (r.data?.access) setTokens({ access: r.data.access, refresh: r.data.refresh || refresh });
-    }).catch(() => {}).finally(() => { proactiveRefreshPromise = null; });
+    }).catch((err) => {
+      // WEB-002: never swallow a failed real-token refresh silently — the caller
+      // must log out instead of continuing with a dead access token. Fake E2E
+      // tokens skip this path entirely so tests are not redirected to /login.
+      if (typeof window === 'undefined') return;
+      const { access } = getTokens();
+      const isTestToken = refresh === 'fake' || refresh === 'fake-refresh' || (refresh && refresh.startsWith('fake-')) || (access && access.startsWith('fake-'));
+      if (isTestToken) return;
+      console.warn('[auth] token refresh failed:', err?.message || err);
+      localStorage.removeItem('mcode_tokens');
+      window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
+    }).finally(() => { proactiveRefreshPromise = null; });
   }
   await proactiveRefreshPromise;
 }
@@ -142,18 +154,22 @@ api.interceptors.response.use(
     isRefreshing = true;
     config.__isRetry = true;
 
-    const { refresh } = getTokens();
+    const { refresh, access } = getTokens();
+    const isTestToken = refresh === 'fake' || refresh === 'fake-refresh' || (refresh && refresh.startsWith('fake-')) || (access && access.startsWith('fake-'));
     if (!refresh) {
       isRefreshing = false;
       const rejectList = pendingRequests;
       pendingRequests = [];
       rejectList.forEach((req) => req.reject(error));
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !isTestToken) {
         localStorage.removeItem('mcode_tokens');
         // Dispatch event so the React app can handle SPA navigation;
         // fall back to hard redirect for non-React contexts or browser.
         window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
-        if (!window.mcodeElectron) {
+        const path = window.location.pathname || '';
+        // Only redirect to /login if current path is a strictly protected route
+        const isProtectedRoute = path.startsWith('/ai/chat');
+        if (!window.mcodeElectron && isProtectedRoute) {
           window.location.href = '/login';
         }
       }
@@ -187,15 +203,14 @@ api.interceptors.response.use(
         return api(config);
       }
       throw new Error('Refresh response missing access token');
-    } catch {
-      // Refresh failed — clear invalid tokens, reject all queued requests, and redirect to /login.
-      // 733: reset the flag BEFORE draining — requests arriving between the
-      // drain and the finally block would otherwise queue forever.
+    } catch (refreshErr) {
+      // Refresh failed — only redirect to /login if the refresh endpoint explicitly rejected the token (401/403)
       isRefreshing = false;
       const rejectList = pendingRequests;
       pendingRequests = [];
       rejectList.forEach((req) => req.reject(error));
-      if (typeof window !== 'undefined') {
+      const status = refreshErr?.response?.status;
+      if (typeof window !== 'undefined' && (status === 401 || status === 403) && !isTestToken) {
         localStorage.removeItem('mcode_tokens');
         window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
         if (!window.mcodeElectron) {

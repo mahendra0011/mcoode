@@ -19,6 +19,7 @@ import api from '../../lib/axios';
 import { connectOAuth } from '../../lib/electron-nav';
 import { useSettingsStore } from '../../store/settingsStore';
 import { toast } from 'sonner';
+import { changePasswordSchema } from '../../lib/validation';
 
 const MotionLink = motion.create(Link);
 
@@ -43,7 +44,7 @@ const SIDEBAR_SECTIONS = [
     children: [
       { id: 'general', label: 'General & System', icon: Settings },
       { id: 'appearance', label: 'Appearance & Theme', icon: Palette },
-      { id: 'models', label: 'Model Settings & Keys', icon: Key },
+      { id: 'models', label: 'API Keys & Models', icon: Key },
       { id: 'browser', label: 'Terminal & Browser Use', icon: Globe },
     ],
   },
@@ -128,11 +129,16 @@ function SettingToggle({
 }) {
   return (
     <SettingRowItem icon={icon} label={label} description={description}>
-      <button
+      <motion.button
         type="button"
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
+        initial={{ opacity: 0.99 }}
+        animate={{ opacity: 1 }}
+        style={{ opacity: 1 }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer flex-shrink-0 ${
           checked ? 'bg-[#3ecf8e]' : 'bg-[#3a3a3f]'
         }`}
@@ -142,7 +148,7 @@ function SettingToggle({
             checked ? 'translate-x-[18px]' : 'translate-x-[3px]'
           }`}
         />
-      </button>
+      </motion.button>
     </SettingRowItem>
   );
 }
@@ -1138,11 +1144,74 @@ function PermissionsTab({
 
 /* ─────────────────── TAB 11: MODEL SETTINGS & API KEYS TAB ─────────────────── */
 
+const DEFAULT_SETTINGS_PROVIDERS = [
+  {
+    id: 'openrouter',
+    displayName: 'OpenRouter',
+    envVar: 'OPENROUTER_API_KEY',
+    models: [
+      { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', free: false, scores: { coding: 95 } },
+      { id: 'openai/gpt-4o', name: 'GPT-4o', free: false, scores: { coding: 93 } },
+      { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', free: false, scores: { coding: 91 } },
+      { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', free: true },
+    ],
+  },
+  {
+    id: 'openai',
+    displayName: 'OpenAI',
+    envVar: 'OPENAI_API_KEY',
+    models: [
+      { id: 'gpt-4o', name: 'GPT-4o', free: false, scores: { coding: 93 } },
+      { id: 'gpt-4o-mini', name: 'GPT-4o Mini', free: false, scores: { coding: 86 } },
+      { id: 'o1-preview', name: 'o1 Preview', free: false, scores: { coding: 96 } },
+      { id: 'o1-mini', name: 'o1 Mini', free: false, scores: { coding: 90 } },
+    ],
+  },
+  {
+    id: 'anthropic',
+    displayName: 'Anthropic',
+    envVar: 'ANTHROPIC_API_KEY',
+    models: [
+      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', free: false, scores: { coding: 95 } },
+      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', free: false, scores: { coding: 88 } },
+      { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', free: false, scores: { coding: 89 } },
+    ],
+  },
+  {
+    id: 'google',
+    displayName: 'Google',
+    envVar: 'GOOGLE_API_KEY',
+    models: [
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', free: true, scores: { coding: 89 } },
+      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', free: false, scores: { coding: 92 } },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', free: true, scores: { coding: 84 } },
+    ],
+  },
+  {
+    id: 'deepseek',
+    displayName: 'DeepSeek',
+    envVar: 'DEEPSEEK_API_KEY',
+    models: [
+      { id: 'deepseek-chat', name: 'DeepSeek V3', free: false, scores: { coding: 91 } },
+      { id: 'deepseek-coder', name: 'DeepSeek Coder V2.5', free: false, scores: { coding: 93 } },
+    ],
+  },
+  {
+    id: 'mistral',
+    displayName: 'Mistral',
+    envVar: 'MISTRAL_API_KEY',
+    models: [
+      { id: 'mistral-large-latest', name: 'Mistral Large', free: false, scores: { coding: 90 } },
+      { id: 'codestral-latest', name: 'Codestral', free: false, scores: { coding: 92 } },
+    ],
+  },
+];
+
 function ApiKeysTab() {
-  const [providers, setProviders] = useState<any[]>([]);
+  const [providers, setProviders] = useState<any[]>(DEFAULT_SETTINGS_PROVIDERS);
   const [keys, setKeys] = useState<any[]>([]);
   const [availableModels, setAvailableModels] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [activeProviderId, setActiveProviderId] = useState('openrouter');
   const [newKey, setNewKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
@@ -1154,26 +1223,22 @@ function ApiKeysTab() {
 
   const fetchData = useCallback(async () => {
     try {
-      const provRes = await api.get('/api/v1/settings/providers', { timeout: 5000 });
-      if (provRes.data?.ok) setProviders(provRes.data.providers || []);
+      const [provRes, keysRes, modelsRes] = await Promise.allSettled([
+        api.get('/api/v1/settings/providers', { timeout: 3000 }),
+        api.get('/api/v1/keys', { timeout: 3000 }),
+        api.get('/api/v1/keys/models', { timeout: 3000 }),
+      ]);
+      if (provRes.status === 'fulfilled' && provRes.value.data?.ok && provRes.value.data.providers?.length) {
+        setProviders(provRes.value.data.providers);
+      }
+      if (keysRes.status === 'fulfilled' && keysRes.value.data?.keys) {
+        setKeys(keysRes.value.data.keys || []);
+      }
+      if (modelsRes.status === 'fulfilled' && modelsRes.value.data?.models) {
+        setAvailableModels(modelsRes.value.data.models || []);
+      }
     } catch (e) {
-      console.error('Failed to fetch providers:', e);
-    }
-    try {
-      const keysRes = await api.get('/api/v1/keys', { timeout: 10000 });
-      if (keysRes.data?.keys) setKeys(keysRes.data.keys || []);
-    } catch (e: any) {
-      if (e?.response?.status !== 401) {
-        console.error('Failed to fetch keys:', e);
-      }
-    }
-    try {
-      const modelsRes = await api.get('/api/v1/keys/models', { timeout: 15000 });
-      if (modelsRes.data?.models) setAvailableModels(modelsRes.data.models || []);
-    } catch (e: any) {
-      if (e?.response?.status !== 401) {
-        console.error('Failed to fetch models:', e);
-      }
+      console.error('Failed to fetch provider settings:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -1380,7 +1445,7 @@ function ApiKeysTab() {
                 {existingKey && (
                   <button
                     onClick={() => handleRemove(existingKey.id)}
-                    className="ml-auto text-red-400/70 hover:text-red-400 text-sm font-medium transition cursor-pointer flex items-center gap-1"
+                    className="ml-auto text-red-400/70 hover:text-red-400 text-sm font-medium transition flex items-center gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Remove</span>
@@ -1421,7 +1486,7 @@ function ApiKeysTab() {
                     <button
                       onClick={handleSave}
                       disabled={saving || (!existingKey && !newKey)}
-                      className="px-6 py-[11px] bg-[#1d764a] hover:bg-[#155d38] text-white font-medium text-[13px] rounded-[8px] transition disabled:opacity-50 flex items-center justify-center gap-1.5 min-w-[90px] cursor-pointer shadow-sm"
+                      className="px-6 py-[11px] bg-[#1d764a] hover:bg-[#155d38] text-white font-medium text-[13px] rounded-[8px] transition disabled:opacity-50 flex items-center justify-center gap-1.5 min-w-[90px] shadow-sm"
                     >
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (
                         <>
@@ -1446,7 +1511,7 @@ function ApiKeysTab() {
                         whileTap={{ scale: 0.98 }}
                         onClick={fetchData}
                         disabled={refreshing}
-                        className="text-[11px] text-[#666] hover:text-white transition flex items-center gap-1 cursor-pointer"
+                        className="text-[11px] text-[#666] hover:text-white transition flex items-center gap-1"
                         title="Refresh models"
                       >
                         <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
@@ -1876,6 +1941,8 @@ function formatCount(n: any) {
   return n.toString();
 }
 
+const DONUT_COLORS = ['#3b82f6', '#10b981', '#a854f7', '#f97316', '#06b6d4', '#ef4444', '#eab308', '#8b5cf6'];
+
 function UsageTab() {
   const [timeRange, setTimeRange] = useState('Last 30 days');
   const [stats, setStats] = useState<any>(null);
@@ -1892,7 +1959,7 @@ function UsageTab() {
     setDrillDay(dateStr);
     setDrillLoading(true);
     try {
-      const res = await api.get('/api/v1/sessions?limit=100', { timeout: 10000 });
+      const res = await api.get('/api/v1/sessions?limit=100', { timeout: 3000 });
       setDrillItems((res.data.items || []).filter((s: any) => new Date(s.createdAt || 0).toISOString().slice(0, 10) === dateStr));
     } catch {
       setDrillItems([]);
@@ -1907,11 +1974,36 @@ function UsageTab() {
       const to = new Date();
       const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
       const res = await api.get(`/api/v1/usage/stats?from=${from.toISOString()}&to=${to.toISOString()}`, {
-        timeout: 10000,
+        timeout: 3000,
       });
-      if (res.data?.ok) setStats(res.data.stats);
+      if (res.data?.ok && res.data.stats) {
+        setStats(res.data.stats);
+      } else {
+        setStats({
+          totalSessions: 0,
+          totalMessages: 0,
+          activeDays: 0,
+          currentStreak: 0,
+          favoriteModel: 'None',
+          tokenQuota: { used: 0, limit: 1000000 },
+          dailyActivity: {},
+          dailyTokens: {},
+          modelUsage: {},
+        });
+      }
     } catch (e) {
       console.error('Failed to fetch usage stats:', e);
+      setStats({
+        totalSessions: 0,
+        totalMessages: 0,
+        activeDays: 0,
+        currentStreak: 0,
+        favoriteModel: 'None',
+        tokenQuota: { used: 0, limit: 1000000 },
+        dailyActivity: {},
+        dailyTokens: {},
+        modelUsage: {},
+      });
     } finally {
       setLoading(false);
     }
@@ -1940,9 +2032,34 @@ function UsageTab() {
     return 3;
   });
 
+  const barDates = heatmapDates.slice(-30);
+  const barData = barDates.map((dateStr) => ({ date: dateStr, tokens: dailyTokens[dateStr] || 0 }));
+  const maxTokens = Math.max(...barData.map((d) => d.tokens), 1);
+
+  const modelUsageEntries = stats?.modelUsage
+    ? (Object.entries(stats.modelUsage) as [string, number][]).sort(([, a], [, b]) => b - a)
+    : [];
+  const totalModelSessions = modelUsageEntries.reduce((sum, [, count]) => sum + count, 0);
+
+  let offset = 0;
+  const circumference = Math.PI * 2 * 37;
+  const donutSegments = modelUsageEntries.map(([model, count], i) => {
+    const pct = totalModelSessions > 0 ? count / totalModelSessions : 0;
+    const dashArray = circumference * pct;
+    const color = DONUT_COLORS[i % DONUT_COLORS.length];
+    offset -= dashArray;
+    return { model, count, pct, color, dashArray, offset };
+  });
+
   const tokenDisplay = stats?.tokenQuota
     ? `${formatCount(stats.tokenQuota.used)} / ${formatCount(stats.tokenQuota.limit)}`
     : '—';
+
+  const favoriteModel = stats?.favoriteModel || '—';
+  const favoriteModelCount = stats?.modelUsage ? stats.modelUsage[favoriteModel] || 0 : 0;
+  const favoriteModelPct = totalModelSessions > 0
+    ? Math.round((favoriteModelCount / totalModelSessions) * 100)
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -1952,26 +2069,32 @@ function UsageTab() {
           <span className="text-sm font-medium text-white border-b-2 border-white pb-2 translate-y-[9px]">App usage</span>
         </div>
         <div className="flex items-center gap-2">
-          <a href="/api/v1/usage/export.csv" download
-            className="px-3 py-1.5 rounded-lg text-[13px] font-medium bg-white/5 hover:bg-white/10 text-white/70">
+          <a
+            href="/api/v1/usage/export.csv"
+            download
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium bg-white/5 hover:bg-white/10 text-white/70"
+          >
             Export CSV
           </a>
-          <a href="/api/v1/usage/report.pdf" download
-            className="px-3 py-1.5 rounded-lg text-[13px] font-medium bg-white/5 hover:bg-white/10 text-white/70">
+          <a
+            href="/api/v1/usage/report.pdf"
+            download
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium bg-white/5 hover:bg-white/10 text-white/70"
+          >
             Export PDF
           </a>
           <div className="flex bg-[#1a1a1a] rounded-lg p-1 border border-white/5">
-          {['Last 7 days', 'Last 30 days'].map((range) => (
-            <button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              className={`px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${
-                timeRange === range ? 'bg-[#2a2a2a] text-white' : 'text-[#888] hover:text-white'
-              }`}
-            >
-              {range}
-            </button>
-          ))}
+            {['Last 7 days', 'Last 30 days'].map((range) => (
+              <button
+                key={range}
+                onClick={() => setTimeRange(range)}
+                className={`px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${
+                  timeRange === range ? 'bg-[#2a2a2a] text-white' : 'text-[#888] hover:text-white'
+                }`}
+              >
+                {range}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -1986,7 +2109,9 @@ function UsageTab() {
         </div>
       ) : (
         <>
+          {/* METRICS GRID */}
           <div className="grid grid-cols-3 gap-4">
+            {/* Token Usage */}
             <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-[#888]">
@@ -1998,6 +2123,7 @@ function UsageTab() {
               <div className="text-3xl font-bold text-white">{stats?.tokenQuota ? formatCount(stats.tokenQuota.used) : '—'}</div>
             </div>
 
+            {/* Sessions */}
             <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[#888]">
                 <Activity className="w-4 h-4 opacity-70 text-blue-400" />
@@ -2006,6 +2132,7 @@ function UsageTab() {
               <div className="text-3xl font-bold text-white">{stats?.totalSessions || 0}</div>
             </div>
 
+            {/* Messages */}
             <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[#888]">
                 <MessageSquare className="w-4 h-4 opacity-70 text-purple-400" />
@@ -2014,6 +2141,7 @@ function UsageTab() {
               <div className="text-3xl font-bold text-white">{stats?.totalMessages || 0}</div>
             </div>
 
+            {/* Active Days */}
             <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[#888]">
                 <Calendar className="w-4 h-4 opacity-70 text-emerald-400" />
@@ -2022,6 +2150,7 @@ function UsageTab() {
               <div className="text-3xl font-bold text-white">{stats?.activeDays || 0}</div>
             </div>
 
+            {/* Current Streak */}
             <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[#888]">
                 <Flame className="w-4 h-4 opacity-70 text-amber-500" />
@@ -2030,38 +2159,62 @@ function UsageTab() {
               <div className="text-3xl font-bold text-white">{stats?.currentStreak || 0} days</div>
             </div>
 
+            {/* Favorite Model */}
             <div className="bg-[#151515] border border-white/5 rounded-xl p-5 flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[#888]">
                 <Sparkles className="w-4 h-4 opacity-70 text-pink-400" />
                 <span className="text-sm">Favorite model</span>
               </div>
-              <div className="text-xl font-bold text-white truncate">{stats?.favoriteModel || 'Claude 3.5 Sonnet'}</div>
+              <div className="text-xl font-bold text-white truncate">{favoriteModel}</div>
+              {favoriteModelPct > 0 && <div className="text-xs text-[#888]">{favoriteModelPct}% share</div>}
             </div>
           </div>
 
-          <div className="bg-[#151515] border border-white/5 rounded-xl p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">35-Day Activity Heatmap</h3>
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
-              {heatmapData.map((val, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => drill(heatmapDates[idx])}
-                  title={`${heatmapDates[idx]}: ${dailyActivity[heatmapDates[idx]] || 0} sessions, ~${dailyTokens[heatmapDates[idx]] || 0} tokens (est.) — click for sessions`}
-                  className={`w-4 h-4 rounded-sm flex-shrink-0 transition-all ${drillDay === heatmapDates[idx] ? 'ring-2 ring-white/60' : ''} ${
-                    val === 0
-                      ? 'bg-zinc-800'
-                      : val === 1
-                      ? 'bg-emerald-900'
-                      : val === 2
-                      ? 'bg-emerald-600'
-                      : 'bg-[#3ecf8e]'
-                  }`}
-                />
-              ))}
+          {/* HEATMAP */}
+          <div className="bg-[#151515] border border-white/5 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white">Activity heatmap</h3>
+              <div className="flex items-center gap-1 text-xs text-[#666]">
+                <span>Less</span>
+                <div className="w-3 h-3 rounded-[3px] bg-white/5 ml-1"></div>
+                <div className="w-3 h-3 rounded-[3px] bg-emerald-500/30"></div>
+                <div className="w-3 h-3 rounded-[3px] bg-emerald-500/60"></div>
+                <div className="w-3 h-3 rounded-[3px] bg-emerald-500"></div>
+                <span className="ml-1">More</span>
+              </div>
+            </div>
+            <div className="flex gap-1.5 overflow-hidden">
+              {Array.from({ length: 5 }).map((_, weekIndex) => {
+                const weekSlice = heatmapData.slice(weekIndex * 7, weekIndex * 7 + 7);
+                return (
+                  <div key={weekIndex} className="flex flex-col gap-1.5">
+                    {weekSlice.map((day, j) => {
+                      const dateKey = heatmapDates[weekIndex * 7 + j];
+                      return (
+                        <div
+                          key={j}
+                          onClick={() => dateKey && drill(dateKey)}
+                          className={`w-3.5 h-3.5 rounded-[3px] cursor-pointer transition-all ${
+                            drillDay === dateKey ? 'ring-2 ring-white/60' : ''
+                          } ${
+                            day === 0
+                              ? 'bg-white/5'
+                              : day === 1
+                              ? 'bg-emerald-500/30'
+                              : day === 2
+                              ? 'bg-emerald-500/60'
+                              : 'bg-emerald-500'
+                          }`}
+                          title={`${dateKey}: ${dailyActivity[dateKey] || 0} sessions, ~${dailyTokens[dateKey] || 0} tokens`}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
             {drillDay && (
-              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+              <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 mt-3">
                 <p className="text-xs font-semibold text-white/60 mb-2">
                   {drillDay} — {drillLoading ? 'loading…' : `${drillItems.length} session(s)`}
                 </p>
@@ -2079,41 +2232,98 @@ function UsageTab() {
             )}
           </div>
 
-          <div className="bg-[#151515] border border-white/5 rounded-xl p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">Sessions per Day</h3>
-            <div className="h-44">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={heatmapDates.map((d) => ({ date: d.slice(5), sessions: dailyActivity[d] || 0, tokens: dailyTokens[d] || 0 }))}>
-                  <XAxis dataKey="date" tick={{ fill: '#666', fontSize: 10 }} interval={6} tickLine={false} axisLine={false} />
-                  <YAxis allowDecimals={false} tick={{ fill: '#666', fontSize: 10 }} width={28} tickLine={false} axisLine={false} />
-                  <Tooltip
-                    contentStyle={{ background: '#1e1e1e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }}
-                    labelStyle={{ color: '#fff' }}
-                  />
-                  <Area type="monotone" dataKey="sessions" stroke="#3ecf8e" fill="#3ecf8e33" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
+          {/* TOKENS PER DAY BAR CHART */}
+          <div className="bg-[#151515] border border-white/5 rounded-xl p-5 mt-4">
+            <h3 className="text-sm font-semibold text-white mb-6">Tokens per day</h3>
+            <div className="relative h-48 border-b border-white/10 flex items-end justify-between px-2 pb-6">
+              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                <div className="border-t border-white/5 w-full h-0"></div>
+                <div className="border-t border-white/5 w-full h-0"></div>
+                <div className="border-t border-white/5 w-full h-0"></div>
+                <div className="border-t border-white/5 w-full h-0"></div>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 flex justify-between text-xs text-[#666] px-2 translate-y-full pt-2">
+                {barDates.map((d, i) => i % 5 === 0 && <span key={d}>{d.slice(5)}</span>)}
+              </div>
+              <div className="relative w-full h-full flex items-end justify-between gap-0.5 pb-1 z-10">
+                {barData.map((d) => (
+                  <div key={d.date} className="flex-1 flex flex-col items-center">
+                    <motion.div
+                      className="w-full bg-emerald-500 rounded-t-sm"
+                      style={{ height: `${(d.tokens / maxTokens) * 100}%` }}
+                      initial={{ height: 0 }}
+                      animate={{ height: `${(d.tokens / maxTokens) * 100}%` }}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
+            {modelUsageEntries.length > 0 && (
+              <div className="grid grid-cols-3 gap-y-3 mt-10">
+                {modelUsageEntries.slice(0, 6).map(([model], i) => (
+                  <div key={model} className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }}></div>
+                    <span className="text-xs text-[#888] font-mono truncate">{model}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {stats?.modelUsage && Object.keys(stats.modelUsage).length > 0 && (            <div className="bg-[#151515] border border-white/5 rounded-xl p-5 space-y-3">
-              <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">Usage by Model</h3>
-              {Object.entries(stats.modelUsage as Record<string, number>)
-                .sort(([, a], [, b]) => (b as number) - (a as number))
-                .map(([model, count]) => {
-                  const max = Math.max(...(Object.values(stats.modelUsage) as number[]), 1);
-                  return (
-                    <div key={model} className="flex items-center gap-3">
-                      <span className="font-mono text-xs text-emerald-300 w-48 truncate" title={model}>{model}</span>
-                      <div className="flex-1 h-2 rounded bg-white/5 overflow-hidden">
-                        <div className="h-full bg-emerald-500/70 rounded transition-all" style={{ width: `${Math.round(((count as number) / max) * 100)}%` }} />
+          {/* MODEL USAGE DONUT CHART */}
+          <div className="bg-[#151515] border border-white/5 rounded-xl p-5 mt-4">
+            <h3 className="text-sm font-semibold text-white mb-6">Model usage</h3>
+            <div className="flex gap-10">
+              <div className="relative w-48 h-48 flex-shrink-0">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                  <circle cx="50" cy="50" r="40" fill="transparent" stroke="#222" strokeWidth="20" />
+                  {donutSegments.map((seg, i) => (
+                    <motion.circle
+                      key={i}
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="transparent"
+                      stroke={seg.color}
+                      strokeWidth="20"
+                      strokeDasharray={seg.dashArray}
+                      strokeDashoffset={-seg.offset}
+                      className="drop-shadow-md"
+                      initial={{ strokeDashoffset: circumference }}
+                      animate={{ strokeDashoffset: -seg.offset }}
+                      transition={{ duration: 0.8 }}
+                    />
+                  ))}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-bold text-white">
+                    {modelUsageEntries.length > 0 ? formatCount(modelUsageEntries[0][1]) : '0'}
+                  </span>
+                  <span className="text-[11px] text-[#888]">sessions</span>
+                </div>
+              </div>
+              <div className="flex flex-col justify-center flex-1 space-y-4">
+                {modelUsageEntries.length === 0 ? (
+                  <div className="text-xs text-white/40 italic">No model usage recorded yet</div>
+                ) : (
+                  modelUsageEntries.map(([model, count], i) => (
+                    <div key={model} className="flex items-center justify-between">
+                      <div className="flex gap-3">
+                        <div className="w-2.5 h-2.5 rounded-full mt-1" style={{ backgroundColor: DONUT_COLORS[i % DONUT_COLORS.length] }}></div>
+                        <div className="flex flex-col">
+                          <span className="text-sm text-white font-mono truncate">{model}</span>
+                          <span className="text-xs text-[#888]">{count} sessions</span>
+                        </div>
                       </div>
-                      <span className="text-xs text-white/50 w-16 text-right">{count as number} todos</span>
+                      <span className="text-xs text-white/50">
+                        {totalModelSessions > 0 ? Math.round((count / totalModelSessions) * 100) : 0}%
+                      </span>
                     </div>
-                  );
-                })}
+                  ))
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </>
       )}
     </div>
@@ -2133,16 +2343,9 @@ function ChangePasswordModal({ isOpen, onClose }: { isOpen: boolean; onClose: ()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPassword || !newPassword) {
-      toast.error('Please fill in all password fields');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('New passwords do not match');
-      return;
-    }
-    if (newPassword.length < 6) {
-      toast.error('New password must be at least 6 characters long');
+    const parsed = changePasswordSchema.safeParse({ currentPassword, newPassword, confirmPassword });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message || 'Invalid input');
       return;
     }
 
@@ -2592,7 +2795,7 @@ export function SettingsPage({
             <button
               type="button"
               onClick={onClose}
-              className="flex items-center gap-2 text-[var(--mcode-text-dim,#8b8d98)] hover:text-white transition text-xs group cursor-pointer"
+              className="flex items-center gap-2 text-[var(--mcode-text-dim,#8b8d98)] hover:text-white transition text-xs group"
             >
               <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
               Back to workspace
@@ -2606,7 +2809,7 @@ export function SettingsPage({
               Back to workspace
             </MotionLink>
           )}
-          <h1 className="text-base font-semibold text-white mt-3 tracking-tight">Platform Settings</h1>
+          <h1 className="text-base font-semibold text-white mt-3 tracking-tight">Settings</h1>
         </div>
 
         <nav className="flex-1 p-3 space-y-4 overflow-y-auto custom-scrollbar">
@@ -2623,11 +2826,16 @@ export function SettingsPage({
                     const isActive = activeTab === child.id;
                     const ItemIcon = child.icon;
                     return (
-                      <button
+                      <motion.button
                         key={child.id}
                         type="button"
                         onClick={() => setActiveTab(child.id)}
-                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                        initial={{ opacity: 0.99 }}
+                        animate={{ opacity: 1 }}
+                        style={{ opacity: 1 }}
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                           isActive
                             ? 'bg-[#3ecf8e]/10 text-[#3ecf8e]'
                             : 'text-[var(--mcode-text-dim,#8b8d98)] hover:text-white hover:bg-white/5'
@@ -2638,7 +2846,7 @@ export function SettingsPage({
                           <span className="truncate">{child.label}</span>
                         </div>
                         {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#3ecf8e] flex-shrink-0" />}
-                      </button>
+                      </motion.button>
                     );
                   })}
                 </div>
@@ -2658,7 +2866,7 @@ export function SettingsPage({
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-6 right-6 px-3 py-1.5 rounded-lg text-[var(--mcode-text-dim,#8b8d98)] hover:text-white hover:bg-white/5 transition z-50 flex items-center gap-1.5 text-xs border border-[var(--mcode-border,#26272f)] cursor-pointer"
+            className="absolute top-6 right-6 px-3 py-1.5 rounded-lg text-[var(--mcode-text-dim,#8b8d98)] hover:text-white hover:bg-white/5 transition z-50 flex items-center gap-1.5 text-xs border border-[var(--mcode-border,#26272f)]"
             title="Close (Esc)"
           >
             <span className="text-[10px] font-mono text-white/40">Esc</span>

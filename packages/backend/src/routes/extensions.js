@@ -207,7 +207,7 @@ export function extensionRoutes({ secret } = {}) {
         try {
           const u = new URL(String(downloadUrl));
           const host = u.hostname.toLowerCase();
-          if (host !== 'open-vsx.org' && host !== 'openvsx.org' && !host.endsWith('.open-vsx.org') && !host.endsWith('.openvsx.org')) {
+          if (host !== 'open-vsx.org' && host !== 'openvsx.org') {
             return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'downloadUrl must be an Open VSX URL' } });
           }
         } catch {
@@ -278,7 +278,7 @@ export function extensionRoutes({ secret } = {}) {
         const relPath = file.path.replace(/^extension\//, '');
         // Guard against directory traversal
         const resolvedPath = path.resolve(extTargetDir, relPath);
-        if (!resolvedPath.startsWith(extTargetDir)) continue;
+        if (!resolvedPath.startsWith(extTargetDir + path.sep) && resolvedPath !== extTargetDir) continue;
 
         await mkdir(path.dirname(resolvedPath), { recursive: true });
         const fileContent = await file.buffer();
@@ -302,7 +302,7 @@ export function extensionRoutes({ secret } = {}) {
           const themeRelPath = themeItem.path;
           if (themeRelPath) {
             const themeFullPath = path.resolve(extTargetDir, themeRelPath);
-            if (fs.existsSync(themeFullPath) && themeFullPath.startsWith(extTargetDir)) {
+            if (fs.existsSync(themeFullPath) && (themeFullPath.startsWith(extTargetDir + path.sep) || themeFullPath === extTargetDir)) {
               const rawTheme = parseJsonc(await readFile(themeFullPath, 'utf-8'));
               const monacoTheme = convertToMonacoTheme(rawTheme, themeItem.uiTheme);
               parsedThemes.push({
@@ -323,7 +323,7 @@ export function extensionRoutes({ secret } = {}) {
           const language = snippetItem.language;
           if (snippetRelPath && language) {
             const snippetFullPath = path.resolve(extTargetDir, snippetRelPath);
-            if (fs.existsSync(snippetFullPath) && snippetFullPath.startsWith(extTargetDir)) {
+            if (fs.existsSync(snippetFullPath) && (snippetFullPath.startsWith(extTargetDir + path.sep) || snippetFullPath === extTargetDir)) {
               const rawSnippets = parseJsonc(await readFile(snippetFullPath, 'utf-8'));
               const snippetList = [];
               for (const [sName, sData] of Object.entries(rawSnippets)) {
@@ -392,9 +392,27 @@ export function extensionRoutes({ secret } = {}) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'Invalid extension ID format' } });
       }
       const extTargetDir = path.join(INSTALLED_DIR, id);
+      // EXT-005: verify the resolved target dir is inside INSTALLED_DIR
+      const resolvedTarget = path.resolve(extTargetDir);
+      const installedRoot = path.resolve(INSTALLED_DIR);
+      if (!resolvedTarget.startsWith(installedRoot + path.sep) && resolvedTarget !== installedRoot) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'Invalid extension ID' } });
+      }
 
       if (fs.existsSync(extTargetDir)) {
-        fs.rmSync(extTargetDir, { recursive: true, force: true });
+        // FINDING-1047: retry on EBUSY/EPERM (Windows file locks)
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            fs.rmSync(extTargetDir, { recursive: true, force: true });
+            break;
+          } catch (rmErr) {
+            if ((rmErr.code === 'EBUSY' || rmErr.code === 'EPERM') && attempt < 2) {
+              await new Promise((r) => setTimeout(r, 100 * (attempt + 1)));
+            } else {
+              throw rmErr;
+            }
+          }
+        }
       }
 
       await updateRegistry((registry) => registry.filter((e) => e.id !== id));

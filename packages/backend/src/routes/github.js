@@ -4,15 +4,15 @@ import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { authMiddleware } from '../auth.js';
 import { db } from '../db.js';
-import { deriveMasterKey, encryptKey, decryptKey } from '../secret-enc.js';
+import { keyManagerFromEnv } from '../secret-enc.js';
 
-export function githubRoutes({ secret }) {
+export function githubRoutes({ secret } = {}) {
   const router = Router();
   // We attach authMiddleware selectively
   return router;
 }
 
-export function githubAuthRoutes({ secret }) {
+export function githubAuthRoutes({ secret, env = process.env } = {}) {
   const router = Router();
   const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
   const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
@@ -24,7 +24,7 @@ export function githubAuthRoutes({ secret }) {
       return res.status(501).json({ error: { code: 'NOT_IMPLEMENTED', message: 'GITHUB_CLIENT_ID not set' } });
     }
     const loginRedirect = process.env.GITHUB_REDIRECT_URI || `http://localhost:3100/api/v1/auth/github/callback`;
-    const stateToken = jwt.sign({ purpose: 'github_login', nonce: crypto.randomUUID() }, secret, { expiresIn: '10m' });
+    const stateToken = jwt.sign({ purpose: 'github_login', nonce: crypto.randomUUID() }, secret, { expiresIn: '10m', issuer: 'mcode', audience: 'mcode-github' });
     const loginUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(loginRedirect)}&scope=${encodeURIComponent('read:user user:email')}&state=${encodeURIComponent(stateToken)}`;
     res.redirect(loginUrl);
   });
@@ -41,7 +41,7 @@ export function githubAuthRoutes({ secret }) {
     if (req.query.token) {
       try {
         const decoded = jwt.verify(req.query.token, secret);
-        userState = jwt.sign({ sub: decoded.sub, purpose: 'github_connect', nonce: crypto.randomUUID() }, secret, { expiresIn: '10m' });
+        userState = jwt.sign({ sub: decoded.sub, purpose: 'github_connect', nonce: crypto.randomUUID() }, secret, { expiresIn: '10m', issuer: 'mcode', audience: 'mcode-github' });
       } catch {
         return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } });
       }
@@ -82,7 +82,7 @@ export function githubAuthRoutes({ secret }) {
     // protection entirely — removed. /login always issues signed state.
     let statePayload;
     try {
-      statePayload = jwt.verify(rawState, secret);
+      statePayload = jwt.verify(rawState, secret, { issuer: 'mcode', audience: 'mcode-github' });
     } catch {
       return res.status(401).send('Invalid or expired state token for authentication');
     }
@@ -119,9 +119,8 @@ export function githubAuthRoutes({ secret }) {
       
       const { login: username, avatar_url: avatarUrl } = userResponse.data;
 
-      // 4. Save to DB
-      const masterKey = deriveMasterKey(secret, userId);
-      const encryptedToken = encryptKey(accessToken, masterKey);
+      // 4. Save to DB (BSEC-001: dedicated at-rest encryption secret when configured)
+      const encryptedToken = keyManagerFromEnv({ secret, env }).encrypt(accessToken, userId);
 
       // Upsert
       const existing = await db().githubAccount.findOne({ userId });
@@ -163,7 +162,6 @@ async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_S
     }
     if (!email) return fail('no verified email on this github account — add one and retry');
     const { hashPassword, signTrackedTokens } = await import('../auth.js');
-    const { encryptKey, deriveMasterKey } = await import('../secret-enc.js');
     const { randomBytes } = await import('node:crypto');
     let user = await db().user.findOne({ email });
     if (!user) {
@@ -171,12 +169,18 @@ async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_S
         email,
         passwordHash: await hashPassword(randomBytes(16).toString('hex')),
         name: me.name || me.login || email.split('@')[0],
-        plan: 'free',
+        plan: process.env.DEFAULT_USER_PLAN || 'free',
         settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
       });
+    } else {
+      // SEC-025: if user exists but has no linked GitHub account, verify identity
+      // by requiring the user to confirm via OTP before linking a new GitHub identity.
+      const existingGh = await db().githubAccount.findOne({ userId: user._id });
+      if (!existingGh) {
+        return fail('an account with this email already exists — link GitHub from settings or login with your password first');
+      }
     }
-    const masterKey = deriveMasterKey(secret, user._id);
-    const encryptedToken = encryptKey(ghToken, masterKey);
+    const encryptedToken = keyManagerFromEnv({ secret, env }).encrypt(ghToken, user._id);
     const existing = await db().githubAccount.findOne({ userId: user._id });
     if (existing) {
       await db().githubAccount.updateOne({ _id: existing._id }, { accessToken: encryptedToken, username: me.login, avatarUrl: me.avatar_url });
@@ -195,16 +199,20 @@ async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_S
       }
     }
     res.redirect(`${front}/login?code=${loginCode}`);
-  } catch (err) {
-    next(err);
-  }
+    } catch (err) {
+      // FINDING-1040: custom error handler for decrypt failures
+      if (err?.name === 'JsonWebTokenError' || err?.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: { code: 'REAUTH_REQUIRED', message: 'GitHub session expired — please reconnect from settings' } });
+      }
+      next(err);
+    }
 }
 
 // Single-use OAuth login codes (GH-004). In-memory: a restart invalidates
 // unredeemed codes, which is the safe direction.
 const pendingLogins = new Map();
 
-export function githubApiRoutes({ secret }) {
+export function githubApiRoutes({ secret, env = process.env } = {}) {
   const router = Router();
   router.use(authMiddleware({ secret }));
 
@@ -236,8 +244,7 @@ export function githubApiRoutes({ secret }) {
       const account = await db().githubAccount.findOne({ userId: req.userId });
       if (!account) return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'GitHub not connected' }});
       
-      const masterKey = deriveMasterKey(secret, req.userId);
-      const accessToken = decryptKey(account.accessToken, masterKey);
+      const accessToken = keyManagerFromEnv({ secret, env }).decrypt(account.accessToken, req.userId);
       
       const page = Math.max(1, Number(req.query.page) || 1);
       const perPage = Math.min(100, Math.max(1, Number(req.query.per_page) || 100));

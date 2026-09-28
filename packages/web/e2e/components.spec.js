@@ -32,7 +32,7 @@ test.describe('FeaturesGrid Component', () => {
 
   test('features grid renders with stagger animation', async ({ page }) => {
     await page.waitForTimeout(500);
-    const features = page.locator('[class*="grid"], section');
+    const features = page.locator('main [class*="grid"], main section, section:not([aria-label]), [class*="grid"]');
     await expect(features.first()).toBeVisible();
   });
 

@@ -24,7 +24,7 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
   onClose,
   className = '',
 }) => {
-  const [activeCategory, setActiveCategory] = useState<string>('modes');
+  const [activeCategory, setActiveCategory] = useState<string>('all');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
 
@@ -69,6 +69,22 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
       {/* Category Tabs (Single line, no text wrapping) */}
       <div className="px-3 py-2 border-b border-white/5 flex items-center justify-between gap-3 bg-white/[0.02]">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-nowrap">
+          <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider px-1 shrink-0">Available commands</span>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCategory('all');
+              setSelectedCmdIndex(0);
+            }}
+            className={`px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeCategory === 'all' && query.length === 0
+                ? 'bg-white/10 text-white font-medium border border-white/10 shadow-sm'
+                : 'text-white/40 hover:text-white/70 hover:bg-white/5 border border-transparent'
+            }`}
+          >
+            <span>All</span>
+            <span className="text-[11px] text-white/30 font-mono">({categoryCounts.all || 0})</span>
+          </button>
           {SLASH_CATEGORIES.map((cat) => {
             const isActive = activeCategory === cat.id && query.length === 0;
             const count = categoryCounts[cat.id] || 0;
@@ -92,21 +108,6 @@ export const SlashCommandPicker: React.FC<SlashCommandPickerProps> = ({
               </button>
             );
           })}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCategory('all');
-              setSelectedCmdIndex(0);
-            }}
-            className={`px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-              activeCategory === 'all' && query.length === 0
-                ? 'bg-white/10 text-white font-medium border border-white/10 shadow-sm'
-                : 'text-white/40 hover:text-white/70 hover:bg-white/5 border border-transparent'
-            }`}
-          >
-            <span>All</span>
-            <span className="text-[11px] text-white/30 font-mono">({categoryCounts.all || 0})</span>
-          </button>
         </div>
 
         <button

@@ -10,7 +10,7 @@
 // Folder" flow feel randomly frozen/stuck ("beech beech mein atak jaata hai").
 //
 // Message protocol:
-//   -> { files: [{ path: string, file: File }, ...] }
+//   -> { files: [{ path: string, buf: ArrayBuffer }, ...] } (buffers transferred)
 //   <- { type: 'progress', percent: number }
 //   <- { type: 'done', buf: Uint8Array } (transferred, zero-copy)
 //   <- { type: 'error', message: string }
@@ -21,6 +21,7 @@ import JSZip from 'jszip';
 // instead of dying silently mid-zip.
 const MAX_ZIP_ENTRIES = 20000;
 const MAX_ZIP_BYTES = 500 * 1024 * 1024;
+const MAX_ZIP_COMPRESSED_BYTES = 500 * 1024 * 1024;
 
 self.onmessage = async (event) => {
   const { files } = event.data || {};
@@ -37,13 +38,13 @@ self.onmessage = async (event) => {
   try {
     const zip = new JSZip();
     let totalBytes = 0;
-    for (const { path, file } of files) {
-      totalBytes += file?.size || 0;
+    for (const { path, buf } of files) {
+      totalBytes += buf?.byteLength || 0;
       if (totalBytes > MAX_ZIP_BYTES) {
         self.postMessage({ type: 'error', message: 'Selection exceeds 500MB — select fewer/smaller files' });
         return;
       }
-      zip.file(path, file);
+      zip.file(path, new Uint8Array(buf));
     }
 
     // 006: generate raw bytes and TRANSFER the buffer (zero-copy) instead
@@ -58,6 +59,10 @@ self.onmessage = async (event) => {
       },
       (metadata) => {
         self.postMessage({ type: 'progress', percent: Math.round(metadata.percent) });
+    if (metadata.percent === 100 && uint8.byteLength > MAX_ZIP_COMPRESSED_BYTES) {
+      self.postMessage({ type: 'error', message: 'Compressed selection exceeds 500MB — select fewer/smaller files' });
+      return;
+    }
       }
     );
 

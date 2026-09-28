@@ -1,7 +1,13 @@
 import axios from 'axios';
 import { runOnHost, getSupportedExtensions } from './host-runner.js';
 
-const PISTON_URL = process.env.PISTON_URL || 'http://localhost:2000';
+function getPistonUrl() {
+  const url = process.env.PISTON_URL;
+  if (!url) {
+    throw new Error('PISTON_URL environment variable is not set — Piston integration is disabled');
+  }
+  return url;
+}
 
 // Cache Piston availability (re-checked periodically)
 let _pistonAvailable = null;
@@ -162,7 +168,7 @@ export function detectLanguage(filename) {
  */
 export async function getInstalledRuntimes() {
   try {
-    const { data } = await axios.get(`${PISTON_URL}/api/v2/runtimes`);
+    const { data } = await axios.get(`${getPistonUrl()}/api/v2/runtimes`);
     return data; // returns array of { language, version, aliases }
   } catch (err) {
     console.error('[Piston] Failed to fetch installed runtimes:', err.message);
@@ -191,7 +197,7 @@ export async function runSingleFile(filename, code, stdin = '') {
     run_timeout: 5000,
   };
 
-  const { data } = await axios.post(`${PISTON_URL}/api/v2/execute`, payload, {
+  const { data } = await axios.post(`${getPistonUrl()}/api/v2/execute`, payload, {
     timeout: 20000
   });
 
@@ -215,7 +221,7 @@ export async function isPistonAvailable() {
   }
 
   try {
-    await axios.get(`${PISTON_URL}/api/v2/runtimes`, { timeout: 2000 });
+    await axios.get(`${getPistonUrl()}/api/v2/runtimes`, { timeout: 2000 });
     _pistonAvailable = true;
   } catch {
     _pistonAvailable = false;

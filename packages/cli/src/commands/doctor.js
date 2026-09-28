@@ -1,6 +1,6 @@
 import { getProviders } from '../providers/index.js';
 import { loadVault } from '../core/vault.js';
-import { loadConfig } from '../core/store.js';
+import { loadConfig, getLastConfigError } from '../core/store.js';
 import { table, ok, warn, json } from '../core/logger.js';
 
 const REQUIRED_KEYS = [
@@ -19,6 +19,10 @@ export async function doctorCommand({ asJson = false } = {}) {
   rows.push(['Node.js', process.version, 'ok']);
   rows.push(['mcode version', '2.4.6', 'ok']);
   rows.push(['Config', '~/.mcode/config.json', config ? 'present' : 'missing']);
+  // MF-007: config-schema row — loud when the file on disk is unparsable or
+  // fails zod validation (the old store swallowed both into `{}`).
+  const cfgErr = getLastConfigError();
+  rows.push(['Config schema', cfgErr ? `${cfgErr.kind} error: ${cfgErr.message}` : 'valid', cfgErr ? 'warn' : 'ok']);
   rows.push(['Vault', '~/.mcode/vault.json.enc', Object.keys(secrets).length ? `${Object.keys(secrets).length} keys` : 'empty (use mcode env add)']);
 
   for (const key of REQUIRED_KEYS) {
@@ -54,7 +58,7 @@ export async function doctorCommand({ asJson = false } = {}) {
   table(rows.map(([a, b, s]) => [a, b, s === 'ok' ? '\u2713' : '\u26a0']), {
     columns: ['CHECK', 'VALUE', '']
   });
-  const issues = rows.filter(([, , s]) => s !== 'ok').length;
+  const issues = rows.filter(([, , s]) => s === 'warn').length;
   if (issues === 0) ok('environment healthy');
   else warn(`${issues} check(s) need attention`);
 }

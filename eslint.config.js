@@ -39,7 +39,14 @@ export default [
         window: 'readonly',
         navigator: 'readonly',
         localStorage: 'readonly',
-        location: 'readonly'
+        location: 'readonly',
+        atob: 'readonly',
+        btoa: 'readonly',
+        FormData: 'readonly',
+        Blob: 'readonly',
+        File: 'readonly',
+        FileReader: 'readonly',
+        CustomEvent: 'readonly',
       },
       parserOptions: { ecmaFeatures: { jsx: true } }
     },
@@ -73,6 +80,26 @@ export default [
         navigator: 'readonly',
         fetch: 'readonly',
         location: 'readonly'
+      }
+    }
+  },
+  {
+    files: ['packages/web/src/workers/*.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        Worker: 'readonly',
+        MessagePort: 'readonly',
+        postMessage: 'readonly',
+        addEventListener: 'readonly',
+        removeEventListener: 'readonly',
+        atob: 'readonly',
+        btoa: 'readonly',
+        FormData: 'readonly',
+        Blob: 'readonly',
+        File: 'readonly',
+        FileReader: 'readonly',
+        CustomEvent: 'readonly',
       }
     }
   }

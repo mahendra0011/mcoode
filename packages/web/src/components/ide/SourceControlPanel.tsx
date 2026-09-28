@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   GitBranch,
   Check,
@@ -24,11 +24,24 @@ import {
 } from "lucide-react";
 import { useIDEStore } from "../../store/ideStore";
 import { toast } from "sonner";
+import api from "../../lib/axios";
 
 export interface ChangedFile {
   path: string;
   fileName: string;
   status: "modified" | "added" | "deleted";
+}
+
+interface GitStatusResponse {
+  branch?: string;
+  notRepo?: boolean;
+  modified?: string[];
+  added?: string[];
+  deleted?: string[];
+  renamed?: string[];
+  untracked?: string[];
+  ahead?: number;
+  behind?: number;
 }
 
 export interface CommitItem {
@@ -56,10 +69,31 @@ const CONTEXT_MENU_ITEMS = [
   { label: "Show Git Output", icon: Terminal },
 ];
 
-export function SourceControlPanel() {
+export function SourceControlPanel({ workspaceId }: { workspaceId?: string | null } = {}) {
   const [message, setMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // FINDING-1213: real `git status` from the backend — files modified outside
+  // the IDE (CLI, external editor) never appeared in the in-memory diff.
+  const [gitStatus, setGitStatus] = useState<GitStatusResponse | null>(null);
+
+  const refreshGitStatus = useCallback(() => {
+    if (!workspaceId) {
+      setGitStatus(null);
+      return;
+    }
+    api
+      .get(`/api/v1/workspaces/${workspaceId}/git-status`, { timeout: 10000 })
+      .then((res) => {
+        if (res.data && !res.data.notRepo) setGitStatus(res.data);
+      })
+      .catch(() => {});
+  }, [workspaceId]);
+
+  useEffect(() => {
+    refreshGitStatus();
+  }, [refreshGitStatus]);
 
   // Sections collapse state
   const [sections, setSections] = useState({
@@ -76,7 +110,7 @@ export function SourceControlPanel() {
   const sourceControlView = useIDEStore((s) => s.sourceControlView);
   const setSourceControlView = useIDEStore((s) => s.setSourceControlView);
 
-  // Compute diff against last commit snapshot
+  // Compute diff against last commit snapshot, merged with real git status
   const changes = useMemo(() => {
     const list: ChangedFile[] = [];
     const seen = new Set<string>();
@@ -100,8 +134,22 @@ export function SourceControlPanel() {
       }
     }
 
+    // FINDING-1213: layer backend git status on top so externally-modified
+    // files show up (skip anything the in-memory diff already covers).
+    if (gitStatus) {
+      const fromGit = (paths: string[] | undefined, status: ChangedFile["status"]) =>
+        (paths || [])
+          .filter((p) => !seen.has(p))
+          .map((p) => ({ path: p, fileName: p.split("/").pop() || p, status }));
+      list.push(...fromGit(gitStatus.modified, "modified"));
+      list.push(...fromGit(gitStatus.renamed, "modified"));
+      list.push(...fromGit(gitStatus.deleted, "deleted"));
+      list.push(...fromGit(gitStatus.added, "added"));
+      list.push(...fromGit(gitStatus.untracked, "added"));
+    }
+
     return list;
-  }, [fileContentsCache, lastCommitSnapshots]);
+  }, [fileContentsCache, lastCommitSnapshots, gitStatus]);
 
   // Merge commit history into Graph commits
   const graphCommits = useMemo<CommitItem[]>(() => {
@@ -315,6 +363,7 @@ export function SourceControlPanel() {
                 type="button"
                 onClick={() => {
                   bumpRefresh();
+                  refreshGitStatus();
                   const runCmd = useIDEStore.getState().runTerminalCommandFn;
                   if (runCmd) runCmd("git status -s");
                   toast.info("Refreshed changes");

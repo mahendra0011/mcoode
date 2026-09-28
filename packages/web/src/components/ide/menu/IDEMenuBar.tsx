@@ -91,16 +91,16 @@ export function IDEMenuBar({
   }, []);
 
   const runMonacoAction = (actionId: string) => {
-    if (!store.activeEditor) {
+    if (!store.getActiveEditor()) {
       toast.error("No active editor");
       return;
     }
     try {
-      const action = store.activeEditor.getAction(actionId);
+      const action = store.getActiveEditor().getAction(actionId);
       if (action) {
         action.run();
       } else {
-        store.activeEditor.trigger("menu", actionId, null);
+        store.getActiveEditor().trigger("menu", actionId, null);
       }
     } catch {
       // ignore
@@ -116,9 +116,9 @@ export function IDEMenuBar({
   };
 
   const copySelection = async () => {
-    if (!store.activeEditor) return;
-    const model = store.activeEditor.getModel();
-    const selection = store.activeEditor.getSelection();
+    if (!store.getActiveEditor()) return;
+    const model = store.getActiveEditor().getModel();
+    const selection = store.getActiveEditor().getSelection();
     if (model && selection) {
       const text = model.getValueInRange(selection);
       if (text) {
@@ -129,14 +129,14 @@ export function IDEMenuBar({
   };
 
   const cutSelection = async () => {
-    if (!store.activeEditor) return;
-    const model = store.activeEditor.getModel();
-    const selection = store.activeEditor.getSelection();
+    if (!store.getActiveEditor()) return;
+    const model = store.getActiveEditor().getModel();
+    const selection = store.getActiveEditor().getSelection();
     if (model && selection) {
       const text = model.getValueInRange(selection);
       if (text) {
         await navigator.clipboard.writeText(text);
-        store.activeEditor.executeEdits("menu", [
+        store.getActiveEditor().executeEdits("menu", [
           { range: selection, text: "", forceMoveMarkers: true },
         ]);
       }
@@ -144,12 +144,12 @@ export function IDEMenuBar({
   };
 
   const pasteSelection = async () => {
-    if (!store.activeEditor) return;
+    if (!store.getActiveEditor()) return;
     try {
       const text = await navigator.clipboard.readText();
-      const selection = store.activeEditor.getSelection();
+      const selection = store.getActiveEditor().getSelection();
       if (selection) {
-        store.activeEditor.executeEdits("menu", [
+        store.getActiveEditor().executeEdits("menu", [
           { range: selection, text, forceMoveMarkers: true },
         ]);
       }
@@ -159,13 +159,13 @@ export function IDEMenuBar({
   };
 
   const duplicateSelection = () => {
-    if (!store.activeEditor) return;
-    const model = store.activeEditor.getModel();
-    const selection = store.activeEditor.getSelection();
+    if (!store.getActiveEditor()) return;
+    const model = store.getActiveEditor().getModel();
+    const selection = store.getActiveEditor().getSelection();
     if (model && selection) {
       const text = model.getValueInRange(selection);
       if (text) {
-        store.activeEditor.executeEdits("menu", [
+        store.getActiveEditor().executeEdits("menu", [
           {
             range: {
               startLineNumber: selection.endLineNumber,
@@ -184,8 +184,8 @@ export function IDEMenuBar({
   };
 
   const triggerBreakpointCurrentLine = () => {
-    if (!store.activeEditor || !store.activePath) return;
-    const pos = store.activeEditor.getPosition();
+    if (!store.getActiveEditor() || !store.activePath) return;
+    const pos = store.getActiveEditor().getPosition();
     if (pos) {
       store.toggleBreakpoint(store.activePath, pos.lineNumber);
     }
@@ -399,7 +399,7 @@ export function IDEMenuBar({
             else if (store.activePath) {
               const content =
                 store.fileContentsCache[store.activePath] ||
-                store.activeEditor?.getValue() ||
+                store.getActiveEditor()?.getValue() ||
                 "";
               const blob = new Blob([content], { type: "text/plain" });
               const url = URL.createObjectURL(blob);
@@ -436,8 +436,8 @@ export function IDEMenuBar({
             else if (store.activePath && store.savedContents[store.activePath] !== undefined) {
               const original = store.savedContents[store.activePath];
               store.setFileContent(store.activePath, original);
-              if (store.activeEditor) {
-                store.activeEditor.setValue(original);
+              if (store.getActiveEditor()) {
+                store.getActiveEditor().setValue(original);
               }
               toast.success("File reverted to last saved state");
             } else {
@@ -585,9 +585,9 @@ export function IDEMenuBar({
           label: "Select All",
           shortcut: "Ctrl+A",
           action: () => {
-            if (store.activeEditor) {
-              store.activeEditor.setSelection(
-                store.activeEditor.getModel()?.getFullModelRange()
+            if (store.getActiveEditor()) {
+              store.getActiveEditor().setSelection(
+                store.getActiveEditor().getModel()?.getFullModelRange()
               );
             }
           },
@@ -663,8 +663,8 @@ export function IDEMenuBar({
           action: () => {
             const next = store.multiCursorModifier === "ctrlCmd" ? "alt" : "ctrlCmd";
             store.setMultiCursorModifier(next);
-            if (store.activeEditor) {
-              store.activeEditor.updateOptions({ multiCursorModifier: next });
+            if (store.getActiveEditor()) {
+              store.getActiveEditor().updateOptions({ multiCursorModifier: next });
             }
             toast.success(`Multi-cursor modifier: ${next === "ctrlCmd" ? "Ctrl/Cmd+Click" : "Alt+Click"}`);
           },
@@ -851,13 +851,13 @@ export function IDEMenuBar({
                 store.addOpenFile(p.path);
                 store.setActivePath(p.path);
               }
-              if (store.activeEditor) {
-                store.activeEditor.revealLineInCenter(p.line);
-                store.activeEditor.setPosition({
+              if (store.getActiveEditor()) {
+                store.getActiveEditor().revealLineInCenter(p.line);
+                store.getActiveEditor().setPosition({
                   lineNumber: p.line,
                   column: p.column || 1,
                 });
-                store.activeEditor.focus();
+                store.getActiveEditor().focus();
               }
             } else {
               toast.info("Beginning of navigation history");
@@ -874,13 +874,13 @@ export function IDEMenuBar({
                 store.addOpenFile(p.path);
                 store.setActivePath(p.path);
               }
-              if (store.activeEditor) {
-                store.activeEditor.revealLineInCenter(p.line);
-                store.activeEditor.setPosition({
+              if (store.getActiveEditor()) {
+                store.getActiveEditor().revealLineInCenter(p.line);
+                store.getActiveEditor().setPosition({
                   lineNumber: p.line,
                   column: p.column || 1,
                 });
-                store.activeEditor.focus();
+                store.getActiveEditor().focus();
               }
             } else {
               toast.info("End of navigation history");
@@ -983,7 +983,7 @@ export function IDEMenuBar({
             store.setSidebarOpen(true);
             const code =
               store.fileContentsCache[store.activePath] ||
-              store.activeEditor?.getValue() ||
+              store.getActiveEditor()?.getValue() ||
               "";
             if (debug?.startDebug) {
               debug.startDebug(store.activePath, code);
@@ -999,7 +999,7 @@ export function IDEMenuBar({
             if (store.activePath) {
               const code =
                 store.fileContentsCache[store.activePath] ||
-                store.activeEditor?.getValue() ||
+                store.getActiveEditor()?.getValue() ||
                 "";
               store.setTerminalOpen(true);
               store.setActivePanelTab("terminal");
@@ -1157,7 +1157,7 @@ export function IDEMenuBar({
                 }
                 const condition = window.prompt("Expression to pause on (e.g. x > 10, user !== null):");
                 if (!condition) return;
-                const line = store.activeEditor?.getPosition?.()?.lineNumber || 1;
+                const line = store.getActiveEditor()?.getPosition?.()?.lineNumber || 1;
                 store.toggleBreakpoint(store.activePath, line);
                 toast.success(`Conditional breakpoint set at line ${line}: "${condition.trim()}"`);
               },
@@ -1171,7 +1171,7 @@ export function IDEMenuBar({
                 }
                 const msg = window.prompt("Log message (expressions in {curly} braces):");
                 if (!msg) return;
-                const line = store.activeEditor?.getPosition?.()?.lineNumber || 1;
+                const line = store.getActiveEditor()?.getPosition?.()?.lineNumber || 1;
                 store.toggleBreakpoint(store.activePath, line);
                 toast.success(`Logpoint set at line ${line}: "${msg.trim()}"`);
               },
@@ -1259,7 +1259,7 @@ export function IDEMenuBar({
         {
           label: "Run Selected Text",
           action: () => {
-            const editor = store.activeEditor;
+            const editor = store.getActiveEditor();
             const model = editor?.getModel?.();
             const selection = editor?.getSelection?.();
             const text = model && selection ? model.getValueInRange(selection) : "";

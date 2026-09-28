@@ -24,7 +24,7 @@ export function ReactionBurst({
       {show && (
         <motion.div
           key="reaction-burst-pop"
-          className="mcode-reaction-burst"
+          className="zcode-reaction-burst mcode-reaction-burst"
           initial={{ opacity: 1, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0 }}
@@ -37,7 +37,7 @@ export function ReactionBurst({
         >
           {/* Primary burst icon — uses CSS keyframe for pop */}
           <motion.span
-            className="mcode-reaction-pop inline-block text-emerald-400"
+            className="zcode-reaction-pop mcode-reaction-pop inline-block text-emerald-400"
             style={{ fontSize: '1.125rem' }}
           >
             {emoji}
@@ -52,7 +52,7 @@ export function ReactionBurst({
             return (
               <motion.span
                 key={i}
-                className="mcode-reaction-particles absolute inline-block w-1 h-1 bg-emerald-400 rounded-full"
+                className="zcode-reaction-particles mcode-reaction-particles absolute inline-block w-1 h-1 bg-emerald-400 rounded-full"
                 style={{ left: '50%', top: '50%', translateX: x, translateY: y }}
                 initial={{ opacity: 0.8, scale: 0 }}
                 animate={{

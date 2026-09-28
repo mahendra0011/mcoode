@@ -15,67 +15,67 @@ export const SPECIAL_MODES = Object.freeze({
   SERVICE: 'service',
 });
 
-/** Metadata for each mode — display name, description, and UI effects. */
+/** Metadata for each mode — display name and description. */
 export const MODE_META = Object.freeze({
   [SPECIAL_MODES.LEARNING]: {
     label: 'Learning',
     description: 'Step-by-step walkthrough with explanations',
     icon: '📖',
-    affects: ['show-steps', 'verbose-explanation'],
+    affects: ['narration', 'verbosity'],
   },
   [SPECIAL_MODES.COMPETITION]: {
     label: 'Competition',
     description: 'Time trials — race against the clock',
     icon: '\u23f1',
-    affects: ['timer-display', 'speed-focus'],
+    affects: ['timer', 'score'],
   },
   [SPECIAL_MODES.ZEN]: {
     label: 'Zen',
     description: 'Minimal UI — just the essentials',
     icon: '🧘',
-    affects: ['minimal-ui', 'hide-sidebar', 'hide-agent-strip'],
+    affects: ['ui', 'notifications'],
   },
   [SPECIAL_MODES.FOCUS]: {
     label: 'Focus',
     description: 'Hide distractions, show only the task',
     icon: '🔒',
-    affects: ['hide-toasts', 'hide-agent-strip', 'full-width-input'],
+    affects: ['ui', 'panels'],
   },
   [SPECIAL_MODES.PRESENTATION]: {
     label: 'Presentation',
     description: 'Large text, clean layout for demos',
     icon: '📽',
-    affects: ['large-font', 'center-align', 'minimal-colors'],
+    affects: ['fontSize', 'layout'],
   },
   [SPECIAL_MODES.DEBUG]: {
     label: 'Debug',
     description: 'Verbose output and event inspector',
     icon: '🐛',
-    affects: ['show-debug-panel', 'verbose-logs', 'show-raw-events'],
+    affects: ['logging', 'events'],
   },
   [SPECIAL_MODES.SILENT]: {
     label: 'Silent',
     description: 'Minimal output — only errors shown',
     icon: '🔕',
-    affects: ['suppress-info', 'errors-only', 'quiet-mode', 'hide-toasts'],
+    affects: ['output', 'verbosity'],
   },
   [SPECIAL_MODES.BATCH]: {
     label: 'Batch',
     description: 'Automated runs with no interactive prompts',
     icon: '\u2696',
-    affects: ['auto-approve', 'no-prompts', 'log-to-file'],
+    affects: ['prompts', 'watch'],
   },
   [SPECIAL_MODES.DAEMON]: {
     label: 'Daemon',
     description: 'Background processing — minimal foreground output',
     icon: '\u273d',
-    affects: ['background-mode', 'minimal-foreground', 'daemon-pid'],
+    affects: ['background', 'output'],
   },
   [SPECIAL_MODES.SERVICE]: {
     label: 'Service',
     description: 'Runs as a system service — log to files only',
     icon: '\u2699',
-    affects: ['service-mode', 'stdout-logs-disabled', 'syslog'],
+    affects: ['logging', 'service'],
   },
 });
 

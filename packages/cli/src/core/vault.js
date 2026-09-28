@@ -6,13 +6,12 @@ import { VAULT_PATH, ensureDirs } from './store.js';
 
 /**
  * Encrypted secrets vault ("secrets stay local").
- * AES-256-GCM; key derived via scrypt from machine identity (machine-id when
- * available, hostname+user fallback) plus a user master secret
- * (MCODE_VAULT_PASSWORD env or per-call passphrase) plus a random per-vault
- * salt stored in the file header. No plaintext keys are ever written to disk.
+ * AES-256-GCM; key derived via scrypt from a user-supplied passphrase
+ * plus a random per-vault salt stored in the file header.
  *
- * SEC-003: hostname+username alone is guessable, so the key now mixes in a
- * machine-unique id and WARNS when no master secret is configured.
+ * SEC-003: hostname+username alone is guessable, so the key now requires
+ * a real passphrase. On first use, the caller must prompt interactively.
+ * Non-interactive environments must pass an explicit passphrase.
  */
 const MAGIC = 'MCODEV2:';
 const SALT_LEN = 16;
@@ -20,7 +19,7 @@ const IV_LEN = 12;
 const TAG_LEN = 16;
 
 let _machineIdCache = null;
-let _noMasterWarned = false;
+let _passphraseWarned = false;
 
 export function getMachineId() {
   if (_machineIdCache !== null) return _machineIdCache;
@@ -36,21 +35,39 @@ export function getMachineId() {
   return '';
 }
 
-function warnNoMasterSecret() {
-  if (_noMasterWarned) return;
-  _noMasterWarned = true;
+function warnNoPassphrase() {
+  if (_passphraseWarned) return;
+  _passphraseWarned = true;
   process.stderr.write(
-    '[vault] WARNING: no master secret set (MCODE_VAULT_PASSWORD is empty and no passphrase given). ' +
-    'Vault key relies on machine identity only — set MCODE_VAULT_PASSWORD for real protection.\n'
+    '[vault] WARNING: no passphrase set. Vault encryption is weak without one.\n' +
+    '  Set MCODE_VAULT_PASSWORD or use `mcode env add --prompt-passphrase`.\n'
   );
 }
 
+/**
+ * Require a real passphrase — fail closed if none provided.
+ * SEC-003: empty passphrase means the key is derivable from non-secret
+ * hostname/username, so we refuse to operate without one.
+ */
+function requirePassphrase(passphrase) {
+  if (process.env.MCODE_VAULT_ALLOW_WEAK === '1') {
+    warnNoPassphrase();
+    return passphrase || 'mcode-vault-weak';
+  }
+  if (!passphrase) {
+    throw new Error(
+      'A vault passphrase is required. Set MCODE_VAULT_PASSWORD or use `mcode env add --prompt-passphrase`.\n' +
+      '  Or set MCODE_VAULT_ALLOW_WEAK=1 to allow weak encryption (not recommended).'
+    );
+  }
+  return passphrase;
+}
+
 function machinePassword(passphrase = '') {
-  const masterSecret = process.env.MCODE_VAULT_PASSWORD || '';
-  if (!masterSecret && !passphrase) warnNoMasterSecret();
+  const masterSecret = requirePassphrase(passphrase);
   const machineId = getMachineId();
   const machinePart = machineId || `${hostname()}:${userInfo().username}`;
-  return `mcode-vault-v2:${machinePart}:${hostname()}:${userInfo().username}:${masterSecret}:${passphrase}`;
+  return `mcode-vault-v2:${machinePart}:${hostname()}:${userInfo().username}:${masterSecret}`;
 }
 
 /** Best-effort OS keychain lookup (macOS Keychain / Windows Credential Manager
@@ -70,7 +87,7 @@ export async function keychainGet(account = 'mcode-vault-master') {
 }
 
 function legacyKey(passphrase = '') {
-  return scryptSync(`mcode-vault-v1:${hostname()}:${userInfo().username}${passphrase}`, 'mcode', 32);
+  return scryptSync(`mcode-vault-v1:${hostname()}:${userInfo().username}${requirePassphrase(passphrase)}`, 'mcode', 32);
 }
 
 function deriveKey(salt, passphrase) {
@@ -105,7 +122,18 @@ function decrypt(buf, passphrase) {
   return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
 }
 
-export async function loadVault(passphrase = '') {
+/**
+ * Get the vault passphrase from env or keychain.
+ * SEC-003: returns empty string if not configured — callers must handle
+ * the requirePassphrase() error and prompt the user.
+ */
+export async function getVaultPassphrase() {
+  if (process.env.MCODE_VAULT_PASSWORD) return process.env.MCODE_VAULT_PASSWORD;
+  const kc = await keychainGet();
+  return kc || '';
+}
+
+export async function loadVault(passphrase = process.env.MCODE_VAULT_PASSWORD || '') {
   await ensureDirs();
   let raw;
   try {
@@ -125,7 +153,7 @@ export async function loadVault(passphrase = '') {
   }
 }
 
-export async function saveVault(secrets, passphrase = '') {
+export async function saveVault(secrets, passphrase = process.env.MCODE_VAULT_PASSWORD || '') {
   await ensureDirs();
   // never destroy an undecryptable existing vault — move it aside first
   let existing = null;
@@ -156,25 +184,25 @@ export async function saveVault(secrets, passphrase = '') {
   await chmod(VAULT_PATH, 0o600).catch(() => {});
 }
 
-export async function vaultSet(key, value, passphrase = '') {
+export async function vaultSet(key, value, passphrase = process.env.MCODE_VAULT_PASSWORD || '') {
   const secrets = await loadVault(passphrase);
   secrets[key] = value;
   await saveVault(secrets, passphrase);
 }
 
-export async function vaultGet(key, passphrase = '') {
+export async function vaultGet(key, passphrase = process.env.MCODE_VAULT_PASSWORD || '') {
   const secrets = await loadVault(passphrase);
   return secrets[key];
 }
 
-export async function vaultDelete(key, passphrase = '') {
+export async function vaultDelete(key, passphrase = process.env.MCODE_VAULT_PASSWORD || '') {
   const secrets = await loadVault(passphrase);
   delete secrets[key];
   await saveVault(secrets, passphrase);
   return secrets;
 }
 
-export async function vaultList(passphrase = '') {
+export async function vaultList(passphrase = process.env.MCODE_VAULT_PASSWORD || '') {
   const secrets = await loadVault(passphrase);
   return Object.keys(secrets).map((key) => ({
     key,

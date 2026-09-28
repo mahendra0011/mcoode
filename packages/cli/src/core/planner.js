@@ -1,4 +1,16 @@
 import { normalizePlan, validatePlan, findCycle } from '@mcode/shared';
+import { z } from 'zod';
+
+const PlanSchema = z.object({
+  summary: z.string(),
+  todos: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    domain: z.string(),
+    dependsOn: z.array(z.string()),
+    files: z.array(z.string()),
+  })),
+});
 
 const PLAN_SYSTEM = `PLAN_JSON
 You are mcode's planner. Turn the user's build request into a precise, dependency-ordered todo plan.
@@ -133,6 +145,10 @@ export class Planner {
     const plan = parsePlanOutput(raw.text);
     plan.prompt = prompt;
     plan.model = `${assignment.provider.id}:${assignment.model.id}`;
+    const parsed = PlanSchema.safeParse(plan);
+    if (!parsed.success) {
+      throw new Error(`plan output has invalid shape: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+    }
     const check = validatePlan(plan);
     if (!check.ok) throw new Error(check.error);
     const cycle = findCycle(plan);

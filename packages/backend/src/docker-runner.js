@@ -3,7 +3,12 @@ import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { httpError } from './http-error.js';
 
-const docker = new Docker(); // Automatically connects to local Docker socket (/var/run/docker.sock or Windows named pipe)
+let docker = null;
+try {
+  docker = new Docker(); // Automatically connects to local Docker socket (/var/run/docker.sock or Windows named pipe)
+} catch (err) {
+  console.warn('[docker-runner] Docker not available:', err.message);
+}
 
 // Project type → Docker image mapping
 const IMAGE_MAP = {
@@ -20,6 +25,7 @@ const activeContainers = new Map();
 // share one pull stream instead of thrashing the network/disk.
 const pullInflight = new Map();
 function pullImageOnce(image) {
+  if (!docker) throw new Error('Docker is not available on this system');
   const existing = pullInflight.get(image);
   if (existing) return existing;
   /** @type {Promise<any>} */
@@ -63,6 +69,7 @@ export function detectProjectType(files = []) {
  * @param {string[]} fileList - Top-level files in project directory
  */
 export async function ensureProjectContainer(socketId, projectPath, fileList = []) {
+  if (!docker) throw new Error('Docker is not available on this system');
   if (activeContainers.has(socketId)) {
     return activeContainers.get(socketId);
   }

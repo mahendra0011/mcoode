@@ -49,6 +49,11 @@ export function jobQueue(name = 'subagents') {
   };
 }
 
+export async function enqueue(name, data, opts) {
+  const q = jobQueue(name);
+  return q.add(name, data, opts);
+}
+
 export async function startWorker(name, handler) {
   if (mode === 'redis' && queueImpl) {
     const worker = new queueImpl.Worker(name, handler, { connection: queueImpl.client });

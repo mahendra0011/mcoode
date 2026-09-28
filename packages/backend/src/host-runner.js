@@ -27,6 +27,8 @@ const RUN_TIMEOUT     = 10_000; // 10s for execution
  *   {out}    — the compiled output binary path
  *   {dir}    — the temp directory path
  */
+const SQL_EXTENSIONS = new Set(['sql', 'sqlite', 'sqlite3']);
+
 const EXEC_MAP = {
   // ═══════════════════════════════════════════════════════════════════
   // All 53 Piston languages + aliases — matching piston-client.js
@@ -358,6 +360,19 @@ export async function runOnHost(filename, code, stdin = '') {
 
   const strategy = EXEC_MAP[ext];
   let tmpDir = null;
+
+  // FINDING-1030: graceful degradation when sqlite3 CLI is unavailable
+  if (SQL_EXTENSIONS.has(ext)) {
+    const sqliteAvailable = await commandExists('sqlite3');
+    if (!sqliteAvailable) {
+      return {
+        stdout: '',
+        stderr: "sqlite3 CLI not found. Install SQLite3 or use a different execution backend.",
+        exitCode: 1,
+        compileOutput: null,
+      };
+    }
+  }
 
   try {
     // Create temp directory for isolation

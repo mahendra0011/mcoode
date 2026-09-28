@@ -1,6 +1,6 @@
 import { ToolExecutor } from './tools.js';
 import { EVENTS } from '@mcode/shared';
-import { join, isAbsolute, relative } from 'node:path';
+import { join, isAbsolute, relative, win32 } from 'node:path';
 import { readFile } from 'node:fs/promises';
 
 
@@ -104,7 +104,7 @@ function parseJsonSubstring(str) {
 
   if (end !== -1) {
     try {
-      return JSON.parse(str.slice(start, end + 1));
+      return JSON.parse(str.slice(start, end + 1).trim());
     } catch {}
   }
 
@@ -112,7 +112,7 @@ function parseJsonSubstring(str) {
   const lastBrace = str.lastIndexOf('}');
   if (lastBrace > start) {
     try {
-      return JSON.parse(str.slice(start, lastBrace + 1));
+      return JSON.parse(str.slice(start, lastBrace + 1).trim());
     } catch {}
   }
   return null;
@@ -296,11 +296,14 @@ export function stripActions(text) {
 
 /** Stream a turn from any provider: native stream when available, else complete(). */
 async function* streamText(assignment, model, params) {
-  if (typeof assignment.provider.stream === 'function') {
-    yield* assignment.provider.stream(model, params);
+  // CAG-006: pass signal through to provider so abort() cancels HTTP streams
+  const signal = params?.signal || null;
+  const providerParams = { ...params, signal };
+  if (assignment.provider.stream) {
+    yield* assignment.provider.stream(model, providerParams);
   } else {
-    const res = await assignment.provider.complete(model, params);
-    if (res?.text) yield res.text;
+    const res = await assignment.provider.complete(model, providerParams);
+    yield res.text || '';
   }
 }
 export class ChatAgent {
@@ -343,6 +346,8 @@ export class ChatAgent {
     this.networkWhitelist = config.networkWhitelist || null;
     this.auditLog = config.auditLog || null;
     this.requirePermission = config.requirePermission !== false;
+    // FINDING-697: track child processes for cleanup on abort
+    this._childProcesses = new Set();
     // CAG-005: 2 minutes of hanging is too long — 60s default (still
     // configurable), the prompt auto-denies with a countdown message.
     this.permissionTimeoutMs = Math.max(5_000, Number(config.permissionTimeoutMs) || 60_000);
@@ -378,6 +383,13 @@ export class ChatAgent {
     if (this.aborted) return;
     this.aborted = true;
     this.abortController?.abort();
+    // FINDING-697: kill any child processes spawned by run_shell
+    if (this._childProcesses) {
+      for (const child of this._childProcesses) {
+        try { child.kill('SIGTERM'); } catch {}
+      }
+      this._childProcesses.clear();
+    }
     for (const resolve of this.abortWaiters.splice(0)) resolve('aborted');
     if (this.pendingPermission) {
       const { requestId } = this.pendingPermission;
@@ -421,6 +433,8 @@ export class ChatAgent {
         });
         settle('no');
       }, this.permissionTimeoutMs);
+      // FINDING-698: clear timeout on abort so stale answers can't cross-contaminate
+      this.abortWaiters.push(() => clearTimeout(timeout));
       this.pendingPermission = { requestId, command, resolve: settle };
       this.abortWaiters.push(settle);
       this.bus?.on(EVENTS.PERMISSION_ANSWER, onAnswer);
@@ -477,15 +491,23 @@ export class ChatAgent {
 
   _toolOutput(name, result) {
     if (!result || result.ok === false) return '';
-    if (name === 'run_shell') return String(result.stdout || '').slice(0, 3000);
-    if (name === 'read_file') return String(result.content || '').slice(0, 3000);
-    if (name === 'write_file') return String(result.diff?.sample || '').slice(0, 3000);
+    // FINDING-700: keep tail of output, not just head — errors usually at end
+    const MAX_OUT = 8000;
+    const slice = (s) => {
+      const str = String(s || '');
+      return str.length > MAX_OUT ? '…' + str.slice(-MAX_OUT) : str;
+    };
+    if (name === 'run_shell') return slice(result.stdout);
+    if (name === 'read_file') return slice(result.content);
+    if (name === 'write_file') return slice(result.diff?.sample);
     return '';
   }
 
   _fullPath(p) {
     if (!p) return '';
-    return isAbsolute(p) ? p : join(this.projectPath, p);
+    // FINDING-699: use win32-aware absolute check on Windows
+    const isAbs = process.platform === 'win32' ? win32.isAbsolute(p) : isAbsolute(p);
+    return isAbs ? p : join(this.projectPath, p);
   }
 
   /** Build the spec block payload for a completed tool result. */
@@ -698,7 +720,6 @@ export class ChatAgent {
       ...this.history,
       { role: 'user', content: prompt }
     ];
-    this.history.push({ role: 'user', content: prompt });
 
     for (this.turn = 0; this.turn < this.maxTurns; this.turn++) {
       let text = '';
@@ -713,7 +734,8 @@ export class ChatAgent {
           if (this.aborted) break;
           text += chunk;
 
-          // Suppress raw tool call tags (<tool_call> or ```mcode-action or raw action JSON) from leaking to the user stream
+          // FINDING-703: suppress tool-call tags more aggressively —
+          // match <tool_call>, ```mcode-action, ```json, and raw action JSON
           const toolCallIdx = text.search(/<tool_call|```(?:mcode-action|json)?|^\s*\{\s*"(?:tool|path|write_file|read_file|edit_file|run_shell)"|\n\s*\{\s*"(?:tool|path|write_file|read_file|edit_file|run_shell)"/i);
           if (toolCallIdx !== -1) {
             if (streamedLength < toolCallIdx) {
@@ -735,6 +757,7 @@ export class ChatAgent {
         break;
       }
       if (this.aborted) break;
+      this.history.push({ role: 'user', content: prompt });
       messages.push({ role: 'assistant', content: text });
       this.history.push({ role: 'assistant', content: stripActions(text) });
 

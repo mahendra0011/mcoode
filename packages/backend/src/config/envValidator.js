@@ -29,6 +29,20 @@ export function validateEnv(env = process.env, { exitOnMissing = true } = {}) {
     warnings.push('JWT_SECRET is too short');
   }
 
+  // BSEC-001: dedicated at-rest encryption secret (never reuse the JWT secret).
+  const encSecret = String(env.API_KEY_ENCRYPTION_SECRET || '');
+  if (encSecret && secret && encSecret === secret) {
+    console.error('[env] ❌ API_KEY_ENCRYPTION_SECRET must differ from JWT_SECRET — separate the signing key from the at-rest encryption key.');
+    warnings.push('API_KEY_ENCRYPTION_SECRET equals JWT_SECRET');
+    if (env.NODE_ENV === 'production') process.exit(1);
+  } else if (!encSecret) {
+    console.warn('[env] ⚠️  API_KEY_ENCRYPTION_SECRET is not set — stored provider keys fall back to JWT-secret encryption (keyId jwt1). Set a dedicated 32+ char secret.');
+    warnings.push('API_KEY_ENCRYPTION_SECRET is not set');
+  } else if (encSecret.length < 32) {
+    console.warn('[env] ⚠️  API_KEY_ENCRYPTION_SECRET is short (< 32 chars) — use a longer random value.');
+    warnings.push('API_KEY_ENCRYPTION_SECRET is too short');
+  }
+
   const mongoUri = env.MONGODB_URI || '';
   if (mongoUri && !mongoUri.startsWith('mongodb')) {
     console.error('[env] ❌ MONGODB_URI does not start with mongodb:// or mongodb+srv://');

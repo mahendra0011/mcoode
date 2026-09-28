@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '../../lib/axios';
+import { ErrorBoundary } from '../ErrorBoundary';
 
 interface Session {
   _id: string;
@@ -45,18 +46,20 @@ export function SessionsPage() {
           No sessions yet — start one from <Link href="/ai/chat" className="text-emerald-300 hover:underline">AI chat</Link>.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {items.map((s) => (
-            <li key={s._id}>
-              <Link href={`/sessions/${s._id}`} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] px-4 py-3 transition-colors">
-                <span className={`w-2 h-2 rounded-full ${s.status === 'completed' ? 'bg-emerald-400' : s.status === 'failed' ? 'bg-red-400' : 'bg-amber-300'}`} />
-                <span className="font-medium text-sm truncate flex-1">{s.projectName || 'Untitled session'}</span>
-                <span className="text-xs text-white/40">{s.mode || ''}</span>
-                <span className="text-xs text-white/30" suppressHydrationWarning>{s.createdAt ? new Date(s.createdAt).toISOString().slice(0, 10) : ''}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <ErrorBoundary label="Sessions list">
+          <ul className="space-y-2">
+            {items.map((s) => (
+              <li key={s._id}>
+                <Link href={`/sessions/${s._id}`} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] px-4 py-3 transition-colors">
+                  <span className={`w-2 h-2 rounded-full ${s.status === 'completed' ? 'bg-emerald-400' : s.status === 'failed' ? 'bg-red-400' : 'bg-amber-300'}`} />
+                  <span className="font-medium text-sm truncate flex-1">{s.projectName || 'Untitled session'}</span>
+                  <span className="text-xs text-white/40">{s.mode || ''}</span>
+                  <span className="text-xs text-white/30" suppressHydrationWarning>{s.createdAt ? new Date(s.createdAt).toISOString().slice(0, 10) : ''}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </ErrorBoundary>
       )}
     </div>
   );

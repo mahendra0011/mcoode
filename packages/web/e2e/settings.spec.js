@@ -7,7 +7,7 @@ test.describe('SettingsPage (/settings)', () => {
 
   test('page loads without errors', async ({ page }) => {
     // Check for rendered settings heading, not title
-    await expect(page.locator('text=Settings')).toBeVisible();
+    await expect(page.locator('text=Settings').first()).toBeVisible();
   });
 
   test('page has tab navigation', async ({ page }) => {

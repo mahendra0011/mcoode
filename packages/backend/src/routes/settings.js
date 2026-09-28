@@ -82,7 +82,7 @@ export function settingsRoutes({ secret }) {
       if (body[k] !== undefined) {
         if (k === 'networkTimeout') {
           const val = Number(body[k]);
-          patch[k] = Number.isFinite(val) ? Math.min(600000, Math.max(1000, val)) : 180000;
+          patch[k] = Number.isFinite(val) ? Math.min(300000, Math.max(1000, val)) : 180000;
         } else if (k === 'allowShellAll' || k === 'requireEditApproval' || k === 'autoApproveHighRisk') {
           patch[k] = Boolean(body[k]);
         } else {

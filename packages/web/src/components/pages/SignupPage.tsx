@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Mail, Clock } from 'lucide-react';
 import robotBg from '../../assets/robot-bg-new.png';
 import api from '../../lib/axios';
+import { signupSchema, otpSchema } from '../../lib/validation';
 
 const MotionLink = motion.create(Link);
 
@@ -34,9 +35,16 @@ export function SignupPage() {
   const [resendTimeout, setResendTimeout] = useState(0);
   const [devOtp, setDevOtp] = useState('');
 
-  // OTP codes are 8 digits (AUTH-002).
-  const OTP_LENGTH = 8;
-  const inputRefs = [useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null), useRef<HTMLInputElement | null>(null)];
+  // OTP codes are 6 digits
+  const OTP_LENGTH = 6;
+  const inputRefs = [
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null),
+    useRef<HTMLInputElement | null>(null)
+  ];
 
   // resend countdown
   useEffect(() => {
@@ -74,6 +82,11 @@ export function SignupPage() {
 
   const sendOtp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const parsed = signupSchema.safeParse(form);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message || 'Invalid input');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -81,7 +94,8 @@ export function SignupPage() {
       if (res.status >= 400) {
         throw new Error(res.data?.error?.message || 'Failed to send code');
       }
-      if (res.data.devOtp) setDevOtp(res.data.devOtp);
+      // SEC-19-11: only capture devOtp on localhost
+      if (res.data.devOtp && /^(localhost|127\.0\.0\.1)/.test(typeof window !== 'undefined' ? window.location.hostname : '')) setDevOtp(res.data.devOtp);
       setOtpStep(true);
       setResendTimeout(60);
     } catch (err) {
@@ -93,7 +107,11 @@ export function SignupPage() {
 
   const verifyOtp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (otp.length !== OTP_LENGTH) return;
+    const parsed = otpSchema.safeParse({ email: form.email, otp });
+    if (!parsed.success) {
+      setOtpError(parsed.error.issues[0]?.message || 'Invalid code');
+      return;
+    }
     setLoading(true);
     setOtpError('');
     try {
@@ -125,7 +143,8 @@ export function SignupPage() {
       if (res.status >= 400) {
         throw new Error(res.data?.error?.message || 'Failed to resend code');
       }
-      if (res.data.devOtp) setDevOtp(res.data.devOtp);
+      // SEC-19-11: only capture devOtp on localhost
+      if (res.data.devOtp && /^(localhost|127\.0\.0\.1)/.test(typeof window !== 'undefined' ? window.location.hostname : '')) setDevOtp(res.data.devOtp);
     } catch (err) {
       setOtpError((err as any).response?.data?.error?.message || (err as any).message);
     }

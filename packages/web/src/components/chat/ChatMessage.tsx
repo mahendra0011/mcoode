@@ -70,12 +70,16 @@ export function ChatMessage({ msg, idx, size = "md", isStreaming, undo, isNormal
             <ThoughtBlock content={(msg as any).thought || (msg as any).reasoning} done={!isStreaming} />
           )}
           {msg.text && msg.kind !== "tool" && (
-            <div data-mcode-tool-stream-animate={showCursor ? "true" : undefined}>
+            <div
+              data-zcode-tool-stream-animate={showCursor ? "true" : undefined}
+              data-mcode-tool-stream-animate={showCursor ? "true" : undefined}
+            >
               <MessageContent msg={msg} text={msg.text} size={size} isStreaming={showCursor}>
                 {showCursor && (
                   <motion.span
+                    data-zcode-stream-marker-animate="true"
                     data-mcode-stream-marker-animate="true"
-                    style={{ ["--mcode-stream-animation-delay"]: "0s" } as MotionStyle}
+                    style={{ ["--zcode-stream-animation-delay"]: "0s", ["--mcode-stream-animation-delay"]: "0s" } as MotionStyle}
                     className="inline-block w-[1.5px] h-[14px] ml-0.5 bg-emerald-400 align-middle"
                     animate={{ opacity: [0.3, 1, 0.3] }}
                     transition={{ duration: 1, repeat: Infinity }}

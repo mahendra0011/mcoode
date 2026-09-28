@@ -452,6 +452,10 @@ function TerminalInstance({
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const searchAddonRef = useRef<SearchAddon | null>(null);
+  const cwdRef = useRef(cwd);
+  cwdRef.current = cwd;
+  const workspaceIdRef = useRef(workspaceId);
+  workspaceIdRef.current = workspaceId;
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -533,9 +537,7 @@ function TerminalInstance({
 
     const socket = getSocket();
 
-    const cwdRef = useRef(cwd);
     cwdRef.current = cwd;
-    const workspaceIdRef = useRef(workspaceId);
     workspaceIdRef.current = workspaceId;
 
     // Spawn PTY session on backend

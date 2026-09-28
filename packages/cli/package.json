@@ -48,7 +48,7 @@
     "@mcode/shared": "*",
     "@opentui/core": "^0.5.1",
     "@opentui/react": "^0.5.1",
-    "axios": "^1.7.9",
+    "@sentry/node": "^11.0.0",
     "chalk": "^5.3.0",
     "chokidar": "^4.0.3",
     "cli-boxes": "^4.0.0",
@@ -58,11 +58,13 @@
     "eslint": "^9.18.0",
     "execa": "^9.5.2",
     "gradient-string": "^3.0.0",
-    "playwright": "^1.62.1",
+    "p-retry": "^8.0.1",
     "pdfkit": "^0.15.2",
+    "playwright": "^1.62.1",
     "react": "^19.2.0",
     "simple-git": "^3.27.0",
-    "socket.io-client": "^4.8.1"
+    "socket.io-client": "^4.8.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "esbuild": "^0.24.2"

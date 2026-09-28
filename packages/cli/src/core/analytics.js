@@ -3,14 +3,14 @@ import { cache } from './cache.js';
 
 /** 725: call after a build finishes so /analytics never serves a stale
  *  60s snapshot right when fresh numbers matter most. */
-export function invalidateAnalytics() {
-  cache.del('analytics');
+export function invalidateAnalytics(userId = 'default') {
+  cache.del(`analytics:${userId}`);
 }
 
 /** Aggregate build metrics from persisted session history.
  * Results are cached for 60s to avoid re-reading all history files. */
-export async function computeAnalytics() {
-  return cache.wrap('analytics', async () => {
+export async function computeAnalytics(userId = 'default') {
+  return cache.wrap(`analytics:${userId}`, async () => {
     const history = await listHistory();
     const builds = history.filter((h) => h.mode === 'god' || h.mode === 'run');
 
@@ -66,8 +66,10 @@ export async function computeAnalytics() {
       }
     }
 
-    // Daily builds (for trend)
-    const day = new Date(entry.startedAt || Date.now()).toISOString().slice(0, 10);
+    // 727: use local date, not UTC — a build at 2am local should count for
+    // the user's day, not the previous UTC day.
+    const d = new Date(entry.startedAt || Date.now());
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const dayEntry = dailyBuilds.get(day) || { builds: 0, cost: 0, duration: 0 };
     dayEntry.builds++;
     dayEntry.cost += num(data.cost);

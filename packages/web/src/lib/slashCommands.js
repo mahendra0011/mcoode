@@ -120,15 +120,14 @@ export const CODE_MODE_COMMANDS = new Set([
 
 /**
  * Return slash commands available for the given active tab.
- * In AI Code Assistant and AI Code Editor, ALL 43 CLI commands are available.
+ * In AI Code Assistant and AI Code Editor, curated web commands are available.
  * In Chat mode, NO slash commands are shown (pure conversational chat).
  */
 export function getAvailableSlashCommands(activeTab) {
-  const isCodeMode = activeTab === 'AI Code Assistant' || activeTab === 'AI Code Editor';
-  if (isCodeMode) {
-    return WEB_SLASH_COMMANDS;
+  if (activeTab === 'Chat') {
+    return [];
   }
-  return [];
+  return WEB_SLASH_COMMANDS;
 }
 
 /**
@@ -185,7 +184,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
   }
 
   const [name, ...rest] = trimmed.slice(1).split(' ');
-  const { setPrompt, toggleWatchMode, switchToAssistantTab } = state;
+  const { toggleWatchMode, switchToAssistantTab } = state;
 
   // Record macro commands if recording is active.
   // 735: scope the buffer to the project where recording started — a
@@ -496,7 +495,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
     case 'hooks':
       dispatch(addMessage({
         kind: 'system',
-        text: '🪝 Active Workflow Hooks (.mcode/hooks.js):\n• pre-build: lint & typecheck validation\n• post-edit: auto-formatting & syntax check\n• pre-commit: security & credentials audit\n• on-error: autonomous self-healing test & bugfix'
+        text: '🪝 ZCode Smart Engine Lifecycle Hooks (7 Active):\n• preBuild: Environment, dependency & worktree validation\n• preWave: Subagent wave role distribution & sandbox provisioning\n• postWave: Wave integration pass, artifact aggregation & hunk merge\n• preAgent: Domain prompt injection, tool permissions & model routing\n• postAgent: Output AST validation, syntax checks & todo status update\n• postTest: Pass rate evaluation & autonomous self-healing trigger\n• postBuild: 360° health audit scorecard & final commit summary'
       }));
       return true;
 
@@ -836,8 +835,6 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
  * Only recognized as slash commands when in AI Code Assistant or AI Code Editor.
  */
 export function isSlashCommand(prompt, activeTab) {
-  if (activeTab && activeTab !== 'AI Code Assistant' && activeTab !== 'AI Code Editor') {
-    return false;
-  }
+  if (activeTab === 'Chat') return false;
   return Boolean(prompt?.trim().startsWith('/'));
 }

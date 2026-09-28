@@ -25,10 +25,15 @@ export function searchRoutes({ secret }) {
       try {
         const { getProviders } = await import('mcode-cli/providers');
         const { ModelRouter } = await import('mcode-cli/router');
-        // SRCH-002: narrow allowlist — never forward JWT_SECRET or unrelated
-        // env (PATH/HOME/MONGODB_URI) into provider construction.
+        // SRCH-002: explicit allowlist — only forward keys providers need.
+        const SECRET_ENV_KEYS = [
+          'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'GEMINI_API_KEY',
+          'DEEPSEEK_API_KEY', 'OPENROUTER_API_KEY', 'MISTRAL_API_KEY', 'COHERE_API_KEY',
+          'OLLAMA_HOST', 'OLLAMA_API_KEY', 'TOGETHER_API_KEY', 'FIREWORKS_API_KEY',
+          'GROQ_API_KEY', 'PERPLEXITY_API_KEY',
+        ];
         const secrets = Object.fromEntries(
-          Object.entries(process.env).filter(([k, v]) => v && k !== 'JWT_SECRET' && (k.endsWith('_KEY') || k.endsWith('_TOKEN') || k.endsWith('_HOST')))
+          SECRET_ENV_KEYS.filter((k) => process.env[k]).map((k) => [k, process.env[k]])
         );
         const providers = await getProviders({ secrets });
         const router = new ModelRouter({ secrets, providers });

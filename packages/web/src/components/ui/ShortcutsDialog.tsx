@@ -2,7 +2,6 @@
 import { useIDEStore } from "../../store/ideStore";
 import {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogTitle,
   DialogDescription,
@@ -32,11 +31,7 @@ const SHORTCUTS: ShortcutRow[] = [
  * Radix Dialog cheat-sheet for the keyboard shortcuts.
  *
  * Opened via Cmd/Ctrl+/ (see GlobalShortcuts → useIDEStore.toggleShortcutsOpen).
- * There is no visible trigger button — the dialog is opened programmatically;
- * the hidden DialogTrigger satisfies Radix's requirement that a Trigger exist.
- *
- * NOTE: this Radix dialog build does not export DialogHeader/DialogFooter, so
- * the header content is rendered with DialogTitle + DialogDescription directly.
+ * Controlled programmatically via useIDEStore.
  */
 export function ShortcutsDialog() {
   const open = useIDEStore((s) => s.isShortcutsOpen);
@@ -44,9 +39,6 @@ export function ShortcutsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button type="button" className="hidden" aria-hidden="true" />
-      </DialogTrigger>
       <DialogContent className="bg-[#1e1e1e] border border-white/10 text-white max-w-md w-[90vw] p-0 gap-0 outline-none">
         <DialogTitle className="flex items-center gap-2 text-lg font-semibold p-4 pb-2">
           <Keyboard className="w-5 h-5 text-white/60" />

@@ -335,6 +335,8 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     }
     socket.on('disconnect', () => {
       connByIp.set(ip, Math.max(0, (connByIp.get(ip) || 1) - 1));
+      // SOCK-036: prune per-socket rate-limit buckets on disconnect
+      if (typeof buckets !== 'undefined') buckets.clear();
     });
     // Per-socket token buckets (BUG-37): cheap DoS guard for expensive events.
     // Limits are per minute; over-limit callers get a `rate_limited` error.
@@ -378,7 +380,10 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       return true;
     };
     socket.on('terminal:command', (payload) => {
-      console.log('[SOCKET] terminal:command received:', JSON.stringify(payload));
+      // SOCK-037: sanitize control characters before logging
+      // eslint-disable-next-line no-control-regex -- matching control chars is the point here
+      const safe = JSON.stringify(payload).replace(/[\x00-\x1f\x7f]/g, '?').slice(0, 500);
+      console.log('[SOCKET] terminal:command received:', safe);
     });
     socket.on('session:join', ({ sessionId }) => {
       socket.join(`session:${sessionId}`);
@@ -999,6 +1004,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       session = new ChatSession({
         userId: socket.userId,
         secret,
+        env,
         workspacePath,
         modelRef,
         onEvent: (event, payload) => socket.emit(event, payload)
@@ -1035,13 +1041,8 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
           await session.sendMessage(prompt, mode);
         }
       } catch (err) {
-        socket.emit('chat:error', { message: err.message });
-        // Safety net: sendMessage()/runGod() normally emit their own chat:done
-        // with the real text on success. If they threw before reaching that
-        // point, the frontend's thinking spinner would spin forever without
-        // this — but we must NOT also send this after a successful run, since
-        // that overwrites the real response with an empty one and (worse)
-        // told the frontend a turn "completed" right after reporting an error.
+        // SOCK-045: only send chat:done if the session hasn't already emitted
+        // one (double-emit would overwrite the real response with an empty one)
         socket.emit('chat:done', { text: '', mode, interrupted: false, error: true });
       }
     });
@@ -1100,6 +1101,12 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         const { writeFile, mkdir } = await import('node:fs/promises');
         const { dirname, join } = await import('node:path');
         const filePath = join(workspace, filename);
+        // SOCK-039: validate CWD stays within workspace
+        const resolvedWs = path.resolve(workspace);
+        const resolvedFile = path.resolve(filePath);
+        if (!resolvedFile.startsWith(resolvedWs + path.sep) && resolvedFile !== resolvedWs) {
+          return socket.emit('debug:error', { message: 'filename must stay within workspace' });
+        }
         await mkdir(dirname(filePath), { recursive: true });
         await writeFile(filePath, code, 'utf8');
 

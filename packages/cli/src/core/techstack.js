@@ -4,7 +4,7 @@ import { cache } from './cache.js';
 
 const FRONTEND_FRAMEWORKS = [
   { name: 'React', deps: ['react', 'react-dom'], files: ['src/main.jsx', 'src/main.tsx', 'src/App.jsx', 'src/App.tsx'] },
-  { name: 'Vue', deps: ['vue', 'vue-router', 'pinia'], files: ['src/main.js', 'src/main.ts', 'src/App.vue', 'vite.config.js', 'vue.config.js'] },
+  { name: 'Vue', deps: ['vue', 'vue-router', 'pinia'], files: ['src/main.js', 'src/main.ts', 'src/App.vue', 'vite.config.js', 'vue.config.js', 'src/pages/App.vue', 'src/views/App.vue', 'src/components/App.vue'] },
   { name: 'Angular', deps: ['@angular/core'], files: ['angular.json', 'src/main.ts'] },
   { name: 'Svelte', deps: ['svelte'], files: ['svelte.config.js', 'src/app.html'] },
   { name: 'Next.js', deps: ['next'], files: ['next.config.js', 'next.config.mjs'] },

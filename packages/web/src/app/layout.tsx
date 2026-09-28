@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 export const viewport = {
   width: "device-width",
   initialScale: 1,
+  themeColor: '#0c0c0c',
 };
 
 // WEB-012: without a viewport meta the dashboard renders zoomed-out on phones.
@@ -21,7 +22,6 @@ export const metadata = {
   title: 'mcode — terminal-first AI coding',
   description: 'mcode: AI coding assistant in your terminal and browser',
   manifest: '/manifest.webmanifest',
-  themeColor: '#0c0c0c',
   icons: {
     icon: '/logo.png',
     shortcut: '/logo.png',

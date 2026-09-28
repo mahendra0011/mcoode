@@ -4,6 +4,8 @@ import { tmpdir, hostname, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { scryptSync, randomBytes, createCipheriv } from 'node:crypto';
 
+// SEC-003: vault requires a passphrase — set one for tests
+process.env.MCODE_VAULT_PASSWORD = 'test-vault-passphrase';
 const home = await mkdtemp(join(tmpdir(), 'mcode-vault-test-'));
 vi.mock('node:os', async (importOriginal) => {
   const os = await importOriginal();

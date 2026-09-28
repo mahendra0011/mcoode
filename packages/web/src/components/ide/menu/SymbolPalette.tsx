@@ -105,7 +105,7 @@ export function SymbolPalette() {
   const activePath = useIDEStore((s) => s.activePath);
   const fileContentsCache = useIDEStore((s) => s.fileContentsCache);
   const setTargetJump = useIDEStore((s) => s.setTargetJump);
-  const activeEditor = useIDEStore((s) => s.activeEditor);
+  const activeEditor = useIDEStore((s) => s.getActiveEditor());
 
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);

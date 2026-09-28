@@ -44,8 +44,9 @@ log(`✅ SOCKET.S2C.CHAT_DONE: ${SOCKET.SERVER_TO_CLIENT.CHAT_DONE}`);
 
 // Test 7: Start a socket connection and test chat flow with mock provider
 const { io: ioClient } = await import('socket.io-client');
-const socket = ioClient('http://localhost:3100', {
-  path: '/live',
+// BUG-19-27: `/live` is the socket namespace, NOT the http path — passing
+// `path: '/live'` makes socket.io request `/live/?EIO=4` and 404.
+const socket = ioClient('http://localhost:3100/live', {
   transports: ['websocket', 'polling'],
   auth: { token: null } // CLI agents connect without auth; but chat needs auth
 });

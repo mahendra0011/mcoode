@@ -1,8 +1,13 @@
 import { Command } from 'commander';
 import { setJsonMode, setInteractive, setQuiet, isJsonMode, out, ok, fail, json } from './core/logger.js';
 import { startRepl } from './repl.js';
+import { checkForUpdate } from './core/update-check.js';
+import { initCrashReporter, setupCrashHooks } from './core/crash-reporter.js';
 
 export async function run(argv) {
+  await initCrashReporter();
+  setupCrashHooks();
+
   const program = new Command('mcode')
     .version('2.4.6')
     .description('terminal-first, multi-model AI coding CLI')
@@ -23,6 +28,14 @@ export async function run(argv) {
       setJsonMode(Boolean(opts.json));
       setInteractive(!opts.nonInteractive);
       setQuiet(Boolean(opts.quiet));
+    });
+
+  program
+    .command('completion <shell>')
+    .description('print shell completion script (bash, zsh, fish)')
+    .action(async (shell) => {
+      const { generateCompletionScript } = await import('./core/completion.js');
+      process.stdout.write(generateCompletionScript(program, shell));
     });
 
   program
@@ -273,13 +286,22 @@ export async function run(argv) {
     });
 
   // ── Config / doctor / history ─────────────────────────────────────────
-  program
+  const configCmd = program
     .command('config')
     .description('show or open the config file')
     .option('--open', 'open the config in your editor', false)
+    .option('--validate', 'validate config.json against the schema (exit 1 if invalid)', false)
     .action(async (opts) => {
       const { configCommand } = await import('./commands/config.js');
-      await configCommand({ open: opts.open });
+      await configCommand({ open: opts.open, validate: Boolean(opts.validate) });
+    });
+  // MF-007: `mcode config validate` — subcommand alias (docs/CI ergonomics).
+  configCmd
+    .command('validate')
+    .description('validate config.json against the schema (exit 1 if invalid)')
+    .action(async () => {
+      const { configValidateCommand } = await import('./commands/config.js');
+      await configValidateCommand();
     });
 
   program
@@ -537,6 +559,12 @@ export async function run(argv) {
   }
 
   await program.parseAsync(argv);
+
+  checkForUpdate('2.4.6').then((latest) => {
+    if (latest) {
+      process.stderr.write(`\nmcode update available: ${latest} (current: 2.4.6)\nRun: npm update -g mcode-cli\n\n`);
+    }
+  }).catch(() => {});
 }
 
 /** One-shot non-interactive God Mode run: plan, dispatch subagents, print summary. */

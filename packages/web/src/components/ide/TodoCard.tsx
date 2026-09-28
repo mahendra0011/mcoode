@@ -124,7 +124,7 @@ export function TodoCard({ plan }: TodoCardProps) {
                       repeat: Infinity,
                       ease: "easeInOut"
                     }}
-                    className="w-4 h-4 rounded-full bg-blue-400"
+                    className="w-4 h-4 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(62,207,142,0.4)]"
                   />
                 ) : isFailed ? (
                   <motion.div

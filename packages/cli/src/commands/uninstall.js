@@ -30,7 +30,14 @@ async function dirSizeMB(dir) {
     const stack = [dir];
     while (stack.length) {
       const cur = stack.pop();
-      const entries = await fs.readdir(cur, { withFileTypes: true }).catch(() => null);
+      const entries = await fs.readdir(cur, { withFileTypes: true }).catch((err) => {
+        // FINDING-686: report EPERM instead of silently returning 0
+        if (err?.code === 'EPERM' || err?.code === 'EACCES') {
+          console.warn(`  [warn] cannot read ${cur}: ${err.code}`);
+          return null;
+        }
+        return null;
+      });
       if (!entries) continue;
       for (const e of entries) {
         const full = path.join(cur, e.name);
@@ -42,7 +49,9 @@ async function dirSizeMB(dir) {
       }
     }
     return bytes / (1024 * 1024);
-  } catch {
+  } catch (err) {
+    // FINDING-686: don't swallow errors silently
+    console.warn(`  [warn] dirSizeMB failed for ${dir}: ${err?.message || err}`);
     return 0;
   }
 }

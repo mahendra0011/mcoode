@@ -15,6 +15,7 @@ import {
   Info,
 } from "lucide-react";
 import { useIDEStore } from "../../store/ideStore";
+import api from "../../lib/axios";
 import { toast } from "sonner";
 
 export interface AndroidDevice {
@@ -56,11 +57,17 @@ export function AndroidEmulatorsPanel() {
   const fetchDevices = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/android/devices");
-      const data = await res.json();
-      if (data.available && data.devices && data.devices.length > 0) {
+      const res = await api.get('/api/v1/android/devices');
+      const data = res.data;
+      if (Array.isArray(data?.devices) && data.devices.length > 0) {
         setHostAvailable(true);
-        setDevices(data.devices);
+        const mapped: AndroidDevice[] = data.devices.map((d: any) => ({
+          id: d.id,
+          name: d.id,
+          status: d.type === 'device' ? 'running' : 'stopped',
+          apiLevel: d.type || 'ADB',
+        }));
+        setDevices(mapped);
       } else {
         setHostAvailable(false);
         // Fallback to custom/simulated devices
@@ -90,20 +97,25 @@ export function AndroidEmulatorsPanel() {
     }
 
     try {
-      await fetch(`/api/android/devices/${encodeURIComponent(device.id)}/start`, {
-        method: "POST",
-      });
-    } catch {}
-
-    setTimeout(() => {
+      await api.post(`/api/v1/android/devices/${encodeURIComponent(device.id)}/start`);
       setDevices((prev) =>
         prev.map((d) => (d.id === device.id ? { ...d, status: "running" } : d))
       );
       toast.success(`${device.name} is running`);
-    }, 1200);
+    } catch {
+      setTimeout(() => {
+        setDevices((prev) =>
+          prev.map((d) => (d.id === device.id ? { ...d, status: "running" } : d))
+        );
+        toast.success(`${device.name} is running`);
+      }, 1200);
+    }
   };
 
-  const handleStop = (device: AndroidDevice) => {
+  const handleStop = async (device: AndroidDevice) => {
+    try {
+      await api.post(`/api/v1/android/devices/${encodeURIComponent(device.id)}/stop`);
+    } catch {}
     setDevices((prev) =>
       prev.map((d) => (d.id === device.id ? { ...d, status: "stopped" } : d))
     );

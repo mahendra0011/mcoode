@@ -18,10 +18,11 @@ export async function historyCommand({ asJson = false, clear = false, limit = 50
   table(entries.map((e) => {
     let dateStr = '-';
     try {
-      const d = new Date(e.startedAt || Date.now());
-      if (!isNaN(d.getTime())) {
-        dateStr = d.toISOString().slice(0, 19).replace('T', ' ');
-      }
+      const raw = e.startedAt;
+      if (raw == null || raw === '') throw new Error('missing startedAt');
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) throw new Error('invalid date');
+      dateStr = d.toISOString().slice(0, 19).replace('T', ' ');
     } catch {}
     return [
       e._file,

@@ -49,7 +49,7 @@ test.describe('Animation Coverage Across All Pages', () => {
     await page.goto('/');
     await page.waitForTimeout(500);
     // Hero content should have motion-driven animations
-    const heroContent = page.locator('h1, h2, h3, p, a, button').first();
+    const heroContent = page.locator('section h1, section p, main h1, h1').first();
     await expect(heroContent).toBeVisible();
   });
 

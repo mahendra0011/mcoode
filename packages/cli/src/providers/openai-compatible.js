@@ -1,4 +1,11 @@
 import { HttpProvider, streamSSE } from '@mcode/shared';
+import pRetry from 'p-retry';
+
+function shouldRetry(err) {
+  if (err?.code === 'ECONNREFUSED' || err?.code === 'ETIMEDOUT' || err?.code === 'ECONNRESET') return true;
+  if (err?.status === 429 || (err?.status >= 500 && err?.status < 600)) return true;
+  return false;
+}
 
 /**
  * Base adapter for any OpenAI-compatible /v1/chat/completions endpoint
@@ -78,41 +85,44 @@ export class OpenAICompatible extends HttpProvider {
  * @param {{ messages?: Array<{role: string, content: string}>, temperature?: number, maxTokens?: number, reasoning?: any, signal?: any }} [opts]
  */
   async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
-    const res = await this.httpFetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: this.headers(),
-      signal,
-      body: JSON.stringify({
+    return pRetry(async () => {
+      const res = await this.httpFetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: this.headers(),
+        signal,
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+          stream: false,
+          ...(reasoning?.effort ? { reasoning_effort: reasoning.effort } : {})
+        })
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        const err = new Error(`${this.id} error ${res.status}: ${detail.slice(0, 400)}`);
+        /** @type {any} */ (err).status = res.status;
+        throw err;
+      }
+      const body = await res.json();
+      if (!Array.isArray(body.choices) || body.choices.length === 0) {
+        throw new Error(`${this.id} error: empty choices array for model ${model}`);
+      }
+      const choice = body.choices?.[0];
+      return {
+        text: choice?.message?.content || '',
+        toolCall: choice?.message?.tool_calls?.[0]
+          ? { name: choice.message.tool_calls[0].function.name, arguments: choice.message.tool_calls[0].function.arguments }
+          : null,
+        usage: {
+          inputTokens: body.usage?.prompt_tokens || 0,
+          outputTokens: body.usage?.completion_tokens || 0
+        },
         model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        stream: false,
-        ...(reasoning?.effort ? { reasoning_effort: reasoning.effort } : {})
-      })
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`${this.id} error ${res.status}: ${detail.slice(0, 400)}`);
-    }
-    const body = await res.json();
-    // OAI-004: empty choices array is a failure, not an empty string.
-    if (!Array.isArray(body.choices) || body.choices.length === 0) {
-      throw new Error(`${this.id} error: empty choices array for model ${model}`);
-    }
-    const choice = body.choices?.[0];
-    return {
-      text: choice?.message?.content || '',
-      toolCall: choice?.message?.tool_calls?.[0]
-        ? { name: choice.message.tool_calls[0].function.name, arguments: choice.message.tool_calls[0].function.arguments }
-        : null,
-      usage: {
-        inputTokens: body.usage?.prompt_tokens || 0,
-        outputTokens: body.usage?.completion_tokens || 0
-      },
-      model,
-      finishReason: choice?.finish_reason || 'stop'
-    };
+        finishReason: choice?.finish_reason || 'stop'
+      };
+    }, { retries: 3, factor: 2, minTimeout: 1000, shouldRetry });
   }
 
 /** * @param {any} model

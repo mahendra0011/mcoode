@@ -182,7 +182,17 @@ export async function* streamSSE(res, { stallTimeoutMs = 60_000 } = {}) {
         const trimmed = line.trim();
         if (!trimmed.startsWith('data:')) continue;
         const payload = trimmed.slice(5).trim();
-        if (payload === '[DONE]') return; // early end of stream
+        if (payload === '[DONE]') {
+          // BUG-19-21: process remaining buffered data before returning
+          if (buffer) {
+            const trimmed = buffer.trim();
+            if (trimmed.startsWith('data:')) {
+              yield trimmed.slice(5).trim();
+            }
+            buffer = '';
+          }
+          return;
+        }
         yield payload;
       }
     }

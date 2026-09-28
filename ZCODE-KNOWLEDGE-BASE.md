@@ -9,7 +9,7 @@
 > **Comprehensive reference** — Everything about ZCode from startup to shutdown, covering the CLI runtime, Electron desktop app, plugin system, MCP servers, skills, animation systems (both web/desktop and terminal CLI), and the full test suite.
 >
 > **Last updated:** 2026-08-13
-> **Sources:** `%USERPROFILE%\.zcode\` (v2 config, plugin cache), `%USERPROFILE%\AppData\Local\Programs\ZCode\resources\` (desktop app), `D:\projects\mcoode\` (project-level docs and tests)
+> **Sources:** `%USERPROFILE%\.zcode\` (v2 config, plugin cache), `%USERPROFILE%\AppData\Local\Programs\ZCode\resources\` (desktop app), `<repo-root>/` (project-level docs and tests)
 
 ## Table of Contents
 
@@ -96,7 +96,7 @@
 | Model catalog | `%USERPROFILE%\AppData\Local\Programs\ZCode\resources\model-providers\*.json` |
 | Plugins cache | `%USERPROFILE%\.zcode\cli\plugins\cache\zcode-plugins-official\` |
 | v2 config | `%USERPROFILE%\.zcode\v2\` (config.json, setting.json, etc.) |
-| Project docs | `D:\projects\mcoode\docs\cli/`, `docs\web\` |
+| Project docs | `docs/cli/`, `docs/web/` (repo-relative) |
 
 ---
 
@@ -1520,16 +1520,16 @@ const READ_MAX = 15, CMD_MAX = 10;
 ```CH15
 echo "15 done"
 __zcode_status=$?
-if [ "$__zcode_status" -eq 0 ]; then pwd -P > '/c/Users/mahen/AppData/Local/Temp/zcode-8879d230-2489-406e-b9a8-a2e1f309b2bd-cwd'; fi
+if [ "$__zcode_status" -eq 0 ]; then pwd -P > "$TEMP/zcode-8879d230-2489-406e-b9a8-a2e1f309b2bd-cwd"; fi
 exit "$__zcode_status"
 
 ---
 ## 15. Terminal CLI Animations
 EOF
 echo "checking file state"
-wc -l "/d/projects/mcoode/ZCODE-KNOWLEDGE-BASE.md"
+wc -l "ZCODE-KNOWLEDGE-BASE.md"
 __zcode_status=$?
-if [ "$__zcode_status" -eq 0 ]; then pwd -P > '/c/Users/mahen/AppData/Local/Temp/zcode-c5e8b279-27c1-456d-a607-2805b5be81e6-cwd'; fi
+if [ "$__zcode_status" -eq 0 ]; then pwd -P > "$TEMP/zcode-c5e8b279-27c1-456d-a607-2805b5be81e6-cwd"; fi
 exit "$__zcode_status"
 
 
@@ -1695,7 +1695,7 @@ Root script: npm test -> vitest run
 ### Project Structure
 
 ```
-D:\projects\mcoode\
+<repo-root>/
 ├── package.json
 ├── package-lock.json (388KB)
 ├── vitest.config.js

@@ -11,6 +11,7 @@ import { runClean } from '../core/clean/run-clean.js';
  */
 async function askQuestion(promptText) {
   if (process.env.CI || process.env.NON_INTERACTIVE) return 'y';
+  // FINDING-673: use stdout.write + readline.prompt to avoid interleaving
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
     rl.question(promptText, (ans) => {
@@ -63,7 +64,7 @@ export async function cleanCommand({
 
   const allFindings = [...tier1Findings, ...tier2Findings];
   const totalLinesRemovable = allFindings.reduce((sum, f) => {
-    const diff = Math.max(0, (f.currentLines || 1) - (f.estimatedCleanLines || 0));
+      const diff = Math.max(0, (f.currentLines || 1) - Math.max(0, f.estimatedCleanLines || 0));
     return sum + diff;
   }, 0);
 

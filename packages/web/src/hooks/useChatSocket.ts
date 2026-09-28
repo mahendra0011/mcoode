@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { io, type Socket } from 'socket.io-client';
 import { getToken } from '../lib/api';
@@ -129,6 +129,7 @@ export function useChatSocket(workspaceId: string | null = null) {
   const dispatch = useAppDispatch();
   const socketRef = useRef<Socket | null>(null);
   const { mode, selectedModel } = useAppSelector((state) => state.chat);
+  const [connectionState, setConnectionState] = useState<'connected' | 'disconnected' | 'reconnecting'>('reconnecting');
 
   // Refs so the onConnect handler always uses the latest workspace/model
   // even after a socket reconnection (avoids stale closure from effect deps)
@@ -212,6 +213,7 @@ export function useChatSocket(workspaceId: string | null = null) {
     socketRef.current = socket;
 
     const onConnect = () => {
+      setConnectionState('connected');
       dispatch(setStatus('connecting'));
       if (!wasConnected) {
         wasConnected = true;
@@ -323,6 +325,7 @@ export function useChatSocket(workspaceId: string | null = null) {
     };
 
     const onDisconnect = () => {
+      setConnectionState('disconnected');
       dispatch(setStatus('idle'));
       // If the backend crashed or restarted mid-response, isStreaming can be
       // stuck true (chat:done was never sent). Reset it so the ThinkingIndicator
@@ -928,6 +931,7 @@ export function useChatSocket(workspaceId: string | null = null) {
   }, [dispatch]);
 
   return {
+    connectionState,
     send,
     interrupt,
     answerPermission,

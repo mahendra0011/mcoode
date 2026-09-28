@@ -32,17 +32,22 @@ async function rateLimited(email) {
   if (!row || now - row.windowStart > OTP_SEND_WINDOW_MS) {
     sendLog.set(email, { windowStart: now, count: 1 });
     if (sendLog.size > SENDLOG_MAX_KEYS) {
-      // AUTH-003/004: sweep expired windows first; only then evict oldest.
+      // AUTH-003/004: sweep expired windows first; only then evict LRU.
       for (const [k, v] of sendLog) {
         if (now - v.windowStart > OTP_SEND_WINDOW_MS) sendLog.delete(k);
         if (sendLog.size <= SENDLOG_MAX_KEYS) break;
       }
       if (sendLog.size > SENDLOG_MAX_KEYS) {
+        // AUTH-004: true LRU — evict least recently used (first key in
+        // insertion-ordered Map after access-order maintenance below).
         sendLog.delete(sendLog.keys().next().value);
       }
     }
     return false;
   }
+  // AUTH-004: maintain access order — move to end (most recently used)
+  sendLog.delete(email);
+  sendLog.set(email, row);
   row.count += 1;
   return row.count > OTP_SEND_LIMIT;
 }
@@ -128,17 +133,29 @@ export function authRoutes({ secret } = {}) {
       let user;
       let existingAccount = false;
       if (intent === 'signup') {
-        user = await users.findOne({ email });
-        if (user) {
+        // AUTH-016: use a transaction/atomic guard to prevent TOCTOU on email uniqueness
+        const existing = await users.findOne({ email }).catch(() => null);
+        if (existing) {
+          user = existing;
           existingAccount = true;
         } else {
-          user = await users.create({
-            email,
-            passwordHash: await hashPassword(password),
-            name,
-            plan: 'free',
-            settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
-          });
+          try {
+            user = await users.create({
+              email,
+              passwordHash: await hashPassword(password),
+              name,
+              plan: process.env.DEFAULT_USER_PLAN || 'free',
+              settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
+            });
+          } catch (err) {
+            // Duplicate key error — another request created the user first
+            if (err?.code === 11000) {
+              user = await users.findOne({ email });
+              existingAccount = true;
+            } else {
+              throw err;
+            }
+          }
         }
       } else {
         user = await users.findOne({ email });
@@ -169,7 +186,7 @@ export function authRoutes({ secret } = {}) {
         email,
         passwordHash: await hashPassword(password),
         name,
-        plan: 'free',
+        plan: process.env.DEFAULT_USER_PLAN || 'free',
         settings: { defaultConcurrency: 5, notifyOnBuildComplete: true, routingOverrides: {} }
       });
       const tokens = await signTrackedTokens(db(), user._id, { secret });
@@ -257,7 +274,8 @@ export function authRoutes({ secret } = {}) {
       if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
         return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
       }
-      res.status(401).json({ error: { code: 'INVALID_REFRESH', message: 'invalid refresh token' } });
+      // AUTH-013: unexpected errors are server faults, not auth failures.
+      res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'unexpected error during token refresh' } });
     }
   });
 

@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { captureException } from "@sentry/react";
 
 /** WEB-001: a crashing panel must never white-screen the whole dashboard. */
 interface Props {
@@ -11,6 +12,8 @@ interface State {
   error: Error | null;
 }
 
+const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
+
 export class ErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null };
 
@@ -19,6 +22,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
+    if (SENTRY_DSN) {
+      captureException(error, {
+        tags: { boundary: this.props.label || "panel" },
+      });
+    }
     // eslint-disable-next-line no-console
     console.error(`[ErrorBoundary${this.props.label ? `:${this.props.label}` : ""}]`, error);
   }

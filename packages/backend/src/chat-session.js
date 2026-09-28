@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { mkdir } from 'node:fs/promises';
 import { db } from './db.js';
-import { deriveMasterKey, decryptKey } from './secret-enc.js';
+import { keyManagerFromEnv } from './secret-enc.js';
 import { EVENTS, SOCKET, CostLedger } from '@mcode/shared';
 const S2C = SOCKET.SERVER_TO_CLIENT;
 
@@ -45,13 +45,17 @@ export class ChatSession {
    * @param {object} [opts]
    * @param {string} [opts.userId]
    * @param {string} [opts.secret]
+   * @param {object} [opts.env] environment source for API_KEY_ENCRYPTION_* fallback
    * @param {string} [opts.workspacePath]
    * @param {string|null} [opts.modelRef]
    * @param {(event: string, payload?: any) => void} [opts.onEvent]
    */
-  constructor({ userId, secret, workspacePath, modelRef = null, onEvent = () => {} } = {}) {
+  constructor({ userId, secret, env = process.env, workspacePath, modelRef = null, onEvent = () => {} } = {}) {
     this.userId = userId;
     this.secret = secret;
+    this.env = env;
+    // BSEC-001: at-rest decryption via the dedicated keyring when configured.
+    this.keyManager = keyManagerFromEnv({ secret, env });
     this.workspacePath = workspacePath;
     this.modelRef = modelRef; // user-selected model ref (e.g. "poolside:poolside/laguna-s-2.1")
     this.onEvent = onEvent; // (event, payload) => forwards to socket client
@@ -69,12 +73,11 @@ export class ChatSession {
   /** Load user's API keys, decrypt, initialize providers + router. */
   async init() {
     const keys = await db().apiKey.find({ userId: this.userId });
-    const masterKey = deriveMasterKey(this.secret, this.userId);
 
     const secrets = {};
     for (const k of keys) {
       try {
-        const dec = decryptKey(k.encryptedKey, masterKey);
+        const dec = this.keyManager.decrypt(k.encryptedKey, this.userId);
         if (dec && !/[\u2022\u25cf\u2219]/.test(dec) && dec !== 'existing-key') {
           secrets[k.envVar] = dec;
         }
@@ -84,7 +87,7 @@ export class ChatSession {
     }
 
     // Merge environment variables from process.env as fallback
-    for (const [envK, envV] of Object.entries(process.env)) {
+    for (const [envK, envV] of Object.entries(this.env || {})) {
       if (envV && !secrets[envK] && (envK.endsWith('_API_KEY') || envK.endsWith('_KEY') || envK.endsWith('_HOST') || envK.endsWith('_TOKEN'))) {
         secrets[envK] = envV;
       }

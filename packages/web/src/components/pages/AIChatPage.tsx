@@ -148,7 +148,8 @@ import { AuditScorecard } from '../../components/ide/AuditScorecard';
 import { TestModeSelector } from '../../components/ide/TestModeSelector';
 import { AutonomousTestPanel } from '../../components/ide/AutonomousTestPanel';
 import { ThinkingIndicator } from '../../components/chat/ThinkingIndicator';
-import { ChatMessage } from '../../components/chat/ChatMessage';
+import { VirtualChatMessages } from '../../components/chat/VirtualChatMessages';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { SpinnerBlock } from '../../components/chat/SpinnerBlock';
 import { AgentActionSequence } from '../../components/chat/AgentActionSequence';
 import { ReactionBurst } from '../../components/chat/ReactionBurst';
@@ -219,7 +220,7 @@ export function AIChatPage() {
     migration,
     audit,
   } = useAppSelector(state => state.chat);
-  const { send, interrupt, answerPermission, undo, sendTerminalCommand, reloadModels, runSecurityCheck, fixSelectedSecurity, runTestMode, runReview, runMigrate, runAudit } = useChatSocket(activeWorkspaceId);
+  const { connectionState, send, interrupt, answerPermission, undo, sendTerminalCommand, reloadModels, runSecurityCheck, fixSelectedSecurity, runTestMode, runReview, runMigrate, runAudit } = useChatSocket(activeWorkspaceId);
   const [prompt, setPrompt] = useState('');
   const [showTurnMachine, setShowTurnMachine] = useState(false);
   const [showReactionBurst, setShowReactionBurst] = useState(false);
@@ -296,18 +297,8 @@ export function AIChatPage() {
     return () => clearTimeout(timer);
   }, [isStreaming, messages, dispatch]);
 
-  // Auto-scroll refs — keep the chat scrolled to the bottom when new
-  // messages arrive or streaming updates come in
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const ideChatEndRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    // Scroll to bottom on new messages or streaming updates.
-    // We scroll the appropriate container depending on which tab is active.
-    const target = activeTab === 'Chat' || activeTab === 'AI Code Assistant' ? chatEndRef.current : ideChatEndRef.current;
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, isStreaming, keysError]);
+  // Auto-scroll for the virtualized chat lists lives inside
+  // VirtualChatMessages (it owns the scroll container now).
 
   // Safety net: if isStreaming is stuck true for 60s without any stream
   // activity (e.g. backend crashed silently without socket disconnect),
@@ -352,16 +343,26 @@ export function AIChatPage() {
   const [cleanNetRemoved, setCleanNetRemoved] = useState(0);
   const [cleanStatusMessage, setCleanStatusMessage] = useState('');
 
-  // Auth guard — get token from localStorage
-  const getTokens = () => {
+  // Auth guard — get token from localStorage on client mount
+  const [token, setToken] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
     try {
-      if (typeof window === 'undefined') return {};
-      return JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
+      if (typeof window !== 'undefined') {
+        const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
+        if (tokens.access) {
+          setToken(tokens.access);
+        } else {
+          router.push('/login');
+        }
+      }
     } catch {
-      return {};
+      router.push('/login');
+    } finally {
+      setAuthChecked(true);
     }
-  };
-  const { access: token } = getTokens();
+  }, [router]);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -421,10 +422,7 @@ export function AIChatPage() {
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!token) {
-      router.push('/login');
-      return;
-    }
+    if (!token) return;
 
     setIsLoadingProfile(true);
     api.get('/api/v1/auth/me', { timeout: 15000 })
@@ -723,6 +721,10 @@ export function AIChatPage() {
     // (200 files / 200MB total — the server enforces the same limits).
     const MAX_ATTACH_FILES = 200;
     const MAX_ATTACH_BYTES = 200 * 1024 * 1024;
+    const CHUNK_FILES = 50;             // files per upload request
+    const CHUNK_BYTES = 8 * 1024 * 1024; // ~8MB per request — keeps each
+                                      // multipart body small enough to avoid
+                                      // tab OOMs and request timeouts.
     const picked = Array.from(files).slice(0, MAX_ATTACH_FILES);
     const pickedBytes = picked.reduce((n: number, f: any) => n + (f.size || 0), 0);
     if (files.length > MAX_ATTACH_FILES || pickedBytes > MAX_ATTACH_BYTES) {
@@ -730,20 +732,47 @@ export function AIChatPage() {
       setIsUploading(false);
       return;
     }
-    const formData = new FormData();
+
+    // Split into chunks so no single FormData body grows unbounded.
+    const chunks: File[][] = [];
+    let currentChunk: File[] = [];
+    let currentBytes = 0;
     for (const file of picked) {
-      formData.append('files', file);
+      const size = file.size || 0;
+      if (currentChunk.length >= CHUNK_FILES || (currentBytes > 0 && currentBytes + size > CHUNK_BYTES)) {
+        chunks.push(currentChunk);
+        currentChunk = [];
+        currentBytes = 0;
+      }
+      currentChunk.push(file);
+      currentBytes += size;
     }
+    if (currentChunk.length > 0) chunks.push(currentChunk);
 
     try {
-      const res = await api.post(`/api/v1/workspaces/${targetWorkspaceId}/upload`, formData);
-      const data = res.data;
-      if (data.ok && data.uploadedFiles) {
-        const attachText = (data.uploadedFiles as any[]).map(f => `[Attached File: ${f}]`).join('\n');
+      const uploadedFiles: string[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const formData = new FormData();
+        for (const file of chunks[i]) {
+          formData.append('files', file);
+        }
+        setUploadProgressText(`Uploading files… (batch ${i + 1}/${chunks.length})`);
+        setUploadProgressPercent(Math.round((i / chunks.length) * 100));
+        const res = await api.post(`/api/v1/workspaces/${targetWorkspaceId}/upload`, formData);
+        const data = res.data;
+        if (data.ok && data.uploadedFiles) {
+          uploadedFiles.push(...(data.uploadedFiles as any[]));
+        } else if (data.error?.message) {
+          showToast(data.error.message, 'error');
+        }
+      }
+      setUploadProgressPercent(100);
+      if (uploadedFiles.length > 0) {
+        const attachText = uploadedFiles.map(f => `[Attached File: ${f}]`).join('\n');
         setPrompt(prev => prev ? `${prev}\n${attachText}\n` : `${attachText}\n`);
         bumpRefresh(); // Refresh file tree
       } else {
-        showToast(data.error?.message || 'Failed to attach files', 'error');
+        showToast('Failed to attach files', 'error');
       }
     } catch (err) {
       showToast('Network error while attaching files', 'error');
@@ -1205,6 +1234,7 @@ export function AIChatPage() {
       const entries: ZipEntry[] = [];
       let folderName = 'Dropped-Project';
       let lastTextUpdate = 0;
+      let failedReads = 0;
 
       // Same fix as the directory-handle path: gather every sibling entry first, then
       // recurse/read them all CONCURRENTLY via Promise.all instead of a sequential
@@ -1216,7 +1246,11 @@ export function AIChatPage() {
         if (isIgnoredUploadPath(relPath)) return;
 
         if (entry.isFile) {
-          const file: File | null = await new Promise((resolve) => entry.file(resolve, () => resolve(null)));
+          // WEB-017: a locked/restricted file must not silently vanish —
+          // count the failure and surface it after the drop finishes.
+          const file: File | null = await new Promise((resolve) =>
+            entry.file(resolve, () => { failedReads++; resolve(null); })
+          );
           if (!file) return;
           const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
           entries.push({ path: filePath, file });
@@ -1245,6 +1279,10 @@ export function AIChatPage() {
       }
 
       await Promise.all(topLevelEntries.map((entry) => readEntry(entry, '')));
+
+      if (failedReads > 0) {
+        showToast(`${failedReads} file${failedReads === 1 ? '' : 's'} could not be read (locked or restricted) — skipped`, 'error');
+      }
 
       await zipAndUploadEntries(entries, folderName, 'uploaded instantly with 0 browser prompts');
     } catch (err: any) {
@@ -1504,8 +1542,7 @@ export function AIChatPage() {
   };
 
   const handleChatKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, submitFn: (e: React.SyntheticEvent) => void) => {
-    const isCodeMode = activeTab === 'AI Code Assistant' || activeTab === 'AI Code Editor';
-    if (isCodeMode && showCommandPicker && prompt.startsWith('/')) {
+    if (showCommandPicker && prompt.startsWith('/')) {
       const q = prompt.slice(1).trim();
       const effectiveCategory = q.length > 0 ? 'all' : 'modes';
       const { filtered } = getGroupedSlashCommands(activeTab, prompt, effectiveCategory);
@@ -1520,9 +1557,25 @@ export function AIChatPage() {
           setSelectedCmdIndex(prev => (prev - 1 + filtered.length) % filtered.length);
           return;
         }
-        if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        if (e.key === 'Tab') {
           e.preventDefault();
           const selected = filtered[selectedCmdIndex] || filtered[0];
+          if (selected) {
+            setPrompt('/' + selected.cmd + ' ');
+            setShowCommandPicker(false);
+            setSelectedCmdIndex(0);
+            return;
+          }
+        }
+        if (e.key === 'Enter' && !e.shiftKey) {
+          const selected = filtered[selectedCmdIndex] || filtered[0];
+          if (isSlashCommand(prompt, activeTab) || (selected && prompt.trim() === '/' + selected.cmd)) {
+            setShowCommandPicker(false);
+            setSelectedCmdIndex(0);
+            submitFn(e);
+            return;
+          }
+          e.preventDefault();
           if (selected) {
             setPrompt('/' + selected.cmd + ' ');
             setShowCommandPicker(false);
@@ -1553,6 +1606,14 @@ export function AIChatPage() {
       return lastMsg.role === 'user';
     }
     return lastMsg.kind !== 'stream';
+  })();
+
+  const activeToolLabel = (() => {
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.kind === 'tool' && lastMsg.status === 'running') {
+      return lastMsg.title || (lastMsg.tool ? `Running: ${lastMsg.tool}` : undefined);
+    }
+    return undefined;
   })();
 
   return (
@@ -1621,7 +1682,7 @@ export function AIChatPage() {
                 onSaveAs={() => {
                   const ap = useIDEStore.getState().activePath;
                   if (ap) {
-                    const content = useIDEStore.getState().fileContentsCache[ap] || useIDEStore.getState().activeEditor?.getValue() || '';
+                    const content = useIDEStore.getState().fileContentsCache[ap] || useIDEStore.getState().getActiveEditor()?.getValue() || '';
                     const blob = new Blob([content], { type: 'text/plain' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -1669,8 +1730,14 @@ export function AIChatPage() {
                     {tab === 'Chat' && <MessageSquare className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-emerald-400'}`} />}
                     {tab === 'AI Code Assistant' && <Sparkles className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-purple-400'}`} />}
                     {tab === 'AI Code Editor' && <FileText className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-blue-400'}`} />}
-                    <span className="hidden md:inline">{tab}</span>
-                    <span className="md:hidden">{tab === 'AI Code Assistant' ? 'Assistant' : tab === 'AI Code Editor' ? 'Editor' : 'Chat'}</span>
+                    {tab === 'Chat' ? (
+                      <span>Chat</span>
+                    ) : (
+                      <>
+                        <span className="hidden md:inline">{tab}</span>
+                        <span className="md:hidden">{tab === 'AI Code Assistant' ? 'Assistant' : 'Editor'}</span>
+                      </>
+                    )}
                   </span>
                 </button>
               );
@@ -1921,8 +1988,18 @@ export function AIChatPage() {
                   <button onClick={() => setIsHistoryOpen(true)} className="text-white/40 hover:text-white transition-colors flex items-center justify-center rounded-md hover:bg-white/5 p-1">
                     <Search className="w-4 h-4" />
                   </button>
+                  {connectionState !== 'connected' && (
+                    <span className="text-amber-400 text-[10px] font-mono font-bold bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20 animate-pulse">
+                      Disconnected — reconnecting…
+                    </span>
+                  )}
+                  {connectionState === 'connected' && (
+                    <span className="text-emerald-400 text-[10px] font-mono font-bold bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
+                      Connected
+                    </span>
+                  )}
                 <span className="text-emerald-400 text-[10px] font-mono font-bold bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">v1.0.0</span>
-              </div>
+                </div>
             </div>
 
             {/* Scrollable Content */}
@@ -2134,9 +2211,9 @@ export function AIChatPage() {
               <button onClick={() => setIsHistoryOpen(true)} className="text-white/30 hover:text-white transition-colors">
                 <History className="w-5 h-5" />
               </button>
-              <button onClick={() => useIDEStore.getState().openSettings('models')} className="text-white/30 hover:text-white transition-colors cursor-pointer" title={t('ide.settings')}>
+              <Link href="/settings" className="text-white/30 hover:text-white transition-colors cursor-pointer" title={t('ide.settings')}>
                 <Settings className="w-5 h-5" />
-              </button>
+              </Link>
               <button className="text-white/30 hover:text-white transition-colors">
                 <HelpCircle className="w-5 h-5" />
               </button>
@@ -2164,6 +2241,16 @@ export function AIChatPage() {
                     className="relative group"
                   >
                     <div className="absolute -inset-1.5 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 rounded-3xl blur-xl opacity-60 group-hover:opacity-100 transition duration-500"></div>
+                    <div className="absolute -inset-2.5 rounded-3xl animate-spin-slow opacity-40 blur-sm bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 pointer-events-none"></div>
+                    <svg
+                      width="100"
+                      height="100"
+                      viewBox="0 0 100 100"
+                      className="absolute -inset-1.5 w-[124px] h-[124px] animate-spin-slow text-emerald-400/30 pointer-events-none"
+                      aria-hidden="true"
+                    >
+                      <circle cx="50" cy="50" r="44" stroke="currentColor" strokeWidth="1.5" strokeDasharray="6 8" fill="none" />
+                    </svg>
                     <div className="relative w-28 h-28 rounded-3xl p-2 bg-[#09090b] border border-white/20 shadow-[0_0_40px_rgba(59,130,246,0.4)] overflow-hidden flex items-center justify-center">
                       <img
                         src="/logo.png"
@@ -2258,8 +2345,7 @@ export function AIChatPage() {
                         onChange={(e) => {
                           const val = e.target.value;
                           setPrompt(val);
-                          const isCodeMode = activeTab === 'AI Code Assistant';
-                          if (isCodeMode && val.startsWith('/')) {
+                          if (val.startsWith('/')) {
                             setShowCommandPicker(true);
                           } else {
                             setShowCommandPicker(false);
@@ -2271,7 +2357,7 @@ export function AIChatPage() {
                       />
                       {/* Slash Command Picker */}
                       <AnimatePresence>
-                        {showCommandPicker && activeTab === 'AI Code Assistant' && prompt.startsWith('/') && (
+                        {showCommandPicker && prompt.startsWith('/') && (
                           <SlashCommandPicker
                             activeTab={activeTab}
                             prompt={prompt}
@@ -2361,13 +2447,13 @@ export function AIChatPage() {
             ) : activeTab !== 'AI Code Editor' ? (
               /* FULL SCREEN CHAT VIEW */
               <motion.div
-                className="flex flex-col w-full h-full relative bg-[#0e0e0e] z-10"
+                className="flex flex-col w-full h-full relative bg-[#0e0e0e] z-10 min-h-0"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
               >
-                <div className="flex-1 overflow-y-auto p-6 md:p-12 flex flex-col gap-6 custom-scrollbar">
-                  <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
+                <div className="flex-1 flex flex-col min-h-0 p-6 md:p-12">
+                  <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 flex-1 min-h-0">
                     {keysError && (
                       <motion.div
                         key="keys-error-alert"
@@ -2498,26 +2584,13 @@ export function AIChatPage() {
                         <PermissionModal request={permissionRequest as any} onAnswer={answerPermission} />
                       </>
                     )}
-                    <AnimatePresence>
-                    {messages.map((msg, idx) => {
-                      const prevMsg = idx > 0 ? messages[idx - 1] : null;
-                      const showAvatar =
-                        msg.role === 'assistant' &&
-                        msg.kind !== 'tool' &&
-                        (!prevMsg || prevMsg.role !== 'assistant' || prevMsg.kind === 'tool');
-                      return (
-                        <ChatMessage
-                          key={`chat-msg-${idx}-${msg.id || msg.role || 'm'}`}
-                          msg={msg}
-                          idx={idx}
-                          size="md"
-                          isStreaming={isStreaming && idx === messages.length - 1}
-                          undo={undo as any}
-                          isNormalChat={mode === 'chat'}
-                          showAvatar={showAvatar}
-                        />
-                      );
-                    })}
+                    <VirtualChatMessages
+                      messages={messages}
+                      isStreaming={isStreaming}
+                      size="md"
+                      isNormalChat={mode === 'chat'}
+                      undo={undo as any}
+                    />
                     {showThinkingIndicator && (
                       <motion.div
                         key="thinking-indicator-chat"
@@ -2531,14 +2604,11 @@ export function AIChatPage() {
                           M
                         </div>
                         <div className="flex-1 min-w-0">
-                          <AgentActionSequence key="agent-action-sequence-1" mode={mode} />
+                          <AgentActionSequence key="agent-action-sequence-1" mode={mode} statusLabel={activeToolLabel} />
                         </div>
                       </motion.div>
                     )}
-                    </AnimatePresence>
                     <ReactionBurst key="chat-reaction-burst" emoji="✓" show={showReactionBurst} />
-                    {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
-                    <div key="chat-scroll-sentinel" ref={chatEndRef} />
                   </div>
                 </div>
                 {/* Chat Input Bottom */}
@@ -2595,8 +2665,7 @@ export function AIChatPage() {
                           onChange={(e) => {
                             const val = e.target.value;
                             setPrompt(val);
-                            const isCodeMode = activeTab === 'AI Code Assistant' || activeTab === 'AI Code Editor';
-                            if (isCodeMode && val.startsWith('/')) { setShowCommandPicker(true); }
+                            if (val.startsWith('/')) { setShowCommandPicker(true); }
                             else { setShowCommandPicker(false); }
                           }}
                           placeholder={t('chat.askFollowup')}
@@ -2605,7 +2674,7 @@ export function AIChatPage() {
                         />
                         {/* Slash Command Picker */}
                         <AnimatePresence>
-                          {showCommandPicker && (activeTab === 'AI Code Assistant' || activeTab === 'AI Code Editor') && prompt.startsWith('/') && (
+                          {showCommandPicker && prompt.startsWith('/') && (
                             <SlashCommandPicker
                               activeTab={activeTab}
                               prompt={prompt}
@@ -2726,7 +2795,7 @@ export function AIChatPage() {
                       <SearchPanel workspaceId={activeWorkspaceId} />
                     )}
                     {activeActivityBar === 'source-control' && (
-                      <SourceControlPanel />
+                      <SourceControlPanel workspaceId={activeWorkspaceId} />
                     )}
                     {activeActivityBar === 'run-debug' && (
                       <RunDebugPanel workspaceId={activeWorkspaceId} />
@@ -2766,33 +2835,37 @@ export function AIChatPage() {
                   </div>
                 ) : (
                   <div className="h-full flex-1 flex flex-col min-w-0 bg-[#0e0e0e]">
-                    <EditorPane
-                      workspaceId={activeWorkspaceId as string}
-                      workspaces={workspaces}
-                      onSelectWorkspace={(id) => {
-                        if (id !== activeWorkspaceId) {
-                          useIDEStore.setState({ openFiles: [], activePath: null });
-                        }
-                        setActiveWorkspaceId(id);
-                        try { localStorage.setItem('mcode_active_workspace_id', id); } catch {}
-                        useIDEStore.getState().setActiveActivityBar('explorer');
-                        useIDEStore.getState().setSidebarOpen(true);
-                        leftPanelRef.current?.expand();
-                        bumpRefresh();
-                      }}
-                      onOpenFolder={() => setIsModalsOpen(true)}
-                      onCloneRepo={() => setIsModalsOpen(true)}
-                    />
-                    {isTerminalOpen && !zenMode && (
-                      <BottomPanel
-                        workspaceId={activeWorkspaceId}
-                        cwd={workspaces.find((w) => w._id === activeWorkspaceId)?.diskPath}
-                        messages={messages}
-                        problems={problems}
-                        onCommand={sendTerminalCommand}
-                        onInterrupt={interrupt}
-                        defaultTab="terminal"
+                    <ErrorBoundary label="Editor">
+                      <EditorPane
+                        workspaceId={activeWorkspaceId as string}
+                        workspaces={workspaces}
+                        onSelectWorkspace={(id) => {
+                          if (id !== activeWorkspaceId) {
+                            useIDEStore.setState({ openFiles: [], activePath: null });
+                          }
+                          setActiveWorkspaceId(id);
+                          try { localStorage.setItem('mcode_active_workspace_id', id); } catch {}
+                          useIDEStore.getState().setActiveActivityBar('explorer');
+                          useIDEStore.getState().setSidebarOpen(true);
+                          leftPanelRef.current?.expand();
+                          bumpRefresh();
+                        }}
+                        onOpenFolder={() => setIsModalsOpen(true)}
+                        onCloneRepo={() => setIsModalsOpen(true)}
                       />
+                    </ErrorBoundary>
+                    {isTerminalOpen && !zenMode && (
+                      <ErrorBoundary label="Panel">
+                        <BottomPanel
+                          workspaceId={activeWorkspaceId}
+                          cwd={workspaces.find((w) => w._id === activeWorkspaceId)?.diskPath}
+                          messages={messages}
+                          problems={problems}
+                          onCommand={sendTerminalCommand}
+                          onInterrupt={interrupt}
+                          defaultTab="terminal"
+                        />
+                      </ErrorBoundary>
                     )}
                   </div>
                 )}
@@ -2850,7 +2923,7 @@ export function AIChatPage() {
                       </div>
                     </div>
                   
-                  <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 custom-scrollbar">
+                  <div className="flex-1 flex flex-col min-h-0 p-4">
                     {enhancedPrompt?.pending && (
                       <ThinkingIndicator label="expanding your prompt..." size="sm" />
                     )}
@@ -2968,19 +3041,13 @@ export function AIChatPage() {
                       />
                     )}
                     <PermissionModal request={permissionRequest as any} onAnswer={answerPermission} />
-                      <AnimatePresence>
-                      {messages.map((msg, idx) => (
-                        <ChatMessage
-                          key={`ide-msg-${idx}-${msg.id || msg.role || 'm'}`}
-                          msg={msg}
-                          idx={idx}
-                          size="sm"
-                          isStreaming={isStreaming && idx === messages.length - 1}
-                          undo={undo as any}
-                          isNormalChat={mode === 'chat'}
-                        />
-                      ))}
-                    </AnimatePresence>
+                    <VirtualChatMessages
+                      messages={messages}
+                      isStreaming={isStreaming}
+                      size="sm"
+                      isNormalChat={mode === 'chat'}
+                      undo={undo as any}
+                    />
                       {showThinkingIndicator && (
                         <motion.div
                           key="thinking-indicator-ide"
@@ -2994,13 +3061,11 @@ export function AIChatPage() {
                             M
                           </div>
                           <div className="flex-1 min-w-0">
-                            <AgentActionSequence key="agent-action-sequence-2" mode={mode} />
+                            <AgentActionSequence key="agent-action-sequence-2" mode={mode} statusLabel={activeToolLabel} />
                           </div>
                         </motion.div>
                       )}
                       <ReactionBurst key="ide-reaction-burst" emoji="✓" show={showReactionBurst} />
-                      {/* Scroll sentinel — triggers useEffect auto-scroll to bottom */}
-                      <div key="ide-scroll-sentinel" ref={ideChatEndRef} />
                   </div>
 
                   {/* Inline Chat Input */}

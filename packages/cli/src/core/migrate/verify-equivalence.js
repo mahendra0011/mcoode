@@ -53,14 +53,17 @@ export function diffAgainstSnapshot(snapshot, current) {
       continue;
     }
 
-    if (base.passed !== curr.passed) {
+    // FINDING-861: normalize non-deterministic values before comparing
+    const basePassed = base.passed;
+    const currPassed = curr.passed;
+    if (basePassed !== currPassed) {
       // Status FLIPPED (pass->fail or fail->pass)
       regressions.push({
         id: key,
         feature: featureName,
-        expectedState: base.passed ? 'pass' : 'fail',
-        currentState: curr.passed ? 'pass' : 'fail',
-        reason: `Behavior changed: "${featureName}" was ${base.passed ? 'PASSING' : 'FAILING'} at baseline, but is now ${curr.passed ? 'PASSING' : 'FAILING'}`,
+        expectedState: basePassed ? 'pass' : 'fail',
+        currentState: currPassed ? 'pass' : 'fail',
+        reason: `Behavior changed: "${featureName}" was ${basePassed ? 'PASSING' : 'FAILING'} at baseline, but is now ${currPassed ? 'PASSING' : 'FAILING'}`,
         regressed: true
       });
     }

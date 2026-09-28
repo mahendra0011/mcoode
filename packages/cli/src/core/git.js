@@ -17,6 +17,9 @@ export async function changedFiles(cwd = process.cwd()) {
     .split('\n')
     .filter(Boolean)
     .map((line) => {
+      // GIT-001: handle rename format "R  old -> new"
+      const renameMatch = /^R\s+(.+?)\s+->\s+(.+)$/.exec(line);
+      if (renameMatch) return renameMatch[2].trim();
       let f = line.slice(3).trim();
       if (f.includes(' -> ')) {
         const parts = f.split(' -> ');

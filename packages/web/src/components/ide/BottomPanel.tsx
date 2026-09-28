@@ -165,7 +165,7 @@ export function BottomPanel({
   const setStoreActiveTab = useIDEStore((s) => s.setActivePanelTab);
   const setTerminalOpen = useIDEStore((s) => s.setTerminalOpen);
   const activePath = useIDEStore((s) => s.activePath);
-  const activeEditor = useIDEStore((s) => s.activeEditor);
+  const activeEditor = useIDEStore((s) => s.getActiveEditor());
   const setTasksOpen = useIDEStore((s) => s.setTasksOpen);
   const openSettings = useIDEStore((s) => s.openSettings);
 
@@ -215,6 +215,16 @@ export function BottomPanel({
   // Ref to MultiTerminalPanel handle for external control
   const terminalPanelRef = useRef<MultiTerminalPanelHandle | null>(null);
 
+  // WEB-014: socket events can fire after unmount (tab switch) — guard every
+  // setState/toast in the handlers so we never touch an unmounted component.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const problemCounts = {
     error: effectiveProblems.filter((p) => p.severity === 'error').length,
     warning: effectiveProblems.filter((p) => p.severity === 'warning').length,
@@ -242,6 +252,7 @@ export function BottomPanel({
     const socket = getSocket();
 
     const handleRunResult = (payload: any) => {
+      if (!mountedRef.current) return;
       const now = new Date().toLocaleTimeString();
       const newLines: string[] = [];
 
@@ -276,6 +287,7 @@ export function BottomPanel({
     };
 
     const handleProjectReady = (payload: any) => {
+      if (!mountedRef.current) return;
       // 015: only open http(s) preview URLs — never javascript:/data: schemes.
       const raw = String(payload.previewUrl || '');
       if (/^https?:\/\//i.test(raw)) {
@@ -290,6 +302,7 @@ export function BottomPanel({
     };
 
     const handleProjectError = (payload: any) => {
+      if (!mountedRef.current) return;
       toast.error(`Docker error: ${payload.error}`);
     };
 

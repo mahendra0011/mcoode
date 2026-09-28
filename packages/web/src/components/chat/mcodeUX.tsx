@@ -218,9 +218,10 @@ export function TerminalOutput({ command, output }: TerminalOutputProps) {
         fontSize: 12,
       }}
     >
-      <div style={{ color: "var(--mcode-accent)", display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ color: "var(--mcode-text, #ffffff)", display: "flex", alignItems: "center", gap: 6 }}>
         <Terminal size={12} className="text-emerald-400 shrink-0" />
-        <span>$ {command}</span>
+        <span className="font-semibold text-emerald-400">$</span>
+        <span className="text-white/90">{command}</span>
       </div>
       <pre style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", color: "var(--mcode-text-dim)" }}>
         {output ? output.slice(0, visibleChars) : ""}

@@ -35,7 +35,7 @@ export interface TestModeSummary {
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   pending: <Clock className="w-3.5 h-3.5 text-white/30" />,
-  running: <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />,
+  running: <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />,
   passed: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />,
   'passed-after-fix': <Wrench className="w-3.5 h-3.5 text-purple-400" />,
   'needs-review': <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />,

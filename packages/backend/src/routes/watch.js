@@ -34,7 +34,6 @@ export function watchRoutes({ secret }) {
       const io = req.app.get('io');
       io?.to(`project:${req.params.projectId}`).emit('watch:start-signal', { projectId: req.params.projectId });
       io?.to(`project:${req.params.projectId}`).emit('watch:status', { status: 'running', scansRun: project.scansRun || 0, fixesApplied: project.fixesApplied || 0, projectId: req.params.projectId });
-      io?.emit('watch:status', { status: 'running', scansRun: project.scansRun || 0, fixesApplied: project.fixesApplied || 0, projectId: req.params.projectId });
       res.json(project);
     } catch (err) {
       next(err);
@@ -51,7 +50,6 @@ export function watchRoutes({ secret }) {
       const io = req.app.get('io');
       io?.to(`project:${req.params.projectId}`).emit('watch:stop-signal', { projectId: req.params.projectId });
       io?.to(`project:${req.params.projectId}`).emit('watch:status', { status: 'stopped', scansRun: updated.scansRun || 0, fixesApplied: updated.fixesApplied || 0, projectId: req.params.projectId });
-      io?.emit('watch:status', { status: 'stopped', scansRun: updated.scansRun || 0, fixesApplied: updated.fixesApplied || 0, projectId: req.params.projectId });
       res.json(updated);
     } catch (err) {
       next(err);

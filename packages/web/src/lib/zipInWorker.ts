@@ -16,6 +16,13 @@ export interface ZipEntry {
  */
 export const WORKSPACE_UPLOAD_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
+// WEB-006: file payloads cross the thread boundary as transferred
+// ArrayBuffers (zero-copy) instead of structured-cloned Files.
+interface ZipTransferEntry {
+  path: string;
+  buf: ArrayBuffer;
+}
+
 export async function zipFilesOffMainThread(
   entries: ZipEntry[],
   onProgress?: (percent: number) => void
@@ -64,6 +71,18 @@ export async function zipFilesOffMainThread(
       settle(() => reject(err instanceof ErrorEvent ? new Error(err.message) : err));
     };
 
-    worker.postMessage({ files: entries });
+    // WEB-006: read each File into an ArrayBuffer up front, then TRANSFER the
+    // buffers (zero-copy) — structured-cloning 100MB+ of Files doubles peak
+    // memory during the clone.
+    (async () => {
+      try {
+        const transfer: ZipTransferEntry[] = await Promise.all(
+          entries.map(async ({ path, file }) => ({ path, buf: await file.arrayBuffer() }))
+        );
+        worker.postMessage({ files: transfer }, transfer.map((f) => f.buf));
+      } catch (err) {
+        settle(() => reject(err instanceof Error ? err : new Error(String(err))));
+      }
+    })();
   });
 }

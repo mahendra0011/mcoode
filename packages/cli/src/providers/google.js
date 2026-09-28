@@ -1,4 +1,11 @@
 import { HttpProvider, streamSSE } from '@mcode/shared';
+import pRetry from 'p-retry';
+
+function shouldRetry(err) {
+  if (err?.code === 'ECONNREFUSED' || err?.code === 'ETIMEDOUT' || err?.code === 'ECONNRESET') return true;
+  if (err?.status === 429 || (err?.status >= 500 && err?.status < 600)) return true;
+  return false;
+}
 
 /** Google Gemini (generativelanguage) adapter. */
 export class GeminiProvider extends HttpProvider {
@@ -77,28 +84,32 @@ export class GeminiProvider extends HttpProvider {
 
   async complete(model, opts = {}) {
     const { url, body } = this._request(model, { maxTokens: 4096, temperature: 0.3, ...opts });
-    const res = await this.httpFetch(url, {
-      method: 'POST',
-      headers: this.headers(),
-      signal: opts.signal || null,
-      body
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`google error ${res.status}: ${detail.slice(0, 400)}`);
-    }
-    const resBody = await res.json();
-    const usage = resBody.usageMetadata || {};
-    return {
-      text: (resBody.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join(''),
-      toolCall: null,
-      usage: {
-        inputTokens: usage.promptTokenCount || 0,
-        outputTokens: usage.candidatesTokenCount || 0
-      },
-      model,
-      finishReason: resBody.candidates?.[0]?.finishReason || 'STOP'
-    };
+    return pRetry(async () => {
+      const res = await this.httpFetch(url, {
+        method: 'POST',
+        headers: this.headers(),
+        signal: opts.signal || null,
+        body
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        const err = new Error(`google error ${res.status}: ${detail.slice(0, 400)}`);
+        /** @type {any} */ (err).status = res.status;
+        throw err;
+      }
+      const resBody = await res.json();
+      const usage = resBody.usageMetadata || {};
+      return {
+        text: (resBody.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join(''),
+        toolCall: null,
+        usage: {
+          inputTokens: usage.promptTokenCount || 0,
+          outputTokens: usage.candidatesTokenCount || 0
+        },
+        model,
+        finishReason: resBody.candidates?.[0]?.finishReason || 'STOP'
+      };
+    }, { retries: 3, factor: 2, minTimeout: 1000, shouldRetry });
   }
 
   async *stream(model, opts = {}) {

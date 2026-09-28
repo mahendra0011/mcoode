@@ -35,6 +35,7 @@ export function ThinkingIndicator({ size = 'md', showAvatar = false, label }: Th
       exit={{ opacity: 0, y: -4 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       className={`flex items-center gap-2 ${textSize}`}
+      data-zcode-chat-loading-animate="true"
       data-mcode-chat-loading-animate="true"
       role="status"
       aria-label="Loading..."

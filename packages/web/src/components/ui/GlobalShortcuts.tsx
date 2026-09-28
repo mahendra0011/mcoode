@@ -31,7 +31,11 @@ export function GlobalShortcuts() {
 
   useHotkeys("mod+k", togglePalette);
   useHotkeys("mod+shift+p", togglePalette);
-  useHotkeys("mod+b", toggleSidebar);
+  // WEB-018: preventDefault so Chrome/Edge don't open the bookmark manager.
+  useHotkeys("mod+b", (e) => {
+    e.preventDefault();
+    toggleSidebar();
+  });
   useHotkeys("mod+`", toggleTerminal);
   useHotkeys("mod+j", toggleTerminal);
   useHotkeys("mod+/", toggleShortcuts);

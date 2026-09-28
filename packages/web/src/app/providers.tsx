@@ -3,6 +3,7 @@ import { Provider } from "react-redux";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { store } from "../store";
 import api from "../lib/axios";
 import { Toaster } from "sonner";
@@ -55,8 +56,6 @@ export default function Providers({ children }: { children: ReactNode }) {
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
         <I18nProvider>
-          {/* Global toast host (sonner) — available to all routes */}
-          <Toaster position="top-right" closeButton richColors />
           {/* Global VS Code-style keyboard shortcuts */}
           <GlobalShortcuts />
           {/* Cmd/Ctrl+/ cheat sheet */}
@@ -64,6 +63,9 @@ export default function Providers({ children }: { children: ReactNode }) {
           {/* Global Cmd+K command palette */}
           <CommandPalette />
           {children}
+          {/* Global toast host (sonner) — placed at end of document tree */}
+          <Toaster position="top-right" closeButton richColors />
+          {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
         </I18nProvider>
       </QueryClientProvider>
     </Provider>

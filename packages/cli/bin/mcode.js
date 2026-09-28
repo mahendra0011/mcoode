@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-// Dev entry: builds the esbuild bundle on demand, then runs it.
-// The published npm package ships prebuilt dist/mcode.mjs.
+// Dev entry — delegates to the published entry (bin/mcode.mjs) after
+// ensuring the bundle exists. Single source of truth: mcode.mjs.
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { respanForFfiIfNeeded, binDir, findCompatibleNodeSync } from './node-resolve.mjs';
 
-// CLI-008: FFI/node resolution is shared with bin/mcode.mjs via
-// ./node-resolve.mjs (single source of truth — the copies had diverged).
 respanForFfiIfNeeded(import.meta.url);
 
 const here = binDir(import.meta.url);

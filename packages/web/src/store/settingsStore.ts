@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useIDEStore } from './ideStore';
+import api from '../lib/axios';
 
 export interface AISettings {
   streamSpeed: 'fast' | 'normal' | 'balanced';
@@ -295,7 +296,7 @@ export const useSettingsStore = create<SettingsState>()(
 
       updateEditorSetting: (k, v) => {
         set((s) => ({ editor: { ...s.editor, [k]: v } }));
-        const activeEditor = useIDEStore.getState().activeEditor;
+        const activeEditor = useIDEStore.getState().getActiveEditor();
         if (activeEditor) {
           activeEditor.updateOptions(get().getMonacoOptions());
         }
@@ -309,7 +310,7 @@ export const useSettingsStore = create<SettingsState>()(
 
       updateAdvancedEditorSetting: (k, v) => {
         set((s) => ({ advancedEditor: { ...s.advancedEditor, [k]: v } }));
-        const activeEditor = useIDEStore.getState().activeEditor;
+        const activeEditor = useIDEStore.getState().getActiveEditor();
         if (activeEditor) {
           activeEditor.updateOptions(get().getMonacoOptions());
         }
@@ -340,11 +341,26 @@ export const useSettingsStore = create<SettingsState>()(
         }
       },
 
-      updateSecuritySetting: (k, v) => set((s) => ({ security: { ...s.security, [k]: v } })),
+      updateSecuritySetting: (k, v) => {
+        set((s) => ({ security: { ...s.security, [k]: v } }));
+        if (typeof window !== 'undefined') {
+          api.put('/api/v1/settings', { [k]: v }).catch(() => {});
+        }
+      },
       updateAccountSetting: (k, v) => set((s) => ({ account: { ...s.account, [k]: v } })),
-      updateAgentSetting: (k, v) => set((s) => ({ agent: { ...s.agent, [k]: v } })),
+      updateAgentSetting: (k, v) => {
+        set((s) => ({ agent: { ...s.agent, [k]: v } }));
+        if (typeof window !== 'undefined') {
+          api.put('/api/v1/settings', { [k]: v }).catch(() => {});
+        }
+      },
       updateNetworkSetting: (k, v) => set((s) => ({ network: { ...s.network, [k]: v } })),
-      updateSystemSetting: (k, v) => set((s) => ({ system: { ...s.system, [k]: v } })),
+      updateSystemSetting: (k, v) => {
+        set((s) => ({ system: { ...s.system, [k]: v } }));
+        if (typeof window !== 'undefined') {
+          api.put('/api/v1/settings', { [k]: v }).catch(() => {});
+        }
+      },
       updateDataSetting: (k, v) => set((s) => ({ data: { ...s.data, [k]: v } })),
       togglePlugin: (id: string) =>
         set((s) => ({
@@ -409,7 +425,7 @@ export const useSettingsStore = create<SettingsState>()(
           document.documentElement.classList.add('dark');
         }
 
-        const activeMonaco = useIDEStore.getState().activeMonaco;
+        const activeMonaco = useIDEStore.getState().getActiveMonaco();
         if (activeMonaco) {
           if (themeName === 'mcode-light' || themeName === 'github-light') {
             activeMonaco.editor.setTheme('vs');

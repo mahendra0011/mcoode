@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
-import { deriveMasterKey, decryptKey } from '../secret-enc.js';
+import { keyManagerFromEnv } from '../secret-enc.js';
 import { uploadSingle, uploadFieldArray, UPLOADS_DIR } from '../upload-config.js';
 import { db } from '../db.js';
 import { httpError } from '../http-error.js';
@@ -48,7 +48,7 @@ function ensureNamedJunction(name, diskPath) {
 // ad-hoc multer stack was removed — one service, one limit, one MIME rule.
 const handleZipfileUpload = uploadSingle('zipfile');
 
-export function workspaceRoutes({ secret }) {
+export function workspaceRoutes({ secret, env = process.env } = {}) {
   const router = Router();
   router.use(authMiddleware({ secret }));
 
@@ -469,6 +469,37 @@ export function workspaceRoutes({ secret }) {
     }
   });
 
+  // GET /workspaces/:id/git-status - real `git status` for the workspace repo
+  // (FINDING-1213: the web Source Control panel only diffed in-memory caches,
+  // so files modified externally/CLI never showed up).
+  router.get('/:id/git-status', async (req, res, next) => {
+    try {
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+
+      try {
+        const git = await simpleGit();
+        const status = await git(ws.diskPath).status();
+        return res.json({
+          branch: status.current || ws.branch || 'main',
+          modified: status.modified || [],
+          added: status.added || [],
+          deleted: status.deleted || [],
+          renamed: status.renamed || [],
+          untracked: status.not_added || [],
+          ahead: status.ahead || 0,
+          behind: status.behind || 0,
+        });
+      } catch {
+        // Not a git repository yet — report clean so the panel falls back to
+        // the in-memory diff.
+        return res.json({ branch: ws.branch || 'main', notRepo: true });
+      }
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // POST /workspaces/:id/checkout - checkout or create branch
   router.post('/:id/checkout', async (req, res, next) => {
     try {
@@ -554,6 +585,14 @@ export function workspaceRoutes({ secret }) {
           else if (l.startsWith('-')) cursor++;
           else if (l.startsWith('+')) out.push(l.slice(1));
         }
+        // WS-011: after applying a hunk, skip any trailing context lines
+        // that were already consumed by the span calculation above.
+        const trailing = h.lines?.length || 0;
+        const contextTrailing = trailing - lines.filter((l) => String(l).startsWith('+')).length;
+        if (contextTrailing > 0) {
+          const endTrailer = Math.min(src.length, cursor + contextTrailing);
+          while (cursor < endTrailer) cursor++;
+        }
       });
       while (cursor < src.length) out.push(src[cursor++]);
       await mkdir(join(full, '..'), { recursive: true });
@@ -581,9 +620,7 @@ export function workspaceRoutes({ secret }) {
       const githubAcc = await db().githubAccount.findOne({ userId: req.userId });
       if (!githubAcc) return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'GitHub not connected' }});
       
-      const { decryptKey: decKey, deriveMasterKey: deriveKey } = await import('../secret-enc.js');
-      const masterKey = deriveKey(secret, req.userId);
-      const token = decKey(githubAcc.accessToken, masterKey);
+      const token = keyManagerFromEnv({ secret, env }).decrypt(githubAcc.accessToken, req.userId);
 
       const git = await simpleGit(ws.diskPath);
       await git.addConfig('user.name', githubAcc.username);

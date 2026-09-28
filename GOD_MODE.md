@@ -86,8 +86,11 @@ const STATIC_BENCHMARK = {
 
 ### Layer 2: Historical Success Rate (50% weight)
 ```js
-// Per-model, per-domain, per-project-stack success tracking
-// Stored in ~/.mcode/scores/{projectId}/model-scores.json
+// Per-model, per-domain, per-project-stack success tracking.
+// NOTE: no per-project score file exists. Historical usage is accumulated
+// in the session CostLedger at ~/.mcode/ledger.json (see packages/cli/src/core/router.js);
+// router scoring falls back to the static catalog + user overrides when the
+// ledger has no data for a model/domain pair.
 {
   "claude-3-5-sonnet:frontend": {
     success: 42,      // tasks passed (tests passed on first try)

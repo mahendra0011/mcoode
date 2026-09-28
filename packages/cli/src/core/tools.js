@@ -126,7 +126,7 @@ export class ToolExecutor {
   tools() {
     const t = {
       read_file: { description: 'Read a file from the project. Supports optional offset and length for paging large files. Fails if the path escapes the project root or the file is missing/unreadable — on ENOENT use list_files to find the correct path instead of retrying.', parameters: { path: 'string', offset: 'number?', length: 'number?' } },
-      list_files: { description: 'List files matching a glob (max 500). Never throws — returns an empty list when nothing matches.', parameters: { glob: 'string' } },
+      list_files: { description: 'List files matching a glob (max 500 per page, page 1 by default). Never throws — returns an empty list when nothing matches.', parameters: { glob: 'string', page: 'number?' } },
       search_code: { description: 'Search the codebase for text (ripgrep, with a bounded native fallback). Returns at most 50 files.', parameters: { query: 'string' } },
       web_search: { description: 'Search the web for information (supports optional count limit up to 20). Fails gracefully with "No search results found" when all engines miss — try simpler keywords.', parameters: { query: 'string', count: 'number?' } },
       web_fetch: { description: 'Fetch and extract text content from a URL (15s timeout). Blocked unless the URL matches networkWhitelist when one is configured.', parameters: { url: 'string' } },
@@ -268,7 +268,7 @@ export class ToolExecutor {
     };
   }
 
-  async list_files({ glob = '**/*' }) {
+  async list_files({ glob = '**/*', page = 1 } = {}) {
     const files = [];
     let matches = null;
     try {
@@ -301,7 +301,18 @@ export class ToolExecutor {
       }
     };
     await walk(this.projectPath);
-    return { ok: true, files: files.slice(0, 500) };
+    // TOOL-009: paginate (500 files per page) so large repos don't dump the
+    // entire tree into one tool result.
+    const pageSize = 500;
+    const pageNum = Math.max(1, Number(page) || 1);
+    const start = (pageNum - 1) * pageSize;
+    return {
+      ok: true,
+      files: files.slice(start, start + pageSize),
+      page: pageNum,
+      total: files.length,
+      hasMore: start + pageSize < files.length,
+    };
   }
 
   async search_code({ query }) {
@@ -726,22 +737,9 @@ export class ToolExecutor {
     const rawCmd = String(command || '');
     this.auditLog?.logToolCall('run_shell', { command: rawCmd.slice(0, 500), todoId: this.todoId, domain: this.domain }).catch(() => {});
     if (!this.allowShellAll) {
-      // strip quoting/escapes first so `r"m" -r -f` / `r\m -rf` can't sneak past
-      const flat = rawCmd.replace(/["'`\\]/g, '');
-      const tokens = flat.toLowerCase().split(/[\s;&|()]+/);
-      const killers = ['rm', 'rmdir', 'del', 'erase', 'dd', 'mkfs', 'format', 'shutdown'];
-      const hit = tokens.some((t) => killers.some((k) => t === k || t.startsWith(`${k}.`)));
-      const dangerousFlags = /-{1,2}([a-z]*r[a-z]*|[a-z]*f[a-z]*)/.test(flat) || /(^|\s)\/[a-z]*[sq][a-z]*(?=\s|$)/.test(flat);
-      if (
-        (hit && dangerousFlags) ||
-        /:\(\)\s*\{/.test(flat) ||
-        /mkfs\s+\S+/.test(flat) ||
-        /format\s+[a-z]:/i.test(flat)
-      ) {
-        return { ok: false, error: 'destructive command blocked by sandbox (use --allow-shell-all to bypass)' };
-      }
-      // SEC-004: allowlist — only build/test tooling may run without explicit bypass.
-      // This blocks curl/wget/nc/ssh/powershell exfiltration & reverse shells by default.
+      // SECURITY-2: allowlist-only — no denylist. The old keyword filter was
+      // bypassable via absolute paths (/bin/rm), unlisted commands (find -delete),
+      // redirection (>), and piped exfiltration (curl | bash).
       const bin = shellBinary(rawCmd);
       if (!SHELL_ALLOWLIST.has(bin)) {
         const netBins = ['curl', 'wget', 'nc', 'netcat', 'ncat', 'ssh', 'scp', 'ftp', 'telnet', 'powershell', 'pwsh', 'cmd', 'bash', 'sh'];

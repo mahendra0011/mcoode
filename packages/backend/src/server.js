@@ -13,7 +13,11 @@ import express from 'express';
 import { createServer } from 'node:http';
 import helmet from 'helmet';
 import cors from 'cors';
+import compression from 'compression';
 import { rateLimit } from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
+import { openapiSpec } from './openapi.js';
+import { initSentry } from './sentry.js';
 import pino from 'pino';
 import { pinoHttp } from 'pino-http';
 import { connectDb, db } from './db.js';
@@ -44,6 +48,8 @@ import { isPistonAvailable } from './piston-client.js';
 import { detectAvailableLanguages } from './host-runner.js';
 import { exec } from 'node:child_process';
 
+initSentry();
+
 export async function startServer({ port = 3100, env = process.env } = {}) {
   // ─── Environment validation (fail fast) ─────────────────────────────────────
   const envResult = validateEnv(env);
@@ -68,6 +74,23 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   const mongoUri = env.MONGODB_URI || null;
   // connectDb() calls process.exit(1) if connection fails — no memory fallback
   const storage = await connectDb(mongoUri);
+
+  // ── BSEC-001: dedicated at-rest encryption secret ──────────────────────────
+  // API keys / OAuth tokens at rest must NOT be encrypted with the JWT secret.
+  // When API_KEY_ENCRYPTION_SECRET is set, all new writes use it (keyId ek1);
+  // legacy blobs still decrypt and are lazily re-encrypted on read (keys GET).
+  // Without it the server still starts (JWT-secret fallback, keyId jwt1) but
+  // logs loudly so the operator fixes the deployment.
+  if (!env.API_KEY_ENCRYPTION_SECRET) {
+    logger.warn(
+      '[enc] API_KEY_ENCRYPTION_SECRET not set — API keys are encrypted with the JWT-secret fallback (keyId jwt1). Set a dedicated 32+ char secret for production.'
+    );
+  } else if (String(env.API_KEY_ENCRYPTION_SECRET).length < 32) {
+    logger.warn('[enc] API_KEY_ENCRYPTION_SECRET is short (< 32 chars) — use a longer random value.');
+  }
+  if (!env.API_KEY_ENCRYPTION_SECRET_PREVIOUS && String(env.API_KEY_ENCRYPTION_KEY_ID || '').trim()) {
+    logger.warn('[enc] API_KEY_ENCRYPTION_KEY_ID is set but API_KEY_ENCRYPTION_SECRET is missing — keyId has no effect without the secret.');
+  }
 
   // ─── Redis (Optional — caching/job queuing) ─────────────────────────────────
   // connectRedis() owns the single client; reuse it (no second connection).
@@ -143,6 +166,7 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   });
   app.use(express.json({ limit: '50mb' }));
   app.use(express.text({ limit: '50mb', type: ['text/*', 'application/octet-stream'] }));
+  app.use(compression());
   app.use(pinoHttp({ logger }));
   app.use('/api/v1', rateLimit({
     windowMs: 60_000,
@@ -179,6 +203,9 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     });
   });
 
+  // ─── Swagger UI ─────────────────────────────────────────────────────────────
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
+
   // ─── Routes (all auth-protected routes use authMiddleware) ───────────────────
   app.use('/api/v1/auth', authRoutes({ secret }));
   app.use('/api/v1/sessions', sessionRoutes({ secret }));
@@ -186,17 +213,17 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   app.use('/api/v1/watch', watchRoutes({ secret }));
   app.use('/api/v1/usage', usageRoutes({ secret }));
   app.use('/api/v1/uploads', uploadRoutes({ secret }));
-  app.use('/api/v1/keys', keyRoutes({ secret }));
-  app.use('/api/v1/workspaces', workspaceRoutes({ secret }));
+  app.use('/api/v1/keys', keyRoutes({ secret, env }));
+  app.use('/api/v1/workspaces', workspaceRoutes({ secret, env }));
   app.use('/api/v1/settings', settingsRoutes({ secret }));
-  app.use('/api/v1/auth/github', githubAuthRoutes({ secret }));
-  app.use('/api/v1/github', githubApiRoutes({ secret }));
+  app.use('/api/v1/auth/github', githubAuthRoutes({ secret, env }));
+  app.use('/api/v1/github', githubApiRoutes({ secret, env }));
   app.use('/api/v1/search', searchRoutes({ secret }));
   app.use('/api/v1/extensions', extensionRoutes({ secret }));
   app.use('/api/v1/languages', languageRoutes());
   app.use('/api/v1/android', androidRoutes({ secret }));
-  app.use('/api/v1/pair', pairRoutes({ secret }));
-  app.post('/api/v1/pair-suggest', authMiddleware({ secret }), (req, res) => handlePairSuggest(req, res, { secret }));
+  app.use('/api/v1/pair', pairRoutes({ secret, env }));
+  app.post('/api/v1/pair-suggest', authMiddleware({ secret }), (req, res) => handlePairSuggest(req, res, { secret, env }));
   app.use('/api/v1/prompt', promptRoutes({ secret }));
   app.use('/api/v1/clean', cleanRoutes({ secret }));
 
@@ -336,6 +363,10 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
       logger.info('HTTP server closed — exiting');
       process.exit(0);
     });
+    const redis = getRedisClient();
+    if (redis) {
+      redis.quit().catch(() => redis.disconnect());
+    }
     setTimeout(() => process.exit(0), 10_000).unref?.();
   };
   process.once('SIGTERM', () => shutdown('SIGTERM'));

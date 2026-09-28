@@ -12,8 +12,8 @@ async function askConfirmation(question = 'proceed with migration? [Y/n]') {
 
   // 676: size the box to the question instead of wrapping borders wrong.
   const width = Math.min(100, Math.max(45, question.length + 8));
-  const topBorder = '┌ ' + '─ '.repeat(Math.floor((width - 4) / 2)) + ' ┐';
-  const botBorder = '└ ' + '─ '.repeat(Math.floor((width - 4) / 2)) + ' ┘';
+  const topBorder = '┌' + '─'.repeat(width - 2) + '┐';
+  const botBorder = '└' + '─'.repeat(width - 2) + '┘';
 
   console.log('');
   console.log(chalk.dim(topBorder));
@@ -133,7 +133,8 @@ export async function migrateCommand(prompt, { yes = false, asJson = false, maxP
       console.log(chalk.bold.green(`✓ migration complete — ${todoCount} tasks executed, behavior verified identical`));
     } else {
       console.log(chalk.bold.red(`✗ migration finished with unresolved regressions (${result.unresolvedRegressions?.length || 0} issues)`));
-      process.exitCode = 1;
+    process.exitCode = 1;
+    return;
     }
   } catch (err) {
     if (jsonMode) {

@@ -24,6 +24,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { useIDEStore } from "../../store/ideStore";
+import api from "../../lib/axios";
 import { toast } from "sonner";
 
 export interface DockerContainer {
@@ -85,20 +86,20 @@ export function ContainersPanel() {
     setLoading(true);
     try {
       const [cRes, iRes] = await Promise.all([
-        fetch("/api/docker/containers"),
-        fetch("/api/docker/images"),
+        api.get("/api/v1/docker/containers").catch(() => api.get("/api/docker/containers")).catch(() => ({ data: null })),
+        api.get("/api/v1/docker/images").catch(() => api.get("/api/docker/images")).catch(() => ({ data: null })),
       ]);
-      const cData = await cRes.json();
-      const iData = await iRes.json();
+      const cData = cRes?.data || {};
+      const iData = iRes?.data || {};
 
-      if (cData.available && cData.containers && cData.containers.length > 0) {
+      if (cData.available && Array.isArray(cData.containers) && cData.containers.length > 0) {
         setContainers(cData.containers);
         setDaemonActive(true);
       } else {
         setContainers(DEFAULT_CONTAINERS);
       }
 
-      if (iData.available && iData.images && iData.images.length > 0) {
+      if (iData.available && Array.isArray(iData.images) && iData.images.length > 0) {
         setImages(iData.images);
       } else {
         setImages(DEFAULT_IMAGES);
@@ -144,7 +145,7 @@ export function ContainersPanel() {
       {/* Top Header matching screenshot */}
       <div className="p-2.5 border-b border-white/5 flex items-center justify-between gap-2 bg-[#181818]/90 flex-shrink-0">
         <div className="flex items-center gap-1.5 truncate">
-          <Box className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+          <Box className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
           <span className="font-semibold uppercase tracking-wider text-white/60 text-[11px] truncate">
             CONTAINERS
           </span>
@@ -156,7 +157,7 @@ export function ContainersPanel() {
             onClick={fetchDockerState}
             disabled={loading}
             className={`p-1 rounded text-white/40 hover:text-white hover:bg-white/10 transition ${
-              loading ? "animate-spin text-blue-400" : ""
+              loading ? "animate-spin text-emerald-400" : ""
             }`}
             title="Refresh Docker Daemon"
           >

@@ -3,6 +3,7 @@ import { authMiddleware } from '../auth.js';
 import { httpError } from '../http-error.js';
 import { db } from '../db.js';
 import { findDeadCode, findBloat, runClean } from 'mcode-cli/clean';
+import path from 'node:path';
 
 /** @param {{ secret?: string }} [opts] */
 export function cleanRoutes({ secret } = {}) {

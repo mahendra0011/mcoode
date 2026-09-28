@@ -16,6 +16,7 @@
 
 ## Conventions
 
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, …). `commitlint` is configured via `commitlint.config.js` (`@commitlint/config-conventional`). Validate a message with `npx commitlint --edit`.
 - Security-sensitive code paths are marked with their audit ID (`SEC-xxx`, `RTR-xxx`, …). Keep the marker when you touch the line.
 - Undoable file writes go through `UndoStack` (atomic persist, mutex-serialized).
 - Backend mutating routes require `authMiddleware`; socket emitter events require `CLI_SHARED_SECRET` when configured.

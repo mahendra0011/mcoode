@@ -7,7 +7,7 @@ import { useIDEStore } from "../../../store/ideStore";
 export function GoToLineModal() {
   const isOpen = useIDEStore((s) => s.isGoToLineOpen);
   const setIsOpen = useIDEStore((s) => s.setGoToLineOpen);
-  const activeEditor = useIDEStore((s) => s.activeEditor);
+  const activeEditor = useIDEStore((s) => s.getActiveEditor());
   const activePath = useIDEStore((s) => s.activePath);
   const recordNavPoint = useIDEStore((s) => s.recordNavPoint);
   const setTargetJump = useIDEStore((s) => s.setTargetJump);

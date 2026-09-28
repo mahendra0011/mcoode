@@ -28,12 +28,20 @@
     "build": "npm run build:cli && npm run build:web",
     "lint:web": "npm --workspace=web run lint",
     "publish:cli": "npm run build:cli && npm publish ./packages/cli",
+    "sbom": "npx @cyclonedx/cdxgen -o sbom.json",
+    "license:check": "license-checker --summary --excludeAllowList MIT,Apache-2.0,BSD-3-Clause,ISC,0BSD",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
     "postinstall": "node scripts/bootstrap.js"
   },
   "devDependencies": {
+    "@commitlint/config-conventional": "^21.2.3",
     "@vitest/coverage-v8": "^2.1.9",
+    "commitlint": "^21.2.3",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "license-checker": "^25.0.1",
+    "vitepress": "^1.6.4",
     "vitest": "^2.1.9"
   },
   "allowScripts": {

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { ALL_LANGUAGES } from "../lib/languagesData";
 
-export type ActiveTab = "Chat" | "AI Code Editor";
+export type ActiveTab = "Chat" | "AI Code Assistant" | "AI Code Editor";
 export type PanelTab = "problems" | "output" | "debugConsole" | "terminal" | "ports" | "watch";
 
 export interface NavPoint {
@@ -95,9 +95,11 @@ interface IDEState {
   createUntitledFile: () => string;
 
   // Active Monaco instance references
-  activeEditor: any | null;
-  activeMonaco: any | null;
+  // Monaco instances are excluded from persistence and are kept in a
+  // non-reactive reference to avoid serializing cyclic editor objects.
   setActiveEditor: (editor: any, monaco: any) => void;
+  getActiveEditor: () => any | null;
+  getActiveMonaco: () => any | null;
 
   // Layout & Appearance
   zenMode: boolean;
@@ -246,6 +248,11 @@ const getInitialSelectedLanguages = (): string[] => {
     return ["Python", "JavaScript", "TypeScript", "HTML", "CSS", "Rust", "Go"];
   }
 };
+
+// WEB-010: Monaco instances are kept in non-reactive refs to avoid cyclic
+// serialization when the store is persisted or inspected.
+const activeEditorRef = { current: null as any | null };
+const activeMonacoRef = { current: null as any | null };
 
 /**
  * Central UI state for the VS Code-style IDE surfaces.
@@ -411,9 +418,12 @@ export const useIDEStore = create<IDEState>()(
     }));
   },
 
-  activeEditor: null,
-  activeMonaco: null,
-  setActiveEditor: (activeEditor, activeMonaco) => set({ activeEditor, activeMonaco }),
+  setActiveEditor: (editor, monaco) => {
+    activeEditorRef.current = editor;
+    activeMonacoRef.current = monaco;
+  },
+  getActiveEditor: () => activeEditorRef.current,
+  getActiveMonaco: () => activeMonacoRef.current,
 
   zenMode: false,
   setZenMode: (zenMode) => set({ zenMode }),
@@ -422,7 +432,7 @@ export const useIDEStore = create<IDEState>()(
   wordWrap: false,
   toggleWordWrap: () => {
     const next = !get().wordWrap;
-    const editor = get().activeEditor;
+    const editor = activeEditorRef.current;
     if (editor) {
       editor.updateOptions({ wordWrap: next ? "on" : "off" });
     }
@@ -432,7 +442,7 @@ export const useIDEStore = create<IDEState>()(
   columnSelection: false,
   toggleColumnSelection: () => {
     const next = !get().columnSelection;
-    const editor = get().activeEditor;
+    const editor = activeEditorRef.current;
     if (editor) {
       editor.updateOptions({ columnSelection: next });
     }

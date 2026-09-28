@@ -225,6 +225,10 @@ export function usageRoutes({ secret }) {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'attachment; filename="mcode-usage-report.pdf"');
       doc.pipe(res);
+      // SEC-035: handle backpressure — if the client is slow, pause the PDF
+      // document until the response drains.
+      res.on('drain', () => { try { doc.resume(); } catch { /* ended */ } });
+      doc.on('data', () => { if (!res.writable) doc.pause(); });
 
       doc.fontSize(22).fillColor('#0d1117').text('mcode usage report', { align: 'center' });
       doc.moveDown();

@@ -17,44 +17,15 @@ export interface AgentActionSequenceProps {
 }
 
 /**
- * Client-side phase cycle shown ONLY while there is no real backend
- * statusLabel yet. This exists purely to make the "gap before the first
- * real event" feel like continuous IDE activity instead of a frozen
- * "Thinking...Xs" counter — matching ZCode's always-animated feel.
- * As soon as a real statusLabel arrives, this cycle is abandoned and the
- * real label is shown instead (see render logic below).
- */
-const PHASES = [
-  "Thinking",
-  "Planning",
-  "Analyzing project",
-  "Scanning workspace",
-  "Reading files",
-  "Searching code",
-  "Inspecting dependencies",
-  "Checking configuration",
-  "Understanding architecture",
-];
-
-const PHASE_INTERVAL_MS = 2000;
-
-/**
  * AgentActionSequence — main chat/agent loading indicator.
  *
- * Behavior:
- *  - While no real backend event has arrived yet, cycles through PHASES
- *    client-side every PHASE_INTERVAL_MS so the UI always feels alive
- *    (never frozen on a single static word).
- *  - The instant a real `statusLabel` is provided by the caller (forwarded
- *    from `chat:tool_call` / `chat:todo_plan`), that real label is shown
- *    immediately and the fake cycle stops — real data always wins, we
- *    never contradict or override it with a fabricated phase.
- *  - Separate real ToolCallCard / TodoPlan messages still render below
- *    this component as before (see AIChatPage.tsx `showThinkingIndicator`).
+ * Adheres strictly to the single source of truth rule (Spec §1):
+ * Never fabricates phases on a local timer. Displays "Thinking" with animated
+ * gradient text (or a real backend statusLabel when supplied), StepPulse dot,
+ * BrainCircuit icon, 80ms SpinnerBlock, and elapsed timer.
  */
 export const AgentActionSequence = ({ startedAt, statusLabel }: AgentActionSequenceProps) => {
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [phaseIndex, setPhaseIndex] = useState(0);
   const start = useRef(startedAt || Date.now());
 
   useEffect(() => {
@@ -62,17 +33,8 @@ export const AgentActionSequence = ({ startedAt, statusLabel }: AgentActionSeque
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    // Only cycle while we don't have a real label to show yet.
-    if (statusLabel) return;
-    const id = setInterval(() => {
-      setPhaseIndex((i) => (i + 1) % PHASES.length);
-    }, PHASE_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [statusLabel]);
-
   const seconds = Math.max(1, Math.round(elapsedMs / 1000));
-  const displayLabel = statusLabel || PHASES[phaseIndex];
+  const displayLabel = statusLabel || "Thinking";
 
   return (
     <motion.div

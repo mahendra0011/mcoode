@@ -1,12 +1,22 @@
 import { Client } from 'ssh2';
 import { StringDecoder } from 'node:string_decoder';
+import jwt from 'jsonwebtoken';
 
 const connections = new Map();
 
-export function connectSSH(socketId, { host, port, username, password, privateKey }, onData, onReady, onError) {
+export function connectSSH(socketId, { host, port, username, password, privateKey, token }, onData, onReady, onError) {
   if (!host || !username || (!password && !privateKey)) {
     onError('host, username, and a password or privateKey are required');
     return;
+  }
+  // FINDING-1021: verify the socket session token before accepting credentials
+  if (token) {
+    try {
+      jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+    } catch {
+      onError('invalid or expired session token');
+      return;
+    }
   }
   const conn = new Client();
   // 1023: streaming decoder keeps multi-byte chars split across TCP

@@ -1,4 +1,11 @@
 import { HttpProvider, streamSSE } from '@mcode/shared';
+import pRetry from 'p-retry';
+
+function shouldRetry(err) {
+  if (err?.code === 'ECONNREFUSED' || err?.code === 'ETIMEDOUT' || err?.code === 'ECONNRESET') return true;
+  if (err?.status === 429 || (err?.status >= 500 && err?.status < 600)) return true;
+  return false;
+}
 
 /** Anthropic Messages API adapter. */
 export class AnthropicProvider extends HttpProvider {
@@ -35,25 +42,27 @@ export class AnthropicProvider extends HttpProvider {
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.apiKey,
-      'anthropic-version': '2023-06-01'
+      'anthropic-version': '2024-10-22'
     };
   }
 
   /** Anthropic rejects `temperature` on models with extended thinking — omit it. */
   _body(model, { messages, temperature, maxTokens, thinking, stream }) {
-    const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+    const systemParts = messages.filter((m) => m.role === 'system').map((m) => m.content);
+    const system = systemParts.length
+      ? { type: 'text', text: systemParts.join('\n') }
+      : undefined;
     const rest = messages.filter((m) => m.role !== 'system');
-    return JSON.stringify({
+    const body = {
       model,
-      system,
       messages: rest,
       ...(thinking ? {} : { temperature }),
-      // ANT-003: cap the combined total so thinking budgets can't push
-      // max_tokens past model limits.
       max_tokens: Math.min(64000, maxTokens + (thinking?.budget_tokens || 0)),
       ...(thinking ? { thinking } : {}),
+      ...(system ? { system } : {}),
       stream
-    });
+    };
+    return JSON.stringify(body);
   }
 
 /** * @param {any} model
@@ -62,27 +71,31 @@ export class AnthropicProvider extends HttpProvider {
   async complete(model, { messages, temperature = 0.3, maxTokens = 4096, reasoning = null, signal = null } = {}) {
     const budget = reasoning?.thinkingBudget || 0;
     const thinking = budget > 0 ? { type: 'enabled', budget_tokens: budget } : undefined;
-    const res = await this.httpFetch(`${this.baseUrl}/messages`, {
-      method: 'POST',
-      headers: this.headers(),
-      signal,
-      body: this._body(model, { messages, temperature, maxTokens, thinking, stream: false })
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new Error(`anthropic error ${res.status}: ${detail.slice(0, 400)}`);
-    }
-    const body = await res.json();
-    return {
-      text: (body.content || []).map((b) => b.text || '').join(''),
-      toolCall: null,
-      usage: {
-        inputTokens: body.usage?.input_tokens || 0,
-        outputTokens: body.usage?.output_tokens || 0
-      },
-      model,
-      finishReason: body.stop_reason || 'stop'
-    };
+    return pRetry(async () => {
+      const res = await this.httpFetch(`${this.baseUrl}/messages`, {
+        method: 'POST',
+        headers: this.headers(),
+        signal,
+        body: this._body(model, { messages, temperature, maxTokens, thinking, stream: false })
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        const err = new Error(`anthropic error ${res.status}: ${detail.slice(0, 400)}`);
+        /** @type {any} */ (err).status = res.status;
+        throw err;
+      }
+      const body = await res.json();
+      return {
+        text: (body.content || []).map((b) => b.text || '').join(''),
+        toolCall: null,
+        usage: {
+          inputTokens: body.usage?.input_tokens || 0,
+          outputTokens: body.usage?.output_tokens || 0
+        },
+        model,
+        finishReason: body.stop_reason || 'stop'
+      };
+    }, { retries: 3, factor: 2, minTimeout: 1000, shouldRetry });
   }
 
 /** * @param {any} model
