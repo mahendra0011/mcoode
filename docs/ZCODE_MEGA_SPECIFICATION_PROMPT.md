@@ -1,4 +1,4 @@
-yrr mane na z code ke smart engine , icons , tootls etc add kiye the isme so tu dekh na working he ya nhi 100% sab and md file bana  de na agar tujhe kuch missing laga choti se choti mane jo details di he usse alag laga working nhi laga bugs mile jo usne fully working hone se rok rahe he ya kuch bhi ho uske liye md file bana dena detsils is and abhi cli ka nhi kerna he bas web ka kerna he poora code base ko deeply analysis kerna and md file me sab include kerna or alag folder me bnna md files jitni issues ho add kerna md file me 500 ho ya 1000 ya 10000 bhi no of line of md file ke limmit bhi nhi he koi jitni kerna chahe no of lines ke ho sakti he 
+yrr mane na z code ke smart engine , icons , tootls etc add kiye the isme so tu dekh na working he ya nhi 100% sab and md file bana  de na agar tujhe kuch missing laga choti se choti mane jo details di he usse alag laga working nhi laga bugs mile jo usne fully working hone se rok rahe he ya kuch bhi ho uske liye md file bana dena detsils is and abhi cli ka nhi kerna he bas web ka kerna he poora code base ko deeply analysis kerna and md file me sab include kerna or alag folder me bnna md files jitni issues ho add kerna md file me 500 ho ya 1000 ya 10000 bhi no of line of md file ke limmit bhi nhi he koi jitni kerna chahe no of lines ke ho sakti he ec2, playwright, Unit Testing jo kerna ho ker mujeh starting to end tak 100% working chiye he agar nhi mila to me teri gaand faad dunga samjh gya na ?? ak ak cheej ke lye test likh verify ker sab working he ya nhi todos bana and kaam start ker
 
  # ZCode UX Animations — From Actual App Source
 
@@ -463,7 +463,8 @@ ZCode uses a multi-layer animation approach:
    - `cubic-bezier(0.4, 0, 0.2, 1)` — Standard easing
    - `cubic-bezier(0.65, 0, 0.35, 1)` — Update sweep animation
    - `spring(stiffness: 500, damping: 20)` — Pop-in effects
-# ZCode UI Elements — From Actual App Source
+
+# ZCode UI Elements — From Actual App Source
 
 > ✅ Extracted from `ZCode/resources/app-extracted/out/renderer/assets/styles-BxSv8qTx.css` and verified against installed packages.
 
