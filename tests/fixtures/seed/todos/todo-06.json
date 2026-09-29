@@ -1,9 +1,0 @@
-{
-  "id": "todo-006",
-  "title": "Dev task 006",
-  "description": "Seeded development task number 6",
-  "priority": "high",
-  "status": "pending",
-  "created_at": "2026-09-20T13:35:44.761Z",
-  "due_date": "2026-10-10T13:35:44.761Z"
-}

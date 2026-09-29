@@ -1,5 +1,26 @@
-// Minimal type declarations for react-window 1.8.x (the package ships no
-// bundled types). Only the pieces the codebase uses are declared.
+/**
+ * Type declarations for `react-window` **1.8.x** (the package ships no bundled
+ * types — `@types/react-window` does not exist for 1.x).
+ *
+ * WHY THIS FILE MUST STAY (audit WEB-013)
+ * --------------------------------------
+ * `react-window` used to be an **undeclared** dependency: nothing in
+ * `packages/web/package.json` asked for it, and it only resolved because
+ * `react-arborist` hoisted 1.8.11 into the root `node_modules`. That is a
+ * phantom dependency — `npm ci` in a pruned CI/Docker context would have left
+ * the chat list (the most important view) unable to resolve its own import.
+ *
+ * It is now declared explicitly in `packages/web/package.json` as
+ * `"react-window": "^1.8.11"`, which matches the 1.x API used by
+ * `VirtualChatMessages.tsx` (`VariableSizeList`, `itemSize` as a callback,
+ * `estimatedItemSize`, `overscanCount`).
+ *
+ * ⚠️ These declarations describe the **1.x** API. If the dependency is ever
+ * bumped to 2.x, this shim will happily describe an API that no longer exists
+ * and the break will only show up at runtime — that is the landmine this
+ * comment exists to flag. (The unused `@tanstack/react-virtual` dependency was
+ * removed in the same pass; it was declared but imported nowhere.)
+ */
 declare module "react-window" {
   import * as React from "react";
 

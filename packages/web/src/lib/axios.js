@@ -18,17 +18,16 @@
  *   const { data } = await api.get('/api/v1/keys/models', { timeout: 10000 });
  */
 import axios from 'axios';
-import { getTokens, setTokens } from './api';
+import { getTokens, setTokens, clearTokens } from './api';
 
 
 function resolveBaseURL() {
-  if (typeof window !== 'undefined' && window.mcodeElectron?.backendUrl) {
-    return window.mcodeElectron.backendUrl;
-  }
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  // In production (non-localhost host), always use relative URLs so Next
-  // rewrites proxy /api → BACKEND. A hardcoded localhost:3100 from .env.local
-  // would bypass the proxy and break prod.
+  // WEB-027: the `window.mcodeElectron.backendUrl` branch (Electron desktop
+  // shell) was deleted — there is no packages/desktop in this repository, so it
+  // could never fire. In production, always use relative URLs so Next rewrites
+  // proxy /api → BACKEND. A hardcoded localhost:3100 from .env.local would
+  // bypass the proxy and break prod.
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.');
@@ -40,8 +39,8 @@ function resolveBaseURL() {
 }
 
 const api = axios.create({
-  // In Electron, point directly at the child-process backend.
-  // In the browser, prefer relative /api (Next rewrites → BACKEND_URL).
+  // WEB-027: the Electron "point at the child-process backend" case is gone.
+  // In the browser we prefer relative /api (Next rewrites → BACKEND_URL).
   baseURL: resolveBaseURL(),
   withCredentials: true,
   timeout: 8000, // 8s default — slow external provider calls can override
@@ -74,35 +73,55 @@ function tokenExpiresInSec(token) {
 }
 
 let proactiveRefreshPromise = null;
+
+/**
+ * Refresh the access token.
+ *
+ * The httpOnly `mcode_refresh` cookie is the session of record (audit WEB-011):
+ * the request body is empty, so no credential travels through JS at all.
+ * `withCredentials` is what actually carries the cookie. The in-memory refresh
+ * token (see `lib/api.ts`) is only a fallback for a version skew against an
+ * older backend build that insists on a body token.
+ */
+async function refreshAccessToken() {
+  // WEB-027: the Electron child-process backend URL is gone — the auth origin is
+  // always same-origin (Next rewrites /api → BACKEND in production).
+  const baseURL = '/';
+  const viaCookie = await axios.post('/api/v1/auth/refresh', {}, {
+    baseURL,
+    timeout: 15000,
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (viaCookie.data?.access) return viaCookie.data;
+
+  const { refresh } = getTokens();
+  if (!refresh) return null;
+  const viaBody = await axios.post('/api/v1/auth/refresh', { refresh }, { baseURL, timeout: 15000 });
+  return viaBody.data?.access ? viaBody.data : null;
+}
+
 async function ensureFreshToken() {
-  const { access, refresh } = getTokens();
-  if (!access || !refresh) return;
+  const { access } = getTokens();
+  if (!access) return;
   if (tokenExpiresInSec(access) > 60) return;
   if (!proactiveRefreshPromise) {
-    proactiveRefreshPromise = axios.post(
-      '/api/v1/auth/refresh',
-      { refresh },
-      {
-        baseURL: typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
-          ? window.mcodeElectron.backendUrl
-          : '/',
-        timeout: 15000,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    ).then((r) => {
-      if (r.data?.access) setTokens({ access: r.data.access, refresh: r.data.refresh || refresh });
-    }).catch((err) => {
-      // WEB-002: never swallow a failed real-token refresh silently — the caller
-      // must log out instead of continuing with a dead access token. Fake E2E
-      // tokens skip this path entirely so tests are not redirected to /login.
-      if (typeof window === 'undefined') return;
-      const { access } = getTokens();
-      const isTestToken = refresh === 'fake' || refresh === 'fake-refresh' || (refresh && refresh.startsWith('fake-')) || (access && access.startsWith('fake-'));
-      if (isTestToken) return;
-      console.warn('[auth] token refresh failed:', err?.message || err);
-      localStorage.removeItem('mcode_tokens');
-      window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
-    }).finally(() => { proactiveRefreshPromise = null; });
+    proactiveRefreshPromise = refreshAccessToken()
+      .then((tokens) => {
+        if (tokens) setTokens(tokens);
+      })
+      .catch((err) => {
+        // WEB-002: never swallow a failed real-token refresh silently — the caller
+        // must log out instead of continuing with a dead access token. Fake E2E
+        // tokens skip this path entirely so tests are not redirected to /login.
+        if (typeof window === 'undefined') return;
+        const isTestToken = access === 'fake' || access.startsWith('fake-');
+        if (isTestToken) return;
+        console.warn('[auth] token refresh failed:', err?.message || err);
+        clearTokens();
+        window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
+      })
+      .finally(() => { proactiveRefreshPromise = null; });
   }
   await proactiveRefreshPromise;
 }
@@ -154,51 +173,33 @@ api.interceptors.response.use(
     isRefreshing = true;
     config.__isRetry = true;
 
+    // The session of record is the httpOnly cookie: refresh with an empty body
+    // first (WEB-011). The in-memory refresh token is only a version-skew
+    // fallback, and it is legitimately absent after a page reload.
     const { refresh, access } = getTokens();
-    const isTestToken = refresh === 'fake' || refresh === 'fake-refresh' || (refresh && refresh.startsWith('fake-')) || (access && access.startsWith('fake-'));
-    if (!refresh) {
+    const isTestToken = access === 'fake' || refresh === 'fake' || refresh === 'fake-refresh'
+      || (access && access.startsWith('fake-'))
+      || (refresh && refresh.startsWith('fake-'));
+    if (isTestToken) {
+      // E2E fake tokens cannot be refreshed — fail fast so tests are not
+      // redirected to /login by the interceptor.
       isRefreshing = false;
       const rejectList = pendingRequests;
       pendingRequests = [];
       rejectList.forEach((req) => req.reject(error));
-      if (typeof window !== 'undefined' && !isTestToken) {
-        localStorage.removeItem('mcode_tokens');
-        // Dispatch event so the React app can handle SPA navigation;
-        // fall back to hard redirect for non-React contexts or browser.
-        window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
-        const path = window.location.pathname || '';
-        // Only redirect to /login if current path is a strictly protected route
-        const isProtectedRoute = path.startsWith('/ai/chat');
-        if (!window.mcodeElectron && isProtectedRoute) {
-          window.location.href = '/login';
-        }
-      }
       return Promise.reject(error);
     }
 
     try {
-      const refreshRes = await axios.post(
-        '/api/v1/auth/refresh',
-        { refresh },
-        {
-          baseURL: typeof window !== 'undefined' && window.mcodeElectron?.backendUrl
-            ? window.mcodeElectron.backendUrl
-            : '/',
-          timeout: 15000,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-
-      if (refreshRes.data && refreshRes.data.access) {
-        const newAccess = refreshRes.data.access;
-        const newRefresh = refreshRes.data.refresh || refresh;
-        setTokens({ access: newAccess, refresh: newRefresh });
-        config.headers.Authorization = `Bearer ${newAccess}`;
+      const refreshed = await refreshAccessToken();
+      if (refreshed?.access) {
+        setTokens(refreshed);
+        config.headers.Authorization = `Bearer ${refreshed.access}`;
 
         // Retry all queued requests with the new token
         const resolveList = pendingRequests;
         pendingRequests = [];
-        resolveList.forEach((req) => req.resolve(newAccess));
+        resolveList.forEach((req) => req.resolve(refreshed.access));
 
         return api(config);
       }
@@ -211,11 +212,9 @@ api.interceptors.response.use(
       rejectList.forEach((req) => req.reject(error));
       const status = refreshErr?.response?.status;
       if (typeof window !== 'undefined' && (status === 401 || status === 403) && !isTestToken) {
-        localStorage.removeItem('mcode_tokens');
+        clearTokens();
         window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
-        if (!window.mcodeElectron) {
-          window.location.href = '/login';
-        }
+        window.location.href = '/login';
       }
       return Promise.reject(error);
     } finally {

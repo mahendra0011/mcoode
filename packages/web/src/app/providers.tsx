@@ -1,10 +1,8 @@
 "use client";
-import { Provider } from "react-redux";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { store } from "../store";
 import api from "../lib/axios";
 import { Toaster } from "sonner";
 import { CommandPalette } from "../components/ui/CommandPalette";
@@ -26,9 +24,12 @@ const THEMES: Record<string, string> = {
 export default function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
   useEffect(() => {
-    // PWA shell: register once, silently skip when unsupported/offline.
+    // PWA shell: register once; log failures instead of swallowing them (WEB-022)
+    // so a broken/unsupported service worker is visible in the console.
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.error('[pwa] service worker registration failed:', err);
+      });
     }
   }, []);
   useEffect(() => {
@@ -53,21 +54,19 @@ export default function Providers({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Provider store={store}>
-      <QueryClientProvider client={queryClient}>
-        <I18nProvider>
-          {/* Global VS Code-style keyboard shortcuts */}
-          <GlobalShortcuts />
-          {/* Cmd/Ctrl+/ cheat sheet */}
-          <ShortcutsDialog />
-          {/* Global Cmd+K command palette */}
-          <CommandPalette />
-          {children}
-          {/* Global toast host (sonner) — placed at end of document tree */}
-          <Toaster position="top-right" closeButton richColors />
-          {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
-        </I18nProvider>
-      </QueryClientProvider>
-    </Provider>
+    <QueryClientProvider client={queryClient}>
+      <I18nProvider>
+        {/* Global VS Code-style keyboard shortcuts */}
+        <GlobalShortcuts />
+        {/* Cmd/Ctrl+/ cheat sheet */}
+        <ShortcutsDialog />
+        {/* Global Cmd+K command palette */}
+        <CommandPalette />
+        {children}
+        {/* Global toast host (sonner) — placed at end of document tree */}
+        <Toaster position="top-right" closeButton richColors />
+        {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
+      </I18nProvider>
+    </QueryClientProvider>
   );
 }

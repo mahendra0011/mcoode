@@ -73,21 +73,14 @@ interface Subagent {
   message?: string;
   progress?: number;
 }
-export interface BuildSummary {
-  done: number;
-  total: number;
-  failed: number;
-  needsReview: number;
-  elapsedSecs?: number;
-  cost?: number;
-  verificationPasses?: number;
-  verificationComplete?: boolean;
-  securityPassed?: boolean;
-  securityChecks?: { done: number; total: number };
-  playwrightClean?: boolean;
-  playwrightIssuesRemaining?: number;
-  modelsByDomain?: { domain: string; model: string; calls: number; cost: number }[];
-}
+/**
+ * `BuildSummary` is declared once, in the store, because that is where the
+ * `build:complete` payload lands (`chatSlice.setBuildComplete`). Re-declaring it
+ * here is what allowed the cost/budget/conflict fields to be dropped from the
+ * UI while still type-checking (audit WEB-004).
+ */
+export type { BuildSummary } from '../../store/chatSlice';
+import type { BuildSummary } from '../../store/chatSlice';
 export interface WaveProgressProps {
   waves?: Wave[];
   subagents?: Record<string, Subagent>;
@@ -108,10 +101,16 @@ export function WaveProgress({
   if (!godMode) return null;
 
   const activeWave = waves.find((w) => w.status === 'running');
-  const hasCompleted = buildSummary && buildSummary.total > 0;
+  const hasCompleted = !!buildSummary && (buildSummary.total ?? 0) > 0;
 
   return (
+    // WEB-019: polite live region so screen readers hear wave progress and
+    // build completion without moving focus.
     <motion.div
+      role="status"
+      aria-live="polite"
+      aria-atomic="false"
+      aria-label="Parallel build progress"
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -210,22 +209,103 @@ export function WaveProgress({
             >
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-3">
-                  <span className={buildSummary.failed > 0 ? 'text-red-400' : 'text-emerald-400'}>
-                    ✓ {buildSummary.done}/{buildSummary.total} done
+                  <span className={(buildSummary.failed ?? 0) > 0 ? 'text-red-400' : 'text-emerald-400'}>
+                    ✓ {buildSummary.done ?? 0}/{buildSummary.total ?? 0} done
                   </span>
-                  {buildSummary.failed > 0 && (
+                  {(buildSummary.failed ?? 0) > 0 && (
                     <span className="text-red-400">✗ {buildSummary.failed} failed</span>
                   )}
-                  {buildSummary.needsReview > 0 && (
+                  {(buildSummary.needsReview ?? 0) > 0 && (
                     <span className="text-amber-400">⚑ {buildSummary.needsReview} review</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 text-white/40">
                   <BarChart3 className="w-3 h-3" />
                   <span>{Math.round(buildSummary.elapsedSecs || 0)}s</span>
-                  {buildSummary.cost && buildSummary.cost > 0 && <span>${Number(buildSummary.cost).toFixed(2)}</span>}
+                  {/* Real, ledger-attributed spend (MF-002). `cost` is the legacy
+                      rate-table estimate and is only shown when no ledger figure
+                      exists — WEB-004 used to render neither. */}
+                  {buildSummary.spendUsd != null ? (
+                    <span className="text-white/60" title="Ledger-attributed spend">
+                      ${Number(buildSummary.spendUsd).toFixed(2)}
+                    </span>
+                  ) : (
+                    buildSummary.cost != null && buildSummary.cost > 0 && (
+                      <span title="Legacy rate-table estimate">~${Number(buildSummary.cost).toFixed(2)}</span>
+                    )
+                  )}
+                  {(buildSummary.tokensIn != null || buildSummary.tokensOut != null) && (
+                    <span className="font-mono text-[10px]">
+                      {((buildSummary.tokensIn ?? 0) / 1000).toFixed(1)}k in /{' '}
+                      {((buildSummary.tokensOut ?? 0) / 1000).toFixed(1)}k out
+                    </span>
+                  )}
                 </div>
               </div>
+
+              {/* Cost ceiling reached — the run was STOPPED, not completed. This is
+                  a warning, not a failure: the user needs the resume command. */}
+              {buildSummary.budget != null && (
+                <div
+                  role="status"
+                  data-testid="build-budget-banner"
+                  className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-2.5 py-2 text-[11px] text-amber-200/90"
+                >
+                  <strong className="font-medium">Stopped at the cost ceiling.</strong>{' '}
+                  spent ${Number(buildSummary.budget.spentUsd ?? 0).toFixed(2)} of the $
+                  {Number(buildSummary.budget.limitUsd ?? 0).toFixed(2)} limit
+                  {buildSummary.budget.at ? ` (${new Date(buildSummary.budget.at).toLocaleString()})` : ''}.
+                  Resume with <code className="font-mono">mcode god --resume</code>.
+                </div>
+              )}
+
+              {/* Writer-safety signals (MF-004) — previously dropped at the type. */}
+              {(buildSummary.overlaps?.length || buildSummary.lockConflicts?.length || buildSummary.emptyFileTodos?.length) ? (
+                <div className="mt-2 flex flex-col gap-1 text-[11px]" data-testid="build-conflicts">
+                  {(buildSummary.overlaps?.length ?? 0) > 0 && (
+                    <details>
+                      <summary className="cursor-pointer text-amber-300/80">
+                        ⚠ {buildSummary.overlaps!.length} file(s) written by more than one agent
+                      </summary>
+                      <ul className="mt-1 flex flex-col gap-0.5 text-white/50">
+                        {buildSummary.overlaps!.map((o) => (
+                          <li key={o.file} className="font-mono truncate">
+                            {o.file} — {o.writers.join(', ')}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  {(buildSummary.lockConflicts?.length ?? 0) > 0 && (
+                    <details>
+                      <summary className="cursor-pointer text-red-300/80">
+                        ⛔ {buildSummary.lockConflicts!.length} lock conflict(s)
+                      </summary>
+                      <ul className="mt-1 flex flex-col gap-0.5 text-white/50">
+                        {buildSummary.lockConflicts!.map((c, i) => (
+                          <li key={`${c.file}-${i}`} className="font-mono truncate">
+                            {c.file} — todo {c.todoId} blocked by {c.lockedBy ?? 'unknown'}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  {(buildSummary.emptyFileTodos?.length ?? 0) > 0 && (
+                    <details>
+                      <summary className="cursor-pointer text-white/40">
+                        {buildSummary.emptyFileTodos!.length} todo(s) produced no files
+                      </summary>
+                      <ul className="mt-1 flex flex-col gap-0.5 text-white/50">
+                        {buildSummary.emptyFileTodos!.map((t) => (
+                          <li key={t.id} className="truncate">
+                            <span className="text-white/30">{t.domain}</span> {t.title}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              ) : null}
 
               {(buildSummary.verificationComplete !== undefined || buildSummary.securityPassed !== undefined || buildSummary.playwrightClean !== undefined) && (
                 <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-white/5 text-[11px]">

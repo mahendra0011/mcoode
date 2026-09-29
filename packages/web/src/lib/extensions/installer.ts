@@ -9,6 +9,9 @@ export interface InstalledExtension {
   description: string;
   icon?: string;
   installedAt: string;
+  // WEB-020: sha256 digest of the installed vsix bytes, as recorded
+  // server-side (`sha256-<hex>`). Absent on entries installed before the gate.
+  integrity?: string;
   contributes?: {
     themes?: Array<{
       id: string;
@@ -57,6 +60,11 @@ class ExtensionInstallerManager {
 
       for (const ext of list) {
         this.installed.set(ext.id, ext);
+        // WEB-020: surface legacy entries without an integrity digest so the
+        // UI can hint "unverified" instead of silently trusting them.
+        if (!ext.integrity) {
+          console.warn(`[installer] Installed extension "${ext.id}" lacks an integrity digest (pre-WEB-020 install).`);
+        }
         this.registerContributions(ext);
       }
 
@@ -70,6 +78,11 @@ class ExtensionInstallerManager {
 
   isInstalled(id: string): boolean {
     return this.installed.has(id);
+  }
+
+  /** WEB-020: true when the server record carries a sha256 integrity digest. */
+  isVerified(id: string): boolean {
+    return Boolean(this.installed.get(id)?.integrity);
   }
 
   isInstalling(id: string): boolean {
@@ -111,6 +124,9 @@ class ExtensionInstallerManager {
 
       if (res.data?.ok && res.data.extension) {
         const installedExt: InstalledExtension = res.data.extension;
+        if (!installedExt.integrity) {
+          console.warn(`[installer] Install response for "${installedExt.id}" lacks an integrity digest.`);
+        }
         this.installed.set(installedExt.id, installedExt);
         this.registerContributions(installedExt);
 

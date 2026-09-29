@@ -1,22 +1,45 @@
 import { Client } from 'ssh2';
 import { StringDecoder } from 'node:string_decoder';
-import jwt from 'jsonwebtoken';
+import { verifyToken } from './auth.js';
 
 const connections = new Map();
+
+/**
+ * The server signing secret. Resolved once at call time from the environment;
+ * there is deliberately NO hardcoded fallback (M11-006). If it is missing the
+ * token cannot be verified and the connection is refused — fail closed.
+ */
+function resolveSecret() {
+  return process.env.JWT_SECRET || '';
+}
 
 export function connectSSH(socketId, { host, port, username, password, privateKey, token }, onData, onReady, onError) {
   if (!host || !username || (!password && !privateKey)) {
     onError('host, username, and a password or privateKey are required');
     return;
   }
-  // FINDING-1021: verify the socket session token before accepting credentials
-  if (token) {
-    try {
-      jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
-    } catch {
-      onError('invalid or expired session token');
-      return;
-    }
+  // M11-006: three defects fixed here.
+  //  1. The check was `if (token)` — SKIPPED when no token was supplied, so a
+  //     caller could obtain an SSH connection with no verification at all.
+  //  2. It fell back to a hardcoded `'dev-secret'` when JWT_SECRET was unset,
+  //     bypassing config/envValidator.js entirely.
+  //  3. No algorithm pin, so a token could negotiate its own `alg`.
+  // A token is now mandatory, verified with the shared helper against the
+  // real server secret, and the algorithm is pinned to HS256 by verifyToken.
+  if (!token) {
+    onError('authentication token is required');
+    return;
+  }
+  const secret = resolveSecret();
+  if (!secret) {
+    onError('server authentication is not configured');
+    return;
+  }
+  try {
+    verifyToken(token, secret);
+  } catch {
+    onError('invalid or expired session token');
+    return;
   }
   const conn = new Client();
   // 1023: streaming decoder keeps multi-byte chars split across TCP

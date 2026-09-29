@@ -30,10 +30,43 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { catalog as staticCatalog, categories } from "@/lib/extensions/catalog";
 import { runtime } from "@/lib/extensions/runtime";
 import extensionInstaller, { InstalledExtension } from "@/lib/extensions/installer";
 import api from "@/lib/axios";
+
+// WEB-020: catalog is intentionally NOT statically imported (933 KB).
+// It is lazy-loaded via dynamic import() below so it leaves the initial bundle.
+// Keep this fallback list in sync with lib/extensions/catalog.ts `categories`.
+const FALLBACK_CATEGORIES = [
+  "All categories",
+  "Themes",
+  "Linters",
+  "Formatters",
+  "Snippets",
+  "Productivity",
+  "Git & VCS",
+  "Databases",
+  "Testing & Debug",
+];
+
+// WEB-020: typed catalog entry (replaces `any` in handleInstall).
+export interface CatalogExtension {
+  id: string;
+  name: string;
+  publisher?: string;
+  version?: string;
+  description?: string;
+  icon?: string;
+  iconBg?: string;
+  rating?: number;
+  downloads?: string | number;
+  category?: string;
+  verified?: boolean;
+  downloadUrl?: string;
+}
+
+export type MarketplaceSelectedExtension = CatalogExtension &
+  Partial<InstalledExtension>;
 
 const STORAGE_KEY = "activeExtensions";
 
@@ -81,14 +114,19 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Extensions Data & Manager
-  const [catalog, setCatalog] = useState<any[]>(staticCatalog);
+  // WEB-020: catalog loads lazily (dynamic import) to keep 933 KB out of the
+  // initial bundle. Behavior is identical once loaded.
+  const [catalog, setCatalog] = useState<CatalogExtension[]>([]);
+  const [categoryList, setCategoryList] = useState<string[]>(FALLBACK_CATEGORIES);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const baseCatalogRef = useRef<CatalogExtension[]>([]);
   const [installedList, setInstalledList] = useState<InstalledExtension[]>([]);
   const [installingIds, setInstallingIds] = useState<Set<string>>(new Set());
   const [activeBuiltIn, setActiveBuiltIn] = useState<Record<string, boolean>>({});
   const [visibleCount, setVisibleCount] = useState(60);
 
   // Detail Modal State
-  const [selectedExtension, setSelectedExtension] = useState<any | null>(null);
+  const [selectedExtension, setSelectedExtension] = useState<MarketplaceSelectedExtension | null>(null);
   const [modalTab, setModalTab] = useState<"overview" | "contributions" | "details">("overview");
 
   // Keyboard shortcut: Ctrl+K or / to focus search
@@ -130,6 +168,39 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
     };
   }, []);
 
+  // WEB-020: lazy-load the 933 KB catalog so it lands in its own chunk.
+  useEffect(() => {
+    let cancelled = false;
+    setCatalogLoading(true);
+    import("@/lib/extensions/catalog")
+      .then((m) => {
+        if (cancelled) return;
+        const loaded: CatalogExtension[] = (m.catalog as CatalogExtension[]) ?? [];
+        baseCatalogRef.current = loaded;
+        setCatalog((prev) => {
+          // Don't clobber live search results that arrived before the base load.
+          if (prev.length > 0 && loaded.length > 0) {
+            const ids = new Set(prev.map((e) => e.id));
+            const missing = loaded.filter((e) => !ids.has(e.id));
+            return missing.length > 0 ? [...prev, ...missing] : prev;
+          }
+          return loaded;
+        });
+        if (Array.isArray((m as { categories?: string[] }).categories)) {
+          setCategoryList((m as { categories: string[] }).categories);
+        }
+      })
+      .catch((err) => {
+        console.warn("[marketplace] Failed to lazy-load catalog:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const installedMap = useMemo(() => {
     const map = new Map<string, InstalledExtension>();
     for (const ext of installedList) {
@@ -152,7 +223,8 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
   // Live Open VSX search query
   useEffect(() => {
     if (!debouncedQuery && activeCategory === "All categories") {
-      setCatalog(staticCatalog);
+      // Restore the lazily loaded base catalog (may still be loading).
+      setCatalog(baseCatalogRef.current);
       setIsSearching(false);
       return;
     }
@@ -163,9 +235,9 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
       .get(`/api/v1/extensions/search?q=${encodeURIComponent(debouncedQuery)}${catQuery}`)
       .then((res) => {
         if (res.data?.extensions && res.data.extensions.length > 0) {
-          const map = new Map<string, any>();
-          staticCatalog.forEach((e) => map.set(e.id, e));
-          res.data.extensions.forEach((e: any) => {
+          const map = new Map<string, CatalogExtension>();
+          baseCatalogRef.current.forEach((e) => map.set(e.id, e));
+          (res.data.extensions as CatalogExtension[]).forEach((e: CatalogExtension) => {
             map.set(e.id, {
               ...e,
               category: activeCategory !== "All categories" ? activeCategory : e.category || "Tools",
@@ -215,7 +287,7 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
     }
   }
 
-  async function handleInstall(ext: any, e?: React.MouseEvent) {
+  async function handleInstall(ext: CatalogExtension, e?: React.MouseEvent) {
     e?.stopPropagation();
     toast.loading(`Downloading & installing ${ext.name}...`, { id: ext.id });
     const success = await extensionInstaller.install({
@@ -344,7 +416,7 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
 
           {/* Category List */}
           <div className="space-y-1">
-            {categories.map((cat) => {
+            {categoryList.map((cat) => {
               const isActive = activeCategory === cat;
               const count = categoryCounts[cat] || 0;
               const icon = CATEGORY_ICON_MAP[cat] || <Tag className="w-4 h-4 text-gray-400" />;
@@ -589,13 +661,31 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
           {/* Results count banner */}
           <div className="flex items-center justify-between mb-4">
             <div className="text-xs text-gray-400">
-              Showing <span className="font-semibold text-gray-200">{displayed.length}</span> of{" "}
-              <span className="font-semibold text-gray-200">{filtered.length}</span> extensions
-              {activeCategory !== "All categories" && ` in ${activeCategory}`}
+              {catalogLoading && catalog.length === 0 ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin text-indigo-400" /> Loading catalog…
+                </span>
+              ) : (
+                <>
+                  Showing <span className="font-semibold text-gray-200">{displayed.length}</span> of{" "}
+                  <span className="font-semibold text-gray-200">{filtered.length}</span> extensions
+                  {activeCategory !== "All categories" && ` in ${activeCategory}`}
+                </>
+              )}
             </div>
           </div>
 
-          {isSearching ? (
+          {catalogLoading && catalog.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5" aria-label="Loading catalog">
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="animate-pulse rounded-xl border border-white/5 bg-white/[0.02] p-4 space-y-3">
+                  <div className="h-4 w-2/3 rounded bg-white/10" />
+                  <div className="h-3 w-full rounded bg-white/5" />
+                  <div className="h-3 w-1/2 rounded bg-white/5" />
+                </div>
+              ))}
+            </div>
+          ) : isSearching ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5" aria-label="Searching extensions">
               {[0, 1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="animate-pulse rounded-xl border border-white/5 bg-white/[0.02] p-4 space-y-3">
@@ -684,6 +774,29 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
                           {ext.category || "Tools"}
                         </span>
                       </div>
+
+                      {/* WEB-020: integrity + update-available affordances */}
+                      {isInstalled && installedData && (
+                        <div className="flex flex-col gap-1 pb-2">
+                          {installedData.integrity ? (
+                            <span
+                              className="text-[10px] font-mono text-emerald-400"
+                              title={installedData.integrity}
+                            >
+                              verified ✓ {shortIntegrity(installedData.integrity)}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium text-amber-400" title="Server record has no integrity digest">
+                              unverified — no integrity record
+                            </span>
+                          )}
+                          {isUpdateAvailable(ext.version, installedData.version) && (
+                            <span className="text-[10px] font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/20 rounded px-1.5 py-0.5 w-fit">
+                              Update available: v{installedData.version} → v{ext.version}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Actions Bar */}
                       <div className="flex items-center gap-2 pt-1">
@@ -786,10 +899,26 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
                           </h3>
                           {ext.verified && <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
                           <span className="text-[10px] text-gray-400 font-mono">v{ext.version || "1.0.0"}</span>
+                          {isInstalled && installedData && isUpdateAvailable(ext.version, installedData.version) && (
+                            <span className="text-[10px] font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/20 rounded px-1.5 py-0.5">
+                              Update available: v{installedData.version} → v{ext.version}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-gray-400 truncate max-w-xl">
                           {ext.description || "No description provided."}
                         </p>
+                        {isInstalled && installedData && (
+                          <p className="text-[10px] font-mono mt-0.5">
+                            {installedData.integrity ? (
+                              <span className="text-emerald-400" title={installedData.integrity}>
+                                verified ✓ {shortIntegrity(installedData.integrity)}
+                              </span>
+                            ) : (
+                              <span className="text-amber-400">unverified — no integrity record</span>
+                            )}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -954,6 +1083,27 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
                       <Download className="w-3 h-3" />
                       {formatDownloads(selectedExtension.downloads)}
                     </span>
+                    {(() => {
+                      const installed = installedMap.get(selectedExtension.id);
+                      if (!installed) return null;
+                      return (
+                        <>
+                          <span>•</span>
+                          {installed.integrity ? (
+                            <span className="font-mono text-emerald-400" title={installed.integrity}>
+                              verified ✓ {shortIntegrity(installed.integrity)}
+                            </span>
+                          ) : (
+                            <span className="font-medium text-amber-400">unverified — no integrity record</span>
+                          )}
+                          {isUpdateAvailable(selectedExtension.version, installed.version) && (
+                            <span className="font-semibold text-sky-300 bg-sky-500/10 border border-sky-500/20 rounded px-1.5 py-0.5">
+                              Update available: v{installed.version} → v{selectedExtension.version}
+                            </span>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Actions in Modal */}
@@ -1185,6 +1335,23 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
                           `https://open-vsx.org/api/${selectedExtension.publisher}/${selectedExtension.name}/${selectedExtension.version}/file.vsix`}
                       </div>
                     </div>
+
+                    <div className="bg-[#161a24] p-3 rounded-lg border border-[#242b3d]">
+                      <div className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Integrity (server record)</div>
+                      {(() => {
+                        const installed = installedMap.get(selectedExtension.id);
+                        if (!installed) {
+                          return <div className="text-gray-400">Not installed — digest is recorded on install.</div>;
+                        }
+                        return installed.integrity ? (
+                          <div className="font-mono text-[11px] text-emerald-400" title={installed.integrity}>
+                            verified ✓ {shortIntegrity(installed.integrity)}
+                          </div>
+                        ) : (
+                          <div className="text-amber-400">unverified — no integrity record</div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1196,7 +1363,7 @@ export default function ExtensionsMarketplace({ editorApi = {} }: ExtensionsMark
   );
 }
 
-function parseDownloads(value: any): number {
+function parseDownloads(value: string | number | undefined | null): number {
   if (typeof value === "number") return value;
   if (!value) return 0;
   const str = String(value);
@@ -1206,10 +1373,24 @@ function parseDownloads(value: any): number {
   return isNaN(num) ? 0 : num;
 }
 
-function formatDownloads(val: any): string {
+function formatDownloads(val: string | number | undefined | null): string {
   if (!val) return "1K+";
   const num = typeof val === "number" ? val : parseDownloads(val);
   if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
   if (num >= 1_000) return `${Math.round(num / 1_000)}K`;
   return String(num);
+}
+
+// WEB-020: short display form of a `sha256-<hex>` digest from the server record.
+function shortIntegrity(integrity: string | undefined): string {
+  if (!integrity) return "sha256:missing";
+  const hex = integrity.replace(/^sha256-/, "");
+  return `sha256:${hex.slice(0, 12)}`;
+}
+
+// WEB-020: update-available affordance only (no auto-update). True when both
+// versions are present and differ after trimming.
+function isUpdateAvailable(catalogVersion?: string, installedVersion?: string): boolean {
+  if (!catalogVersion || !installedVersion) return false;
+  return catalogVersion.trim() !== installedVersion.trim();
 }

@@ -74,8 +74,15 @@ export async function rotateRefreshToken(db, refresh, secret) {
   return signTrackedTokens(db, payload.sub, { secret });
 }
 
-export function verifyToken(token, secret) {
-  return jwt.verify(token, secret);
+/**
+ * Verify a JWT.
+ *
+ * M11-006: `algorithms` is PINNED to HS256 by default and is not
+ * caller-overridable. jsonwebtoken otherwise honours the token's own `alg`
+ * header, which is the precondition for algorithm-confusion attacks.
+ */
+export function verifyToken(token, secret, { algorithms = ['HS256'] } = {}) {
+  return jwt.verify(token, secret, { algorithms });
 }
 
 function cookieFlags(maxAgeMs) {

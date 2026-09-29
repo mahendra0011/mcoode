@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, X } from 'lucide-react';
 import api from '../lib/axios';
+import { setTokens } from '../lib/api';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -36,8 +37,8 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
         throw new Error(data.error?.message || 'Authentication failed');
       }
       
-      localStorage.setItem('mcode_tokens', JSON.stringify({ access: data.access, refresh: data.refresh }));
-      
+      // WEB-011: keep the refresh token out of script-readable storage.
+      setTokens({ access: data.access, refresh: data.refresh });
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {

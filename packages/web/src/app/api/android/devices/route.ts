@@ -1,10 +1,19 @@
-import { exec } from "child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "util";
-const execAsync = promisify(exec);
+import { requireApiAuth } from "@/lib/server/apiAuth";
 
-export async function GET() {
+const execFileAsync = promisify(execFile);
+
+/** M11-002: refuse anonymous callers — this shells out to the Android emulator CLI. */
+export async function GET(req: Request) {
   try {
-    const { stdout } = await execAsync("emulator -list-avds", { timeout: 3000 });
+    const auth = await requireApiAuth(req);
+    if (!auth.ok) return auth.response;
+
+    const { stdout } = await execFileAsync("emulator", ["-list-avds"], {
+      timeout: 3000,
+      windowsHide: true,
+    });
     const names = stdout
       .trim()
       .split("\n")

@@ -42,11 +42,12 @@ function SourceRow({ source, idx }: { source: SearchSource; idx: number }) {
       <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
         {!imgError && domain ? (
           <img
-            src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+            src={`https://${domain}/favicon.ico`}
             alt=""
             width={15}
             height={15}
             className="rounded-sm shrink-0 object-contain"
+            referrerPolicy="no-referrer"
             onError={() => setImgError(true)}
           />
         ) : (

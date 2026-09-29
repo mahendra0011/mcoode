@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { reportError } from '../../lib/logger';
+import { clearTokens } from '../../lib/api';
 import JSZip from 'jszip';
 import { useAppDispatch, useAppSelector } from '../../store';
 import {
@@ -10,7 +12,7 @@ import {
   Workflow, Monitor, MousePointerClick, Cpu, Paperclip, BrainCircuit, Cloud, Bug
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { McodeTurnMachineVisualization } from '../../components/mcode/McodeTurnMachineVisualization';
+import { McodeTurnMachineVisualization, type TurnPhase, type TurnTransition } from '../../components/mcode/McodeTurnMachineVisualization';
 import { Group as ResizablePanelGroup, Panel as ResizablePanel, Separator as ResizablePanelHandle, usePanelRef } from 'react-resizable-panels';
 import Link from 'next/link'; import { useRouter, useSearchParams } from 'next/navigation';
 import { useChatSocket, getSocket } from '../../hooks/useChatSocket';
@@ -19,6 +21,7 @@ import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhan
 import { handleSlashCommand, isSlashCommand, getAvailableSlashCommands, getGroupedSlashCommands } from '../../lib/slashCommands';
 import { SlashCommandPicker } from '../chat/SlashCommandPicker';
 import { CleanupReport } from '../chat/CleanupReport';
+import { GodModeToggle } from '../chat/mcodeUX';
 import { zipFilesOffMainThread, WORKSPACE_UPLOAD_TIMEOUT_MS, type ZipEntry } from '../../lib/zipInWorker';
 import { useI18n } from '../../lib/i18n';
 
@@ -84,11 +87,16 @@ function isIgnoredUploadPath(relPath: string): boolean {
 
 /** Read a batch of DataTransferItem directory entries to exhaustion (readEntries only
  *  returns ~100 at a time per the spec), then return the full list. */
-function readAllDirectoryEntries(dirReader: any): Promise<any[]> {
+/** Minimal structural type for `FileSystemDirectoryEntry.createReader()` (webkit drop API). */
+interface DirectoryReaderLike {
+  readEntries(success: (entries: FileSystemEntry[]) => void, error?: () => void): void;
+}
+
+function readAllDirectoryEntries(dirReader: DirectoryReaderLike): Promise<FileSystemEntry[]> {
   return new Promise((resolve) => {
-    const all: any[] = [];
+    const all: FileSystemEntry[] = [];
     const readBatch = () => {
-      dirReader.readEntries((batch: any[]) => {
+      dirReader.readEntries((batch: FileSystemEntry[]) => {
         if (!batch || batch.length === 0) {
           resolve(all);
         } else {
@@ -154,6 +162,34 @@ import { SpinnerBlock } from '../../components/chat/SpinnerBlock';
 import { AgentActionSequence } from '../../components/chat/AgentActionSequence';
 import { ReactionBurst } from '../../components/chat/ReactionBurst';
 
+/**
+ * Shown when the socket drops *while a turn is in flight* (audit WEB-003).
+ *
+ * The old behaviour was to clear `isStreaming` on a 15 s / 60 s local timer,
+ * which silently truncated healthy long turns and re-enabled the composer while
+ * the CLI still owned the turn. Now the only thing that ends a turn is a real
+ * event, so the honest thing to do when the connection dies mid-turn is to say
+ * so — the run may well still be alive on the machine.
+ */
+function StreamInterruptedNotice({ connectionState }: { connectionState: 'connected' | 'disconnected' | 'reconnecting' }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="stream-interrupted-notice"
+      className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-3 py-2 text-[12px] leading-relaxed text-amber-200/90"
+    >
+      <span className="mt-[3px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
+      <span>
+        <strong className="font-medium text-amber-200">Lost the connection mid-turn.</strong>{' '}
+        {connectionState === 'reconnecting'
+          ? 'Reconnecting automatically — the run may still be in progress on the machine.'
+          : 'The backend is unreachable, so progress cannot be shown. The run may still be in progress; start the backend with `mcode serve` and it will report back.'}
+      </span>
+    </div>
+  );
+}
+
 export function AIChatPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -174,7 +210,7 @@ export function AIChatPage() {
       if (saved) {
         setActiveWorkspaceId(saved);
       }
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
   }, []);
 
   // Persist active workspace to localStorage so refreshes always restore the active project
@@ -182,7 +218,7 @@ export function AIChatPage() {
     if (activeWorkspaceId && typeof window !== 'undefined') {
       try {
         localStorage.setItem('mcode_active_workspace_id', activeWorkspaceId);
-      } catch {}
+      } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     }
   }, [activeWorkspaceId]);
 
@@ -284,48 +320,20 @@ export function AIChatPage() {
     setRunTerminalCommandFn(sendTerminalCommand);
   }, [sendTerminalCommand, setRunTerminalCommandFn]);
 
-  // Auto-reset streaming if it gets stuck after a tool execution
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    if (isStreaming && messages.length > 0 && messages[messages.length - 1]?.kind !== 'stream') {
-      // If we are waiting for a stream to start after a tool completes, and it takes >15s,
-      // it's likely the backend crashed or the connection dropped without a chat:done event.
-      timer = setTimeout(() => {
-        dispatch(resetStreaming());
-      }, 15000);
-    }
-    return () => clearTimeout(timer);
-  }, [isStreaming, messages, dispatch]);
+  // ── Streaming state is reset ONLY by real socket events (audit WEB-003) ──
+  // `chat:done`, `chat:error` and `disconnect` are the only things that end a
+  // turn (see `onDisconnect` / `onChatDone` / `onChatError` in useChatSocket).
+  //
+  // This page used to *also* clear `isStreaming` on two wall-clock timers —
+  // 15 s after a tool message and 60 s after the turn started. A god-mode turn
+  // routinely runs for minutes (`run_shell` 120 s, `run_tests` 180 s, subagent
+  // waves), so those timers cancelled healthy runs, re-enabled the composer
+  // while the CLI still owned the turn, and made the thinking indicator vanish
+  // mid-answer. The spec forbids inventing a phase on a local timer; the timers
+  // are gone and the interruption is now reported honestly instead.
 
   // Auto-scroll for the virtualized chat lists lives inside
   // VirtualChatMessages (it owns the scroll container now).
-
-  // Safety net: if isStreaming is stuck true for 60s without any stream
-  // activity (e.g. backend crashed silently without socket disconnect),
-  // reset it so the ThinkingIndicator stops spinning and the user can
-  // type a new message.
-  const streamingSinceRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (isStreaming) {
-      if (!streamingSinceRef.current) {
-        streamingSinceRef.current = Date.now();
-      }
-      const elapsed = Date.now() - streamingSinceRef.current;
-      const remaining = 60000 - elapsed;
-      if (remaining <= 0) {
-        dispatch(resetStreaming());
-        streamingSinceRef.current = null;
-      } else {
-        const timer = setTimeout(() => {
-          dispatch(resetStreaming());
-          streamingSinceRef.current = null;
-        }, remaining);
-        return () => clearTimeout(timer);
-      }
-    } else {
-      streamingSinceRef.current = null;
-    }
-  }, [isStreaming, dispatch]);
   const [showCommandPicker, setShowCommandPicker] = useState(false);
   const [selectedCmdIndex, setSelectedCmdIndex] = useState(0);
   const commandPickerRef = useRef<HTMLDivElement | null>(null);
@@ -454,11 +462,9 @@ export function AIChatPage() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('mcode_tokens');
+    clearTokens();
     window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
-    if (!window.mcodeElectron) {
-      router.push('/login');
-    }
+    router.push('/login');
   };
 	const [isModalsOpen, setIsModalsOpen] = useState(false);
 	const [githubAccount, setGithubAccount] = useState<any>(null);
@@ -513,14 +519,14 @@ export function AIChatPage() {
 			if (!shouldEnable) {
 				try {
 					await api.post(`/api/v1/watch/${activeWorkspaceId}/stop`);
-				} catch {}
+				} catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
 				socket?.emit('watch:stop', { projectId: activeWorkspaceId });
 				dispatch(watchStatusUpdated({ status: 'stopped' }));
 				toast.info('Watch daemon stopped');
 			} else {
 				try {
 					await api.post(`/api/v1/watch/${activeWorkspaceId}/start`);
-				} catch {}
+				} catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
 				socket?.emit('watch:start', { projectId: activeWorkspaceId });
 				dispatch(watchStatusUpdated({ status: 'running' }));
 				toast.success('Watch daemon active — watching project changes');
@@ -894,7 +900,7 @@ export function AIChatPage() {
           return [data.workspace, ...filtered];
         });
         setActiveWorkspaceId(data.workspace._id);
-        try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch {}
+        try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
         useIDEStore.setState({ openFiles: [], activePath: null });
         useIDEStore.getState().setActiveActivityBar('explorer');
         useIDEStore.getState().setSidebarOpen(true);
@@ -1044,7 +1050,7 @@ export function AIChatPage() {
         return [data.workspace, ...filtered];
       });
       setActiveWorkspaceId(data.workspace._id);
-      try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch {}
+      try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
       useIDEStore.setState({ openFiles: [], activePath: null });
       useIDEStore.getState().setActiveActivityBar('explorer');
       useIDEStore.getState().setSidebarOpen(true);
@@ -1318,7 +1324,7 @@ export function AIChatPage() {
       if (uploadRes.data?.ok) {
         setWorkspaces(prev => [wsData.workspace, ...prev.filter(w => w._id !== targetId)]);
         setActiveWorkspaceId(targetId);
-        try { localStorage.setItem('mcode_active_workspace_id', targetId); } catch {}
+        try { localStorage.setItem('mcode_active_workspace_id', targetId); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
         useIDEStore.setState({ openFiles: [file.name], activePath: file.name });
         bumpRefresh();
         showToast(`File '${file.name}' uploaded successfully!`);
@@ -1352,7 +1358,7 @@ export function AIChatPage() {
           return [data.workspace, ...filtered];
         });
         setActiveWorkspaceId(data.workspace._id);
-        try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch {}
+        try { localStorage.setItem('mcode_active_workspace_id', data.workspace._id); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
         useIDEStore.setState({ openFiles: [], activePath: null });
         useIDEStore.getState().setActiveActivityBar('explorer');
         useIDEStore.getState().setSidebarOpen(true);
@@ -1460,13 +1466,9 @@ export function AIChatPage() {
   const handleGithubConnect = () => {
     const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
     const url = `/api/v1/auth/github?token=${encodeURIComponent(tokens.access || '')}`;
-    if (window.mcodeElectron?.openOAuthPopup) {
-      window.mcodeElectron.openOAuthPopup(url).catch(() => {
-        window.location.href = url;
-      });
-    } else {
-      window.location.href = url;
-    }
+    // WEB-027: the Electron `openOAuthPopup` bridge is gone (no packages/desktop
+    // in this repository), so OAuth is always a full-page redirect.
+    window.location.href = url;
   };
 
   // open-files state + tree-refresh now live in useIDEStore (FileTree/EditorPane read them directly).
@@ -1615,6 +1617,48 @@ export function AIChatPage() {
     }
     return undefined;
   })();
+
+  // Real interruption signal (WEB-003): the socket is down *while a turn is in
+  // flight*. We do not clear `isStreaming` here — the backend may still be
+  // working — we just stop pretending everything is fine.
+  const streamInterrupted = isStreaming && connectionState !== 'connected';
+
+  // ── Turn phase, derived from real state (audit WEB-025) ─────────────────
+  // The turn-machine panel used to be fed
+  //   isStreaming ? 'streaming' : (mode === 'agent' ? 'executing_tools' : 'idle')
+  // which claimed "Executing Tools" during every non-streaming moment in agent
+  // mode — including model waits, tool planning, permission prompts and idle.
+  // The CLI does not emit a phase field, so the phase is derived from signals
+  // that *are* real, and it is `idle` whenever nothing is actually happening.
+  const turnPhase: TurnPhase = (() => {
+    if (permissionRequest) return 'awaiting_permission';
+    const last = messages[messages.length - 1];
+    if (last?.kind === 'tool' && last.status === 'running') return 'executing_tools';
+    if (isStreaming) return 'streaming';
+    return 'idle';
+  })();
+
+  // When the current phase began — a real timestamp, so the panel's elapsed
+  // timer is not permanently 0 (it used to be `Date.now()` computed at render).
+  const [phaseStartedAt, setPhaseStartedAt] = useState(() => Date.now());
+  useEffect(() => { setPhaseStartedAt(Date.now()); }, [turnPhase]);
+
+  // Real transition log for the panel: one entry per phase change this session.
+  const turnTransitions = useRef<TurnTransition[]>([]);
+  const lastPhaseRef = useRef<{ phase: TurnPhase; at: number } | null>(null);
+  if (!lastPhaseRef.current || lastPhaseRef.current.phase !== turnPhase) {
+    const now = Date.now();
+    turnTransitions.current = [
+      ...turnTransitions.current.slice(-49),
+      {
+        from: lastPhaseRef.current?.phase ?? turnPhase,
+        to: turnPhase,
+        timestamp: now,
+        durationMs: lastPhaseRef.current ? now - lastPhaseRef.current.at : 0,
+      },
+    ];
+    lastPhaseRef.current = { phase: turnPhase, at: now };
+  }
 
   return (
     <div 
@@ -2397,9 +2441,7 @@ export function AIChatPage() {
                             </motion.button>
                           )}
                           {activeTab === 'AI Code Assistant' && (
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-250 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
-                              <Zap className="w-3.5 h-3.5" /> God
-                            </motion.button>
+                            <GodModeToggle value={godMode} onChange={(v) => dispatch(setGodMode(v))} />
                           )}
                         </div>
 
@@ -2505,7 +2547,7 @@ export function AIChatPage() {
                           <WaveProgress
                             waves={waves as any}
                             subagents={subagents as any}
-                            buildSummary={buildSummary as any}
+                            buildSummary={buildSummary}
                             godMode={godMode}
                             projectTier={projectTier}
                             concurrency={concurrency}
@@ -2591,6 +2633,9 @@ export function AIChatPage() {
                       isNormalChat={mode === 'chat'}
                       undo={undo as any}
                     />
+                    {streamInterrupted && (
+                      <StreamInterruptedNotice connectionState={connectionState} />
+                    )}
                     {showThinkingIndicator && (
                       <motion.div
                         key="thinking-indicator-chat"
@@ -2721,9 +2766,7 @@ export function AIChatPage() {
                             </motion.button>
                           )}
                           {activeTab === 'AI Code Assistant' && (
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-250 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
-                              <Zap className="w-3.5 h-3.5" /> God
-                            </motion.button>
+                            <GodModeToggle value={godMode} onChange={(v) => dispatch(setGodMode(v))} />
                           )}
                         </div>
                         <div className="flex items-center gap-2">
@@ -2844,7 +2887,7 @@ export function AIChatPage() {
                             useIDEStore.setState({ openFiles: [], activePath: null });
                           }
                           setActiveWorkspaceId(id);
-                          try { localStorage.setItem('mcode_active_workspace_id', id); } catch {}
+                          try { localStorage.setItem('mcode_active_workspace_id', id); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
                           useIDEStore.getState().setActiveActivityBar('explorer');
                           useIDEStore.getState().setSidebarOpen(true);
                           leftPanelRef.current?.expand();
@@ -2963,7 +3006,7 @@ export function AIChatPage() {
                         <WaveProgress
                           waves={waves as any}
                           subagents={subagents as any}
-                          buildSummary={buildSummary as any}
+                          buildSummary={buildSummary}
                           godMode={godMode}
                           projectTier={projectTier}
                           concurrency={concurrency}
@@ -3048,6 +3091,9 @@ export function AIChatPage() {
                       isNormalChat={mode === 'chat'}
                       undo={undo as any}
                     />
+                    {streamInterrupted && (
+                      <StreamInterruptedNotice connectionState={connectionState} />
+                    )}
                       {showThinkingIndicator && (
                         <motion.div
                           key="thinking-indicator-ide"
@@ -3145,9 +3191,7 @@ export function AIChatPage() {
                               <Slash className="w-4 h-4" />
                             </motion.button>
                             {mode === 'agent' && (
-                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => dispatch(setGodMode(!godMode))} className={`px-3 h-7 rounded-lg flex items-center gap-2 transition-all duration-250 text-xs font-medium border backdrop-blur-md ${godMode ? 'bg-gradient-to-r from-purple-500/10 to-pink-500/10 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'}`}>
-                                <Zap className="w-3.5 h-3.5" /> God
-                              </motion.button>
+                              <GodModeToggle value={godMode} onChange={(v) => dispatch(setGodMode(v))} size="xs" />
                             )}
                           </div>
                           <div className="flex items-center gap-2">
@@ -3694,8 +3738,11 @@ export function AIChatPage() {
               <div className="max-h-[90vh] overflow-y-auto">
                 <McodeTurnMachineVisualization
                   state={{
-                    currentPhase: isStreaming ? 'streaming' : (mode === 'agent' ? 'executing_tools' : 'idle'),
-                    transitions: [],
+                    // Real, derived phase (WEB-025) — never a guess.
+                    currentPhase: turnPhase,
+                    phaseStartedAt,
+                    transitions: turnTransitions.current,
+                    toolCalls: messages.filter((m) => m.kind === 'tool').length,
                     waves: godMode ? waves : undefined,
                     subagents: godMode ? subagents : undefined,
                   }}

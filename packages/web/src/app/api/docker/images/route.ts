@@ -1,12 +1,19 @@
-import { exec } from "child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "util";
-const execAsync = promisify(exec);
+import { requireApiAuth } from "@/lib/server/apiAuth";
 
-export async function GET() {
+const execFileAsync = promisify(execFile);
+
+/** M11-002: refuse anonymous callers — this shells out to the host Docker CLI. */
+export async function GET(req: Request) {
   try {
-    const { stdout } = await execAsync(
-      'docker images --format "{{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Size}}"',
-      { timeout: 3000 }
+    const auth = await requireApiAuth(req);
+    if (!auth.ok) return auth.response;
+
+    const { stdout } = await execFileAsync(
+      "docker",
+      ["images", "--format", "{{.ID}}\t{{.Repository}}\t{{.Tag}}\t{{.Size}}"],
+      { timeout: 3000, windowsHide: true }
     );
     const lines = stdout.trim().split("\n").filter(Boolean);
     const images = lines.map((line) => {

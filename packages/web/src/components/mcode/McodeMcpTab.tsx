@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Server, Shield, Zap, AlertTriangle, Image, Database, Wifi, Settings, ChevronDown, ExternalLink } from 'lucide-react';
+import { Server, Shield, Zap, AlertTriangle, Image, Database, Wifi, Settings, ChevronDown, ExternalLink, Info } from 'lucide-react';
 import { domainColor } from '../../../../shared/src/domains';
 
 /**
@@ -14,6 +14,22 @@ export function McodeMcpTab() {
 
   return (
     <div className="space-y-8">
+      {/* WEB-028: per-tab label reusing the ReferenceBanner pattern in McodeDashboard.tsx —
+          this static tool table is not live state. */}
+      <div
+        role="note"
+        className="flex items-start gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3"
+      >
+        <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+        <div className="text-[12px] leading-relaxed min-w-0">
+          <p className="text-amber-200/90 font-medium">
+            Read-only CLI reference — this page does not read or change your configuration.
+          </p>
+          <p className="text-white/40 mt-1">
+            No on-disk configuration backs this section — the CLI implements neither skills nor MCP.
+          </p>
+        </div>
+      </div>
       <div>
         <h2 className="text-lg font-semibold text-white mb-1">MCP Servers</h2>
         <p className="text-sm text-white/40">3 MCP servers providing 46 tools. Security: high-risk tools require approval with system side-effect scope.</p>

@@ -20,14 +20,12 @@ export function StreamingAnswer({ text, wordsPerTick = 2, tickMs = 35 }: Streami
   const [count, setCount] = useState<number>(0);
 
   useEffect(() => {
+    setCount(0);
+    let n = 0;
     const id = setInterval(() => {
-      setCount((c) => {
-        if (c >= words.length) {
-          clearInterval(id);
-          return c;
-        }
-        return c + wordsPerTick;
-      });
+      n = Math.min(words.length, n + wordsPerTick);
+      setCount(n);
+      if (n >= words.length) clearInterval(id);
     }, tickMs);
     return () => clearInterval(id);
   }, [text, words.length, wordsPerTick, tickMs]);

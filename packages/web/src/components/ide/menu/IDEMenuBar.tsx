@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import api from "../../../lib/axios";
 import { getSocket } from "../../../hooks/useChatSocket";
 import { openReportIssue } from "../../../lib/reportIssue";
+import { reportError } from "../../../lib/logger";
 
 interface MenuItemDef {
   label?: string;
@@ -235,13 +236,9 @@ export function IDEMenuBar({
           label: "New Window",
           shortcut: "Ctrl+Shift+N",
           action: () => {
-            if (window.mcodeElectron?.openExternal) {
-              window.mcodeElectron.openExternal(window.location.href).catch(() => {
-                window.open(window.location.href, "_blank");
-              });
-            } else {
-              window.open(window.location.href, "_blank");
-            }
+            // WEB-027: the Electron `openExternal` bridge is gone (no
+            // packages/desktop in this repo), so this is always a new tab.
+            window.open(window.location.href, "_blank");
           },
         },
         { divider: true },
@@ -466,10 +463,8 @@ export function IDEMenuBar({
           label: "Close Window",
           shortcut: "Ctrl+Shift+W",
           action: () => {
-            if (typeof window !== "undefined" && (window.mcodeElectron as any)?.closeWindow) {
-              (window.mcodeElectron as any).closeWindow();
-              return;
-            }
+            // WEB-027: the Electron `closeWindow` bridge is gone (no
+            // packages/desktop in this repo), so this is always window.close().
             window.close();
             setTimeout(() => {
               if (!document.hidden) {
@@ -486,12 +481,10 @@ export function IDEMenuBar({
         },
         { divider: true },
         {
-          label: typeof window !== "undefined" && window.mcodeElectron ? "Exit" : "Back to Chat",
+          // WEB-027: the Electron `quitApp` bridge is gone, so there is no
+          // "Exit" variant of this item — the web app navigates back to chat.
+          label: "Back to Chat",
           action: () => {
-            if (typeof window !== "undefined" && (window.mcodeElectron as any)?.quitApp) {
-              (window.mcodeElectron as any).quitApp();
-              return;
-            }
             store.setActiveTab("Chat");
           },
         },
@@ -1091,7 +1084,13 @@ export function IDEMenuBar({
             if (existing) {
               try {
                 cfg = JSON.parse(existing);
-              } catch {}
+              } catch (err) {
+                // Corrupt/partial .vscode/launch.json in the workspace cache.
+                // Falling back to the empty default is correct here (the user is
+                // about to *add* a configuration, not read one) — but it used to
+                // be a bare `catch {}` with no explanation, so it read as a bug.
+                reportError('launch.json parse', err, { userVisible: false });
+              }
             }
             if (!Array.isArray(cfg.configurations)) cfg.configurations = [];
             const name = window.prompt("Enter configuration name (e.g. Node Launch, Chrome Debug):", `Launch Program ${cfg.configurations.length + 1}`);

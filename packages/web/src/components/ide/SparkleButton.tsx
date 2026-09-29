@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Loader2, Check, Copy, ArrowRight, X, Lightbulb, Wand2 } from 'lucide-react';
+import { Sparkles, Check, Copy, ArrowRight, X, Lightbulb, Wand2 } from 'lucide-react';
 import api from '../../lib/axios';
 
 const STARTER_TEMPLATES = [
@@ -101,7 +101,6 @@ export interface SparkleButtonProps {
 
 export function SparkleButton({ prompt = '', setPrompt }: SparkleButtonProps) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [enhancedResult, setEnhancedResult] = useState<{
     original: string;
     enhanced: string;
@@ -134,23 +133,12 @@ export function SparkleButton({ prompt = '', setPrompt }: SparkleButtonProps) {
       return;
     }
 
-    setLoading(true);
-    try {
-      const res = await api.post('/api/v1/prompt/enhance', { prompt: trimmed }, { timeout: 8000 });
-      if (res.data && res.data.enhanced) {
-        setEnhancedResult({
-          original: trimmed,
-          enhanced: res.data.enhanced,
-          corrections: res.data.corrections || [],
-          source: res.data.source || 'ai',
-        });
-        setLoading(false);
-        return;
-      }
-    } catch {
-      // Fall through to instant local rule-based enhancement
-    }
-
+    // WEB-031: The prompt enhancement flow (prompt:enhancing / prompt:enhanced)
+    // is not wired on the server side — it's a CLI-side feature. Disable AI
+    // enhancement to avoid a spinner that never resolves. The local rule-based
+    // fallback below still works for basic typo/structure fixes.
+    // If you need AI enhancement, run `mcode god "enhance prompt: <your prompt>"`
+    // in the CLI terminal instead.
     const fallback = localEnhance(trimmed);
     setEnhancedResult({
       original: trimmed,
@@ -158,7 +146,7 @@ export function SparkleButton({ prompt = '', setPrompt }: SparkleButtonProps) {
       corrections: fallback.corrections,
       source: 'smart-optimizer',
     });
-    setLoading(false);
+    setOpen(true);
   };
 
   const handleApply = () => {
@@ -187,19 +175,11 @@ export function SparkleButton({ prompt = '', setPrompt }: SparkleButtonProps) {
         whileTap={{ scale: 0.96 }}
         type="button"
         onClick={handleTriggerEnhance}
-        disabled={loading}
-        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 text-xs font-medium border backdrop-blur-md cursor-pointer ${
-          open || loading
-            ? 'bg-gradient-to-r from-amber-500/20 via-purple-500/20 to-emerald-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
-            : 'bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-amber-400'
-        }`}
-        title="Enhance prompt, fix typing errors & improve understanding (✨)"
+        disabled={true}
+        className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 text-xs font-medium border backdrop-blur-md cursor-not-allowed bg-white/5 border-white/10 text-white/30"
+        title="CLI-side feature: run mcode god --enhance in your terminal for AI enhancement. Local typo fixes still apply."
       >
-        {loading ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-        ) : (
-          <Sparkles className="w-3.5 h-3.5" />
-        )}
+        <Sparkles className="w-3.5 h-3.5 text-white/40" />
       </motion.button>
 
       <AnimatePresence>
@@ -236,16 +216,7 @@ export function SparkleButton({ prompt = '', setPrompt }: SparkleButtonProps) {
               </button>
             </div>
 
-            {loading ? (
-              <div className="py-8 flex flex-col items-center justify-center gap-3">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin" />
-                  <Sparkles className="w-4 h-4 text-amber-400 absolute inset-0 m-auto" />
-                </div>
-                <div className="text-xs text-white/80 font-medium">Fixing errors & enhancing prompt...</div>
-                <div className="text-[11px] text-white/40">Polishing grammar, adding technical specs & context</div>
-              </div>
-            ) : enhancedResult ? (
+            {enhancedResult ? (
               <div className="mt-3 flex flex-col gap-3">
                 {/* Corrections badge */}
                 {enhancedResult.corrections && enhancedResult.corrections.length > 0 && (

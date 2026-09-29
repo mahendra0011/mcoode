@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { reportError } from '../../lib/logger';
 import {
   Smartphone,
   Play,
@@ -44,14 +45,14 @@ export function AndroidEmulatorsPanel() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) return JSON.parse(stored);
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     return DEFAULT_SIMULATED_DEVICES;
   };
 
   const saveCustomDevices = (devs: AndroidDevice[]) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(devs));
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
   };
 
   const fetchDevices = useCallback(async () => {
@@ -115,7 +116,7 @@ export function AndroidEmulatorsPanel() {
   const handleStop = async (device: AndroidDevice) => {
     try {
       await api.post(`/api/v1/android/devices/${encodeURIComponent(device.id)}/stop`);
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     setDevices((prev) =>
       prev.map((d) => (d.id === device.id ? { ...d, status: "stopped" } : d))
     );

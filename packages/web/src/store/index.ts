@@ -1,27 +1,36 @@
 /**
- * State ownership boundary (DEBT-008): Redux Toolkit owns the chat/session
- * domain (chatSlice + ModelSelector), Zustand owns UI chrome
- * (settingsStore, ideStore). Don't add a third system; keep chat state in
- * Redux and visual/persisted UI prefs in Zustand.
+ * State ownership (DEBT-008 — resolved): zustand is the single client-state
+ * library. Chat/session state lives here, driven by the reducer in
+ * chatSlice.ts; UI chrome lives in settingsStore/ideStore. react-redux and
+ * @reduxjs/toolkit were removed.
+ *
+ * `useAppDispatch` / `useAppSelector` keep their exact Redux-era API so all
+ * existing consumers work unchanged: selectors receive `{ chat }` and
+ * dispatch accepts the action objects from chatSlice.
  */
-import { configureStore } from '@reduxjs/toolkit';
-import chatReducer from './chatSlice';
-import { useDispatch, useSelector } from 'react-redux';
-import type { TypedUseSelectorHook } from 'react-redux';
+import { create } from 'zustand';
+import chatReducer, { initialState } from './chatSlice';
+import type { ChatState } from './chatSlice';
+import type { SliceAction } from './sliceFactory';
 
-export const store = configureStore({
-  reducer: {
-    chat: chatReducer,
-  },
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({
-      serializableCheck: false,
-      immutableCheck: false,
+export type RootState = { chat: ChatState };
+export type AppDispatch = (action: SliceAction) => void;
+
+interface ChatStore extends ChatState {
+  dispatch: AppDispatch;
+}
+
+export const useChatStore = create<ChatStore>()((set) => ({
+  ...initialState,
+  dispatch: (action: SliceAction) =>
+    set((s) => {
+      const next = chatReducer(s as ChatState, action);
+      return { ...next, dispatch: s.dispatch };
     }),
-});
+}));
 
-export type RootState = ReturnType<typeof store.getState>;
-export type AppDispatch = typeof store.dispatch;
+export const useAppDispatch = (): AppDispatch => useChatStore((s) => s.dispatch);
 
-export const useAppDispatch = () => useDispatch<AppDispatch>();
-export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
+export function useAppSelector<T>(selector: (state: RootState) => T): T {
+  return useChatStore((s) => selector({ chat: s as ChatState }));
+}

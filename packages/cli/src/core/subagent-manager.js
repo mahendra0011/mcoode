@@ -911,7 +911,7 @@ export class SubagentManager {
         initialExitCode: integration?.exitCode,
         initialTail: integration?.tail
       });
-    } else if (integration?.status === 'failed' && !this._stopped) {
+    } else if (testsRan && integration?.status === 'failed' && !this._stopped) {
       integration = await this._bugfixRounds({
         initialExitCode: integration.exitCode,
         initialTail: integration.tail

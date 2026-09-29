@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { reportError } from '../../lib/logger';
 import Editor from '@monaco-editor/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -443,7 +444,7 @@ export function EditorPane({
     setDirty(prev => new Set(prev).add(activePath));
     try {
       localStorage.setItem(`mcode_draft_${activePath}`, str);
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
 
     // Conversational Layer: check for structural suggestion after 2s pause in typing
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -470,7 +471,7 @@ export function EditorPane({
               setPairSuggestion(res.data.suggestion);
             }
           }
-        } catch {}
+        } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
       }, 2000);
     }
   }, [activePath, setFileContent, pairModeEnabled]);
@@ -507,7 +508,7 @@ export function EditorPane({
     if (formatOnSave && editorRef.current) {
       try {
         editorRef.current.getAction('editor.action.formatDocument')?.run();
-      } catch {}
+      } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     }
     const content = fileContents[activePath] ?? useIDEStore.getState().fileContentsCache[activePath] ?? '';
 
@@ -518,14 +519,14 @@ export function EditorPane({
           setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
           setSavedContent(activePath, content);
           recordTimeline(activePath, 'Saved', content);
-          try { localStorage.removeItem(`mcode_draft_${activePath}`); } catch {}
+          try { localStorage.removeItem(`mcode_draft_${activePath}`); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
         })
         .catch(err => console.error(err));
     } else {
       setDirty(prev => { const next = new Set(prev); next.delete(activePath); return next; });
       setSavedContent(activePath, content);
       recordTimeline(activePath, 'Saved', content);
-      try { localStorage.removeItem(`mcode_draft_${activePath}`); } catch {}
+      try { localStorage.removeItem(`mcode_draft_${activePath}`); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     }
   }, [workspaceId, activePath, fileContents, formatOnSave, recordTimeline, setSavedContent]);
 
@@ -541,13 +542,13 @@ export function EditorPane({
             .then(() => {
               setDirty(prev => { const next = new Set(prev); next.delete(path); return next; });
               setSavedContent(path, content);
-              try { localStorage.removeItem(`mcode_draft_${path}`); } catch {}
+              try { localStorage.removeItem(`mcode_draft_${path}`); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
             })
             .catch(() => {});
         } else {
           setDirty(prev => { const next = new Set(prev); next.delete(path); return next; });
           setSavedContent(path, content);
-          try { localStorage.removeItem(`mcode_draft_${path}`); } catch {}
+          try { localStorage.removeItem(`mcode_draft_${path}`); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
         }
       });
     }, autoSaveDelay || 1000);
@@ -560,7 +561,7 @@ export function EditorPane({
       if (dirty.size === 0) return;
       dirty.forEach((path) => {
         const content = fileContents[path] ?? useIDEStore.getState().fileContentsCache[path] ?? '';
-        try { localStorage.setItem(`mcode_draft_${path}`, content); } catch {}
+        try { localStorage.setItem(`mcode_draft_${path}`, content); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
       });
     };
     window.addEventListener('beforeunload', handleBeforeUnload);

@@ -1,6 +1,64 @@
+"use client";
 import React, { useState, useEffect, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Terminal, FileText, Pencil, FolderSearch, Send, Paperclip, ShieldCheck, ChevronDown, ChevronRight, FileCode } from "lucide-react";
+import { Search, Terminal, FileText, Pencil, FolderSearch, Send, Paperclip, ShieldCheck, ChevronDown, ChevronRight, FileCode, Zap } from "lucide-react";
+
+/**
+ * GodModeToggle — the switch that puts the chat UI into god (agent) mode.
+ *
+ * WEB-017 fixed three defects here at once:
+ *
+ *  1. **Off-spec colour.** The toggle was `from-purple-500/10 to-pink-500/10
+ *     text-purple-300` with a purple glow. Spec §3 is explicit: nothing in the
+ *     live-processing path may introduce blue/purple/cyan/amber — it uses
+ *     `--mcode-green` / emerald. The neighbouring mode switcher in the same
+ *     toolbar was already `text-emerald-400`, so the app knew the rule and broke
+ *     it in exactly the control that turns the live path on.
+ *  2. **`duration-250` is not a Tailwind class.** The project is on Tailwind v3
+ *     with `plugins: []`, and 250 is not in the default duration scale
+ *     (75/100/150/200/300/500/700/1000), so the class generated *nothing* and
+ *     the colour transition did not animate at all. It is now the spec's
+ *     `duration-200` (0.2 s enter timing). `packages/web/tests/no-dead-utilities.test.js`
+ *     fails CI on any other non-default `duration-*` / `delay-*` token.
+ *  3. **Triplication.** This snippet was copy-pasted into all three composers
+ *     (chat / follow-up / agent), so every styling fix had to be made three
+ *     times and nothing kept them in sync. It is one component now.
+ */
+
+export interface GodModeToggleProps {
+  value: boolean;
+  onChange: (next: boolean) => void;
+  /** `sm` = the 32px composer rows, `xs` = the 28px compact agent composer. */
+  size?: 'sm' | 'xs';
+  label?: string;
+}
+
+const SIZES = {
+  sm: { box: 'px-3 h-8 rounded-lg', icon: 'w-3.5 h-3.5' },
+  xs: { box: 'px-3 h-7 rounded-lg', icon: 'w-3 h-3' },
+} as const;
+
+export function GodModeToggle({ value, onChange, size = 'sm', label = 'God' }: GodModeToggleProps) {
+  const { box, icon } = SIZES[size];
+
+  return (
+    <motion.button
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      type="button"
+      onClick={() => onChange(!value)}
+      aria-pressed={value}
+      title={value ? 'God mode on — full agent autonomy' : 'God mode off'}
+      className={`${box} flex items-center gap-2 transition-all duration-200 text-xs font-medium border backdrop-blur-md ${
+        value
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+          : 'bg-white/5 text-white/50 border-white/5 hover:bg-white/10'
+      }`}
+    >
+      <Zap className={icon} /> {label}
+    </motion.button>
+  );
+}
 
 export type IconKey = keyof typeof ICONS;
 
@@ -113,9 +171,13 @@ export function ToolCallCard({ type = "explored", label, summary, children, defa
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-            data-state="open"
-            data-mcode-collapsible-animate-close="true"
+            // Spec timing for the collapse: 0.3s ease-in-out. The element used to
+            // carry `data-state="open"` + `data-mcode-collapsible-animate-close`,
+            // but the CSS rule requires `[data-state="closed"]` and this node only
+            // exists while open — so the spec'd animation could never run and
+            // framer did the work at 0.25s instead (audit WEB-005). One mechanism,
+            // spec duration.
+            transition={{ duration: 0.3, ease: [0.65, 0, 0.35, 1] }}
             style={{
               padding: "8px 0 8px 24px",
               fontSize: 12.5,

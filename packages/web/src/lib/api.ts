@@ -1,64 +1,150 @@
 /**
  * Shared API helpers for the web frontend.
  *
- * Centralizes the auth-header pattern that was previously copy-pasted
- * (inconsistently) across components. Every fetch() to a backend route
- * that runs behind authMiddleware must include the Authorization header
- * — using this helper avoids the class of bugs where a component forgets
- * to attach credentials.
+ * Centralizes the auth pattern that was previously copy-pasted (inconsistently)
+ * across components, so a component can never forget to attach credentials.
+ *
+ * ── Token storage policy (audit WEB-011) ──────────────────────────────────
+ * The backend already issues an httpOnly cookie pair (`mcode_access` 15 min,
+ * `mcode_refresh` 30 days — `setAuthCookies` in `packages/backend/src/auth.js`)
+ * and `POST /api/v1/auth/refresh` accepts a **cookie-only** refresh
+ * (`req.body.refresh || readAuthCookies(req).mcode_refresh`).
+ *
+ * So this module now:
+ *   • keeps only the **short-lived access token** in `localStorage` — it is
+ *     needed for the socket handshake, which cannot read cookies;
+ *   • keeps the **refresh token in memory only** for the lifetime of the tab,
+ *     never in script-readable storage;
+ *   • relies on the httpOnly `mcode_refresh` cookie for anything durable.
+ *
+ * Before this change both tokens (including the 30-day refresh credential) sat
+ * in `localStorage`, so any XSS became a full account takeover.
  */
 
-/** 729: guarded parse — malformed JSON (or disabled storage in private
- *  browsing) yields {} instead of a render-crashing SyntaxError. */
-function readTokens(): { access?: string; refresh?: string } {
+const TOKEN_KEY = 'mcode_tokens';
+
+/**
+ * Refresh token for the current tab — memory only, never serialised.
+ * Populated from a login/refresh response; lost on reload by design (the
+ * httpOnly cookie covers the reload case).
+ */
+let memoryRefresh: string | undefined;
+
+/**
+ * 729: guarded parse — malformed JSON (or disabled storage in private
+ * browsing) yields {} instead of a render-crashing SyntaxError.
+ *
+ * Also scrubs a legacy `refresh` field out of the stored blob on first read, so
+ * a session created before WEB-011 does not keep a 30-day token in storage.
+ */
+function readStoredTokens(): { access?: string } {
+  let parsed: { access?: string; refresh?: string } = {};
   try {
-    const raw = typeof window !== 'undefined' ? window.localStorage.getItem('mcode_tokens') : null;
-    const parsed = JSON.parse(raw || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem(TOKEN_KEY) : null;
+    const value = JSON.parse(raw || '{}');
+    if (value && typeof value === 'object') parsed = value;
   } catch {
-    return {};
+    parsed = {};
   }
+  if (parsed.refresh) {
+    memoryRefresh = memoryRefresh || parsed.refresh;
+    delete parsed.refresh;
+    try {
+      if (typeof window !== 'undefined') window.localStorage.setItem(TOKEN_KEY, JSON.stringify({ access: parsed.access }));
+    } catch {
+      /* storage unavailable — memory-only session, still fine */
+    }
+  }
+  return { access: parsed.access };
 }
 
-/** Resolve the backend origin (Electron child-process backend vs same-origin). */
+/**
+ * Origin prefix for absolute `fetch` calls.
+ *
+ * WEB-027: this used to return `window.mcodeElectron.backendUrl` for the
+ * Electron desktop shell. There is no `packages/desktop` in this repository,
+ * so the bridge could never be present — the value was always `''` (same-origin).
+ * Kept as a function so the intent stays explicit at the call site.
+ */
 function backendOrigin(): string {
-  if (typeof window !== 'undefined' && (window as any).mcodeElectron?.backendUrl) {
-    return String((window as any).mcodeElectron.backendUrl).replace(/\/$/, '');
-  }
   return '';
 }
 
 export function getAuthHeaders(extra: Record<string, string> = {}): { Authorization: string } & Record<string, string> {
-  const tokens = readTokens();
   return {
-    Authorization: `Bearer ${tokens.access || ''}`,
+    Authorization: `Bearer ${getToken()}`,
     ...extra
   };
 }
 
 export function getToken(): string {
-  return readTokens().access || '';
+  return readStoredTokens().access || '';
 }
 
-/** Read the full { access, refresh } token pair from localStorage. */
+/** The in-session token pair. `refresh` is memory-only (see the policy above). */
 export function getTokens(): { access?: string; refresh?: string } {
-  return readTokens();
+  return { access: readStoredTokens().access, refresh: memoryRefresh };
 }
 
-/** Persist the token pair to localStorage. */
+/**
+ * Persist the session.
+ *  - `access`  → localStorage (needed for the socket handshake across reloads)
+ *  - `refresh` → memory only
+ */
 export function setTokens(tokens: { access?: string; refresh?: string }): void {
-  localStorage.setItem('mcode_tokens', JSON.stringify(tokens));
+  memoryRefresh = tokens.refresh || memoryRefresh;
+  try {
+    // Never write `refresh` back out (defence in depth: even if a caller passes
+    // one, only the access token reaches storage).
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ access: tokens.access }));
+  } catch {
+    /* private mode / storage disabled — the session stays in memory + cookie */
+  }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event('mcode:reload-models'));
   }
 }
 
+/** Drop every client-side credential (used by the logout paths). */
+export function clearTokens(): void {
+  memoryRefresh = undefined;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
+
 /**
- * fetchWithAuth — wraps fetch() with automatic Bearer-token injection and
- * transparent refresh-on-401. If the access token has expired (401), it
- * calls POST /api/v1/auth/refresh with the stored refresh token, updates
- * localStorage, and retries the original request once. If the refresh
- * also fails, the user is redirected to /login.
+ * Exchange the httpOnly `mcode_refresh` cookie for a new access token.
+ *
+ * The cookie is the source of truth, so no token is sent in the body — the
+ * request only proves the browser still holds the cookie. If the backend is an
+ * older build that insists on a body token, the in-memory refresh token is used
+ * as a fallback so an in-flight tab is never logged out by a version skew.
+ */
+export async function refreshSession(): Promise<{ access?: string; refresh?: string } | null> {
+  const base = backendOrigin();
+  const tryRefresh = async (body: Record<string, unknown>) => {
+    const res = await fetch(`${base}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as { access?: string; refresh?: string };
+  };
+
+  const viaCookie = await tryRefresh({});
+  if (viaCookie?.access) return viaCookie;
+  if (memoryRefresh) return tryRefresh({ refresh: memoryRefresh });
+  return null;
+}
+
+/**
+ * fetchWithAuth — wraps fetch() with Bearer-token injection and a transparent
+ * refresh-on-401 driven by the httpOnly cookie.
  *
  * Usage: replace `fetch(url, opts)` → `fetchWithAuth(url, opts)` for any
  * authenticated endpoint. The Authorization header is added automatically;
@@ -70,34 +156,20 @@ export async function fetchWithAuth(input: RequestInfo | URL, init: RequestInit 
     const token = getToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
-  const response = await fetch(input, { ...init, headers });
+  const response = await fetch(input, { ...init, headers, credentials: init.credentials ?? 'include' });
 
   if (response.status === 401) {
-    // Attempt a silent refresh (730: Electron-aware base URL).
-    const { refresh } = getTokens();
-    if (refresh) {
-      try {
-        const refreshRes = await fetch(`${backendOrigin()}/api/v1/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh })
-        });
-        if (refreshRes.ok) {
-          const tokens = await refreshRes.json();
-          setTokens(tokens);
-          headers.set('Authorization', `Bearer ${tokens.access}`);
-          return fetch(input, { ...init, headers });
-        }
-      } catch {
-        /* refresh failed — return the 401 response */
-      }
+    const tokens = await refreshSession().catch(() => null);
+    if (tokens?.access) {
+      setTokens(tokens);
+      headers.set('Authorization', `Bearer ${tokens.access}`);
+      return fetch(input, { ...init, headers, credentials: init.credentials ?? 'include' });
     }
-    // Refresh failed or no refresh token — return the 401 response so callers
-    // can decide how to handle it (redirect, show error, etc.). This avoids
-    // a hard redirect that breaks test rendering and non-browser contexts.
+    // Refresh failed — return the 401 response so callers can decide how to
+    // handle it (redirect, show error, etc.). This avoids a hard redirect that
+    // breaks test rendering and non-browser contexts.
     return response;
   }
 
-  // Non-401 response — return it so callers can read the body.
   return response;
 }

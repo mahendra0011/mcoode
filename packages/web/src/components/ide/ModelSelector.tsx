@@ -1,21 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useAppDispatch, useAppSelector } from '../../store';
 import { ChevronDown, Plus, Key, Check, X, Loader2, Circle, ChevronRight, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { setSelectedModel } from '../../store/chatSlice';
 import api from '../../lib/axios';
-
-/** All CLI providers are fetched from the backend — this just seeds the
- * initial dropdown while the API call is in flight. */
-const FALLBACK_PROVIDERS = [
-  { id: 'openai', displayName: 'OpenAI', envVar: 'OPENAI_API_KEY' },
-  { id: 'anthropic', displayName: 'Anthropic', envVar: 'ANTHROPIC_API_KEY' },
-  { id: 'google', displayName: 'Google', envVar: 'GOOGLE_API_KEY' },
-  { id: 'openrouter', displayName: 'OpenRouter', envVar: 'OPENROUTER_API_KEY' },
-  { id: 'deepseek', displayName: 'DeepSeek', envVar: 'DEEPSEEK_API_KEY' },
-  { id: 'mistral', displayName: 'Mistral', envVar: 'MISTRAL_API_KEY' }
-];
+import { useProviderCatalog } from '../../hooks/useProviderCatalog';
+import { CATALOG_STALE_NOTICE } from '../../lib/providerCatalog';
 
 interface ModelOption {
   ref: string;
@@ -31,18 +22,21 @@ export interface ModelSelectorProps {
 }
 
 export function ModelSelector({ compact = false, onAuthRequired, onManageModels }: ModelSelectorProps) {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [hoveredProvider, setHoveredProvider] = useState<string | null>(null);
   const [keys, setKeys] = useState<any[]>([]);
-  const [providers, setProviders] = useState(FALLBACK_PROVIDERS);
+  // WEB-029: the provider list now comes from the shared catalog module, and
+  // `isStale` tells us when we are looking at the bundled fallback rather than
+  // the live CLI catalog — the dropdown says so instead of pretending.
+  const { providers, isStale, refresh: reloadCatalog } = useProviderCatalog();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [keyForm, setKeyForm] = useState({ providerId: '', apiKey: '', displayName: '' });
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const chatState = useSelector((state: { chat: any }) => state.chat) as {
+  const chatState = useAppSelector((state: { chat: any }) => state.chat) as {
     models: ModelOption[];
     selectedModel: string | null;
     keysError: string | null;
@@ -59,17 +53,9 @@ export function ModelSelector({ compact = false, onAuthRequired, onManageModels 
       .catch(() => setKeys([]));
   }, []);
 
-  // Fetch all available providers from the backend (same list as CLI)
-  useEffect(() => {
-    api.get('/api/v1/settings/providers', { timeout: 5000 })
-      .then((res) => res.data)
-      .then((data) => {
-        if (data?.providers?.length) setProviders(data.providers);
-      })
-      .catch(() => {
-        /* keep fallback list */
-      });
-  }, []);
+  // Fetch all available providers from the backend (same list as CLI).
+  // WEB-029: this moved into useProviderCatalog() so the chat picker and the
+  // settings screen can never disagree about which providers exist.
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -181,6 +167,21 @@ export function ModelSelector({ compact = false, onAuthRequired, onManageModels 
               className={`absolute ${compact ? 'bottom-full right-0' : 'bottom-full left-0'} mb-2 w-52 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 py-1.5`}
               onMouseLeave={() => setHoveredProvider(null)}
             >
+              {/* WEB-029: when the backend is unreachable we are showing the
+                  bundled catalog, not the CLI's. Say so, and allow a retry —
+                  previously this looked exactly like the live list. */}
+              {isStale && (
+                <div className="px-3 py-2 border-b border-white/10 mb-1">
+                  <p className="text-[11px] text-amber-300/90 leading-snug">{CATALOG_STALE_NOTICE}</p>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); reloadCatalog(); }}
+                    className="mt-1.5 text-[11px] text-amber-300 hover:text-amber-200 underline underline-offset-2"
+                  >
+                    Reload catalog
+                  </button>
+                </div>
+              )}
               {hasKeys && Object.keys(modelsByProvider).length > 0 ? (
                 Object.entries(modelsByProvider).map(([provider, providerModels]) => (
                   <div

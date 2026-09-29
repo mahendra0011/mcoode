@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, Code, Smartphone, Globe, FileText, FileImage, FileType,
-  ExternalLink, ChevronDown, Terminal, Sparkles, BarChart, Layers, Package
+  ExternalLink, ChevronDown, Terminal, Sparkles, BarChart, Layers, Package, Info
 } from 'lucide-react';
 
 /**
@@ -67,6 +67,22 @@ export function McodeSkillsTab() {
 
   return (
     <div className="space-y-8">
+      {/* WEB-028: per-tab label reusing the ReferenceBanner pattern in McodeDashboard.tsx —
+          this static catalog is not live state. */}
+      <div
+        role="note"
+        className="flex items-start gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3"
+      >
+        <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+        <div className="text-[12px] leading-relaxed min-w-0">
+          <p className="text-amber-200/90 font-medium">
+            Read-only CLI reference — this page does not read or change your configuration.
+          </p>
+          <p className="text-white/40 mt-1">
+            No on-disk configuration backs this section — the CLI implements neither skills nor MCP.
+          </p>
+        </div>
+      </div>
       <div>
         <h2 className="text-lg font-semibold text-white mb-1">Skills Catalog (15)</h2>
         <p className="text-sm text-white/40">All 15 mcode skills organized by category — Guide (6), Developer Tools (4), Documents (3), Utilities (2).</p>

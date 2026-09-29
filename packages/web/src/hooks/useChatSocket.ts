@@ -4,6 +4,7 @@ import { io, type Socket } from 'socket.io-client';
 import { getToken } from '../lib/api';
 import api from '../lib/axios';
 import { useIDEStore } from '../store/ideStore';
+import { SOCKET_EVENTS } from '../lib/socketEvents';
 import { useSettingsStore } from '../store/settingsStore';
 import {
   setStatus,
@@ -83,14 +84,20 @@ import {
 
 let socketSingleton: Socket | null = null;
 
+/** Narrow shape for axios/request failures inspected in the catch blocks below. */
+type RequestError = {
+  response?: { status?: number };
+  code?: string;
+  message?: string;
+};
+
 export function getSocket(): Socket {
   const token = getToken() || '';
   if (!socketSingleton || socketSingleton.disconnected) {
     let backendUrl: string;
-    if (typeof window !== 'undefined' && (window as any).mcodeElectron?.backendUrl) {
-      backendUrl = (window as any).mcodeElectron.backendUrl;
-    } else if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       // Same-origin in prod (Next rewrites /live → BACKEND); direct :3100 only for local dev.
+      // WEB-027: the Electron `mcodeElectron.backendUrl` branch was deleted.
       const host = window.location.hostname;
       const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.');
       backendUrl = isLocal
@@ -165,12 +172,13 @@ export function useChatSocket(workspaceId: string | null = null) {
       dispatch(setModels(res.data.models || []));
       // setModels reducer now auto-defaults selectedModel if it's invalid
       // (e.g. was set to a provider id by the socket chat:ready path).
-    } catch (err: any) {
-      if (err?.response?.status === 401) {
+    } catch (err: unknown) {
+      const reqErr = err as RequestError | undefined;
+      if (reqErr?.response?.status === 401) {
         dispatch(chatError({ kind: 'keys', message: 'please select your api keys to use mcode' }));
         return;
       }
-      if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
+      if (reqErr?.code === 'ECONNABORTED' || reqErr?.message?.includes('timeout')) {
         console.warn('[useChatSocket] Timeout fetching models from /api/v1/keys/models');
         return;
       }
@@ -185,8 +193,9 @@ export function useChatSocket(workspaceId: string | null = null) {
     try {
       const res = await api.get('/api/v1/keys', { timeout: 10000 });
       return res.data.keys || [];
-    } catch (err: any) {
-      if (err?.response?.status !== 401) {
+    } catch (err: unknown) {
+      const reqErr = err as RequestError | undefined;
+      if (reqErr?.response?.status !== 401) {
         console.error('Failed to load keys:', err);
       }
     }
@@ -200,8 +209,9 @@ export function useChatSocket(workspaceId: string | null = null) {
     try {
       const res = await api.get('/api/v1/github/status', { timeout: 10000 });
       return res.data;
-    } catch (err: any) {
-      if (err?.response?.status !== 401) {
+    } catch (err: unknown) {
+      const reqErr = err as RequestError | undefined;
+      if (reqErr?.response?.status !== 401) {
         console.error('Failed to load github status:', err);
       }
     }
@@ -343,23 +353,41 @@ export function useChatSocket(workspaceId: string | null = null) {
       offlineToast('Backend unreachable — retrying automatically… (start it with `mcode serve`)');
     };
 
-    // ── God-mode socket event handlers ──
-    const onSubagentCreated = (payload: any) => { dispatch(setSubagentCreated(payload)); };
-    const onSubagentAssigned = (payload: any) => { dispatch(setSubagentAssigned(payload)); };
-    const onSubagentStarted = (payload: any) => { dispatch(setSubagentStarted(payload)); };
-    const onSubagentStep = (payload: any) => { dispatch(setSubagentStep(payload)); };
-    const onSubagentDone = (payload: any) => { dispatch(setSubagentDone(payload)); };
-    const onSubagentFailed = (payload: any) => { dispatch(setSubagentFailed(payload)); };
-    const onSubagentFile = (payload: any) => {
+    // ── God-mode socket event handlers ──────────────────────────────────────
+    // Named after the `agent:*` namespace they actually receive (audit WEB-001).
+    // The Redux actions keep their historical `setSubagent*` names on purpose:
+    // they describe the *state* (a subagent), not the event that carries it.
+    const onAgentStarted = (payload: any) => {
+      // `agent:started` is the first (and only) event the relay emits for a
+      // subagent, so it is also what has to create/assign the entry that the
+      // never-emitted `subagent:created` / `subagent:assigned` used to create.
+      if (payload?.todoId != null) {
+        dispatch(setSubagentCreated(payload));
+        if (payload.model) dispatch(setSubagentAssigned(payload));
+      }
+      dispatch(setSubagentStarted(payload));
+    };
+    const onAgentStep = (payload: any) => {
+      dispatch(setSubagentStep(payload));
+      // `agent:step` is the only event that carries tool information; the old
+      // `subagent:tool_call` / `subagent:tool_result` events do not exist on the wire.
+      if (payload?.todoId != null && payload?.tool) {
+        dispatch(setSubagentToolCall({ todoId: payload.todoId, tool: payload.tool, args: payload.args }));
+        if (payload.toolMs != null) {
+          dispatch(setSubagentToolResult({ todoId: payload.todoId, tool: payload.tool, ms: payload.toolMs, risk: payload.risk }));
+        }
+      }
+    };
+    const onAgentDone = (payload: any) => { dispatch(setSubagentDone(payload)); };
+    const onAgentFailed = (payload: any) => { dispatch(setSubagentFailed(payload)); };
+    const onAgentFile = (payload: any) => {
       dispatch(setSubagentFile(payload));
       useIDEStore.getState().bumpRefresh();
       document.dispatchEvent(
         new CustomEvent('file:changed', { detail: { path: payload?.file } })
       );
     };
-    const onSubagentToolCall = (payload: any) => { dispatch(setSubagentToolCall(payload)); };
-    const onSubagentToolResult = (payload: any) => { dispatch(setSubagentToolResult(payload)); };
-    const onSubagentNeedsReview = (payload: any) => { dispatch(setSubagentNeedsReview(payload)); };
+    const onAgentNeedsReview = (payload: any) => { dispatch(setSubagentNeedsReview(payload)); };
     const onWaveStart = (payload: any) => { dispatch(setWaveStart(payload)); };
     const onWaveComplete = (payload: any) => { dispatch(setWaveComplete(payload)); };
     const onIntegrationPass = (payload: any) => { dispatch(setIntegrationPass(payload)); };
@@ -604,21 +632,20 @@ export function useChatSocket(workspaceId: string | null = null) {
     socket.on('disconnect', onDisconnect);
     socket.on('connect_error', onConnectError);
 
-    // God-mode events
-    socket.on('subagent:created', onSubagentCreated);
-    socket.on('subagent:assigned', onSubagentAssigned);
-    socket.on('subagent:started', onSubagentStarted);
-    socket.on('subagent:step', onSubagentStep);
-    socket.on('subagent:done', onSubagentDone);
-    socket.on('subagent:failed', onSubagentFailed);
-    socket.on('subagent:file', onSubagentFile);
-    socket.on('subagent:tool_call', onSubagentToolCall);
-    socket.on('subagent:tool_result', onSubagentToolResult);
-    socket.on('subagent:needs_review', onSubagentNeedsReview);
-    socket.on('wave:start', onWaveStart);
-    socket.on('wave:complete', onWaveComplete);
-    socket.on('integration:pass', onIntegrationPass);
-    socket.on('build:complete', onBuildComplete);
+    // God-mode events. These names are the canonical ones from
+    // `lib/socketEvents.ts`, which mirrors `EVENT_TO_SOCKET` in
+    // `packages/shared/src/events.js` — i.e. exactly what the relay emits.
+    // Do not add a `subagent:*` listener: nothing emits that namespace (WEB-001).
+    socket.on(SOCKET_EVENTS.AGENT_STARTED, onAgentStarted);
+    socket.on(SOCKET_EVENTS.AGENT_STEP, onAgentStep);
+    socket.on(SOCKET_EVENTS.AGENT_DONE, onAgentDone);
+    socket.on(SOCKET_EVENTS.AGENT_FAILED, onAgentFailed);
+    socket.on(SOCKET_EVENTS.AGENT_FILE, onAgentFile);
+    socket.on(SOCKET_EVENTS.AGENT_NEEDS_REVIEW, onAgentNeedsReview);
+    socket.on(SOCKET_EVENTS.WAVE_START, onWaveStart);
+    socket.on(SOCKET_EVENTS.WAVE_COMPLETE, onWaveComplete);
+    socket.on(SOCKET_EVENTS.INTEGRATION_PASS, onIntegrationPass);
+    socket.on(SOCKET_EVENTS.BUILD_COMPLETE, onBuildComplete);
     socket.on('toast', onToast);
 
     // Web God Mode (Phases 0-10) socket subscriptions
@@ -739,21 +766,17 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);
 
-      // God-mode cleanup
-      socket.off('subagent:created', onSubagentCreated);
-      socket.off('subagent:assigned', onSubagentAssigned);
-      socket.off('subagent:started', onSubagentStarted);
-      socket.off('subagent:step', onSubagentStep);
-      socket.off('subagent:done', onSubagentDone);
-      socket.off('subagent:failed', onSubagentFailed);
-      socket.off('subagent:file', onSubagentFile);
-      socket.off('subagent:tool_call', onSubagentToolCall);
-      socket.off('subagent:tool_result', onSubagentToolResult);
-      socket.off('subagent:needs_review', onSubagentNeedsReview);
-      socket.off('wave:start', onWaveStart);
-      socket.off('wave:complete', onWaveComplete);
-      socket.off('integration:pass', onIntegrationPass);
-      socket.off('build:complete', onBuildComplete);
+      // God-mode cleanup (canonical `agent:*` names — see lib/socketEvents.ts)
+      socket.off(SOCKET_EVENTS.AGENT_STARTED, onAgentStarted);
+      socket.off(SOCKET_EVENTS.AGENT_STEP, onAgentStep);
+      socket.off(SOCKET_EVENTS.AGENT_DONE, onAgentDone);
+      socket.off(SOCKET_EVENTS.AGENT_FAILED, onAgentFailed);
+      socket.off(SOCKET_EVENTS.AGENT_FILE, onAgentFile);
+      socket.off(SOCKET_EVENTS.AGENT_NEEDS_REVIEW, onAgentNeedsReview);
+      socket.off(SOCKET_EVENTS.WAVE_START, onWaveStart);
+      socket.off(SOCKET_EVENTS.WAVE_COMPLETE, onWaveComplete);
+      socket.off(SOCKET_EVENTS.INTEGRATION_PASS, onIntegrationPass);
+      socket.off(SOCKET_EVENTS.BUILD_COMPLETE, onBuildComplete);
       socket.off('toast', onToast);
       socket.off('prompt:enhancing', onPromptEnhancing);
       socket.off('prompt:enhanced', onPromptEnhanced);

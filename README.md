@@ -123,12 +123,12 @@ packages/
   shared/    events, task domains + colors, plan/todo math, provider contracts, rate-limit ledger (RPM/TPM)
   cli/       commander app + OpenTUI TUI, god mode, watch daemon, providers, templates, vault
   backend/   Express + Socket.IO: auth, sessions, plugins, watch, usage, uploads
-  web/       Next.js + React + Tailwind + Redux Toolkit + React Query + Monaco + xterm
+  web/       Next.js + React + Tailwind + Zustand + React Query + Monaco + xterm
 ```
 
 CLI distribution: esbuild bundles the CLI into a single ESM file (`dist/mcode.mjs`,
 OpenTUI is bundled; the package also ships the watch daemon entry + templates). The CLI
-stays a self-healing dev entry: `bin/mcode.js` rebuilds the bundle on demand (needs Node 26.4+).
+stays a self-healing dev entry: `bin/mcode.js` rebuilds the bundle on demand (needs Node 20+).
 
 Config lives in `~/.mcode/` (`config.json`, encrypted `vault.json.enc`, history, watch state).
 Secrets never leave the machine: **keys are stored locally, encrypted** (AES-256-GCM,
@@ -143,6 +143,20 @@ npm run build:dashboard
 npm test               # vitest: plan/waves/cycles, routing, vault, memory db
 npm run mcode -- --version
 ```
+
+## Security notes for operators
+
+- **Network egress is open by default.** `networkWhitelist` in `~/.mcode/config.json`
+  is `null` (allow all) on a fresh install — the CLI prints a one-time stderr
+  warning in that case. To contain agent web access, set e.g.
+  `"networkWhitelist": ["*.example.com", "registry.npmjs.org"]` (supports
+  `*.glob`); `web_fetch`/`web_search` and shell network binaries are then
+  restricted to those destinations.
+- JWT auth (access 15m / refresh 30d, rotation with reuse detection); set a
+  strong `JWT_SECRET` and `CLI_SHARED_SECRET` in production — tokenless sockets
+  are rejected unless the CLI secret matches.
+- Never commit `.env` (pre-commit hook blocks it); rotate any secret that was
+  ever committed.
 
 ## License
 

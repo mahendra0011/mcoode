@@ -23,8 +23,10 @@ export const metadata = {
   description: 'mcode: AI coding assistant in your terminal and browser',
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/logo.png',
-    shortcut: '/logo.png',
+    // WEB-022: the 1.1 MB PNGs are kept only for the apple touch icon —
+    // browsers use the <1 KB SVG for the tab/shortcut icon.
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
     apple: '/logo.png',
   },
 };

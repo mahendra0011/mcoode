@@ -5,7 +5,35 @@
 @tailwind utilities;
 
 @layer base {
+  /* WEB-007: single default theme is always-dark mcode. The shadcn light
+     tokens survive only under `.light` for opt-in use; `:root` carries the
+     dark values so `bg-background`/`text-foreground` (and `body`) are dark
+     by default and cannot drift from `--mcode-*`. */
   :root {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 78 65% 56%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --radius: 0.5rem;
+    --frame: 0 0% 6%;
+  }
+
+  .light {
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
@@ -84,6 +112,8 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased min-h-screen;
+    background-color: var(--mcode-bg, #0d0e12);
+    color: var(--mcode-text, #e6e6ea);
     overscroll-behavior: none;
   }
 }
@@ -244,11 +274,10 @@
   to { opacity: 1; }
 }
 
-/* Stream marker text color transition */
-@keyframes mcode-stream-marker-in {
-  0% { color: #0000; }
-  to { color: var(--mcode-text-dim, #8b8d98); }
-}
+/* REMOVED (audit WEB-005): @keyframes mcode-stream-marker-in.
+   It was only referenced by the `::marker` rule that could never match, and it
+   animated `color`, which is meaningless for a 1.5px-wide text cursor. The
+   streaming cursor animates `opacity` at the spec timing in ChatMessage.tsx. */
 
 /* Animated gradient text — mcode's thinking label animation (4s linear infinite) */
 @keyframes gradient-flow {
@@ -337,10 +366,14 @@
   animation: .9s cubic-bezier(.16, 1, .3, 1) both mcode-stream-text-in;
 }
 
-[data-zcode-stream-marker-animate="true"]::marker,
-[data-mcode-stream-marker-animate="true"]::marker {
-  animation: .9s cubic-bezier(.16, 1, .3, 1) var(--zcode-stream-animation-delay, var(--mcode-stream-animation-delay, 0s)) both mcode-stream-marker-in;
-}
+/* REMOVED (audit WEB-005): the `::marker` stream animation.
+   `[data-*-stream-marker-animate="true"]::marker` could never match anything —
+   `::marker` is only generated for `display: list-item` boxes, and the only
+   element carrying the attribute was a `<span class="inline-block">` streaming
+   cursor. The attribute existed to make the animation *look* implemented.
+   The cursor now animates with the spec timing in `ChatMessage.tsx`
+   (0.9 s, cubic-bezier(.16, 1, .3, 1)). If a real list-item marker animation is
+   ever needed, re-add the rule together with the list item that carries it. */
 
 [data-zcode-collapsible-animate-close="true"][data-state="closed"],
 [data-mcode-collapsible-animate-close="true"][data-state="closed"] {
@@ -473,38 +506,16 @@
   [data-mcode-collapsible-animate-close="true"][data-state="closed"] > * {
     animation: none;
   }
-  [data-zcode-stream-marker-animate="true"]::marker,
-  [data-mcode-stream-marker-animate="true"]::marker {
-    animation: none;
-  }
 }
 
 /* ─────────────────── Startup Animation ─────────────────── */
-/* mcode-style startup logo pop (720ms, cubic-bezier(0.22, 1, 0.36, 1)) */
-@keyframes startup-logo-pop {
-  0% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
+/* WEB-026: the `@keyframes startup-logo-pop` / `startup-fade-out` definitions
+   and the `.startup-logo` / `.startup-title` / `.fade-out` animation
+   declarations were deleted. framer-motion already animated `scale`/`opacity`
+   on these exact elements, so the CSS keyframes were a second animation system
+   racing the same nodes. McodeStartupOverlay.tsx is now the only driver. */
 
-@keyframes startup-fade-out {
-  0% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    visibility: hidden;
-  }
-}
-
+/* Layout + static paint only — no animation lives here. */
 .startup-overlay {
   position: fixed;
   inset: 0;
@@ -518,13 +529,11 @@
 }
 
 .startup-logo {
-  animation: 0.72s cubic-bezier(0.22, 1, 0.36, 1) both startup-logo-pop;
   filter: drop-shadow(0 0 30px rgba(16, 185, 129, 0.4));
 }
 
 .startup-title {
   margin-top: 1.5rem;
-  animation: 0.72s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both startup-logo-pop;
   background: linear-gradient(90deg, #10b981, #3b82f6, #a854f7);
   -webkit-background-clip: text;
   background-clip: text;
@@ -532,10 +541,6 @@
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-
-.startup-overlay.fade-out {
-  animation: 0.5s ease-out both startup-fade-out;
 }
 
 /* Monaco IDE Breakpoint Gutter Glyphs */
@@ -689,52 +694,24 @@
 }
 
 /* ─────────────────── Startup Loading Animation ─────────────────── */
-#root {
-  opacity: 0;
-  transition: opacity 0.16s ease;
-}
-
-body.mcode-startup-ready #root {
-  opacity: 1;
-}
-
-#loading {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.16s ease;
-  background: var(--color-bg, #0c0c0c);
-}
-
-body.mcode-startup-ready #loading {
-  pointer-events: none;
-  opacity: 0;
-}
-
-.startup-logo-shell {
-  position: relative;
-  display: flex;
-  width: 96px;
-  height: 96px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 24px;
-  background: linear-gradient(180deg, #000000 0%, #151718 100%);
-  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.2);
-}
+/* WEB-026: this whole block was deleted. `#root { opacity: 0 }` hid the entire
+   app behind a class that only a JS timer could add, so a slow first paint / cold
+   chunk produced a blank page; `body.mcode-startup-ready #root` /
+   `body.mcode-startup-ready #loading` / `#loading` / `.startup-logo-shell` all
+   targeted ZCode elements that do not exist in this Next.js app (`layout.tsx`
+   renders no `#root`, no `#loading`, no `.startup-logo-shell`).
+   The startup overlay now fades itself out and never gates the app's
+   visibility. Nothing is hidden by default. */
 
 /* ─────────────────── Animation Duration & Timing Reference ─────────────────── */
 /* 900ms — mcode-stream-text-in (cubic-bezier 0.16,1,.3,1) — data-mcode-stream-animate */
-/* 900ms — mcode-stream-marker-in (cubic-bezier 0.16,1,.3,1) — data-mcode-stream-marker-animate */
+/* 900ms — streaming cursor opacity — ChatMessage.tsx (WEB-005: was a dead ::marker rule) */
 /* 300ms — mcode-collapsible-up (ease-in-out) — data-mcode-collapsible-animate-close */
 /* 300ms — mcode-collapsible-fade-out (ease-in-out) — child of collapsible */
 /* 1.15s — mcode-update-charge-sweep (cubic-bezier 0.65,0,.35,1) — infinite */
 /* 1.2s — task-search-result-highlight (ease-out) — search results */
 /* 0.9s — browser-use-operation-breathe (cubic-bezier .16,1,.3,1) — browser ops */
 /* Infinite — workspace-remote-connecting-breathe — remote workspace */
-/* 160ms — #root opacity transition (ease) — app startup */
-/* 720ms — startup-logo-pop (cubic-bezier 0.22,1,0.36,1) — logo shell */
+/* 720ms — startup logo pop (cubic-bezier 0.22,1,0.36,1) — framer-motion, McodeStartupOverlay.tsx */
+/* 500ms — startup overlay fade-out — framer-motion, McodeStartupOverlay.tsx */
 

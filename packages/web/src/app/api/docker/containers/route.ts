@@ -1,12 +1,19 @@
-import { exec } from "child_process";
+import { execFile } from "node:child_process";
 import { promisify } from "util";
-const execAsync = promisify(exec);
+import { requireApiAuth } from "@/lib/server/apiAuth";
+import { reportError } from "@/lib/logger";
+
+const execFileAsync = promisify(execFile);
 
 const BACKEND = process.env.BACKEND_URL || "http://localhost:3100";
 
-export async function GET() {
+/** M11-002: refuse anonymous callers — this shells out to the host Docker CLI. */
+export async function GET(req: Request) {
   // Prefer the backend (dockerode, authed) — fall back to local CLI exec
   // for self-hosted desktop where the Next server shares the host.
+  const auth = await requireApiAuth(req);
+  if (!auth.ok) return auth.response;
+
   try {
     const res = await fetch(`${BACKEND}/api/v1/docker/containers`, {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,11 +23,16 @@ export async function GET() {
       const data = await res.json();
       if (Array.isArray(data?.containers)) return Response.json({ available: true, containers: data.containers, source: 'backend' });
     }
-  } catch {}
+  } catch (err) {
+    // Backend unreachable is expected and non-fatal: we fall back to the
+    // local Docker CLI. Log it rather than swallowing it (WEB-015).
+    reportError('docker.containers.backend', err, { userVisible: false });
+  }
   try {
-    const { stdout } = await execAsync(
-      'docker ps -a --format "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Ports}}"',
-      { timeout: 3000 }
+    const { stdout } = await execFileAsync(
+      "docker",
+      ["ps", "-a", "--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Ports}}"],
+      { timeout: 3000, windowsHide: true }
     );
     const lines = stdout.trim().split("\n").filter(Boolean);
     const containers = lines.map((line) => {

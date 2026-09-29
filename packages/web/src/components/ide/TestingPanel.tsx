@@ -37,8 +37,14 @@ export interface TestCase {
  */
 /** Execute a test body inside an isolated sandbox iframe (opaque origin:
  *  scripts only, no same-origin — the body cannot reach parent storage).
- *  Shared by discovered file tests and god-mode generated tests. */
+ *  Shared by discovered file tests and god-mode generated tests.
+ *  FINDING-1216: same guard as RunDebugPanel — block access to sensitive
+ *  globals before eval so a malicious committed test cannot exfiltrate
+ *  parent storage or redirect the top window. */
 export function runBodyInSandbox(testBody: string) {
+  if (/parent|top|document|cookie|localStorage|sessionStorage|fetch|XMLHttpRequest|location|window\.parent|window\.top/i.test(testBody)) {
+    throw new Error('blocked: test body accesses sensitive globals (parent/top/storage/network)');
+  }
   const iframe = document.createElement("iframe");
   iframe.style.display = "none";
   iframe.sandbox.add("allow-scripts");
@@ -49,7 +55,13 @@ export function runBodyInSandbox(testBody: string) {
   win.defineTest = defineTest;
 
   try {
-    win.eval(`(function() { ${testBody} })()`);
+    win.eval(`(function() {
+      const window = undefined;
+      const document = undefined;
+      const parent = undefined;
+      const top = undefined;
+      ${testBody}
+    })()`);
   } finally {
     if (document.body.contains(iframe)) {
       document.body.removeChild(iframe);

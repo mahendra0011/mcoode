@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
+import { reportError } from '../../lib/logger';
 import api from '../../lib/axios';
 import { getSocket } from '../../hooks/useChatSocket';
 
@@ -145,7 +146,7 @@ function WatchTab() {
       const r = await api.post(`/api/v1/watch/${encodeURIComponent(projectId)}/${op}`);
       setStatus(r.data);
       setState('ready');
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
   };
   useEffect(() => { load(); }, []);
   return (
@@ -199,7 +200,7 @@ function EnhanceTab() {
     setLibrary(next);
     try {
       localStorage.setItem('mcode_prompt_library', JSON.stringify(next));
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
   };
   const saveToLibrary = async (name: string, text: string) => {
     try {
@@ -208,7 +209,7 @@ function EnhanceTab() {
         saveLibLocal([...library, { name, text, _id: r.data.item._id }]);
         return;
       }
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     saveLibLocal([...library, { name, text }]);
   };
   const deleteFromLibrary = async (i: number) => {
@@ -216,7 +217,7 @@ function EnhanceTab() {
     if (item?._id) {
       try {
         await api.delete(`/api/v1/prompt/library/${item._id}`, { timeout: 8000 });
-      } catch {}
+      } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     }
     saveLibLocal(library.filter((_, j) => j !== i));
   };

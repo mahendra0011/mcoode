@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useIDEStore } from './ideStore';
 import api from '../lib/axios';
+import { reportError } from '../lib/logger';
 
 export interface AISettings {
   streamSpeed: 'fast' | 'normal' | 'balanced';
@@ -344,21 +345,25 @@ export const useSettingsStore = create<SettingsState>()(
       updateSecuritySetting: (k, v) => {
         set((s) => ({ security: { ...s.security, [k]: v } }));
         if (typeof window !== 'undefined') {
-          api.put('/api/v1/settings', { [k]: v }).catch(() => {});
+          // Optimistic UI — the toggle flips immediately; a failed write
+          // reports a user-visible toast via reportError (WEB-002).
+          api.put('/api/v1/settings', { [k]: v }).catch((err) => reportError('Security setting not saved', err));
         }
       },
       updateAccountSetting: (k, v) => set((s) => ({ account: { ...s.account, [k]: v } })),
       updateAgentSetting: (k, v) => {
         set((s) => ({ agent: { ...s.agent, [k]: v } }));
         if (typeof window !== 'undefined') {
-          api.put('/api/v1/settings', { [k]: v }).catch(() => {});
+          // Optimistic UI — see updateSecuritySetting (WEB-002).
+          api.put('/api/v1/settings', { [k]: v }).catch((err) => reportError('Agent setting not saved', err));
         }
       },
       updateNetworkSetting: (k, v) => set((s) => ({ network: { ...s.network, [k]: v } })),
       updateSystemSetting: (k, v) => {
         set((s) => ({ system: { ...s.system, [k]: v } }));
         if (typeof window !== 'undefined') {
-          api.put('/api/v1/settings', { [k]: v }).catch(() => {});
+          // Optimistic UI — see updateSecuritySetting (WEB-002).
+          api.put('/api/v1/settings', { [k]: v }).catch((err) => reportError('System setting not saved', err));
         }
       },
       updateDataSetting: (k, v) => set((s) => ({ data: { ...s.data, [k]: v } })),

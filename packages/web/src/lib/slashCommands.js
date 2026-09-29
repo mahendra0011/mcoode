@@ -1,4 +1,5 @@
 import { addMessage, setMode } from '../store/chatSlice';
+import { clearTokens } from './api';
 import { useIDEStore } from '../store/ideStore';
 
 /**
@@ -391,7 +392,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
     case 'exit':
       dispatch(addMessage({ kind: 'system', text: '🚪 Exiting session...' }));
       try {
-        localStorage.removeItem('mcode_tokens');
+        clearTokens();
         window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
       } catch {}
       if (state.router?.push) {

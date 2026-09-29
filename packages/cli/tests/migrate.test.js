@@ -231,9 +231,11 @@ describe('Migrate Mode (doc 51)', () => {
       let passCount = 0;
       const mockRunner = async () => {
         passCount++;
-        // On pass 1, simulate regression (passed: false), then on pass 2, it's fixed (passed: true)
+        // FINDING-861: a STABLE regression reproduces on the confirm re-run
+        // (calls 1+2 flip), then the fix lands (call 3 passes). A one-shot
+        // flip would be classified flaky and skipped — no fix dispatched.
         return {
-          tests: [{ id: 'char-f1', name: 'Characterization: f1', feature: 'f1', passed: passCount > 1 }]
+          tests: [{ id: 'char-f1', name: 'Characterization: f1', feature: 'f1', passed: passCount > 2 }]
         };
       };
 

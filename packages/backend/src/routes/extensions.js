@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import axios from 'axios';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -264,6 +265,10 @@ export function extensionRoutes({ secret } = {}) {
 
       const buffer = Buffer.from(downloadResponse.data);
 
+      // WEB-020: integrity end-to-end — hash the exact bytes we extracted so
+      // the registry record and install response carry a verifiable digest.
+      const integrity = `sha256-${createHash('sha256').update(buffer).digest('hex')}`;
+
       // 3. Extract via unzipper
       const directory = await unzipper.Open.buffer(buffer);
       const extTargetDir = path.join(INSTALLED_DIR, id);
@@ -361,6 +366,7 @@ export function extensionRoutes({ secret } = {}) {
         description: pkg.description || '',
         icon: pkg.icon ? `/api/v1/extensions/${id}/icon` : '⚡',
         installedAt: new Date().toISOString(),
+        integrity,
         contributes: {
           themes: parsedThemes,
           snippets: parsedSnippets,

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   LayoutDashboard, Component, Settings, Cpu, GitBranch,
   Shield, Plug, Workflow, Puzzle, BarChart3,
-  Terminal, Activity, Layers, ChevronRight, Home,
+  Terminal, Activity, Layers, ChevronRight, Home, Info,
 } from "lucide-react";
 import { McodeAnimationsTab } from "../mcode/McodeAnimationsTab";
 import { McodeArchitectureTab } from "../mcode/McodeArchitectureTab";
@@ -19,7 +19,6 @@ import { McodeSkillsTab } from "../mcode/McodeSkillsTab";
 import { McodeStartupTab } from "../mcode/McodeStartupTab";
 import { McodeTestsTab } from "../mcode/McodeTestsTab";
 import { McodeTurnMachineTab } from "../mcode/McodeTurnMachineTab";
-import { AgentInputBar } from "../chat/mcodeUX";
 
 interface TabItem {
   id: string;
@@ -27,24 +26,81 @@ interface TabItem {
   icon: React.ElementType;
   component: React.FC;
   section: string;
+  /**
+   * WEB-028: the file on disk that actually governs this section. The tabs are
+   * read-only reference, so naming the source of truth is what stops them from
+   * reading as live configuration. `null` = the tab is pure UI documentation with
+   * no on-disk counterpart.
+   */
+  configPath: string | null;
 }
 
+/**
+ * Every tab's backing config path, verified against the CLI source:
+ *   - `~/.mcode/config.json`  — `CONFIG_PATH` in `packages/cli/src/core/store.js`
+ *   - `<project>/.mcode/hooks.js` — `packages/cli/src/core/hooks.js` (`loadHooks`)
+ *   - `~/.mcode/cache/registry.json` — `plugin-registry.js` (installed plugins)
+ *
+ * Skills and MCP have **no implementation in this repository's CLI** (0 matches
+ * across all 104 CLI source files), so those two tabs are pure product
+ * reference and say so explicitly rather than implying a working feature.
+ */
 const TAB_ITEMS: TabItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, component: DashboardOverview, section: "Overview" },
-  { id: "architecture", label: "Architecture", icon: Layers, component: McodeArchitectureTab, section: "Overview" },
-  { id: "animations", label: "Animation Systems", icon: Activity, component: McodeAnimationsTab, section: "Development" },
-  { id: "config", label: "Configuration", icon: Settings, component: McodeConfigTab, section: "Development" },
-  { id: "dependencies", label: "Dependencies & Tools", icon: Puzzle, component: McodeDependenciesTab, section: "Development" },
-  { id: "git-tools", label: "Git Tools", icon: GitBranch, component: McodeGitToolsTab, section: "Development" },
-  { id: "hooks", label: "Hooks", icon: Cpu, component: McodeHooksTab, section: "Development" },
-  { id: "mcp", label: "MCP Servers", icon: Shield, component: McodeMcpTab, section: "AI Integration" },
-  { id: "plugins", label: "Plugins", icon: Plug, component: McodePluginsTab, section: "AI Integration" },
-  { id: "skills", label: "Skills", icon: Workflow, component: McodeSkillsTab, section: "AI Integration" },
-  { id: "settings", label: "Settings Reference", icon: Settings, component: McodeSettingsTab, section: "AI Integration" },
-  { id: "startup", label: "Startup", icon: Activity, component: McodeStartupTab, section: "App" },
-  { id: "tests", label: "Tests", icon: BarChart3, component: McodeTestsTab, section: "App" },
-  { id: "turn-machine", label: "Turn Machine", icon: Terminal, component: McodeTurnMachineTab, section: "App" },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, component: DashboardOverview, section: "Overview", configPath: null },
+  { id: "architecture", label: "Architecture", icon: Layers, component: McodeArchitectureTab, section: "Overview", configPath: "~/.mcode/ (CLI storage layout)" },
+  { id: "animations", label: "Animation Systems", icon: Activity, component: McodeAnimationsTab, section: "Development", configPath: "packages/web/src/styles/index.css" },
+  { id: "config", label: "Configuration", icon: Settings, component: McodeConfigTab, section: "Development", configPath: "~/.mcode/config.json" },
+  { id: "dependencies", label: "Dependencies & Tools", icon: Puzzle, component: McodeDependenciesTab, section: "Development", configPath: "package.json" },
+  { id: "git-tools", label: "Git Tools", icon: GitBranch, component: McodeGitToolsTab, section: "Development", configPath: "mcode git commands (CLI)" },
+  { id: "hooks", label: "Hooks", icon: Cpu, component: McodeHooksTab, section: "Development", configPath: "<project>/.mcode/hooks.js" },
+  { id: "mcp", label: "MCP Servers", icon: Shield, component: McodeMcpTab, section: "AI Integration", configPath: null },
+  { id: "plugins", label: "Plugins", icon: Plug, component: McodePluginsTab, section: "AI Integration", configPath: "~/.mcode/cache/registry.json" },
+  { id: "skills", label: "Skills", icon: Workflow, component: McodeSkillsTab, section: "AI Integration", configPath: null },
+  { id: "settings", label: "Settings Reference", icon: Settings, component: McodeSettingsTab, section: "AI Integration", configPath: "~/.mcode/config.json" },
+  { id: "startup", label: "Startup", icon: Activity, component: McodeStartupTab, section: "App", configPath: "packages/web/src/components/mcode/McodeStartupOverlay.tsx" },
+  { id: "tests", label: "Tests", icon: BarChart3, component: McodeTestsTab, section: "App", configPath: "mcode test commands (CLI)" },
+  { id: "turn-machine", label: "Turn Machine", icon: Terminal, component: McodeTurnMachineTab, section: "App", configPath: null },
 ];
+
+/**
+ * WEB-028: the `/mcode` tabs present hard-coded CLI reference material with the
+ * same card styling as the real settings screens, and nothing told the user they
+ * were not live configuration. A user opening "Hooks" reasonably concluded their
+ * workspace had those hooks configured. This banner is rendered above *every*
+ * tab (see `McodeDashboard`) and names the file that actually governs the
+ * section, so the page can no longer be mistaken for state.
+ */
+function ReferenceBanner({ path }: { path: string | null }) {
+  return (
+    <div
+      role="note"
+      className="mb-5 flex items-start gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3"
+    >
+      <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+      <div className="text-[12px] leading-relaxed min-w-0">
+        <p className="text-amber-200/90 font-medium">
+          Read-only CLI reference — this page does not read or change your configuration.
+        </p>
+        <p className="text-white/50 mt-1">
+          Edit it in <code className="text-white/70 font-mono">~/.mcode/config.json</code> (or run{' '}
+          <code className="text-white/70 font-mono">mcode config</code>), then restart the CLI.
+        </p>
+        {path ? (
+          <p className="text-white/40 mt-1 flex items-center gap-1.5 flex-wrap">
+            <Terminal className="w-3 h-3 flex-shrink-0" />
+            <span>Governed by:</span>
+            <code className="text-white/60 font-mono">{path}</code>
+          </p>
+        ) : (
+          <p className="text-white/40 mt-1">
+            No on-disk configuration backs this section — it documents product behaviour, not
+            machine state.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function DashboardOverview() {
   return (
@@ -72,13 +128,6 @@ function DashboardOverview() {
             <p className="text-[11px] text-white/40">{tab.section}</p>
           </div>
         ))}
-      </div>
-
-      <div className="pt-6 border-t border-white/5">
-        <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4">Agent Input Bar Preview</h3>
-        <div className="max-w-2xl">
-          <AgentInputBar model="Claude 3" onSend={(value) => console.log("Send:", value)} />
-        </div>
       </div>
     </div>
   );
@@ -155,6 +204,8 @@ export function McodeDashboard() {
           <span className="text-white/60">{activeItem.label}</span>
         </div>
         <div className="p-6">
+          {/* WEB-028: every /mcode tab is read-only reference — say so on each one. */}
+          {activeItem.id !== "dashboard" && <ReferenceBanner path={activeItem.configPath} />}
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 10 }}

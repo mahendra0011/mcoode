@@ -5,7 +5,10 @@
  */
 
 const REQUIRED = ['MONGODB_URI', 'JWT_SECRET'];
-const WEAK_SECRETS = ['mcode-dev-secret-change-me', 'changeme', 'secret', 'password'];
+// M11-006: 'dev-secret' was the hardcoded fallback in ssh-manager.js and was
+// absent from this list, so the validator and the code disagreed about which
+// string counts as the development secret.
+const WEAK_SECRETS = ['mcode-dev-secret-change-me', 'dev-secret', 'changeme', 'secret', 'password'];
 
 export function validateEnv(env = process.env, { exitOnMissing = true } = {}) {
   const missing = REQUIRED.filter((k) => !env[k]);

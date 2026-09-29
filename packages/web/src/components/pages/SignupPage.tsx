@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Mail, Clock } from 'lucide-react';
 import robotBg from '../../assets/robot-bg-new.png';
 import api from '../../lib/axios';
+import { setTokens } from '../../lib/api';
 import { signupSchema, otpSchema } from '../../lib/validation';
 
 const MotionLink = motion.create(Link);
@@ -125,7 +126,9 @@ export function SignupPage() {
       if (res.status >= 400) {
         throw new Error(res.data?.error?.message || 'Invalid verification code');
       }
-      localStorage.setItem('mcode_tokens', JSON.stringify({ access: res.data.access, refresh: res.data.refresh }));
+      // WEB-011: never write the refresh token to script-readable storage —
+      // setTokens keeps it in memory and relies on the httpOnly cookie.
+      setTokens({ access: res.data.access, refresh: res.data.refresh });
       router.push('/ai/chat');
     } catch (err) {
       setOtpError((err as any).response?.data?.error?.message || (err as any).message);

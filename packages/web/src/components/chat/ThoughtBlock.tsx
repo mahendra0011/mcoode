@@ -19,7 +19,11 @@ export interface ThoughtBlockProps {
 export function ThoughtBlock({ content, done = false, startedAt }: ThoughtBlockProps) {
   const [open, setOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const start = useRef(startedAt || Date.now());
+  const start = useRef(startedAt ?? Date.now());
+
+  useEffect(() => {
+    if (startedAt !== undefined) start.current = startedAt;
+  }, [startedAt]);
 
   useEffect(() => {
     if (done) return;
@@ -31,7 +35,7 @@ export function ThoughtBlock({ content, done = false, startedAt }: ThoughtBlockP
     if (done) setElapsedMs((prev) => (prev > 0 ? prev : Date.now() - start.current));
   }, [done]);
 
-  const seconds = Math.max(1, Math.round(elapsedMs / 1000));
+  const seconds = Math.max(0, Math.round(elapsedMs / 1000));
   const durationLabel = seconds < 60
     ? `${seconds} second${seconds === 1 ? '' : 's'}`
     : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;

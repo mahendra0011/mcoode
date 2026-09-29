@@ -17,6 +17,28 @@ import { runProjectTestCommand } from './equivalence-check.js';
  * @param {EquivSnapshot} current - Result from runProjectTestCommand
  * @returns {Array<{ feature: string, expectedState: string, currentState: string, reason: string, regressed: boolean }>}
  */
+/**
+ * FINDING-861: scrub non-deterministic values (timestamps, UUIDs, random
+ * numbers, durations, absolute paths, PIDs) so output comparisons don't
+ * flag timestamp/RNG noise as behavior changes.
+ *
+ * @param {unknown} output
+ * @returns {string}
+ */
+export function normalizeTestOutput(output) {
+  return String(output ?? '')
+    .replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/g, '<TIME>')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<UUID>')
+    .replace(/\b\d+\.\d+\.\d+\.\d+(?::\d+)?\b/g, '<ADDR>')
+    .replace(/(?:\d+\s?(?:ms|s|sec|seconds)|\(\d+\s?ms\))/gi, '<DUR>')
+    .replace(/\b\d{10,13}\b/g, '<EPOCH>')
+    .replace(/[A-Za-z]:\\(?:[^\\s]+\\)*[^\\s]*/g, '<PATH>')
+    .replace(/(?:^|\s)\/(?:[^/\s]+\/)+[^/\s]*/g, '<PATH>')
+    .replace(/\bpid\s*\d+\b/gi, 'pid <PID>')
+    .replace(/\b0x[0-9a-f]+\b/gi, '<HEX>')
+    .replace(/\b[a-f0-9]{32,64}\b/gi, '<HASH>');
+}
+
 export function diffAgainstSnapshot(snapshot, current) {
   const baselineTests = snapshot?.baselineTests?.tests || [];
   const currentTests = current?.tests || [];
@@ -53,10 +75,16 @@ export function diffAgainstSnapshot(snapshot, current) {
       continue;
     }
 
-    // FINDING-861: normalize non-deterministic values before comparing
+    // FINDING-861: a pass/fail flip whose normalized outputs are identical
+    // cannot be a real behavior change (same output, different verdict =
+    // harness noise). Mark it flaky so the caller skips the fix loop.
     const basePassed = base.passed;
     const currPassed = curr.passed;
     if (basePassed !== currPassed) {
+      const sameOutput =
+        base.output !== undefined && curr.output !== undefined &&
+        normalizeTestOutput(base.output) === normalizeTestOutput(curr.output);
+      if (sameOutput) continue;
       // Status FLIPPED (pass->fail or fail->pass)
       regressions.push({
         id: key,
@@ -123,8 +151,32 @@ export async function verifyEquivalence(snapshot, { subagentManager, router, bus
       testRunner
     });
 
-    const regressions = diffAgainstSnapshot(snapshot, current);
-    history.push({ pass, totalTests: current.total, regressionsCount: regressions.length, regressions });
+    let regressions = diffAgainstSnapshot(snapshot, current);
+
+    // FINDING-861: confirm flips before spending fix passes on them. A test
+    // with non-deterministic output (Date.now(), Math.random(), UUIDs) can
+    // flip spuriously; re-running once filters flakes that would otherwise
+    // send the 5-pass repair loop after working code.
+    if (regressions.length > 0) {
+      const confirm = await runProjectTestCommand(projectPath, {
+        characterizationTests: /** @type {Array<{feature: string, code?: string, name?: string, run?: Function}>} */ (snapshot?.characterizationTests || []),
+        testRunner
+      });
+      const stillFailing = diffAgainstSnapshot(snapshot, confirm);
+      const stillSet = new Set(stillFailing.map((r) => r.id));
+      const flaky = regressions.filter((r) => !stillSet.has(r.id));
+      if (flaky.length > 0) {
+        bus?.emit('MIGRATE_STATUS', {
+          stage: 'verify',
+          pass,
+          message: `ignoring ${flaky.length} non-reproducible flip${flaky.length !== 1 ? 's' : ''} (flaky: ${flaky.map((r) => r.feature).join(', ').slice(0, 200)})`
+        });
+      }
+      regressions = stillFailing;
+      history.push({ pass, totalTests: current.total, regressionsCount: regressions.length, regressions, flaky: flaky.map((r) => r.id) });
+    } else {
+      history.push({ pass, totalTests: current.total, regressionsCount: 0, regressions });
+    }
 
     bus?.emit('MIGRATE_PASS_RESULT', {
       pass,

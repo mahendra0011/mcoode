@@ -16,12 +16,35 @@ import {
   Bell, RotateCcw, Database, Users, Wrench, Type, Indent
 } from 'lucide-react';
 import api from '../../lib/axios';
-import { connectOAuth } from '../../lib/electron-nav';
+import { reportError } from '../../lib/logger';
 import { useSettingsStore } from '../../store/settingsStore';
 import { toast } from 'sonner';
 import { changePasswordSchema } from '../../lib/validation';
+import { useProviderCatalog } from '../../hooks/useProviderCatalog';
+import { CATALOG_STALE_NOTICE, DEFAULT_PROVIDER_ID } from '../../lib/providerCatalog';
 
 const MotionLink = motion.create(Link);
+
+/* WEB-018: backend version chip — single-sourced from GET /api/v1/version
+ * (`mcode version`), so UI/CLI provenance can be correlated in bug reports. */
+function VersionChip({ fallback }: { fallback: string }) {
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.get('/api/v1/version', { timeout: 5000 })
+      .then((r) => { if (live && r.data?.version) setVersion(String(r.data.version)); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+  return (
+    <span
+      className="text-[10px] text-[var(--mcode-text-dim,#8b8d98)]"
+      title={version ? `backend v${version} — correlate with \`mcode version\`` : fallback}
+    >
+      {version ? `mcode v${version}` : fallback}
+    </span>
+  );
+}
 
 /* ─────────────────── THEME CONSTANTS ─────────────────── */
 
@@ -353,8 +376,15 @@ function GeneralTab() {
 
 /* ─────────────────── TAB 2: APPEARANCE & THEME TAB ─────────────────── */
 
-function AppearanceTab({ settings, onUpdate }: { settings: any; onUpdate: (patch: any) => void }) {
-  const currentAccent = settings.accentColor || 'emerald';
+/** Loose server-persisted settings map shared by the tab components below. */
+type SettingsMap = Record<string, unknown>;
+interface SettingsTabProps {
+  settings: SettingsMap;
+  onUpdate: (patch: SettingsMap) => void;
+}
+
+function AppearanceTab({ settings, onUpdate }: SettingsTabProps) {
+  const currentAccent: string = typeof settings.accentColor === 'string' ? settings.accentColor : 'emerald';
   const appearance = useSettingsStore((s) => s.appearance);
   const updateAppearance = useSettingsStore((s) => s.updateAppearanceSetting);
 
@@ -379,7 +409,7 @@ function AppearanceTab({ settings, onUpdate }: { settings: any; onUpdate: (patch
             <button
               key={th.id}
               type="button"
-              onClick={() => updateAppearance('colorTheme', th.id as any)}
+              onClick={() => updateAppearance('colorTheme', th.id)}
               className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-medium transition cursor-pointer ${
                 appearance.colorTheme === th.id
                   ? 'bg-white/10 border-white/30 text-white shadow-sm'
@@ -395,7 +425,7 @@ function AppearanceTab({ settings, onUpdate }: { settings: any; onUpdate: (patch
 
       {/* Accent Color Palette */}
       <div className="bg-[#151515] border border-white/5 rounded-xl p-5 space-y-3">
-        <h3 className="text-xs font-semibold text-white/80 uppercase tracking-wider">Accent Color</h3>
+        <h3 className="text-xs font-semibold text-white/80 uppercase tracking-wider">Accent Color <span className="normal-case font-normal text-white/40">(dashboard only)</span></h3>
         <div className="grid grid-cols-3 gap-3">
           {ACCENT_COLORS.map((c) => (
             <button
@@ -700,7 +730,7 @@ function MemoryTab() {
           checked={Boolean(agent.checkpointsEnabled ?? true)}
           onChange={(v) => {
             updateAgent('checkpointsEnabled', v);
-            api.put('/api/v1/settings', { rewindCheckpointing: v }).catch(() => {});
+            api.put('/api/v1/settings', { rewindCheckpointing: v }).catch((err) => reportError('Checkpoints setting not saved', err));
           }}
         />
 
@@ -711,7 +741,7 @@ function MemoryTab() {
           checked={Boolean(agent.conversationCompaction ?? true)}
           onChange={(v) => {
             updateAgent('conversationCompaction', v);
-            api.put('/api/v1/settings', { conversationCompaction: v }).catch(() => {});
+            api.put('/api/v1/settings', { conversationCompaction: v }).catch((err) => reportError('Compaction setting not saved', err));
           }}
         />
       </div>
@@ -1144,75 +1174,21 @@ function PermissionsTab({
 
 /* ─────────────────── TAB 11: MODEL SETTINGS & API KEYS TAB ─────────────────── */
 
-const DEFAULT_SETTINGS_PROVIDERS = [
-  {
-    id: 'openrouter',
-    displayName: 'OpenRouter',
-    envVar: 'OPENROUTER_API_KEY',
-    models: [
-      { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', free: false, scores: { coding: 95 } },
-      { id: 'openai/gpt-4o', name: 'GPT-4o', free: false, scores: { coding: 93 } },
-      { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', free: false, scores: { coding: 91 } },
-      { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', free: true },
-    ],
-  },
-  {
-    id: 'openai',
-    displayName: 'OpenAI',
-    envVar: 'OPENAI_API_KEY',
-    models: [
-      { id: 'gpt-4o', name: 'GPT-4o', free: false, scores: { coding: 93 } },
-      { id: 'gpt-4o-mini', name: 'GPT-4o Mini', free: false, scores: { coding: 86 } },
-      { id: 'o1-preview', name: 'o1 Preview', free: false, scores: { coding: 96 } },
-      { id: 'o1-mini', name: 'o1 Mini', free: false, scores: { coding: 90 } },
-    ],
-  },
-  {
-    id: 'anthropic',
-    displayName: 'Anthropic',
-    envVar: 'ANTHROPIC_API_KEY',
-    models: [
-      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', free: false, scores: { coding: 95 } },
-      { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', free: false, scores: { coding: 88 } },
-      { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus', free: false, scores: { coding: 89 } },
-    ],
-  },
-  {
-    id: 'google',
-    displayName: 'Google',
-    envVar: 'GOOGLE_API_KEY',
-    models: [
-      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', free: true, scores: { coding: 89 } },
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', free: false, scores: { coding: 92 } },
-      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', free: true, scores: { coding: 84 } },
-    ],
-  },
-  {
-    id: 'deepseek',
-    displayName: 'DeepSeek',
-    envVar: 'DEEPSEEK_API_KEY',
-    models: [
-      { id: 'deepseek-chat', name: 'DeepSeek V3', free: false, scores: { coding: 91 } },
-      { id: 'deepseek-coder', name: 'DeepSeek Coder V2.5', free: false, scores: { coding: 93 } },
-    ],
-  },
-  {
-    id: 'mistral',
-    displayName: 'Mistral',
-    envVar: 'MISTRAL_API_KEY',
-    models: [
-      { id: 'mistral-large-latest', name: 'Mistral Large', free: false, scores: { coding: 90 } },
-      { id: 'codestral-latest', name: 'Codestral', free: false, scores: { coding: 92 } },
-    ],
-  },
-];
+/*
+ * WEB-029: `DEFAULT_SETTINGS_PROVIDERS` (this file) and `FALLBACK_PROVIDERS`
+ * (`ModelSelector.tsx`) were two independent hard-coded catalogs, each swapped in
+ * silently when `GET /api/v1/settings/providers` failed or timed out after 3 s —
+ * so the UI could offer models the mcode CLI cannot route, with nothing saying
+ * so. Both now come from `lib/providerCatalog.ts` via `useProviderCatalog()`, and
+ * both label the list as stale when the live fetch fails.
+ */
 
 function ApiKeysTab() {
-  const [providers, setProviders] = useState<any[]>(DEFAULT_SETTINGS_PROVIDERS);
+  const { providers, isStale, loading: catalogLoading, refresh: reloadCatalog } = useProviderCatalog();
   const [keys, setKeys] = useState<any[]>([]);
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeProviderId, setActiveProviderId] = useState('openrouter');
+  const [activeProviderId, setActiveProviderId] = useState(DEFAULT_PROVIDER_ID);
   const [newKey, setNewKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1223,14 +1199,12 @@ function ApiKeysTab() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [provRes, keysRes, modelsRes] = await Promise.allSettled([
-        api.get('/api/v1/settings/providers', { timeout: 3000 }),
+      // WEB-029: the provider catalog is owned by useProviderCatalog() now — this
+      // only fetches the two things that genuinely live on the account.
+      const [keysRes, modelsRes] = await Promise.allSettled([
         api.get('/api/v1/keys', { timeout: 3000 }),
         api.get('/api/v1/keys/models', { timeout: 3000 }),
       ]);
-      if (provRes.status === 'fulfilled' && provRes.value.data?.ok && provRes.value.data.providers?.length) {
-        setProviders(provRes.value.data.providers);
-      }
       if (keysRes.status === 'fulfilled' && keysRes.value.data?.keys) {
         setKeys(keysRes.value.data.keys || []);
       }
@@ -1316,6 +1290,31 @@ function ApiKeysTab() {
           Manage custom model providers. Once configured, they can be selected during chat and agent execution.
         </p>
       </div>
+
+      {/* WEB-029: the provider list below used to be swapped in silently when the
+          live fetch failed, so a stale catalog looked exactly like a real one.
+          When it is the bundled fallback, say so — and offer a retry. */}
+      {isStale && (
+        <div
+          role="status"
+          className="mb-4 flex-shrink-0 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
+        >
+          <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] text-amber-200 font-medium">Provider catalog is not live</p>
+            <p className="text-[12px] text-amber-200/70 mt-0.5">{CATALOG_STALE_NOTICE}</p>
+          </div>
+          <button
+            type="button"
+            onClick={reloadCatalog}
+            disabled={catalogLoading}
+            className="flex-shrink-0 flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-md border border-amber-500/40 text-amber-200 hover:bg-amber-500/15 transition disabled:opacity-50"
+          >
+            {catalogLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden rounded-xl bg-[#181818] border border-[#222]">
         {/* Left Sidebar */}
@@ -2623,7 +2622,9 @@ function ConnectionsTab() {
   const handleConnectGithub = () => {
     const tokens = JSON.parse(localStorage.getItem('mcode_tokens') || '{}');
     const url = `/api/v1/auth/github?token=${tokens.access || ''}`;
-    connectOAuth(url);
+    // WEB-027: the Electron `openOAuthPopup` bridge is gone (no packages/desktop
+    // in this repo), so OAuth is always a standard full-page redirect.
+    window.location.href = url;
   };
 
   const handleDisconnectGithub = async () => {
@@ -2779,7 +2780,7 @@ export function SettingsPage({
       await api.put('/api/v1/settings', patch);
       toast.success('Settings saved');
     } catch (e) {
-      console.error(e);
+      reportError('Settings not saved', e);
     }
   };
 
@@ -2856,7 +2857,7 @@ export function SettingsPage({
         </nav>
 
         <div className="p-4 border-t border-[var(--mcode-border,#26272f)] text-center">
-          <span className="text-[10px] text-[var(--mcode-text-dim,#8b8d98)]">mcode platform v2.4.6</span>
+          <VersionChip fallback="mcode platform v2.4.6" />
         </div>
       </aside>
 

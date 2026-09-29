@@ -1,48 +1,81 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 /**
- * StartupOverlay — replicates mcode's 2-stage startup animation.
+ * StartupOverlay — the mcode startup logo pop.
  *
- * Stage 1: The logo and title pop in (720ms, cubic-bezier(0.22, 1, 0.36, 1)).
- * Stage 2: After the app signals "ready" (via window.mcodeElectron.onReady
- *   in Electron, or a short timeout in browser), the overlay fades out.
+ * Spec timings (ZCODE-ANIMATIONS.md §startup): logo 720 ms
+ * `cubic-bezier(0.22, 1, 0.36, 1)`, 500 ms overlay fade-out.
  *
- * The overlay is dismissed imperatively so it never blocks route changes
- * once the React tree has committed.
+ * WEB-026 fixes applied here:
+ *
+ *  1. **One motion system.** framer-motion drives `scale`/`opacity`. The CSS
+ *     `@keyframes startup-logo-pop` on `.startup-logo` was animating the *same*
+ *     element a second time, so the result was two systems racing on one node.
+ *     The keyframes and the `.startup-overlay.fade-out` rule are deleted from
+ *     `index.css`; nothing animates via CSS any more.
+ *  2. **Real readiness gate instead of a magic 1200 ms constant.** The overlay is
+ *     dismissed once React has actually painted (`double requestAnimationFrame`
+ *     after mount) — the same "react ready" signal the ZCode startup state
+ *     machine uses — rather than a fixed sleep that always cost 1.2 s.
+ *  3. **`prefers-reduced-motion: reduce` bypass.** No pop, no fade: the overlay
+ *     simply stops existing on the first frame. It also never blocks pointer
+ *     events while it is up, so the app is usable either way.
+ *
+ * WEB-027: the `window.mcodeElectron.onReady` branch is gone. There is no
+ * `packages/desktop` in this repository, so that branch could never fire — it
+ * meant the overlay *always* paid the fixed fallback delay.
+ *
+ * The app is **not** hidden behind this overlay: `index.css` no longer sets
+ * `#root { opacity: 0 }`, so a slow first paint degrades to "logo over content"
+ * instead of a blank page.
  */
+
+/** Spec timings, single source of truth for the startup sequence. */
+const LOGO_DURATION_S = 0.72;
+const FADE_DURATION_S = 0.5;
+const EASE = [0.22, 1, 0.36, 1] as const;
+
 export function McodeStartupOverlay() {
   const [visible, setVisible] = useState(true);
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   useEffect(() => {
-    document.body.classList.add('mcode-startup-ready');
-    const hide = () => setVisible(false);
-
-    if (typeof window !== 'undefined' && window.mcodeElectron?.onReady) {
-      // Electron path: wait for the main process to confirm the React app is ready
-      window.mcodeElectron.onReady(hide);
-    } else {
-      // Browser / Vite dev: fade out after a brief delay
-      const timer = setTimeout(hide, 1200);
-      return () => clearTimeout(timer);
+    if (reducedMotion) {
+      // No animation at all — drop the overlay on the first committed frame.
+      setVisible(false);
+      return;
     }
-  }, []);
+
+    // "React ready": the commit has landed and the browser has had a frame to
+    // paint it. Two rAFs guarantee the paint, not just the commit.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setVisible(false));
+    });
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [reducedMotion]);
 
   return (
     <AnimatePresence>
       {visible && (
         <motion.div
-          className="startup-overlay pointer-events-none"
+          className="startup-overlay"
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+          exit={{ opacity: 0, transition: { duration: FADE_DURATION_S, ease: 'easeOut' } }}
+          transition={{ duration: FADE_DURATION_S, ease: [0.4, 0, 0.2, 1] }}
         >
           <motion.div
             className="startup-logo"
             initial={{ scale: 0.72, opacity: 0 }}
             animate={{ scale: [0.72, 1.045, 0.985, 1.008, 1], opacity: 1 }}
-            transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1], times: [0, 0.38, 0.58, 0.76, 1] }}
+            transition={{ duration: LOGO_DURATION_S, ease: EASE, times: [0, 0.38, 0.58, 0.76, 1] }}
           >
             <div className="relative flex items-center justify-center">
               <div
@@ -64,7 +97,7 @@ export function McodeStartupOverlay() {
             className="startup-title"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ delay: 0.2, duration: 0.5, ease: EASE }}
           >
             mcode
           </motion.div>

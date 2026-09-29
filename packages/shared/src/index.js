@@ -17,7 +17,7 @@ export class CostLedger {
     this.filePath = filePath;
     this.windowMs = windowMs;
     this.providers = new Map(); // providerId -> { rpm: number[], tpm: number[] }
-    this.modes = new Map(); // 880: mode -> { tokens, cost, runs } (accounting only)
+    this.modes = new Map(); // MF-0880: mode -> { tokens, cost, runs } (accounting only)
   }
 
   record(providerId, { inputTokens = 0, outputTokens = 0, mode = null, cost = 0 } = {}) {
@@ -29,7 +29,7 @@ export class CostLedger {
     }
     entry.rpm.push(now);
     entry.tpm.push({ t: now, n: inputTokens + outputTokens });
-    // 880: per-mode budget attribution — separate from (never affecting)
+    // MF-0880: per-mode budget attribution — separate from (never affecting)
     // the provider-keyed rate-limit windows above.
     if (mode) {
       const m = this.modes.get(mode) || { tokens: 0, cost: 0, runs: 0 };
@@ -101,7 +101,9 @@ export class CostLedger {
       const { readFile } = await import('node:fs/promises');
       const raw = await readFile(this.filePath, 'utf8');
       const data = JSON.parse(raw);
-      // Back-compat: old files saved {calls:n} — treat as timestamps now
+      // Back-compat: old files saved {calls:n} — restore conservatively
+      // (timestamps would create instant rate limit). Spread calls evenly
+      // over half-window so historical load doesn't falsely trigger limits.
       for (const [id, e] of Object.entries(data.providers || {})) {
         const now = Date.now();
         const rpm = Array.isArray(e.rpm) ? e.rpm.filter((t) => typeof t === 'number') : [];
@@ -109,7 +111,11 @@ export class CostLedger {
           ? e.tpm.filter((x) => x && typeof x.t === 'number' && typeof x.n === 'number')
           : [];
         if (!rpm.length && typeof e.calls === 'number' && e.calls > 0) {
-          for (let i = 0; i < e.calls; i++) rpm.push(now);
+          const spread = Math.min(e.calls, 100);
+          const interval = this.windowMs / 2 / spread;
+          for (let i = 0; i < spread; i++) {
+            rpm.push(now - (spread - i) * interval);
+          }
         }
         this.providers.set(id, { rpm, tpm });
         this._trim('rpm', id);
@@ -143,7 +149,7 @@ export const COST_RATES = {
  * Kept in @mcode/shared so the CLI summary, the ledger attribution and the
  * `history`/`doctor` reports all compute money the same way.
  *
- * @param {{ costPer1kIn?: number, costPer1kOut?: number, provider?: string, id?: string }|string|null} model
+ * @param {{ costPer1kIn?: number, costPer1kOut?: number, provider?: { id?: string } | string, id?: string, ref?: string }|string|null} model
  * @param {{ inputTokens?: number, outputTokens?: number }|null} usage
  * @param {{ rates?: Record<string, { in: number, out: number }> }} [opts]
  * @returns {number} USD (0 when there is no usage)
@@ -152,21 +158,37 @@ export function estimateCallCost(model = null, usage = null, { rates = COST_RATE
   const input = Number(usage?.inputTokens) || 0;
   const output = Number(usage?.outputTokens) || 0;
   if (input <= 0 && output <= 0) return 0;
-  const inPer1k = Number(model?.costPer1kIn);
-  const outPer1k = Number(model?.costPer1kOut);
-  if (Number.isFinite(inPer1k) && Number.isFinite(outPer1k)) {
-    return (input / 1000) * inPer1k + (output / 1000) * outPer1k;
+  // Catalog pricing: check only if model is an object (not a string ref)
+  if (model && typeof model !== 'string') {
+    const inPer1k = Number(model.costPer1kIn);
+    const outPer1k = Number(model.costPer1kOut);
+    if (Number.isFinite(inPer1k) && Number.isFinite(outPer1k)) {
+      return (input / 1000) * inPer1k + (output / 1000) * outPer1k;
+    }
   }
-  const ref = typeof model === 'string' ? model : String(model?.ref || model?.id || '');
-  const provider = String(model?.provider?.id || model?.provider || ref.split(':')[0] || 'default');
+  let ref = '';
+  if (model && typeof model !== 'string') {
+    ref = String(model?.ref || model?.id || '');
+  } else if (typeof model === 'string') {
+    ref = model;
+  }
+  let provider = ref.split(':')[0] || 'default';
+  if (model && typeof model !== 'string' && model.provider) {
+    const prov = model.provider;
+    if (typeof prov === 'object' && prov !== null && prov.id !== undefined) {
+      provider = String(prov.id || prov);
+    } else if (typeof prov === 'string') {
+      provider = prov;
+    }
+  }
   const rate = rates[provider] || rates.default;
   return (input / 1e6) * rate.in + (output / 1e6) * rate.out;
 }
 
 /** Rough token estimation — fallback only (subagents prefer provider-reported
- *  `usage` when the API returns it). ~4 chars/token holds for English prose
- *  and code, but CJK/emoji run ~1-3 tokens per char, so non-ASCII is counted
- *  at ~1 token/char instead of being underestimated 2-4x (RTR-004). */
+ *  `usage` when the API returns it). ~4 chars/token for English prose, but CJK/
+ *  emoji run ~1-3 tokens/char, so non-ASCII is counted at ~2 tokens/char
+ *  instead of being underestimated 2-4x (RTR-004). */
 export function estimateTokens(text) {
   if (!text) return 0;
   const str = String(text);
@@ -176,5 +198,5 @@ export function estimateTokens(text) {
     if (ch.codePointAt(0) < 128) ascii++;
     else nonAscii++;
   }
-  return Math.ceil(ascii / 4) + nonAscii;
+  return Math.ceil(ascii / 4) + Math.ceil(nonAscii * 1.5);
 }

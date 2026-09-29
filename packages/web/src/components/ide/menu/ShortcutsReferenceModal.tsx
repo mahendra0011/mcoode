@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Keyboard, Search, X } from "lucide-react";
 import { useIDEStore } from "../../../store/ideStore";
@@ -105,6 +105,8 @@ export function ShortcutsReferenceModal() {
   const setIsOpen = useIDEStore((s) => s.setShortcutsOpen);
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("All");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const categories = useMemo(() => {
     return ["All", "File", "Edit", "Selection", "View", "Go", "Run", "Terminal", "Help"];
@@ -123,14 +125,48 @@ export function ShortcutsReferenceModal() {
     });
   }, [query, activeCategory]);
 
+  // WEB-019: Escape-close, initial focus, and a Tab focus-trap so keyboard
+  // users can't tab out behind the modal. Hooks stay above the early return.
+  useEffect(() => {
+    if (!isOpen) return;
+    searchInputRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+        return;
+      }
+      if (e.key === "Tab" && dialogRef.current) {
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, setIsOpen]);
+
   if (!isOpen) return null;
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Keyboard shortcuts reference"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={() => setIsOpen(false)}
     >
       <motion.div
+        ref={dialogRef}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
@@ -140,24 +176,27 @@ export function ShortcutsReferenceModal() {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#1f1f23]">
           <div className="flex items-center gap-2.5">
-            <Keyboard className="w-5 h-5 text-blue-400" />
+            <Keyboard className="w-5 h-5 text-blue-400" aria-hidden="true" />
             <h2 className="text-base font-semibold text-white">Keyboard Shortcuts Reference</h2>
           </div>
           <button
             onClick={() => setIsOpen(false)}
+            aria-label="Close shortcuts reference dialog"
             className="text-white/40 hover:text-white p-1 rounded-lg hover:bg-white/5 transition"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         {/* Filter bar */}
         <div className="px-6 py-3 border-b border-white/10 bg-[#161618] flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="relative w-full sm:w-72 flex items-center">
-            <Search className="w-4 h-4 text-white/40 absolute left-3" />
+            <Search className="w-4 h-4 text-white/40 absolute left-3" aria-hidden="true" />
             <input
+              ref={searchInputRef}
               type="text"
               value={query}
+              aria-label="Search shortcuts"
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search shortcuts..."
               className="w-full bg-[#1e1e22] border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-white/40 focus:outline-none focus:border-blue-500"

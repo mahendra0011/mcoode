@@ -1,11 +1,12 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
-  plugins: [react()],
+  // DEBT-004: no @vitejs/plugin-react — vite's built-in esbuild handles
+  // TS/TSX transforms; the stale plugin broke config load outright.
+  plugins: [],
   test: {
     root: rootDir,
     environment: 'jsdom',

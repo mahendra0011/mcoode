@@ -23,10 +23,8 @@ const DEP_CATEGORIES = [
     items: [
       { name: 'react', version: '18.x', purpose: 'UI rendering engine' },
       { name: 'framer-motion', version: '11.x', purpose: 'Animation library (primary)' },
-      { name: 'react-redux', version: '9.x', purpose: 'State management' },
-      { name: 'redux', version: '4.x', purpose: 'Redux store' },
-      { name: 'redux-thunk', version: '3.x', purpose: 'Async Redux middleware' },
-      { name: 'zustand', version: '5.x', purpose: 'Lightweight reactive state (IDE store)' },
+      { name: 'zustand', version: '5.x', purpose: 'State management (single store: chat + IDE)' },
+      { name: 'immer', version: '11.x', purpose: 'Immutable updates in the chat slice' },
       { name: 'tailwindcss', version: '4.2.2', purpose: 'CSS framework' },
       { name: '@radix-ui / radix-ui', version: 'latest', purpose: 'Headless UI primitives' },
     ],

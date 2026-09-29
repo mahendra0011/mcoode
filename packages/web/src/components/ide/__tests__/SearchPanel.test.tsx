@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../../../lib/axios', () => ({
@@ -58,8 +58,12 @@ describe('SearchPanel', () => {
 
   it('toggles match case option', async () => {
     const user = userEvent.setup();
-    render(<SearchPanel />);
-    const matchCase = screen.getByTitle('Match Case (Alt+C)');
+    // `screen` is not re-exported by @testing-library/react v16 in this setup
+    // (and @testing-library/dom is not a direct dependency), so use the queries
+    // `render()` returns. This import error was failing `npm run typecheck` and
+    // therefore the whole production build.
+    const { getByTitle } = render(<SearchPanel />);
+    const matchCase = getByTitle('Match Case (Alt+C)');
     await user.click(matchCase);
     expect(matchCase).toHaveClass('bg-blue-600');
   });

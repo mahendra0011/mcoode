@@ -1,5 +1,5 @@
 import React from "react";
-import { motion, type MotionStyle } from "framer-motion";
+import { motion } from "framer-motion";
 import { MessageContent } from "./MessageContent";
 import { StepCard } from "../ide/StepCards";
 import { ThoughtBlock } from "./ThoughtBlock";
@@ -76,13 +76,18 @@ export function ChatMessage({ msg, idx, size = "md", isStreaming, undo, isNormal
             >
               <MessageContent msg={msg} text={msg.text} size={size} isStreaming={showCursor}>
                 {showCursor && (
+                  // Spec timing: 0.9 s, cubic-bezier(.16, 1, .3, 1).
+                  // The old markup carried `data-*-stream-marker-animate="true"`
+                  // on a `<span>`: `::marker` only exists on list items, so the
+                  // rule could never match and the attribute was decorative
+                  // (audit WEB-005). The dead `::marker` rules were removed from
+                  // `src/styles/index.css` so the CSS stops advertising an API
+                  // nothing can use.
                   <motion.span
-                    data-zcode-stream-marker-animate="true"
-                    data-mcode-stream-marker-animate="true"
-                    style={{ ["--zcode-stream-animation-delay"]: "0s", ["--mcode-stream-animation-delay"]: "0s" } as MotionStyle}
-                    className="inline-block w-[1.5px] h-[14px] ml-0.5 bg-emerald-400 align-middle"
+                    className="inline-block w-[1.5px] h-[14px] ml-0.5 align-middle"
+                    style={{ background: 'var(--mcode-green, #3ecf8e)' }}
                     animate={{ opacity: [0.3, 1, 0.3] }}
-                    transition={{ duration: 1, repeat: Infinity }}
+                    transition={{ duration: 0.9, repeat: Infinity, ease: [0.16, 1, 0.3, 1] }}
                   />
                 )}
               </MessageContent>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Github, UploadCloud, X, FolderUp, FileText, Loader2, Sparkles } from 'lucide-react';
+import { reportError } from '../../lib/logger';
 
 export interface WorkspaceModalsProps {
   isOpen: boolean;
@@ -67,13 +68,25 @@ export function WorkspaceModals({
 
     let hasFiles = false;
     let cleaningUp = false;
+    let focusTimer = 0;
     const cleanup = () => {
       if (cleaningUp) return;
       cleaningUp = true;
+      // WEB-016: every teardown path must also unhook the window focus probe
+      // and cancel its pending timer. Previously `addEventListener('focus')` had
+      // no counterpart, so if the component unmounted (route change, hot reload)
+      // before the user came back to the tab, the listener kept a closure over
+      // this dead `input` element alive and fired a 4 s timer against it.
+      window.removeEventListener('focus', handleFocus);
+      clearTimeout(focusTimer);
+      input.onchange = null;
+      (input as any).oncancel = null;
       setTimeout(() => {
         try {
           input.remove();
-        } catch {}
+        } catch (err) {
+          reportError('folder upload cleanup', err, { userVisible: false });
+        }
       }, 2000);
     };
 
@@ -105,7 +118,7 @@ export function WorkspaceModals({
 
     // If user cancelled without picking a folder, reset after checking files
     const handleFocus = () => {
-      setTimeout(() => {
+      focusTimer = window.setTimeout(() => {
         if (!hasFiles && (!input.files || input.files.length === 0)) {
           if (onStartUploading) onStartUploading(undefined);
           cleanup();

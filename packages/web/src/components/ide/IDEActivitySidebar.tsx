@@ -1,4 +1,5 @@
 "use client";
+import { clearTokens } from "../../lib/api";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import type { ComponentType, SVGProps } from "react";
@@ -178,11 +179,9 @@ export function IDEActivitySidebar({ active = "explorer", onSelectTab, onSourceC
   const router = useRouter();
 
   const handleLogout = () => {
-    localStorage.removeItem("mcode_tokens");
+    clearTokens();
     window.dispatchEvent(new CustomEvent("mcode:auth:logout"));
-    if (!window.mcodeElectron) {
-      router.push("/login");
-    }
+    router.push("/login");
   };
 
   const setZoom = (z: number) => {

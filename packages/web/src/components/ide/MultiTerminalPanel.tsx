@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { reportError } from '../../lib/logger';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Terminal as TerminalIcon,
@@ -482,7 +483,7 @@ function TerminalInstance({
         term.options.cursorStyle = cs;
         term.options.cursorBlink = cb;
         term.options.scrollback = sb;
-        try { fitAddon.fit(); } catch {}
+        try { fitAddon.fit(); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
       }
     };
     window.addEventListener('mcode:terminal-settings-updated', handleSettingsUpdate);
@@ -530,7 +531,7 @@ function TerminalInstance({
     if (terminalRef.current) term.open(terminalRef.current);
     try {
       fitAddon.fit();
-    } catch {}
+    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
 
     xtermRef.current = term;
     searchAddonRef.current = searchAddon;
@@ -599,7 +600,7 @@ function TerminalInstance({
         if (term.cols && term.rows) {
           socket.emit('terminal:resize', { id: session.id, cols: term.cols, rows: term.rows });
         }
-      } catch {}
+      } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     });
     if (terminalRef.current) resizeObserver.observe(terminalRef.current);
 
@@ -609,7 +610,7 @@ function TerminalInstance({
         if (term.cols && term.rows) {
           socket.emit('terminal:resize', { id: session.id, cols: term.cols, rows: term.rows });
         }
-      } catch {}
+      } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     };
     window.addEventListener('resize', handleResize);
 

@@ -142,7 +142,19 @@ export function VirtualChatMessages({
   };
 
   return (
-    <div ref={containerRef} className="flex-1 min-h-0 w-full">
+    // WEB-019: live region so screen readers announce new/streamed messages.
+    // role="log" carries an implicit polite live region; aria-busy signals
+    // an in-flight stream. (Rows remount during virtualization, so keep
+    // atomic off to avoid re-reading the whole list per update.)
+    <div
+      ref={containerRef}
+      className="flex-1 min-h-0 w-full"
+      role="log"
+      aria-live="polite"
+      aria-atomic="false"
+      aria-busy={isStreaming}
+      aria-label="Chat messages"
+    >
       {viewportHeight > 0 && (
         <VariableSizeList
           ref={listRef}

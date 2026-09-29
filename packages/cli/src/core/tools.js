@@ -116,6 +116,15 @@ export class ToolExecutor {
     this.todoId = todoId;
     this.cancelSignal = cancelSignal;
     this.networkWhitelist = networkWhitelist;
+    // M11-009: null = allow-all egress (backward compatible default). Make
+    // the fail-open explicit and loud instead of silent: operators who need
+    // containment must set networkWhitelist (see README security section).
+    if ((networkWhitelist === null || networkWhitelist === undefined) && !ToolExecutor._egressWarned) {
+      ToolExecutor._egressWarned = true;
+      try {
+        process.stderr?.write('[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.\n');
+      } catch { /* stderr may be closed in tests */ }
+    }
     this.auditLog = auditLog;
     this.memoryDir = memoryDir;
     this.mode = mode;

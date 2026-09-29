@@ -291,6 +291,17 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     globalBuckets.set(gkey, row);
     return row.count <= max * GLOBAL_RATE_MULTIPLIER;
   };
+  /**
+   * M11-005: a socket must present EITHER a valid user JWT or the CLI shared
+   * secret. Previously a tokenless handshake called `next()` unconditionally,
+   * so an anonymous socket connected successfully and 28 of 40 handlers had
+   * no `requireAuth` — making the cross-tenant diskPath IDOR (M11-004)
+   * reachable without logging in.
+   *
+   * The CLI emitter is a legitimate non-user client, so it is admitted on
+   * `CLI_SHARED_SECRET` alone and marked `emitterAuthed`; `requireEmitterAuth`
+   * then gates the CLI->server event surface it is actually allowed to use.
+   */
   io.use((/** @type {import('socket.io').Socket & { userId?: string|null, role?: string, emitterAuthed?: boolean }} */ socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
     if (!token) {
@@ -298,18 +309,23 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       socket.role = 'emitter';
       const presented = String(socket.handshake.auth?.cliSecret || socket.handshake.headers?.['x-cli-secret'] || '');
       socket.emitterAuthed = Boolean(cliSecret && presented && presented === cliSecret);
-      if (cliSecret && !socket.emitterAuthed) {
-        console.warn('[SOCKET] unauthenticated emitter connected (missing/invalid CLI_SHARED_SECRET) — its events will be dropped');
-      } else if (!cliSecret && !noSecretWarned) {
+      if (socket.emitterAuthed) return next();
+
+      // M11-005: no token AND no valid CLI secret -> refuse the connection.
+      if (cliSecret) {
+        console.warn('[SOCKET] rejected: no token and missing/invalid CLI_SHARED_SECRET');
+      } else if (!noSecretWarned) {
         noSecretWarned = true;
-        console.warn('[SOCKET] CLI_SHARED_SECRET not configured — emitter events are unauthenticated (set it in backend .env)');
+        console.warn('[SOCKET] rejected anonymous socket: CLI_SHARED_SECRET not configured and no user token presented (set it in backend .env)');
       }
-      return next();
+      return next(new Error('authentication required'));
     }
     try {
-      const payload = verifyToken(token, secret);
+      // M11-006: pin HS256 so a token cannot negotiate its own algorithm.
+      const payload = verifyToken(token, secret, { algorithms: ['HS256'] });
       socket.userId = payload.sub;
       socket.role = 'listener';
+      socket.emitterAuthed = true;
       next();
     } catch {
       next(new Error('invalid token'));
@@ -391,6 +407,36 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     socket.on('project:join', ({ projectId }) => {
       socket.join(`project:${projectId}`);
     });
+
+    /**
+     * M11-004: resolve a workspace path from a client-supplied projectId,
+     * ALWAYS scoped to the caller.
+     *
+     * Eight handlers previously did `workspace.findOne({ _id: projectId })`
+     * with no `userId` filter and then ran a tool against `ws.diskPath`.
+     * Three of them (clean:run, migrate:run, security:fix-selected) WRITE to
+     * that directory, so the unscoped lookup let any caller point them at
+     * another user's source tree by id alone.
+     *
+     * The correct scoped pattern already existed at chat:start and
+     * spawnPtySession; this helper makes it the only way to resolve a path.
+     *
+     * @returns {Promise<string|null>} the owned diskPath, or null when the
+     *   workspace does not exist or is not owned by this socket's user.
+     */
+    async function resolveOwnedWorkspace(socket, projectId) {
+      if (!projectId) return null;
+      if (!socket.userId) return null; // fail closed for anonymous sockets
+      try {
+        const ws = await db().workspace.findOne({
+          _id: String(projectId),
+          userId: socket.userId,
+        });
+        return ws?.diskPath || null;
+      } catch {
+        return null;
+      }
+    }
 
     const requireEmitterAuth = (event) => {
       if (socket.role === 'emitter' && cliSecret && !socket.emitterAuthed) {
@@ -499,10 +545,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
       if (!projectPath && payload.projectId) {
-        try {
-          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
-          if (ws?.diskPath) projectPath = ws.diskPath;
-        } catch {}
+          projectPath = (await resolveOwnedWorkspace(socket, payload.projectId)) || projectPath;
       }
       if (!projectPath) {
         projectPath = await getDefaultWorkspacePath(socket);
@@ -556,10 +599,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
       if (!projectPath && payload.projectId) {
-        try {
-          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
-          if (ws?.diskPath) projectPath = ws.diskPath;
-        } catch {}
+          projectPath = (await resolveOwnedWorkspace(socket, payload.projectId)) || projectPath;
       }
       if (!projectPath) {
         projectPath = await getDefaultWorkspacePath(socket);
@@ -584,10 +624,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
       if (!projectPath && projectId) {
-        try {
-          const ws = await db().workspace.findOne({ _id: String(projectId) });
-          if (ws?.diskPath) projectPath = ws.diskPath;
-        } catch {}
+          projectPath = (await resolveOwnedWorkspace(socket, projectId)) || projectPath;
       }
       if (!projectPath) {
         projectPath = await getDefaultWorkspacePath(socket);
@@ -689,10 +726,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
       if (!projectPath && payload.projectId) {
-        try {
-          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
-          if (ws?.diskPath) projectPath = ws.diskPath;
-        } catch {}
+          projectPath = (await resolveOwnedWorkspace(socket, payload.projectId)) || projectPath;
       }
       if (!projectPath) {
         projectPath = await getDefaultWorkspacePath(socket);
@@ -721,10 +755,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
       if (!projectPath && payload.projectId) {
-        try {
-          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
-          if (ws?.diskPath) projectPath = ws.diskPath;
-        } catch {}
+          projectPath = (await resolveOwnedWorkspace(socket, payload.projectId)) || projectPath;
       }
       if (!projectPath) {
         projectPath = await getDefaultWorkspacePath(socket);
@@ -772,10 +803,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
       if (!projectPath && payload.projectId) {
-        try {
-          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
-          if (ws?.diskPath) projectPath = ws.diskPath;
-        } catch {}
+          projectPath = (await resolveOwnedWorkspace(socket, payload.projectId)) || projectPath;
       }
       if (!projectPath) {
         projectPath = await getDefaultWorkspacePath(socket);
@@ -849,10 +877,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
       if (!projectPath && payload.projectId) {
-        try {
-          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
-          if (ws?.diskPath) projectPath = ws.diskPath;
-        } catch {}
+          projectPath = (await resolveOwnedWorkspace(socket, payload.projectId)) || projectPath;
       }
       if (!projectPath) {
         projectPath = await getDefaultWorkspacePath(socket);
@@ -902,10 +927,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
       if (!projectPath && payload.projectId) {
-        try {
-          const ws = await db().workspace.findOne({ _id: String(payload.projectId) });
-          if (ws?.diskPath) projectPath = ws.diskPath;
-        } catch {}
+          projectPath = (await resolveOwnedWorkspace(socket, payload.projectId)) || projectPath;
       }
       if (!projectPath) {
         projectPath = await getDefaultWorkspacePath(socket);
@@ -1348,45 +1370,33 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         return;
       }
 
-      // Try container execution if active
+      // Try container execution if active.
+      // M11-003: this is now the ONLY execution path. Previously a failure
+      // here fell through to host execution, which meant the safety posture
+      // silently depended on whether a container happened to be running.
       try {
         socket.emit('chat:shell_stream', { chunk: `\r\x1b[34m$ ${command}\x1b[0m\r\n` });
         await execInContainer(socket.id, command, (chunk) => {
           socket.emit('chat:shell_stream', { chunk });
         });
         return;
-      } catch (_) {
-        /* Container not active — fallback to host execution */
+      } catch (err) {
+        // Fail closed: no container means no shell, not "try the host instead".
+        socket.emit('chat:shell_stream', {
+          chunk: `\r\n\x1b[31mNo active container for this session — command not run on the host.\x1b[0m\r\n`,
+        });
+        socket.emit('chat:error', {
+          code: 'NO_CONTAINER',
+          message: 'Command execution requires an active project container. Start one, or run the CLI directly on the host.',
+        });
+        return;
       }
 
-      const session = chatSessions.get(socket.id);
-      let projectPath = session?.workspacePath;
-      if (!projectPath) {
-        const { join } = await import('node:path');
-        const { homedir } = await import('node:os');
-        const { mkdir } = await import('node:fs/promises');
-        projectPath = join(homedir(), '.mcode', 'workspaces', 'default');
-        await mkdir(projectPath, { recursive: true });
-      }
-
-      const { execa } = await import('execa');
-      const child = execa(command, {
-        cwd: projectPath,
-        shell: true,
-        timeout: 120_000,
-        env: { ...process.env, FORCE_COLOR: '1' },
-        reject: false,
-      });
-
-      child.stdout?.on('data', (chunk) => {
-        socket.emit('chat:shell_stream', { chunk: chunk.toString() });
-      });
-      child.stderr?.on('data', (chunk) => {
-        socket.emit('chat:shell_stream', { chunk: chunk.toString() });
-      });
-
-      await child;
-      socket.emit('chat:shell_stream', { chunk: '\r\n' });
+      // M11-003: the host-execution fallback that used to live here was removed.
+      // It ran `execa(command, { shell: true, env: { ...process.env } })` behind
+      // a five-pattern denylist, and only when no container was active — so the
+      // security posture silently depended on runtime state. Container
+      // execution is now the only path, and it fails closed.
     });
 
     // ── Real Terminal PTY Session Management (node-pty) ──────────────

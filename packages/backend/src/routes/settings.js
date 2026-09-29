@@ -61,6 +61,83 @@ export function settingsRoutes({ secret }) {
     }
   });
 
+  // Local-desktop bridge: after a successful Mongo write, mirror the CLI-owned
+  // subset into the server machine's ~/.mcode/config.json via the CLI's own
+  // saveConfig (which validates against ConfigSchema before writing).
+  // This only helps single-machine (local desktop) deploys where the backend
+  // and the CLI share a filesystem / home directory. Hosted multi-machine
+  // deploys still need `mcode config` on the machine that runs the agent —
+  // the CLI never reads Mongo userSettings.
+  // Best-effort: never fail the request on mirror errors.
+  const CLI_WATCH_KEYS = new Set([
+    'scanIntervalMs',
+    'debounceMs',
+    'maxFixesPerHour',
+    'autoCommit',
+    'maxAttemptsPerFix',
+    'confirm',
+  ]);
+  // Web watchDefaults historically uses UI-era key names; map the known
+  // aliases onto real CLI watch keys before filtering.
+  const WATCH_ALIASES = { intervalMs: 'scanIntervalMs', autoFix: 'autoCommit' };
+  const buildCliMirrorPatch = (patch) => {
+    const cliPatch = {};
+    const mirrored = [];
+    if (patch.networkWhitelist !== undefined) {
+      cliPatch.networkWhitelist = patch.networkWhitelist;
+      mirrored.push('networkWhitelist');
+    }
+    if (patch.allowShellAll !== undefined) {
+      cliPatch.allowShellAll = patch.allowShellAll;
+      mirrored.push('allowShellAll');
+    }
+    if (patch.requireEditApproval !== undefined) {
+      cliPatch.requireEditApproval = patch.requireEditApproval;
+      mirrored.push('requireEditApproval');
+    }
+    const concurrency = patch.godModeDefaults?.concurrency;
+    if (concurrency !== undefined && Number.isFinite(Number(concurrency))) {
+      cliPatch.concurrency = Number(concurrency);
+      mirrored.push('concurrency');
+    }
+    if (patch.watchDefaults && typeof patch.watchDefaults === 'object') {
+      const watch = {};
+      for (const [k, v] of Object.entries(patch.watchDefaults)) {
+        const mapped = WATCH_ALIASES[k] || k;
+        if (CLI_WATCH_KEYS.has(mapped)) watch[mapped] = v;
+      }
+      if (Object.keys(watch).length > 0) {
+        cliPatch.watch = watch;
+        mirrored.push('watch');
+      }
+    }
+    return { cliPatch, mirrored };
+  };
+  const mirrorToCliConfig = async (patch) => {
+    const { cliPatch, mirrored } = buildCliMirrorPatch(patch || {});
+    if (mirrored.length === 0) return [];
+    try {
+      // Relative import into the CLI's own store (same pattern as clean.js
+      // reaching into CLI core) so validation/write logic stays in one place.
+      const { loadConfig, saveConfig } = await import('../../../cli/src/core/store.js');
+      // saveConfig merges shallowly — deep-merge `watch` first so unrelated
+      // watch keys already in config.json are not clobbered.
+      if (cliPatch.watch) {
+        try {
+          const current = await loadConfig().catch(() => ({}));
+          cliPatch.watch = { ...(current?.watch || {}), ...cliPatch.watch };
+        } catch {
+          /* keep the filtered watch as-is */
+        }
+      }
+      await saveConfig(cliPatch);
+      return mirrored;
+    } catch (e) {
+      console.warn('[settings] CLI config mirror skipped:', e?.message || e);
+      return [];
+    }
+  };
+
   // SET-001: single shared patch builder — PUT / and PUT /permissions used
   // to duplicate coercion logic with subtle differences. One function now.
   const buildSettingsPatch = (body) => {
@@ -104,7 +181,8 @@ export function settingsRoutes({ secret }) {
         await db().userSettings.updateOne({ userId: req.userId }, patch);
         settings = await db().userSettings.findOne({ userId: req.userId });
       }
-      res.json({ ok: true, settings: { ...DEFAULTS, ...settings } });
+      const cliMirrored = await mirrorToCliConfig(patch);
+      res.json({ ok: true, settings: { ...DEFAULTS, ...settings }, cliMirrored });
     } catch (e) {
       res.status(500).json({ error: { message: 'Failed to update settings' } });
     }
@@ -142,7 +220,8 @@ export function settingsRoutes({ secret }) {
         await db().userSettings.updateOne({ userId: req.userId }, patch);
         settings = await db().userSettings.findOne({ userId: req.userId });
       }
-      res.json({ ok: true, settings: { ...DEFAULTS, ...settings } });
+      const cliMirrored = await mirrorToCliConfig(patch);
+      res.json({ ok: true, settings: { ...DEFAULTS, ...settings }, cliMirrored });
     } catch (e) {
       res.status(500).json({ error: { message: 'Failed to update permissions' } });
     }

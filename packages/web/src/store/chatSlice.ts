@@ -1,4 +1,4 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice } from './sliceFactory';
 import type { ChatMessage } from '../types/chat';
 import type { ProblemEntry } from '../components/ide/BottomPanel';
 
@@ -10,13 +10,46 @@ function safeHostname(url: string | null | undefined): string {
   }
 }
 
-function sanitizeToolArgs(args: any): any {
+/**
+ * Maximum number of chat messages kept in memory (audit WEB-014).
+ *
+ * The reducers below append or rewrite messages with no cap, so a long god-mode
+ * run (5 subagents × many turns × tool results + file diffs) grew the array
+ * without bound, and every streamed chunk copied it again for all
+ * `useSelector(state => state.messages)` consumers.
+ *
+ * The tail is kept (the user is looking at it); the head is evicted oldest-first
+ * once the cap is exceeded. 500 messages is far more than fits on screen while
+ * keeping a full session's worth of scrollback.
+ */
+const MAX_MESSAGES = 500;
+
+/** Append a message and enforce the cap. Callers use this instead of `push`. */
+function appendMessage(state: ChatState, message: ChatMessage) {
+  state.messages.push(message);
+  const overflow = state.messages.length - MAX_MESSAGES;
+  if (overflow > 0) state.messages.splice(0, overflow);
+}
+
+/** Loose tool-argument shapes that arrive over the socket (JSON or object). */
+type ToolArgsFields = {
+  path?: unknown;
+  file?: unknown;
+  command?: unknown;
+  query?: unknown;
+  url?: unknown;
+  [key: string]: unknown;
+};
+type ToolArgsInput = string | ToolArgsFields | null | undefined;
+
+function sanitizeToolArgs(args: ToolArgsInput): string | ToolArgsFields | null | undefined {
   if (typeof args === 'string') {
     const trimmed = args.trim();
     if (trimmed.startsWith('{') && (trimmed.includes('"path"') || trimmed.includes('"command"') || trimmed.includes('"content"'))) {
       try {
-        const p = JSON.parse(trimmed);
-        return p.path || p.file || p.command || p.query || p.url || args;
+        const p = JSON.parse(trimmed) as ToolArgsFields;
+        const hit: unknown = p.path || p.file || p.command || p.query || p.url;
+        return (hit || args) as string | ToolArgsFields;
       } catch {
         const m = /"path"\s*:\s*"([^"]+)"/.exec(trimmed);
         if (m) return m[1];
@@ -25,7 +58,9 @@ function sanitizeToolArgs(args: any): any {
     return args;
   }
   if (args && typeof args === 'object') {
-    return args.path || args.file || args.command || args.query || args.url || '';
+    const r = args as ToolArgsFields;
+    const hit: unknown = r.path || r.file || r.command || r.query || r.url;
+    return ((hit || '') as string | ToolArgsFields);
   }
   return args;
 }
@@ -143,9 +178,57 @@ export interface Subagent {
   lastToolResult?: { tool?: string; ms?: number; risk?: string };
   reviewReason?: string;
 }
-export interface BuildSummary { done?: number; total?: number; failed?: number; needsReview?: number; elapsedSecs?: number; cost?: number }
+/**
+ * The `build:complete` payload the CLI emits (`SubagentManager._emitBuildComplete`).
+ *
+ * This is the single declaration used by the store *and* by `WaveProgress`, so a
+ * field the CLI sends can no longer be dropped at the type boundary (audit
+ * WEB-004). Previously the interface listed 6 of ~20 fields, so `spendUsd`,
+ * `budget`, `overlaps`, `lockConflicts`, `emptyFileTodos` and the token counts
+ * reached the browser and were then thrown away — a budget-aborted run looked
+ * exactly like a normal one.
+ */
+export interface BuildSummary {
+  done?: number;
+  total?: number;
+  failed?: number;
+  needsReview?: number;
+  elapsedSecs?: number;
+  files?: number;
 
-interface ChatState {
+  // ── Money (MF-002 cost attribution) ──
+  /** Legacy rate-table estimate (kept for backwards compatibility). */
+  cost?: number;
+  /** Ledger-attributed real spend. */
+  spendUsd?: number;
+  spendByMode?: Record<string, { tokens: number; cost: number; runs: number }>;
+  /** Non-null when the run stopped because the cost ceiling was reached. */
+  budget?: { limitUsd: number; spentUsd: number; at: string } | null;
+
+  // ── Tokens ──
+  tokensIn?: number;
+  tokensOut?: number;
+
+  // ── Writer safety (MF-004 conflict reporting) ──
+  overlaps?: { file: string; writers: string[] }[];
+  lockConflicts?: { file: string; todoId: string; lockedBy: string | null; at?: string }[];
+  emptyFileTodos?: { id: string; domain: string; title: string }[];
+
+  // ── Model / integration ──
+  models?: { domain: string; model: string; count: number }[];
+  modelsByDomain?: { domain: string; model: string; calls: number; cost: number }[];
+  integration?: { ran?: boolean; status?: string; exitCode?: number | null };
+
+  // ── God-mode verification gates ──
+  verificationPasses?: number;
+  verificationComplete?: boolean;
+  securityPassed?: boolean;
+  securityChecks?: { done: number; total: number };
+  playwrightClean?: boolean;
+  playwrightIssuesRemaining?: number;
+}
+
+export interface ChatState {
   status: Status;
   keysError: string | null;
   mode: Mode;
@@ -243,7 +326,7 @@ interface ChatState {
   } | null;
 }
 
-const initialState: ChatState = {
+export const initialState: ChatState = {
   status: 'idle',
   keysError: null,
   mode: 'chat',
@@ -392,7 +475,7 @@ const chatSlice = createSlice({
       }
     },
     addMessage: (state, action) => {
-      state.messages.push(action.payload);
+      appendMessage(state, action.payload);
       state.isStreaming = true;
       state._turnDone = false;
       state.keysError = null;
@@ -407,7 +490,7 @@ const chatSlice = createSlice({
           ? text
           : (lastMessage.text || '') + text;
       } else {
-        state.messages.push({
+        appendMessage(state, {
           id: Date.now().toString(),
           role: 'assistant',
           kind: 'stream',
@@ -493,7 +576,7 @@ const chatSlice = createSlice({
           });
         }
 
-        state.messages.push({
+        appendMessage(state, {
           id: payload.replaceKey || Date.now().toString(),
           role: 'assistant',
           kind: 'tool',
@@ -528,7 +611,7 @@ const chatSlice = createSlice({
         }
       }
 
-      state.messages.push({
+      appendMessage(state, {
         id: payload.replaceKey || Date.now().toString(),
         role: 'assistant',
         kind: payload.kind || 'tool',
@@ -555,9 +638,11 @@ const chatSlice = createSlice({
           }
         }
 
-        const fetchUrl =
+        const cleanUrl: unknown =
+          typeof cleanArgs === 'string' ? null : (cleanArgs as ToolArgsFields | null | undefined)?.url;
+        const fetchUrl: string =
           payload.tool === 'web_fetch'
-            ? (typeof cleanArgs === 'string' ? cleanArgs : cleanArgs?.url || '')
+            ? (typeof cleanArgs === 'string' ? cleanArgs : typeof cleanUrl === 'string' ? cleanUrl : '')
             : '';
 
         if (existingWebMsg) {
@@ -579,7 +664,7 @@ const chatSlice = createSlice({
           return;
         }
 
-        state.messages.push({
+        appendMessage(state, {
           id: payload.replaceKey || Date.now().toString(),
           role: 'assistant',
           kind: 'tool',
@@ -614,7 +699,7 @@ const chatSlice = createSlice({
         }
       }
 
-      state.messages.push({
+      appendMessage(state, {
         id: payload.replaceKey || Date.now().toString(),
         role: 'assistant',
         kind: 'tool',

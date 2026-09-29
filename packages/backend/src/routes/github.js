@@ -25,6 +25,8 @@ export function githubAuthRoutes({ secret, env = process.env } = {}) {
     }
     const loginRedirect = process.env.GITHUB_REDIRECT_URI || `http://localhost:3100/api/v1/auth/github/callback`;
     const stateToken = jwt.sign({ purpose: 'github_login', nonce: crypto.randomUUID() }, secret, { expiresIn: '10m', issuer: 'mcode', audience: 'mcode-github' });
+    // M11-007: persist the nonce so /callback can burn it exactly once.
+    rememberNonce(jwt.decode(stateToken)?.nonce);
     const loginUrl = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(loginRedirect)}&scope=${encodeURIComponent('read:user user:email')}&state=${encodeURIComponent(stateToken)}`;
     res.redirect(loginUrl);
   });
@@ -40,8 +42,10 @@ export function githubAuthRoutes({ secret, env = process.env } = {}) {
     let userState = '';
     if (req.query.token) {
       try {
-        const decoded = jwt.verify(req.query.token, secret);
+        const decoded = jwt.verify(req.query.token, secret, { algorithms: ['HS256'] }); // M11-006: pin the algorithm
         userState = jwt.sign({ sub: decoded.sub, purpose: 'github_connect', nonce: crypto.randomUUID() }, secret, { expiresIn: '10m', issuer: 'mcode', audience: 'mcode-github' });
+        // M11-007: persist the nonce so /callback can burn it exactly once.
+        rememberNonce(jwt.decode(userState)?.nonce);
       } catch {
         return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } });
       }
@@ -82,9 +86,17 @@ export function githubAuthRoutes({ secret, env = process.env } = {}) {
     // protection entirely — removed. /login always issues signed state.
     let statePayload;
     try {
-      statePayload = jwt.verify(rawState, secret, { issuer: 'mcode', audience: 'mcode-github' });
+      // M11-006: pin HS256 so a token cannot negotiate its own algorithm.
+      statePayload = jwt.verify(rawState, secret, { issuer: 'mcode', audience: 'mcode-github', algorithms: ['HS256'] });
     } catch {
       return res.status(401).send('Invalid or expired state token for authentication');
+    }
+
+    // M11-007: burn the nonce. A valid signature is no longer sufficient —
+    // the state must also be one this server issued and has not yet spent,
+    // which makes a captured state unreplayable within its 10-minute window.
+    if (!consumeNonce(statePayload.nonce)) {
+      return res.status(401).send('State token has already been used or is not recognised');
     }
 
     if (statePayload.purpose === 'github_login') {
@@ -131,6 +143,11 @@ export function githubAuthRoutes({ secret, env = process.env } = {}) {
       }
 
       // 5. Redirect back to frontend IDE
+      // GH-002: no silent localhost fallback in production — a missing
+      // FRONTEND_URL there would bounce users to a dead local page.
+      if (!process.env.FRONTEND_URL && process.env.NODE_ENV === 'production') {
+        return next(new Error('FRONTEND_URL is not configured — cannot complete GitHub OAuth redirect'));
+      }
       res.redirect(process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/ai/chat?github_connected=1` : 'http://localhost:3000/ai/chat?github_connected=1');
 
     } catch (err) {
@@ -145,6 +162,11 @@ export function githubAuthRoutes({ secret, env = process.env } = {}) {
  *  find-or-create user → link github account → tracked tokens in fragment. */
 async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_SECRET, code }) {
   try {
+    // GH-002: fail closed in production when FRONTEND_URL is unset instead
+    // of redirecting to a hardcoded localhost page that does not exist there.
+    if (!process.env.FRONTEND_URL && process.env.NODE_ENV === 'production') {
+      return fail('server misconfigured: FRONTEND_URL is not set');
+    }
     const front = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
     const fail = (msg) => res.redirect(`${front}/login?oauth_error=${encodeURIComponent(msg)}`);
     const tokenResponse = await axios.post('https://github.com/login/oauth/access_token', {
@@ -211,6 +233,49 @@ async function githubLoginCallback(req, res, next, { secret, CLIENT_ID, CLIENT_S
 // Single-use OAuth login codes (GH-004). In-memory: a restart invalidates
 // unredeemed codes, which is the safe direction.
 const pendingLogins = new Map();
+
+/**
+ * M11-007: single-use record for OAuth `state` nonces.
+ *
+ * The state token was signed with a random `nonce`, but the nonce was never
+ * persisted or compared, so it contributed nothing: the state was a bearer
+ * token valid for 10 minutes and unlimited in uses. A captured `state` (it
+ * travels in the address bar, so it lands in history, referrers and logs)
+ * could be replayed against /callback within its window.
+ *
+ * Recording the nonce at issue and consuming it on callback makes the existing
+ * token structure single-use without changing its shape. In-memory, for the
+ * same reason as pendingLogins: a restart invalidates unredeemed states, which
+ * is the safe direction.
+ */
+const usedStateNonces = new Map();
+
+/** Record a freshly issued nonce. Returns false if it was already present. */
+function rememberNonce(nonce) {
+  if (!nonce) return false;
+  if (usedStateNonces.has(nonce)) return false;
+  usedStateNonces.set(nonce, Date.now() + 10 * 60_000); // match the token TTL
+  // Opportunistic sweep so the map cannot grow without bound.
+  if (usedStateNonces.size > 1000) {
+    const now = Date.now();
+    for (const [k, exp] of usedStateNonces) {
+      if (exp < now) usedStateNonces.delete(k);
+    }
+  }
+  return true;
+}
+
+/**
+ * Consume a nonce. Returns true only the first time it is seen, so a replayed
+ * state fails here even though its signature is still valid and unexpired.
+ */
+function consumeNonce(nonce) {
+  if (!nonce) return false;
+  const exp = usedStateNonces.get(nonce);
+  if (exp === undefined) return false;
+  usedStateNonces.delete(nonce); // burn on first use regardless of expiry
+  return exp >= Date.now();
+}
 
 export function githubApiRoutes({ secret, env = process.env } = {}) {
   const router = Router();
