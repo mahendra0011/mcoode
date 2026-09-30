@@ -178,7 +178,7 @@ export function LoginPage() {
       {/* Background Image */}
       <div
         className="absolute inset-0 z-0 pointer-events-none bg-cover bg-[center_40%] bg-no-repeat"
-        style={{ backgroundImage: `url(${robotBg})` }}
+        style={{ backgroundImage: `url(${typeof robotBg === 'string' ? robotBg : (robotBg as { src: string })?.src || ''})` }}
       />
 
       {/* Top Left Navigation */}

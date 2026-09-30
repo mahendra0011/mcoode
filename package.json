@@ -5,7 +5,10 @@
   "description": "mcode — terminal-first, multi-model AI coding CLI (monorepo)",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/backend",
+    "packages/cli",
+    "packages/shared",
+    "packages/web"
   ],
   "engines": {
     "node": ">=20.0.0"

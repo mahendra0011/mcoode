@@ -10,13 +10,15 @@ import { HowItWorks } from '../../components/sections/HowItWorks';
 import { Pricing } from '../../components/sections/Pricing';
 import heroBg from '../../assets/hero-bg.png';
 
+const bgUrl = typeof heroBg === 'string' ? heroBg : (heroBg as { src: string })?.src || '';
+
 export function LandingPage() {
   return (
     <Layout>
       <div className="relative w-full">
         <div 
           className="absolute inset-0 min-[850px]:inset-2.5 bg-[size:100%_auto] bg-top bg-no-repeat -z-10 rounded-br-4xl rounded-bl-4xl"
-          style={{ backgroundImage: `url(${heroBg})` }}
+          style={{ backgroundImage: `url(${bgUrl})` }}
           aria-hidden="true"
         />
         <Hero />

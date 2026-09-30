@@ -10,6 +10,8 @@ import { HowItWorks } from '../../components/sections/HowItWorks';
 import { Pricing } from '../../components/sections/Pricing';
 import robotBg from '../../assets/ai-bg.png';
 
+const bgUrl = typeof robotBg === 'string' ? robotBg : (robotBg as { src: string })?.src || '';
+
 export function AILandingPage() {
   return (
     <Layout>
@@ -17,7 +19,7 @@ export function AILandingPage() {
         {/* Combined Background for AIHero and AIChatPreview */}
         <div 
           className="absolute inset-0 min-[850px]:inset-2.5 bg-[size:100%_auto] bg-top bg-no-repeat -z-10 rounded-br-4xl rounded-bl-4xl"
-          style={{ backgroundImage: `url(${robotBg})`, backgroundColor: '#ffffff' }}
+          style={{ backgroundImage: `url(${bgUrl})`, backgroundColor: '#ffffff' }}
           aria-hidden="true"
         />
         <AIHero />

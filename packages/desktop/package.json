@@ -1,0 +1,58 @@
+{
+  "name": "@mcode/desktop",
+  "version": "2.4.6",
+  "private": true,
+  "description": "mcode desktop shell — a thin Electron window that loads the local web app",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "fix:win": "node win-fix.js",
+    "fix:builder": "node patch-builder.js",
+    "postinstall": "node patch-builder.js && node win-fix.js",
+    "prestart": "node patch-builder.js && node win-fix.js",
+    "start": "electron .",
+    "test": "node guard.test.js",
+    "predist": "node patch-builder.js && node win-fix.js",
+    "dist": "electron-builder --win nsis",
+    "preportable": "node patch-builder.js && node win-fix.js",
+    "portable": "electron-builder --win portable",
+    "pack": "electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "com.mcode.desktop",
+    "productName": "mcode",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "config.js",
+      "guards.js",
+      "menu.js",
+      "pages.js",
+      "assets/**",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "mcode"
+    }
+  }
+}

@@ -65,6 +65,10 @@ root-all.txt
 vitest-out.txt
 web-tests-*.txt
 packages/web/*.txt
+*.log
+*.bak
+*.orig
+*.regenerated
 
 # ─── Docs (not needed at runtime) ─────────────────────────────────────────────
 docs

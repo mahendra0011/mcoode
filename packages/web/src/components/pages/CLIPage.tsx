@@ -7,6 +7,8 @@ import { HowItWorks } from '../../components/sections/HowItWorks';
 import { Pricing } from '../../components/sections/Pricing';
 import cliBg from '../../assets/cli-bg.png';
 
+const bgUrl = typeof cliBg === 'string' ? cliBg : (cliBg as { src: string })?.src || '';
+
 export function CLIPage() {
   return (
     <Layout>
@@ -14,7 +16,7 @@ export function CLIPage() {
         {/* Combined Background for CLIHero and CLIDemoPreview */}
         <div 
           className="absolute inset-0 min-[850px]:inset-2.5 bg-[size:100%_auto] bg-top bg-no-repeat -z-10 rounded-br-4xl rounded-bl-4xl"
-          style={{ backgroundImage: `url(${cliBg})` }}
+          style={{ backgroundImage: `url(${bgUrl})` }}
           aria-hidden="true"
         />
         <CLIHero />

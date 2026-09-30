@@ -1,0 +1,142 @@
+# mcode — DEV override for live code sync.
+#
+#   docker compose up -d                          # production-style (baked code)
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d   # live sync
+#
+# Plain `docker compose up -d` copies the source into the image at BUILD time,
+# so editing a file on the host changes nothing until you run
+# `docker compose up -d --build`. That is correct for production but painful for
+# development — every save costs a full image rebuild.
+#
+# This override bind-mounts the workspace over /app/packages and switches the
+# two services into watch mode:
+#
+#   backend -> `nodemon -L -P 1000` restarts on save  (a few seconds)
+#   web     -> `next dev --webpack` with hot module reload
+#
+# Both watchers POLL rather than use inotify: the source arrives through
+# Windows bind mounts (9p/gRPC-FUSE), which do not deliver inotify events into
+# the Linux container. nodemon needs `-L/--legacy-watch` (it ignores the
+# NODEMON_USE_POLLING env var); the web dev server needs webpack's watchpack
+# (WATCHPACK_POLLING) — Turbopack's watcher stayed silent on this mount even
+# with watchOptions.pollIntervalMs set.
+#
+# node_modules is deliberately NOT mounted: the Windows host tree contains
+# win32-compiled binaries (node-pty etc.) that cannot load in a Linux
+# container. An anonymous volume keeps the image's own musl-built node_modules
+# in place while still letting the source files be live.
+
+services:
+  backend:
+    # Spawn the backend the same way the image's own CMD does, but under
+    # nodemon.
+    #
+    # Notes on the three things that broke earlier attempts:
+    #   1. `npx nodemon` picked the HOST's Windows .bin shim (execs node.exe).
+    #      -> use the image's absolute path, /app/node_modules/.bin/nodemon.
+    #   2. `--watch` (long form) is rejected by this nodemon build.
+    #      -> use the short `-w`, and `-e js,json` comma-separated.
+    #   3. `npm run dev` failed with "Missing script" because the entrypoint
+    #      does `cd /app` (the monorepo root, which has no `dev` script) and
+    #      that overrides compose's working_dir.
+    #      -> use absolute paths everywhere instead of relying on cwd.
+    #
+    # -L/--legacy-watch + -P/--polling-interval, NOT the NODEMON_USE_POLLING /
+    # NODEMON_POLLING_INTERVAL env vars: this nodemon version does not read
+    # polling settings from the environment (only nodemon.json / package.json /
+    # CLI), so with the env vars alone it kept using fs.watch/inotify and never
+    # fired on a host-side save through the 9p/gRPC-FUSE bind mount. `-L` is
+    # exactly the switch the flag help recommends for "network/Docker".
+    command:
+      - /app/node_modules/.bin/nodemon
+      - -L
+      - -P
+      - "1000"
+      - -w
+      - /app/packages/backend/src
+      - -e
+      - js,json
+      - /app/packages/backend/src/main.js
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    volumes:
+      # Bind-mount the workspace so host edits are visible inside the container
+      # without a rebuild.
+      - ./packages/backend:/app/packages/backend
+      - ./packages/cli:/app/packages/cli
+      - ./packages/shared:/app/packages/shared
+      # Keep the image's own compiled node_modules. This anonymous volume MUST
+      # be listed: without it the bind mount above would shadow
+      # /app/packages/backend/node_modules, and the Windows host tree (win32
+      # .node binaries) cannot load in a Linux container.
+      - /app/node_modules
+      - /app/packages/backend/node_modules
+
+  web:
+    # `next dev` recompiles only the changed route and the browser hot-reloads.
+    #
+    # The dev entrypoint above execs `next dev` directly, so `command` must be
+    # empty — anything here would be passed as $0/$@ to that sh -c script.
+    command: []
+    environment:
+      NODE_ENV: development
+      # In dev the browser talks to the backend's published port directly for
+      # the socket (packages/web/src/app/live shadows the /live rewrite).
+      NEXT_PUBLIC_API_URL: http://localhost:3100
+      BACKEND_URL: http://backend:3100
+      # webpack's watchpack honours these (chokidar is used for some other
+      # paths). Together with `watchOptions.pollIntervalMs` in next.config.mjs
+      # this makes the dev server notice host-side saves.
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "1000"
+      WATCHPACK_POLLING: "true"
+    # `next dev` compiles on first request, so allow a much longer start_period
+    # than the production `next start` healthcheck in the base image.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+    volumes:
+      # Source is bind-mounted so edits reach the dev server. .next is
+      # deliberately NOT mounted: `next dev` must own that directory, and a
+      # Windows bind mount would fight it over file ownership.
+      - ./packages/web/src:/app/packages/web/src
+      - ./packages/web/public:/app/packages/web/public
+      # next.config.mjs must be live too: it carries `turbopack.root` and
+      # `watchOptions.pollIntervalMs`, which are what make watching work in
+      # this container. Without this mount a config tweak would need an image
+      # rebuild to be visible.
+      - ./packages/web/next.config.mjs:/app/packages/web/next.config.mjs
+      - /app/node_modules
+      # Deliberately NO anonymous volume here.
+      #
+      # /app/packages/web/node_modules is a real directory in the image (it
+      # holds @tanstack/react-query-devtools, oxlint, etc.). Shadowing it with
+      # an empty anonymous volume makes Turbopack fail to resolve `next`:
+      #   "Could not find the Next.js package (next/package.json)"
+      #   Filesystem root used for resolution: /app/packages/web
+      # The host's copy is never mounted in its place, so nothing shadows it.
+    # NOTE: no .next mount here on purpose.
+    #
+    # `next dev` and `next start` are mutually exclusive in the same directory.
+    # The image ships a PRODUCTION .next (next build output); `next dev` tries to
+    # write its own dev manifest alongside it and then reads a file that never
+    # existed:
+    #   ENOENT .next/dev/server/pages/_app/build-manifest.json  -> HTTP 500
+    # Wiping .next before the dev server starts gives it a clean slate. The
+    # cost is a slower first compile (~20s), which is the right trade for a
+    # working dev server.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "[dev] clearing production .next so the dev server can compile cleanly"
+        rm -rf /app/packages/web/.next
+        # `--webpack`, not Turbopack: Turbopack's Rust watcher (notify) did not
+        # react to host-side saves on the Windows bind mount even with
+        # watchOptions.pollIntervalMs set, so edits never reached the browser.
+        # webpack + watchpack polling (WATCHPACK_POLLING) does react.
+        exec /app/node_modules/.bin/next dev --webpack -p 3000 -H 0.0.0.0

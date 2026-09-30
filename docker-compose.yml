@@ -28,11 +28,17 @@ services:
     ports:
       - "27017:27017"
     healthcheck:
-      # `mongosh` ships with mongo:7. Without this, depends_on would only wait
-      # for the container to start, not for mongod to accept connections.
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      # TCP probe, NOT `mongosh`.
+      #
+      # mongosh on this image takes ~14s just to boot its Node runtime, while
+      # the healthcheck timeout is 5s — so a mongosh-based probe reports the
+      # container unhealthy forever even though mongod is serving fine. That
+      # also blocks the backend, which waits on `condition: service_healthy`.
+      # A TCP connect to the port answers in ~0.1s and is what we actually
+      # care about: is mongod accepting connections?
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/27017'"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 10
       start_period: 20s
     networks: [mcode]
@@ -118,11 +124,13 @@ services:
       dockerfile: Dockerfile
       target: web
       args:
-        # Browser-side calls go through the Next.js proxy on this origin, so
-        # relative URLs are correct and CORS never applies.
-        NEXT_PUBLIC_API_URL: http://localhost:3000
-        # Server-side rewrites (/api, /live) must resolve via the compose
-        # network, not the browser's localhost.
+        # The browser must reach the Socket.IO endpoint at the backend's
+        # published port, NOT through the web origin: packages/web/src/app/live
+        # is a real page, so a filesystem route at /live wins over the
+        # next.config rewrite and the engine.io handshake would receive HTML
+        # instead of a socket session.
+        NEXT_PUBLIC_API_URL: http://localhost:3100
+        # Server-side rewrites (/api) must resolve over the compose network.
         BACKEND_URL: http://backend:3100
     image: mcode-web:latest
     container_name: mcode-web

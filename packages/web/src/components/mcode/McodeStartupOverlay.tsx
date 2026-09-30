@@ -40,36 +40,36 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 export function McodeStartupOverlay() {
   const [visible, setVisible] = useState(true);
+  const [mounted, setMounted] = useState(false);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   useEffect(() => {
+    setMounted(true);
     if (reducedMotion) {
-      // No animation at all — drop the overlay on the first committed frame.
       setVisible(false);
       return;
     }
 
-    // "React ready": the commit has landed and the browser has had a frame to
-    // paint it. Two rAFs guarantee the paint, not just the commit.
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => setVisible(false));
-    });
+    // Spec timings: logo animation 720ms before overlay fade-out
+    const timer = setTimeout(() => {
+      setVisible(false);
+    }, 720);
 
-    return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
+    return () => clearTimeout(timer);
   }, [reducedMotion]);
 
+  // Prevent SSR fixed black overlay overlaying initial page load
+  if (!mounted || !visible) return null;
+
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {visible && (
         <motion.div
           className="startup-overlay"
           initial={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: FADE_DURATION_S, ease: 'easeOut' } }}
-          transition={{ duration: FADE_DURATION_S, ease: [0.4, 0, 0.2, 1] }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: FADE_DURATION_S, ease: 'easeOut' }}
         >
           <motion.div
             className="startup-logo"

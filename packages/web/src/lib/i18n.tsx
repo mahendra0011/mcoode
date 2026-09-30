@@ -20,6 +20,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     "chat.send": "Send",
     "nav.ai": "AI",
     "nav.cli": "CLI",
+    "nav.ide": "Desktop IDE",
     "nav.tools": "Tools",
     "nav.live": "Live",
     "nav.docs": "Docs",
