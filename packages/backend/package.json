@@ -19,7 +19,7 @@
     "archiver": "^8.0.0",
     "axios": "^1.19.0",
     "bcryptjs": "^2.4.3",
-    "bullmq": "^5.4.0",
+    "bullmq": "^6.3.8",
     "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dockerode": "^5.0.1",
