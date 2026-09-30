@@ -1,0 +1,50 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/projects/mcoode[39m
+
+ [32m✓[39m packages/web/tests/provider-catalog.test.js [2m([22m[2m4 tests[22m[2m)[22m[33m 752[2mms[22m[39m
+   [33m[2m✓[22m[39m provider catalog does not drift from the CLI (WEB-029)[2m > [22mthere is exactly ONE fallback provider list in src [33m720[2mms[22m[39m
+ [32m✓[39m packages/web/tests/chat-icons.test.js [2m([22m[2m17 tests[22m[2m)[22m[90m 34[2mms[22m[39m
+ [32m✓[39m packages/web/tests/utils.test.js [2m([22m[2m4 tests[22m[2m)[22m[90m 128[2mms[22m[39m
+ [32m✓[39m packages/web/tests/chat-processing-colors.test.js [2m([22m[2m8 tests[22m[2m)[22m[90m 60[2mms[22m[39m
+ [32m✓[39m packages/web/tests/wave-payload.test.js [2m([22m[2m7 tests[22m[2m)[22m[90m 203[2mms[22m[39m
+ [31m❯[39m packages/web/tests/god-mode-event-parity.test.js [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[90m 210[2mms[22m[39m
+[31m   [31m×[31m subagent reducers survive out-of-order / replayed events (WEB-034)[2m > [22mkeeps the real wire shape: started carries tokens as { in, out }[90m 146[2mms[22m[31m[39m
+[31m     → expected undefined to be 'poolside/laguna-s-2.1' // Object.is equality[39m
+ [32m✓[39m packages/web/tests/electron-bridge-removed.test.js [2m([22m[2m3 tests[22m[2m)[22m[33m 824[2mms[22m[39m
+   [33m[2m✓[22m[39m the deleted Electron bridge stays deleted (WEB-027)[2m > [22mhas no executable mcodeElectron reference in src [33m455[2mms[22m[39m
+   [33m[2m✓[22m[39m the deleted Electron bridge stays deleted (WEB-027)[2m > [22mhas no import of the deleted electron-nav module [33m353[2mms[22m[39m
+ [32m✓[39m packages/web/tests/no-silent-catches.test.js [2m([22m[2m2 tests[22m[2m)[22m[33m 1166[2mms[22m[39m
+   [33m[2m✓[22m[39m no silent catches (WEB-015)[2m > [22mhas no new empty catch blocks [33m632[2mms[22m[39m
+   [33m[2m✓[22m[39m no silent catches (WEB-015)[2m > [22mhas not left stale entries in the baseline [33m524[2mms[22m[39m
+ [32m✓[39m packages/web/tests/socket-contract.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 1746[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22msubscribes only to events the backend can emit [33m585[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22mlists every unreachable subscription in KNOWN_UNWIRED [33m541[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22monly subscribes to `subagent:*` names that chat-session.js really forwards (WEB-032) [33m497[2mms[22m[39m
+ [32m✓[39m packages/web/tests/no-dead-utilities.test.js [2m([22m[2m2 tests[22m[2m)[22m[90m 91[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 1 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/web/tests/god-mode-event-parity.test.js[2m > [22msubagent reducers survive out-of-order / replayed events (WEB-034)[2m > [22mkeeps the real wire shape: started carries tokens as { in, out }
+[31m[1mAssertionError[22m: expected undefined to be 'poolside/laguna-s-2.1' // Object.is equality[39m
+
+[32m- Expected:[39m 
+"poolside/laguna-s-2.1"
+
+[31m+ Received:[39m 
+undefined
+
+[36m [2m❯[22m packages/web/tests/god-mode-event-parity.test.js:[2m153:38[22m[39m
+    [90m151| [39m    [34mexpect[39m(state[33m.[39msubagents[33m.[39mt3[33m.[39mstatus)[33m.[39m[34mtoBe[39m([32m'running'[39m)[33m;[39m
+    [90m152| [39m    [34mexpect[39m(state[33m.[39msubagents[33m.[39mt3[33m.[39mtokens)[33m.[39m[34mtoEqual[39m({ [35min[39m[33m:[39m [34m0[39m[33m,[39m out[33m:[39m [34m0[39m })[33m;[39m
+    [90m153| [39m    [34mexpect[39m(state[33m.[39msubagents[33m.[39mt3[33m.[39mmodel)[33m.[39m[34mtoBe[39m([32m'poolside/laguna-s-2.1'[39m)[33m;[39m
+    [90m   | [39m                                     [31m^[39m
+    [90m154| [39m    [34mexpect[39m(state[33m.[39msubagents[33m.[39mt3[33m.[39mdomain)[33m.[39m[34mtoBe[39m([32m'frontend'[39m)[33m;[39m
+    [90m155| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m9 passed[39m[22m[90m (10)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m58 passed[39m[22m[90m (59)[39m
+[2m   Start at [22m 01:56:07
+[2m   Duration [22m 11.79s[2m (transform 3.81s, setup 0ms, collect 14.01s, tests 5.21s, environment 40ms, prepare 18.24s)[22m
+

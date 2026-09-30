@@ -1,0 +1,72 @@
+# ─── mcode Docker build context ───────────────────────────────────────────────
+# This is a DENY-list on purpose.
+#
+# The previous version was a whitelist that ended with `!node_modules/**`.
+# That copied the Windows host's node_modules — including win32-compiled
+# node-pty / cpu-features / ssh2 .node binaries — into a Linux container.
+# The binaries could not load, and the backend crashed on boot. The
+# Dockerfile now installs dependencies INSIDE the image, so the host tree
+# must never enter the context.
+
+# ─── Dependencies (installed in-image, never copied) ──────────────────────────
+node_modules
+**/node_modules
+.npm
+
+# ─── Build output (rebuilt in-image) ──────────────────────────────────────────
+.next
+**/.next
+dist
+**/dist
+build
+**/build
+out
+**/out
+*.tsbuildinfo
+
+# ─── Test / coverage artifacts ────────────────────────────────────────────────
+coverage
+**/coverage
+.nyc_output
+playwright-report
+**/playwright-report
+test-results
+**/test-results
+
+# ─── VCS, CI, editors ────────────────────────────────────────────────────────
+.git
+.github
+.vscode
+.idea
+
+# ─── Local agent scratch + logs ───────────────────────────────────────────────
+.mcode
+logs
+**/logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# ─── Secrets ──────────────────────────────────────────────────────────────────
+# Passed at runtime via compose `env_file` / `environment`, never baked in.
+.env
+.env.*
+!.env.example
+!.env.docker.example
+*.pem
+*.key
+*.cert
+*.pfx
+
+# ─── Scratch output from local test/debug runs ────────────────────────────────
+*.txt
+cli2.txt
+root-all.txt
+vitest-out.txt
+web-tests-*.txt
+packages/web/*.txt
+
+# ─── Docs (not needed at runtime) ─────────────────────────────────────────────
+docs
+**/*.md
+!README.md

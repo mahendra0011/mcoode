@@ -7,7 +7,7 @@ import {
   getGroupedSlashCommands,
   handleSlashCommand,
   isSlashCommand
-} from '../../web/src/lib/slashCommands.js';
+} from '../src/lib/slashCommands.js';
 
 describe('Slash Commands Parity & Execution (Doc 01–53)', () => {
   const ALL_CLI_COMMANDS = [

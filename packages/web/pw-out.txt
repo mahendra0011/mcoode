@@ -1,0 +1,817 @@
+npm notice run mcode-monorepo@2.4.6 npx
+npm notice run playwright test --reporter=line
+
+Running 158 tests using 1 worker
+
+[1/158] [chromium] › e2e\advanced-mode.spec.js:20:3 › AI Code Assistant + AI Code Editor Tab › 1. AI Code Assistant tab switches between chat and agent mode
+[chromium] › e2e\advanced-mode.spec.js:20:3 › AI Code Assistant + AI Code Editor Tab › 1. AI Code Assistant tab switches between chat and agent mode
+Initially in chat mode: true
+
+After click - agent mode: false
+
+After second click - back to chat: true
+
+[2/158] [chromium] › e2e\advanced-mode.spec.js:52:3 › AI Code Assistant + AI Code Editor Tab › 2. AI Code Assistant tab shows God Mode toggle and Slash button
+[3/158] [chromium] › e2e\advanced-mode.spec.js:67:3 › AI Code Assistant + AI Code Editor Tab › 3. Switching to AI Code Editor tab shows IDE layout
+[4/158] (retries) [chromium] › e2e\advanced-mode.spec.js:67:3 › AI Code Assistant + AI Code Editor Tab › 3. Switching to AI Code Editor tab shows IDE layout (retry #1)
+  1) [chromium] › e2e\advanced-mode.spec.js:67:3 › AI Code Assistant + AI Code Editor Tab › 3. Switching to AI Code Editor tab shows IDE layout 
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      75 |     // Check for Explorer section
+      76 |     const explorer = page.locator('text=Explorer');
+    > 77 |     expect(await explorer.count()).toBeGreaterThan(0);
+         |                                    ^
+      78 |
+      79 |     // Check for AI Assistance panel
+      80 |     const aiAssistance = page.locator('text=AI Assistance');
+        at D:\projects\mcoode\packages\web\e2e\advanced-mode.spec.js:77:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-f90ff-Editor-tab-shows-IDE-layout-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-f90ff-Editor-tab-shows-IDE-layout-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\advanced-mode-AI-Code-Assi-f90ff-Editor-tab-shows-IDE-layout-chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      75 |     // Check for Explorer section
+      76 |     const explorer = page.locator('text=Explorer');
+    > 77 |     expect(await explorer.count()).toBeGreaterThan(0);
+         |                                    ^
+      78 |
+      79 |     // Check for AI Assistance panel
+      80 |     const aiAssistance = page.locator('text=AI Assistance');
+        at D:\projects\mcoode\packages\web\e2e\advanced-mode.spec.js:77:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-f90ff-Editor-tab-shows-IDE-layout-chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-f90ff-Editor-tab-shows-IDE-layout-chromium-retry1\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\advanced-mode-AI-Code-Assi-f90ff-Editor-tab-shows-IDE-layout-chromium-retry1\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-f90ff-Editor-tab-shows-IDE-layout-chromium-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\advanced-mode-AI-Code-Assi-f90ff-Editor-tab-shows-IDE-layout-chromium-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/158] [chromium] › e2e\advanced-mode.spec.js:94:3 › AI Code Assistant + AI Code Editor Tab › 4. AI Code Editor tab has inline chat input
+[6/158] [chromium] › e2e\advanced-mode.spec.js:107:3 › AI Code Assistant + AI Code Editor Tab › 5. AI Code Assistant tab + God Mode shows wave progress component
+[chromium] › e2e\advanced-mode.spec.js:107:3 › AI Code Assistant + AI Code Editor Tab › 5. AI Code Assistant tab + God Mode shows wave progress component
+God mode button class: px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-200 text-xs font-medium border backdrop-blur-md bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]
+
+[7/158] (retries) [chromium] › e2e\advanced-mode.spec.js:107:3 › AI Code Assistant + AI Code Editor Tab › 5. AI Code Assistant tab + God Mode shows wave progress component (retry #1)
+God mode button class: px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-200 text-xs font-medium border backdrop-blur-md bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]
+
+  2) [chromium] › e2e\advanced-mode.spec.js:107:3 › AI Code Assistant + AI Code Editor Tab › 5. AI Code Assistant tab + God Mode shows wave progress component 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "bg-gradient-to-r from-purple-500"
+    Received string:    "px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-200 text-xs font-medium border backdrop-blur-md bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+
+      117 |     const godActive = await page.locator('button').filter({ hasText: /God/i }).getAttribute('class');
+      118 |     console.log('God mode button class:', godActive);
+    > 119 |     expect(godActive).toContain('bg-gradient-to-r from-purple-500');
+          |                       ^
+      120 |   });
+      121 |
+      122 |   test('6. Tab switching preserves state between Chat and AI Code Editor', async ({ page }) => {
+        at D:\projects\mcoode\packages\web\e2e\advanced-mode.spec.js:119:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-c3d69-ows-wave-progress-component-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-c3d69-ows-wave-progress-component-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\advanced-mode-AI-Code-Assi-c3d69-ows-wave-progress-component-chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "bg-gradient-to-r from-purple-500"
+    Received string:    "px-3 h-8 rounded-lg flex items-center gap-2 transition-all duration-200 text-xs font-medium border backdrop-blur-md bg-emerald-500/10 text-emerald-400 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+
+      117 |     const godActive = await page.locator('button').filter({ hasText: /God/i }).getAttribute('class');
+      118 |     console.log('God mode button class:', godActive);
+    > 119 |     expect(godActive).toContain('bg-gradient-to-r from-purple-500');
+          |                       ^
+      120 |   });
+      121 |
+      122 |   test('6. Tab switching preserves state between Chat and AI Code Editor', async ({ page }) => {
+        at D:\projects\mcoode\packages\web\e2e\advanced-mode.spec.js:119:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-c3d69-ows-wave-progress-component-chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-c3d69-ows-wave-progress-component-chromium-retry1\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\advanced-mode-AI-Code-Assi-c3d69-ows-wave-progress-component-chromium-retry1\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\advanced-mode-AI-Code-Assi-c3d69-ows-wave-progress-component-chromium-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\advanced-mode-AI-Code-Assi-c3d69-ows-wave-progress-component-chromium-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[8/158] [chromium] › e2e\advanced-mode.spec.js:122:3 › AI Code Assistant + AI Code Editor Tab › 6. Tab switching preserves state between Chat and AI Code Editor
+[9/158] [chromium] › e2e\ai-chat.spec.js:14:3 › AIChatPage (/ai/chat) › page renders without crashing
+[10/158] [chromium] › e2e\ai-chat.spec.js:19:3 › AIChatPage (/ai/chat) › sidebar renders with workspace actions
+[11/158] [chromium] › e2e\ai-chat.spec.js:26:3 › AIChatPage (/ai/chat) › tab navigation renders (Chat, AI Code Assistant, AI Code Editor)
+[12/158] [chromium] › e2e\ai-chat.spec.js:33:3 › AIChatPage (/ai/chat) › chat tab empty state renders with action buttons
+[13/158] [chromium] › e2e\ai-chat.spec.js:41:3 › AIChatPage (/ai/chat) › action bar buttons are motion.button with hover/tap
+[14/158] [chromium] › e2e\ai-chat.spec.js:51:3 › AIChatPage (/ai/chat) › God Mode toggle button exists
+[15/158] [chromium] › e2e\ai-chat.spec.js:58:3 › AIChatPage (/ai/chat) › file upload trigger exists
+[16/158] [chromium] › e2e\ai-chat.spec.js:67:3 › AIChatPage (/ai/chat) › branch selector exists
+[17/158] [chromium] › e2e\ai-chat.spec.js:74:3 › AIChatPage (/ai/chat) › switch mode toggles between chat and agent
+[18/158] [chromium] › e2e\ai-chat.spec.js:84:3 › AIChatPage (/ai/chat) › no plain <button> tags without motion styles exist
+[19/158] [chromium] › e2e\ai-chat.spec.js:101:3 › AIChatPage God-Mode View › god-mode toggle can be clicked
+[20/158] [chromium] › e2e\ai-chat.spec.js:114:3 › AIChatPage God-Mode View › wave/subagent progress would render in god mode
+[21/158] [chromium] › e2e\animations.spec.js:18:5 › Animation Coverage Across All Pages › LandingPage has Framer Motion animated elements
+[22/158] [chromium] › e2e\animations.spec.js:30:5 › Animation Coverage Across All Pages › LandingPage has motion.button elements (not plain <button>)
+[23/158] [chromium] › e2e\animations.spec.js:18:5 › Animation Coverage Across All Pages › AILandingPage has Framer Motion animated elements
+[24/158] [chromium] › e2e\animations.spec.js:30:5 › Animation Coverage Across All Pages › AILandingPage has motion.button elements (not plain <button>)
+[25/158] [chromium] › e2e\animations.spec.js:18:5 › Animation Coverage Across All Pages › CLIPage has Framer Motion animated elements
+[26/158] [chromium] › e2e\animations.spec.js:30:5 › Animation Coverage Across All Pages › CLIPage has motion.button elements (not plain <button>)
+[27/158] [chromium] › e2e\animations.spec.js:18:5 › Animation Coverage Across All Pages › LoginPage has Framer Motion animated elements
+[28/158] [chromium] › e2e\animations.spec.js:30:5 › Animation Coverage Across All Pages › LoginPage has motion.button elements (not plain <button>)
+[29/158] [chromium] › e2e\animations.spec.js:18:5 › Animation Coverage Across All Pages › SignupPage has Framer Motion animated elements
+[30/158] [chromium] › e2e\animations.spec.js:30:5 › Animation Coverage Across All Pages › SignupPage has motion.button elements (not plain <button>)
+[31/158] [chromium] › e2e\animations.spec.js:18:5 › Animation Coverage Across All Pages › ForgotPasswordPage has Framer Motion animated elements
+[32/158] [chromium] › e2e\animations.spec.js:30:5 › Animation Coverage Across All Pages › ForgotPasswordPage has motion.button elements (not plain <button>)
+[33/158] [chromium] › e2e\animations.spec.js:18:5 › Animation Coverage Across All Pages › AIChatPage has Framer Motion animated elements
+[34/158] [chromium] › e2e\animations.spec.js:30:5 › Animation Coverage Across All Pages › AIChatPage has motion.button elements (not plain <button>)
+[35/158] [chromium] › e2e\animations.spec.js:18:5 › Animation Coverage Across All Pages › SettingsPage has Framer Motion animated elements
+[36/158] [chromium] › e2e\animations.spec.js:30:5 › Animation Coverage Across All Pages › SettingsPage has motion.button elements (not plain <button>)
+[37/158] [chromium] › e2e\animations.spec.js:48:3 › Animation Coverage Across All Pages › landing page hero has stagger animation on children
+[38/158] [chromium] › e2e\animations.spec.js:56:3 › Animation Coverage Across All Pages › no GSAP imports remain anywhere in src/
+[39/158] [chromium] › e2e\animations.spec.js:66:3 › Hover & Tap Animation Verification › hero CTA buttons respond to hover
+[40/158] [chromium] › e2e\animations.spec.js:77:3 › Hover & Tap Animation Verification › auth form buttons respond to hover
+[41/158] [chromium] › e2e\animations.spec.js:88:3 › Hover & Tap Animation Verification › settings tab buttons are motion.button with hover
+[42/158] [chromium] › e2e\animations.spec.js:103:3 › Variant Animation Verification › SignupPage form fields use fieldVariants (stagger) — fixed from fieldVariant typo
+[43/158] [chromium] › e2e\animations.spec.js:118:3 › Variant Animation Verification › Pricing page has grid of motion.button cards
+[44/158] [chromium] › e2e\animations.spec.js:134:3 › Variant Animation Verification › StepCard DiffViewer has hidden+visible variant keys
+[45/158] [chromium] › e2e\auth.spec.js:8:3 › LoginPage (/login) › page loads without errors
+[46/158] [chromium] › e2e\auth.spec.js:13:3 › LoginPage (/login) › has email input field
+[47/158] [chromium] › e2e\auth.spec.js:19:3 › LoginPage (/login) › has password input field
+[48/158] [chromium] › e2e\auth.spec.js:25:3 › LoginPage (/login) › submit button is a motion.button with hover/tap animation
+[49/158] [chromium] › e2e\auth.spec.js:33:3 › LoginPage (/login) › Google OAuth login button exists
+[50/158] [chromium] › e2e\auth.spec.js:40:3 › LoginPage (/login) › link to SignupPage exists
+[51/158] [chromium] › e2e\auth.spec.js:45:3 › LoginPage (/login) › link to ForgotPassword exists
+[52/158] [chromium] › e2e\auth.spec.js:50:3 › LoginPage (/login) › form fields have stagger animation via Framer Motion variants
+[53/158] [chromium] › e2e\auth.spec.js:57:3 › LoginPage (/login) › OTP toggle button exists for passwordless login
+[54/158] [chromium] › e2e\auth.spec.js:62:3 › LoginPage (/login) › clicking "Send Code" toggles to OTP entry mode
+[55/158] [chromium] › e2e\auth.spec.js:88:3 › SignupPage (/signup) › page loads without errors
+[56/158] [chromium] › e2e\auth.spec.js:92:3 › SignupPage (/signup) › has name input field
+[57/158] [chromium] › e2e\auth.spec.js:97:3 › SignupPage (/signup) › has email input field
+[58/158] [chromium] › e2e\auth.spec.js:102:3 › SignupPage (/signup) › has password input field
+[59/158] [chromium] › e2e\auth.spec.js:107:3 › SignupPage (/signup) › submit button is a motion.button
+[60/158] [chromium] › e2e\auth.spec.js:114:3 › SignupPage (/signup) › password visibility toggle exists
+[61/158] [chromium] › e2e\auth.spec.js:121:3 › SignupPage (/signup) › link to LoginPage exists
+[62/158] [chromium] › e2e\auth.spec.js:126:3 › SignupPage (/signup) › form fields use fieldVariants for staggered entrance
+[63/158] [chromium] › e2e\auth.spec.js:136:3 › SignupPage (/signup) › submit button says "Send Verification Code" (OTP flow)
+[64/158] [chromium] › e2e\auth.spec.js:142:3 › SignupPage (/signup) › clicking submit triggers OTP flow (backend mocked)
+[65/158] [chromium] › e2e\auth.spec.js:167:3 › SignupPage (/signup) › OTP entry transitions to verification step
+[66/158] [chromium] › e2e\auth.spec.js:199:3 › ForgotPasswordPage (/forgot-password) › page loads without errors
+[67/158] [chromium] › e2e\auth.spec.js:204:3 › ForgotPasswordPage (/forgot-password) › has email input field
+[68/158] [chromium] › e2e\auth.spec.js:209:3 › ForgotPasswordPage (/forgot-password) › submit/reset button is a motion.button
+[69/158] [chromium] › e2e\auth.spec.js:216:3 › ForgotPasswordPage (/forgot-password) › link back to LoginPage exists
+[70/158] [chromium] › e2e\chat-animations.spec.js:16:3 › ThinkingIndicator & ChatMessage › page loads without errors
+[71/158] [chromium] › e2e\chat-animations.spec.js:20:3 › ThinkingIndicator & ChatMessage › page renders scrollable chat container
+[72/158] [chromium] › e2e\chat-animations.spec.js:27:3 › ThinkingIndicator & ChatMessage › input form is present
+[73/158] [chromium] › e2e\chat-animations.spec.js:34:3 › ThinkingIndicator & ChatMessage › sidebar renders brand or login button
+[74/158] [chromium] › e2e\chat-animations.spec.js:46:3 › ThinkingIndicator & ChatMessage › tab switcher renders (Chat/AI Code Assistant/AI Code Editor)
+[75/158] [chromium] › e2e\chat-animations.spec.js:66:3 › MessageContent & Markdown › react-markdown is bundled without errors
+[76/158] [chromium] › e2e\chat-animations.spec.js:78:3 › MessageContent & Markdown › syntax highlight CSS classes are loaded
+[77/158] [chromium] › e2e\chat-animations.spec.js:94:3 › MessageContent & Markdown › framer-motion is loaded
+[78/158] [chromium] › e2e\chat-animations.spec.js:114:3 › Three-View Consistency › tab navigation works between Chat and AI Code Editor
+[79/158] [chromium] › e2e\chat-animations.spec.js:124:3 › Three-View Consistency › dead code (chat/StepCard, chat/TodoCard) is removed
+[80/158] [chromium] › e2e\chat-animations.spec.js:135:3 › Three-View Consistency › no console errors from missing animation components
+[81/158] [chromium] › e2e\chat-animations.spec.js:160:3 › IDE View Animation Components › IDE view renders without JS errors
+[82/158] [chromium] › e2e\chat-animations.spec.js:169:3 › IDE View Animation Components › page has animation elements or loads cleanly
+[83/158] [chromium] › e2e\chat-flow.spec.js:15:3 › AIChatPage → Slash Commands › typing / shows command picker
+[84/158] (retries) [chromium] › e2e\chat-flow.spec.js:15:3 › AIChatPage → Slash Commands › typing / shows command picker (retry #1)
+  3) [chromium] › e2e\chat-flow.spec.js:15:3 › AIChatPage → Slash Commands › typing / shows command picker 
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      22 |     await page.waitForTimeout(500);
+      23 |     const clearBtn = page.locator('button').filter({ hasText: '/clear' });
+    > 24 |     expect(await clearBtn.count()).toBeGreaterThan(0);
+         |                                    ^
+      25 |   });
+      26 |
+      27 |   test('slash command list contains expected commands', async ({ page }) => {
+        at D:\projects\mcoode\packages\web\e2e\chat-flow.spec.js:24:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-70d5a-typing-shows-command-picker-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-70d5a-typing-shows-command-picker-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-flow-AIChatPage-→-Sla-70d5a-typing-shows-command-picker-chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      22 |     await page.waitForTimeout(500);
+      23 |     const clearBtn = page.locator('button').filter({ hasText: '/clear' });
+    > 24 |     expect(await clearBtn.count()).toBeGreaterThan(0);
+         |                                    ^
+      25 |   });
+      26 |
+      27 |   test('slash command list contains expected commands', async ({ page }) => {
+        at D:\projects\mcoode\packages\web\e2e\chat-flow.spec.js:24:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-70d5a-typing-shows-command-picker-chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-70d5a-typing-shows-command-picker-chromium-retry1\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-flow-AIChatPage-→-Sla-70d5a-typing-shows-command-picker-chromium-retry1\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-70d5a-typing-shows-command-picker-chromium-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\chat-flow-AIChatPage-→-Sla-70d5a-typing-shows-command-picker-chromium-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[85/158] [chromium] › e2e\chat-flow.spec.js:27:3 › AIChatPage → Slash Commands › slash command list contains expected commands
+[86/158] [chromium] › e2e\chat-flow.spec.js:37:3 › AIChatPage → Slash Commands › slash commands are listed in picker
+[87/158] [chromium] › e2e\chat-flow.spec.js:52:3 › AIChatPage → Slash Commands › /clear command clears the chat
+[88/158] (retries) [chromium] › e2e\chat-flow.spec.js:52:3 › AIChatPage → Slash Commands › /clear command clears the chat (retry #1)
+  4) [chromium] › e2e\chat-flow.spec.js:52:3 › AIChatPage → Slash Commands › /clear command clears the chat 
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      59 |     await page.waitForTimeout(1000);
+      60 |     const clearMsg = page.locator('text=/chat cleared/i');
+    > 61 |     expect(await clearMsg.count()).toBeGreaterThan(0);
+         |                                    ^
+      62 |   });
+      63 |
+      64 |   test('/god command without args shows usage hint', async ({ page }) => {
+        at D:\projects\mcoode\packages\web\e2e\chat-flow.spec.js:61:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-3e7dd-ear-command-clears-the-chat-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-3e7dd-ear-command-clears-the-chat-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-flow-AIChatPage-→-Sla-3e7dd-ear-command-clears-the-chat-chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      59 |     await page.waitForTimeout(1000);
+      60 |     const clearMsg = page.locator('text=/chat cleared/i');
+    > 61 |     expect(await clearMsg.count()).toBeGreaterThan(0);
+         |                                    ^
+      62 |   });
+      63 |
+      64 |   test('/god command without args shows usage hint', async ({ page }) => {
+        at D:\projects\mcoode\packages\web\e2e\chat-flow.spec.js:61:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-3e7dd-ear-command-clears-the-chat-chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-3e7dd-ear-command-clears-the-chat-chromium-retry1\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-flow-AIChatPage-→-Sla-3e7dd-ear-command-clears-the-chat-chromium-retry1\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-3e7dd-ear-command-clears-the-chat-chromium-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\chat-flow-AIChatPage-→-Sla-3e7dd-ear-command-clears-the-chat-chromium-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[89/158] [chromium] › e2e\chat-flow.spec.js:64:3 › AIChatPage → Slash Commands › /god command without args shows usage hint
+[90/158] (retries) [chromium] › e2e\chat-flow.spec.js:64:3 › AIChatPage → Slash Commands › /god command without args shows usage hint (retry #1)
+  5) [chromium] › e2e\chat-flow.spec.js:64:3 › AIChatPage → Slash Commands › /god command without args shows usage hint 
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      71 |     await page.waitForTimeout(500);
+      72 |     const godHint = page.locator('text=/god-mode/i');
+    > 73 |     expect(await godHint.count()).toBeGreaterThan(0);
+         |                                   ^
+      74 |   });
+      75 |
+      76 |   test('slash commands work in Chat tab (not just empty state)', async ({ page }) => {
+        at D:\projects\mcoode\packages\web\e2e\chat-flow.spec.js:73:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-f31f5-thout-args-shows-usage-hint-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-f31f5-thout-args-shows-usage-hint-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-flow-AIChatPage-→-Sla-f31f5-thout-args-shows-usage-hint-chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      71 |     await page.waitForTimeout(500);
+      72 |     const godHint = page.locator('text=/god-mode/i');
+    > 73 |     expect(await godHint.count()).toBeGreaterThan(0);
+         |                                   ^
+      74 |   });
+      75 |
+      76 |   test('slash commands work in Chat tab (not just empty state)', async ({ page }) => {
+        at D:\projects\mcoode\packages\web\e2e\chat-flow.spec.js:73:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-f31f5-thout-args-shows-usage-hint-chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-f31f5-thout-args-shows-usage-hint-chromium-retry1\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-flow-AIChatPage-→-Sla-f31f5-thout-args-shows-usage-hint-chromium-retry1\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-f31f5-thout-args-shows-usage-hint-chromium-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\chat-flow-AIChatPage-→-Sla-f31f5-thout-args-shows-usage-hint-chromium-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[91/158] [chromium] › e2e\chat-flow.spec.js:76:3 › AIChatPage → Slash Commands › slash commands work in Chat tab (not just empty state)
+[92/158] (retries) [chromium] › e2e\chat-flow.spec.js:76:3 › AIChatPage → Slash Commands › slash commands work in Chat tab (not just empty state) (retry #1)
+  6) [chromium] › e2e\chat-flow.spec.js:76:3 › AIChatPage → Slash Commands › slash commands work in Chat tab (not just empty state) 
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      83 |     await page.waitForTimeout(500);
+      84 |     const helpBtn = page.locator('button').filter({ hasText: '/help' });
+    > 85 |     expect(await helpBtn.count()).toBeGreaterThan(0);
+         |                                   ^
+      86 |   });
+      87 | });
+      88 |
+        at D:\projects\mcoode\packages\web\e2e\chat-flow.spec.js:85:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-fd63e-t-tab-not-just-empty-state--chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-fd63e-t-tab-not-just-empty-state--chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-flow-AIChatPage-→-Sla-fd63e-t-tab-not-just-empty-state--chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+      83 |     await page.waitForTimeout(500);
+      84 |     const helpBtn = page.locator('button').filter({ hasText: '/help' });
+    > 85 |     expect(await helpBtn.count()).toBeGreaterThan(0);
+         |                                   ^
+      86 |   });
+      87 | });
+      88 |
+        at D:\projects\mcoode\packages\web\e2e\chat-flow.spec.js:85:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-fd63e-t-tab-not-just-empty-state--chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-fd63e-t-tab-not-just-empty-state--chromium-retry1\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-flow-AIChatPage-→-Sla-fd63e-t-tab-not-just-empty-state--chromium-retry1\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\chat-flow-AIChatPage-→-Sla-fd63e-t-tab-not-just-empty-state--chromium-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\chat-flow-AIChatPage-→-Sla-fd63e-t-tab-not-just-empty-state--chromium-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[93/158] [chromium] › e2e\chat-flow.spec.js:99:3 › AIChatPage → Mode Switching › tab navigation renders (Chat, AI Code Assistant, AI Code Editor)
+[94/158] [chromium] › e2e\chat-flow.spec.js:105:3 › AIChatPage → Mode Switching › AI Code Assistant tab switches between chat and agent mode
+[95/158] [chromium] › e2e\chat-flow.spec.js:116:3 › AIChatPage → Mode Switching › God Mode button exists and toggles
+[96/158] [chromium] › e2e\chat-flow.spec.js:126:3 › AIChatPage → Mode Switching › model selector renders in chat interface
+[97/158] [chromium] › e2e\chat-flow.spec.js:133:3 › AIChatPage → Mode Switching › empty state shows action buttons
+[98/158] [chromium] › e2e\chat-flow.spec.js:140:3 › AIChatPage → Mode Switching › send button is disabled when input is empty
+[99/158] [chromium] › e2e\chat-flow.spec.js:148:3 › AIChatPage → Mode Switching › all tabs render without crashing
+[100/158] [chromium] › e2e\chat-flow.spec.js:174:3 › AIChatPage → Sidebar › sidebar renders with M CODE brand
+[101/158] [chromium] › e2e\chat-flow.spec.js:179:3 › AIChatPage → Sidebar › sidebar has new chat button
+[102/158] [chromium] › e2e\chat-flow.spec.js:184:3 › AIChatPage → Sidebar › sidebar has profile or login button
+[103/158] [chromium] › e2e\chat-flow.spec.js:191:3 › AIChatPage → Sidebar › sidebar has settings link
+[104/158] [chromium] › e2e\chat-flow.spec.js:198:3 › Integration: Model selection flow › selected model in Settings persists and reflects in chat ModelSelector
+[105/158] [chromium] › e2e\chat-mode.spec.js:21:3 › Chat Mode Verification › 1. Page loads and renders chat tab by default
+[106/158] [chromium] › e2e\chat-mode.spec.js:30:3 › Chat Mode Verification › 2. Chat empty state shows spinner, heading, suggestions
+[107/158] [chromium] › e2e\chat-mode.spec.js:47:3 › Chat Mode Verification › 3. ThinkingIndicator renders when streaming starts (not already streaming)
+[chromium] › e2e\chat-mode.spec.js:47:3 › Chat Mode Verification › 3. ThinkingIndicator renders when streaming starts (not already streaming)
+Thinking/cursor elements found: 2
+
+[108/158] [chromium] › e2e\chat-mode.spec.js:79:3 › Chat Mode Verification › 4. Chat input has all action buttons with motion effects
+[109/158] [chromium] › e2e\chat-mode.spec.js:105:3 › Chat Mode Verification › 5. Streaming cursor blinks (opacity animation)
+[chromium] › e2e\chat-mode.spec.js:105:3 › Chat Mode Verification › 5. Streaming cursor blinks (opacity animation)
+Pulse caret CSS defined: true
+
+CSS loaded: true
+
+[110/158] [chromium] › e2e\chat-mode.spec.js:133:3 › Chat Mode Verification › 6. Tab buttons have motion hover/scale effects
+[chromium] › e2e\chat-mode.spec.js:133:3 › Chat Mode Verification › 6. Tab buttons have motion hover/scale effects
+Tab button before hover: {
+  transform: 'none',
+  transition: 'color 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), text-decoration-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), fill 0.15s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
+}
+
+Tab button after hover: {
+  transform: 'none',
+  transition: 'color 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), text-decoration-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), fill 0.15s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.15s cubic-bezier(0.4, 0, 0.2, 1)'
+}
+
+[111/158] [chromium] › e2e\chat-mode.spec.js:157:3 › Chat Mode Verification › 7. Chat mode (not agent/AI Code Assistant) — verify default mode is chat
+[chromium] › e2e\chat-mode.spec.js:157:3 › Chat Mode Verification › 7. Chat mode (not agent/AI Code Assistant) — verify default mode is chat
+Messages rendered: true
+
+[112/158] [chromium] › e2e\chat-mode.spec.js:175:3 › Chat Mode Verification › 8. Framer Motion is loaded and used in chat UI
+[chromium] › e2e\chat-mode.spec.js:175:3 › Chat Mode Verification › 8. Framer Motion is loaded and used in chat UI
+Elements with opacity style: 4 of 298 total
+
+Has staggered delays: false
+
+[113/158] [chromium] › e2e\chat-search-real.spec.js:15:3 › Chat Mode — Real Search Flow › Search query triggers web_search and renders ZCode-style SearchResultBlock animations
+[114/158] (retries) [chromium] › e2e\chat-search-real.spec.js:15:3 › Chat Mode — Real Search Flow › Search query triggers web_search and renders ZCode-style SearchResultBlock animations (retry #1)
+  7) [chromium] › e2e\chat-search-real.spec.js:15:3 › Chat Mode — Real Search Flow › Search query triggers web_search and renders ZCode-style SearchResultBlock animations 
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5175/login
+    Call log:
+      - navigating to "http://localhost:5175/login", waiting until "load"
+
+
+      18 |
+      19 |     // Step 1: Login with real credentials
+    > 20 |     await page.goto('http://localhost:5175/login');
+         |                ^
+      21 |     await page.fill('input[name="email"], input[type="email"]', 'technomp786@gmail.com');
+      22 |     await page.fill('input[name="password"], input[type="password"]', 'mahendra@@009988');
+      23 |     await page.click('button[type="submit"]');
+        at D:\projects\mcoode\packages\web\e2e\chat-search-real.spec.js:20:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-search-real-Chat-Mode-01175-earchResultBlock-animations-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-search-real-Chat-Mode-01175-earchResultBlock-animations-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-search-real-Chat-Mode-01175-earchResultBlock-animations-chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:5175/login
+    Call log:
+      - navigating to "http://localhost:5175/login", waiting until "load"
+
+
+      18 |
+      19 |     // Step 1: Login with real credentials
+    > 20 |     await page.goto('http://localhost:5175/login');
+         |                ^
+      21 |     await page.fill('input[name="email"], input[type="email"]', 'technomp786@gmail.com');
+      22 |     await page.fill('input[name="password"], input[type="password"]', 'mahendra@@009988');
+      23 |     await page.click('button[type="submit"]');
+        at D:\projects\mcoode\packages\web\e2e\chat-search-real.spec.js:20:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\chat-search-real-Chat-Mode-01175-earchResultBlock-animations-chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\chat-search-real-Chat-Mode-01175-earchResultBlock-animations-chromium-retry1\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\chat-search-real-Chat-Mode-01175-earchResultBlock-animations-chromium-retry1\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\chat-search-real-Chat-Mode-01175-earchResultBlock-animations-chromium-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\chat-search-real-Chat-Mode-01175-earchResultBlock-animations-chromium-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[115/158] [chromium] › e2e\components.spec.js:8:3 › Header Component Animations › header renders with motion elements
+[116/158] [chromium] › e2e\components.spec.js:13:3 › Header Component Animations › header logo is a motion element
+[117/158] [chromium] › e2e\components.spec.js:18:3 › Header Component Animations › header nav links exist
+[118/158] [chromium] › e2e\components.spec.js:23:3 › Header Component Animations › dropdown trigger button has motion styles
+[119/158] [chromium] › e2e\components.spec.js:33:3 › FeaturesGrid Component › features grid renders with stagger animation
+[120/158] [chromium] › e2e\components.spec.js:39:3 › FeaturesGrid Component › feature cards are motion.div with hover effects
+[121/158] [chromium] › e2e\components.spec.js:50:3 › Testimonials Component › testimonials section renders
+[122/158] (retries) [chromium] › e2e\components.spec.js:50:3 › Testimonials Component › testimonials section renders (retry #1)
+  8) [chromium] › e2e\components.spec.js:50:3 › Testimonials Component › testimonials section renders 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator:  locator('section').last()
+    Expected: visible
+    Received: hidden
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeVisible" locator('section').last() with timeout 5000ms
+      - waiting for locator('section').last()
+        13 × locator resolved to <section tabindex="-1" aria-live="polite" aria-atomic="false" aria-relevant="additions text" aria-label="Notifications alt+T" data-react-aria-top-layer="true"></section>
+           - unexpected value "hidden"
+
+
+      50 |   test('testimonials section renders', async ({ page }) => {
+      51 |     const testimonials = page.locator('section');
+    > 52 |     await expect(testimonials.last()).toBeVisible();
+         |                                       ^
+      53 |   });
+      54 | });
+      55 |
+        at D:\projects\mcoode\packages\web\e2e\components.spec.js:52:39
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\components-Testimonials-Co-c5977-estimonials-section-renders-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\components-Testimonials-Co-c5977-estimonials-section-renders-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\components-Testimonials-Co-c5977-estimonials-section-renders-chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator:  locator('section').last()
+    Expected: visible
+    Received: hidden
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeVisible" locator('section').last() with timeout 5000ms
+      - waiting for locator('section').last()
+        12 × locator resolved to <section tabindex="-1" aria-live="polite" aria-atomic="false" aria-relevant="additions text" aria-label="Notifications alt+T" data-react-aria-top-layer="true"></section>
+           - unexpected value "hidden"
+
+
+      50 |   test('testimonials section renders', async ({ page }) => {
+      51 |     const testimonials = page.locator('section');
+    > 52 |     await expect(testimonials.last()).toBeVisible();
+         |                                       ^
+      53 |   });
+      54 | });
+      55 |
+        at D:\projects\mcoode\packages\web\e2e\components.spec.js:52:39
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\components-Testimonials-Co-c5977-estimonials-section-renders-chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\components-Testimonials-Co-c5977-estimonials-section-renders-chromium-retry1\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\components-Testimonials-Co-c5977-estimonials-section-renders-chromium-retry1\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\components-Testimonials-Co-c5977-estimonials-section-renders-chromium-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\components-Testimonials-Co-c5977-estimonials-section-renders-chromium-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[123/158] [chromium] › e2e\components.spec.js:65:3 › AIChatPage IDE Components › ModelSelector renders
+[124/158] [chromium] › e2e\components.spec.js:72:3 › AIChatPage IDE Components › TerminalPane renders
+[125/158] [chromium] › e2e\components.spec.js:79:3 › AIChatPage IDE Components › StepCard / StepCards render with motion animations
+[126/158] [chromium] › e2e\components.spec.js:86:3 › AIChatPage IDE Components › PermissionModal uses useFlashOnMount when shown
+[127/158] [chromium] › e2e\components.spec.js:93:3 › AIChatPage IDE Components › WaveProgress component exists in DOM for god mode
+[128/158] [chromium] › e2e\components.spec.js:110:3 › SparkleButton Component › sparkle button dropdown trigger is motion.button
+[129/158] [chromium] › e2e\landing.spec.js:8:3 › LandingPage (/) › page loads without errors
+[130/158] [chromium] › e2e\landing.spec.js:14:3 › LandingPage (/) › hero section renders with headline
+[131/158] [chromium] › e2e\landing.spec.js:19:3 › LandingPage (/) › hero has Get Started CTA button (motion.button)
+[132/158] [chromium] › e2e\landing.spec.js:26:3 › LandingPage (/) › features section renders
+[133/158] [chromium] › e2e\landing.spec.js:31:3 › LandingPage (/) › footer renders with links
+[134/158] [chromium] › e2e\landing.spec.js:36:3 › LandingPage (/) › navigation links work
+[135/158] [chromium] › e2e\landing.spec.js:43:3 › LandingPage (/) › hero elements have Framer Motion transform style
+[136/158] [chromium] › e2e\landing.spec.js:55:3 › AILandingPage (/ai) › page loads without errors
+[137/158] [chromium] › e2e\landing.spec.js:59:3 › AILandingPage (/ai) › AI hero section renders
+[138/158] [chromium] › e2e\landing.spec.js:64:3 › AILandingPage (/ai) › AI chat preview renders
+[139/158] [chromium] › e2e\landing.spec.js:69:3 › AILandingPage (/ai) › navigation to /ai/chat via CTA
+[140/158] [chromium] › e2e\landing.spec.js:76:3 › AILandingPage (/ai) › hero elements have Framer Motion animations
+[141/158] [chromium] › e2e\landing.spec.js:87:3 › CLIPage (/cli) › page loads without errors
+[142/158] [chromium] › e2e\landing.spec.js:91:3 › CLIPage (/cli) › CLI hero section renders
+[143/158] [chromium] › e2e\landing.spec.js:96:3 › CLIPage (/cli) › CLI demo preview renders
+[144/158] [chromium] › e2e\landing.spec.js:101:3 › CLIPage (/cli) › download/install CTA visible
+[145/158] [chromium] › e2e\landing.spec.js:106:3 › CLIPage (/cli) › hero elements have Framer Motion animations
+[146/158] [chromium] › e2e\settings-models.spec.js:25:3 › Settings → Model settings (ApiKeysTab) › providers sidebar renders with search
+[147/158] [chromium] › e2e\settings-models.spec.js:30:3 › Settings → Model settings (ApiKeysTab) › all providers have models available from static catalog
+[148/158] [chromium] › e2e\settings-models.spec.js:46:3 › Settings → Model settings (ApiKeysTab) › model selection with gradient border
+[149/158] [chromium] › e2e\settings-models.spec.js:68:3 › Settings → Model settings (ApiKeysTab) › model selection persists across provider switches
+[150/158] [chromium] › e2e\settings-models.spec.js:100:3 › Settings → Model settings (ApiKeysTab) › no hardcoded Z.ai promotion button in sidebar
+[151/158] [chromium] › e2e\settings-models.spec.js:117:3 › Settings → Model settings (ApiKeysTab) › save button sends model field
+[152/158] [chromium] › e2e\settings-models.spec.js:130:3 › Settings → Model settings (ApiKeysTab) › provider search filters the list
+[153/158] [chromium] › e2e\settings-models.spec.js:159:3 › Settings → Usage stats (UsageTab) › usage stats tab loads with real data (not mock)
+[154/158] [chromium] › e2e\settings-models.spec.js:168:3 › Settings → Usage stats (UsageTab) › usage stats shows loading state then data
+[155/158] [chromium] › e2e\settings-models.spec.js:186:3 › Settings → Usage stats (UsageTab) › time range selector works
+[156/158] [chromium] › e2e\settings-models.spec.js:199:3 › Settings → Usage stats (UsageTab) › heatmap renders with real data
+[157/158] [chromium] › e2e\settings-models.spec.js:209:3 › Settings → Usage stats (UsageTab) › tokens per day bar chart renders with real data
+[158/158] [chromium] › e2e\settings-models.spec.js:219:3 › Settings → Usage stats (UsageTab) › model usage donut chart renders with real data
+[159/158] [chromium] › e2e\settings.spec.js:8:3 › SettingsPage (/settings) › page loads without errors
+[160/158] [chromium] › e2e\settings.spec.js:13:3 › SettingsPage (/settings) › page has tab navigation
+[161/158] [chromium] › e2e\settings.spec.js:21:3 › SettingsPage (/settings) › at least 4 settings tabs visible
+[162/158] [chromium] › e2e\settings.spec.js:28:3 › SettingsPage (/settings) › God-Mode tab exists and is clickable
+[163/158] [chromium] › e2e\settings.spec.js:35:3 › SettingsPage (/settings) › all action buttons are motion.button
+[164/158] [chromium] › e2e\settings.spec.js:43:3 › SettingsPage (/settings) › toggle switches exist for god-mode/skip-tests
+[165/158] [chromium] › e2e\settings.spec.js:52:3 › SettingsPage (/settings) › accent color selector buttons exist
+[166/158] [chromium] › e2e\terminal-check.spec.ts:4:3 › Terminal check › terminal receives terminal:write events
+[chromium] › e2e\terminal-check.spec.ts:4:3 › Terminal check › terminal receives terminal:write events
+PAGE ERR: Failed to load resource: the server responded with a status of 404 (Not Found)
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Failed to load models: AxiosError: Request failed with status code 500
+    at e0 (http://localhost:3000/_next/static/chunks/0hbbfyoab_-qm.js:1:23714)
+    at XMLHttpRequest.b (http://localhost:3000/_ne
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Error fetching chats: AxiosError: Request failed with status code 500
+    at e0 (http://localhost:3000/_next/static/chunks/0hbbfyoab_-qm.js:1:23714)
+    at XMLHttpRequest.b (http://localhost:3000/_nex
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: AxiosError: Request failed with status code 500
+    at e0 (http://localhost:3000/_next/static/chunks/0hbbfyoab_-qm.js:1:23714)
+    at XMLHttpRequest.b (http://localhost:3000/_next/static/chunks/0hbbfy
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Error fetching workspaces: AxiosError: Request failed with status code 500
+    at e0 (http://localhost:3000/_next/static/chunks/0hbbfyoab_-qm.js:1:23714)
+    at XMLHttpRequest.b (http://localhost:3000
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Error fetching github status: AxiosError: Request failed with status code 500
+    at e0 (http://localhost:3000/_next/static/chunks/0hbbfyoab_-qm.js:1:23714)
+    at XMLHttpRequest.b (http://localhost:3
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+Placeholder visible before write: 0
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+Placeholder visible after write: 0
+
+Terminal text check: {
+  "found": false
+}
+
+Has helper textarea: false
+
+Terminal dimensions: {"found":false}
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+PAGE ERR: WebSocket connection to 'ws://localhost:3100/live/?EIO=4&transport=websocket' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED
+
+  8 failed
+    [chromium] › e2e\advanced-mode.spec.js:67:3 › AI Code Assistant + AI Code Editor Tab › 3. Switching to AI Code Editor tab shows IDE layout 
+    [chromium] › e2e\advanced-mode.spec.js:107:3 › AI Code Assistant + AI Code Editor Tab › 5. AI Code Assistant tab + God Mode shows wave progress component 
+    [chromium] › e2e\chat-flow.spec.js:15:3 › AIChatPage → Slash Commands › typing / shows command picker 
+    [chromium] › e2e\chat-flow.spec.js:52:3 › AIChatPage → Slash Commands › /clear command clears the chat 
+    [chromium] › e2e\chat-flow.spec.js:64:3 › AIChatPage → Slash Commands › /god command without args shows usage hint 
+    [chromium] › e2e\chat-flow.spec.js:76:3 › AIChatPage → Slash Commands › slash commands work in Chat tab (not just empty state) 
+    [chromium] › e2e\chat-search-real.spec.js:15:3 › Chat Mode — Real Search Flow › Search query triggers web_search and renders ZCode-style SearchResultBlock animations 
+    [chromium] › e2e\components.spec.js:50:3 › Testimonials Component › testimonials section renders 
+  150 passed (11.4m)

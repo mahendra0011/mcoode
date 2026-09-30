@@ -169,7 +169,8 @@ export interface Subagent {
   model?: string;
   title?: string;
   startedAt?: string;
-  tokens?: number;
+  /** Token counter — CLI sends `{ in, out }` from SUBAGENT_STARTED/STEP. */
+  tokens?: number | { in?: number; out?: number };
   latency?: number;
   secs?: number;
   lastFile?: string;
@@ -177,6 +178,8 @@ export interface Subagent {
   lastToolArgs?: unknown;
   lastToolResult?: { tool?: string; ms?: number; risk?: string };
   reviewReason?: string;
+  /** Failure text from `agent:failed` / `subagent:failed`. */
+  error?: string;
 }
 /**
  * The `build:complete` payload the CLI emits (`SubagentManager._emitBuildComplete`).
@@ -418,6 +421,31 @@ export const initialState: ChatState = {
   },
   audit: null,
 };
+
+/**
+ * WEB-032/WEB-034: subagent reducers used to silently drop any event whose
+ * entry did not exist yet (`if (p.todoId && state.subagents[p.todoId])`).
+ * Events arrive in bursts and can be re-ordered or replayed after a socket
+ * reconnect, so `step`/`done`/`file` could land before `started` and vanish.
+ * Every subagent reducer now goes through this helper, which creates the row
+ * on first sight and returns null only for payloads with no todoId at all.
+ */
+function ensureSubagent(state: ChatState, p: any): Subagent | null {
+  if (p?.todoId == null || p.todoId === 'undefined') return null;
+  const key = String(p.todoId);
+  if (!state.subagents[key]) {
+    state.subagents[key] = {
+      todoId: key,
+      domain: p.domain,
+      status: 'pending',
+      message: '',
+      progress: 0,
+    };
+  } else if (p.domain && !state.subagents[key].domain) {
+    state.subagents[key].domain = p.domain;
+  }
+  return state.subagents[key];
+}
 
 const chatSlice = createSlice({
   name: 'chat',
@@ -792,104 +820,115 @@ const chatSlice = createSlice({
     },
     setSubagentCreated: (state, action) => {
       const p = action.payload || {};
-      state.subagents[p.todoId] = {
-        todoId: p.todoId,
-        domain: p.domain,
-        status: 'pending',
-        message: '',
-        progress: 0
-      };
+      const entry = ensureSubagent(state, p);
+      if (entry) entry.status = 'pending';
     },
     setSubagentAssigned: (state, action) => {
       const p = action.payload || {};
-      if (p.todoId && state.subagents[p.todoId]) {
-        state.subagents[p.todoId].status = 'assigned';
-        state.subagents[p.todoId].model = p.model;
-        state.subagents[p.todoId].title = p.title;
+      const entry = ensureSubagent(state, p);
+      if (entry) {
+        entry.status = 'assigned';
+        if (p.model) entry.model = p.model;
+        if (p.title) entry.title = p.title;
       }
     },
     setSubagentStarted: (state, action) => {
       const p = action.payload || {};
-      if (!state.subagents[p.todoId]) {
-        state.subagents[p.todoId] = {
-          todoId: p.todoId,
-          domain: p.domain,
-          status: 'running',
-          message: '',
-          progress: 0
-        };
-      } else {
-        state.subagents[p.todoId].status = 'running';
-      }
-      state.subagents[p.todoId].startedAt = p.startedAt;
-      state.subagents[p.todoId].tokens = p.tokens;
-      state.subagents[p.todoId].latency = p.latency;
+      const entry = ensureSubagent(state, p);
+      if (!entry) return;
+      entry.status = 'running';
+      // The wire payload (SUBAGENT_STARTED from subagent.js) carries model,
+      // title and domain as well — capture them here so a `started` event that
+      // arrives without its `assigned` sibling still renders a complete row.
+      if (p.model) entry.model = p.model;
+      if (p.title) entry.title = p.title;
+      entry.startedAt = p.startedAt;
+      entry.tokens = p.tokens;
+      entry.latency = p.latency;
     },
     setSubagentStep: (state, action) => {
       const p = action.payload || {};
-      if (p.todoId && state.subagents[p.todoId]) {
-        state.subagents[p.todoId].message = p.message || state.subagents[p.todoId].message;
-        if (p.tokens != null) state.subagents[p.todoId].tokens = p.tokens;
-        if (p.secs != null) state.subagents[p.todoId].secs = p.secs;
-      }
+      const entry = ensureSubagent(state, p);
+      if (!entry) return;
+      entry.message = p.message || entry.message;
+      if (p.tokens != null) entry.tokens = p.tokens;
+      if (p.secs != null) entry.secs = p.secs;
     },
     setSubagentDone: (state, action) => {
       const p = action.payload || {};
-      if (p.todoId && state.subagents[p.todoId]) {
-        state.subagents[p.todoId].status = 'done';
-        state.subagents[p.todoId].progress = 100;
-      }
+      const entry = ensureSubagent(state, p);
+      if (!entry) return;
+      entry.status = 'done';
+      entry.progress = 100;
     },
     setSubagentFailed: (state, action) => {
       const p = action.payload || {};
-      if (p.todoId && state.subagents[p.todoId]) {
-        state.subagents[p.todoId].status = 'failed';
-      }
+      const entry = ensureSubagent(state, p);
+      if (!entry) return;
+      entry.status = 'failed';
+      if (p.error) entry.error = p.error;
     },
     setSubagentFile: (state, action) => {
       const p = action.payload || {};
-      if (p.todoId && state.subagents[p.todoId]) {
-        state.subagents[p.todoId].lastFile = p.file;
-      }
+      const entry = ensureSubagent(state, p);
+      if (entry) entry.lastFile = p.file;
     },
     setSubagentToolCall: (state, action) => {
       const p = action.payload || {};
-      if (p.todoId && state.subagents[p.todoId]) {
-        state.subagents[p.todoId].lastTool = p.tool;
-        state.subagents[p.todoId].lastToolArgs = p.args;
+      const entry = ensureSubagent(state, p);
+      if (entry) {
+        entry.lastTool = p.tool;
+        entry.lastToolArgs = p.args;
       }
     },
     setSubagentToolResult: (state, action) => {
       const p = action.payload || {};
-      if (p.todoId && state.subagents[p.todoId]) {
-        state.subagents[p.todoId].lastToolResult = { tool: p.tool, ms: p.ms, risk: p.risk };
-      }
+      const entry = ensureSubagent(state, p);
+      if (entry) entry.lastToolResult = { tool: p.tool, ms: p.ms, risk: p.risk };
     },
     setSubagentNeedsReview: (state, action) => {
       const p = action.payload || {};
-      if (p.todoId && state.subagents[p.todoId]) {
-        state.subagents[p.todoId].status = 'needs_review';
-        state.subagents[p.todoId].reviewReason = p.reason;
+      const entry = ensureSubagent(state, p);
+      if (entry) {
+        entry.status = 'needs_review';
+        entry.reviewReason = p.reason;
       }
     },
+    // WEB-033: the wire payload is `{ wave, totalWaves, todos: [{ id, domain,
+    // title }] }` (SubagentManager, packages/cli/src/core/subagent-manager.js) —
+    // there is no `total` and no `subagentIds` field. The reducer used to read
+    // `p.total || 0`, so every wave rendered as “Wave N · 0/0” at 0% forever.
+    // Derive both fields from the real todo list, while still honouring an
+    // explicit `total`/`subagentIds` if a future producer adds them.
     setWaveStart: (state, action) => {
       const p = action.payload || {};
       if (p.projectTier !== undefined) state.projectTier = p.projectTier;
       if (p.concurrency !== undefined) state.concurrency = p.concurrency;
-      state.waves.push({
+      const todos: Array<{ id?: string | number }> = Array.isArray(p.todos) ? p.todos : [];
+      const entry: Wave = {
         wave: p.wave,
-        total: p.total || 0,
+        total: p.total ?? todos.length,
         completed: 0,
         status: 'running',
-        subagentIds: p.subagentIds
-      });
+        subagentIds: p.subagentIds ?? todos.map((t) => String(t.id)).filter((id) => id && id !== 'undefined')
+      };
+      // Re-running god mode in the same chat must not stack duplicate wave rows.
+      const existing = state.waves.findIndex((w) => w.wave === p.wave);
+      if (existing >= 0) state.waves[existing] = entry;
+      else state.waves.push(entry);
     },
     setWaveComplete: (state, action) => {
       const p = action.payload || {};
       const wave = state.waves.find((w) => w.wave === p.wave);
       if (wave) {
         wave.status = 'complete';
-        wave.completed = p.completed || wave.total;
+        // Wire payload for completion is `{ wave, totalWaves, todos: [{...,
+        // status }] }` — `p.completed` never exists, and falling back to
+        // `wave.total` (0 before WEB-033) froze the bar at 0%. Count the real
+        // per-todo statuses instead.
+        const todos: Array<{ status?: string }> = Array.isArray(p.todos) ? p.todos : [];
+        const doneCount = todos.filter((t) => t.status === 'done').length;
+        wave.completed = p.completed ?? (todos.length > 0 ? doneCount : wave.total);
       }
     },
     setIntegrationPass: (state, action) => {

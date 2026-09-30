@@ -1,0 +1,656 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/projects/mcoode[39m
+
+ [32m✓[39m packages/web/tests/socket-contract.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 2261[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22msubscribes only to events the backend can emit [33m880[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22mlists every unreachable subscription in KNOWN_UNWIRED [33m545[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22monly subscribes to `subagent:*` names that chat-session.js really forwards (WEB-032) [33m771[2mms[22m[39m
+ [32m✓[39m packages/web/tests/god-mode-event-parity.test.js [2m([22m[2m7 tests[22m[2m)[22m[90m 180[2mms[22m[39m
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/security-checkup.test.js [2m([22m[2m12 tests[22m[2m)[22m[33m 1000[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/test-mode.test.js [2m([22m[2m17 tests[22m[2m)[22m[33m 1988[2mms[22m[39m
+   [33m[2m✓[22m[39m Test Mode (doc 48) — autonomous self-healing testing agent[2m > [22mStep 2 — feature inventory[2m > [22mbuildFeatureInventory falls back to heuristic when no router is available [33m782[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/subagent.test.js [2m([22m[2m8 tests[22m[2m)[22m[90m 203[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/slash-commands.test.js [2m([22m[2m13 tests[22m[2m)[22m[33m 1018[2mms[22m[39m
+   [33m[2m✓[22m[39m Slash Commands Parity & Execution (Doc 01–53)[2m > [22mexecutes every single command in AI Code Assistant without throwing [33m675[2mms[22m[39m
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/undo-thread.test.js [2m([22m[2m10 tests[22m[2m)[22m[33m 6184[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22mwrite_file returns an undoId and edit_file returns a different undoId [33m578[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22mUndoStack.undo(id) reverts the specific snapshot and returns the file [33m640[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22mUndoStack.undo() with no id falls back to LIFO (most recent) [33m431[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22mUndoStack.undo(unknownId) returns null instead of reverting another file (TOOL-003) [33m444[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22mOrchestrator.undo(id) accepts and passes id parameter [33m3559[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/mf-cost-plan-conflicts.test.js [2m([22m[2m15 tests[22m[2m)[22m[33m 4347[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-002 cost attribution + budget ceiling[2m > [22maborts the run cleanly after the wave in flight and keeps a resumable checkpoint [33m1136[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-004 writer audit + conflicts[2m > [22mresolveOverlaps rolls back the later write when asked to keep the first [33m1202[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-004 writer audit + conflicts[2m > [22mToolExecutor notifies the writer audit on write_file and edit_file [33m562[2mms[22m[39m
+ [32m✓[39m packages/web/tests/provider-catalog.test.js [2m([22m[2m4 tests[22m[2m)[22m[33m 1332[2mms[22m[39m
+   [33m[2m✓[22m[39m provider catalog does not drift from the CLI (WEB-029)[2m > [22mthere is exactly ONE fallback provider list in src [33m1285[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/audit-mode.test.js [2m([22m[2m11 tests[22m[2m)[22m[33m 3269[2mms[22m[39m
+   [33m[2m✓[22m[39m Audit Mode (Doc 52)[2m > [22mPerformance Scan (Doc 52 — zero AI calls)[2m > [22mdetects missing indexes in schema files [33m661[2mms[22m[39m
+   [33m[2m✓[22m[39m Audit Mode (Doc 52)[2m > [22mCode Quality Scan[2m > [22mdetects static code smells like empty catch blocks and debugger statements [33m373[2mms[22m[39m
+   [33m[2m✓[22m[39m Audit Mode (Doc 52)[2m > [22mPDF Report & Markdown Report generation[2m > [22mgenerates a PDF file via generateAuditPDF [33m1372[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/migrate.test.js [2m([22m[2m13 tests[22m[2m)[22m[33m 5597[2mms[22m[39m
+   [33m[2m✓[22m[39m Migrate Mode (doc 51)[2m > [22mFull Migration Workflow (runMigrate)[2m > [22mexecutes the full migrate lifecycle [33m4832[2mms[22m[39m
+ [32m✓[39m packages/shared/tests/events.test.js [2m([22m[2m10 tests[22m[2m)[22m[90m 89[2mms[22m[39m
+[
+  {
+    "name": "tool",
+    "enabled": true,
+    "version": "1.1.0",
+    "registry": "https://reg.test/registry.json",
+    "installedAt": "2026-09-29T21:21:43.703Z"
+  }
+]
+ [32m✓[39m packages/cli/tests/plugin-registry.test.js [2m([22m[2m22 tests[22m[2m)[22m[33m 9787[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 registry loading (cache + offline)[2m > [22mfetches remotely, caches for 24h and then serves from cache [33m343[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22minstalls a remote plugin, records provenance and persists the config [33m487[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22mrefuses an entry whose integrity does not match [33m665[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22mrefuses a remote entry with no integrity at all [33m651[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22mrefuses an entry that needs a newer CLI [33m610[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22mfails loudly for an unknown plugin name [33m1469[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22minstalls from the bundled catalog offline and records bundled provenance [33m948[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22mhonours an explicit version range [33m1422[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22mplugin upgrade re-resolves the recorded registry and installs a newer version [33m2355[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/clean.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 1553[2mms[22m[39m
+   [33m[2m✓[22m[39m Clean Mode — Dead Code + AI-Bloat Detection (Doc 55)[2m > [22mtier 1: findDeadCode scans and returns structured findings [33m485[2mms[22m[39m
+   [33m[2m✓[22m[39m Clean Mode — Dead Code + AI-Bloat Detection (Doc 55)[2m > [22mrunClean snapshots behavior, executes fixes, and checks equivalence [33m930[2mms[22m[39m
+ [32m✓[39m packages/web/tests/no-dead-utilities.test.js [2m([22m[2m2 tests[22m[2m)[22m[90m 204[2mms[22m[39m
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mforwards CLI events to authenticated web clients
+[22m[39m[SOCKET] connection: qsdEdF9lE4-CJ52mAAAA role: listener url: /live/?EIO=4&transport=polling&t=6lz74ga2
+
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mforwards CLI events to authenticated web clients
+[22m[39m[SOCKET] connection: 4vo7ECV9zG55snvgAAAB role: emitter url: /live/?EIO=4&transport=polling&t=6lzdye01
+
+ [31m❯[39m packages/cli/tests/init-templates.test.js [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 9361[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-008 init template hygiene[2m > [22mevery template ships a .gitignore that ignores .env and node_modules [33m341[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-008 init template hygiene[2m > [22mserver templates enable helmet + cors + rate limiting by default [33m637[2mms[22m[39m
+[31m   [31m×[31m MF-008 init template hygiene[2m > [22mapplyTemplate writes .gitignore + .env.example into a fresh project[33m 5128[2mms[22m[31m[39m
+[31m     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+   [33m[2m✓[22m[39m MF-008 init template hygiene[2m > [22ma pre-existing .gitignore is never clobbered by the safety net [33m1969[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-008 init template hygiene[2m > [22mapplyTemplate copies the template .gitignore verbatim (safety net unused) [33m774[2mms[22m[39m
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mforwards build:complete to web clients
+[22m[39m[SOCKET] connection: 6-s4As7LdicXdH3zAAAC role: listener url: /live/?EIO=4&transport=polling&t=6m0iaf3i
+[SOCKET] connection: Db_Oc07A5_D3EPAkAAAD role: emitter url: /live/?EIO=4&transport=polling&t=6m0igswm
+
+ [32m✓[39m packages/web/tests/wave-payload.test.js [2m([22m[2m7 tests[22m[2m)[22m[90m 236[2mms[22m[39m
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mforwards watch events to web clients
+[22m[39m[SOCKET] connection: xrpm4-sYZ6igm49vAAAE role: listener url: /live/?EIO=4&transport=polling&t=6m0utmpa
+[SOCKET] connection: Kt_9kq1nu1wBKQjEAAAF role: emitter url: /live/?EIO=4&transport=polling&t=6m0uvruv
+
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mallows CLI emitters that present the shared secret
+[22m[39m[SOCKET] connection: HlJTglGKdBxeeaQHAAAH role: emitter url: /live/?EIO=4&transport=polling&t=6m1hon4z
+
+[90mstderr[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mrejects sockets with no token and no CLI secret
+[22m[39m[SOCKET] rejected: no token and missing/invalid CLI_SHARED_SECRET
+
+[90mstderr[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mrejects sockets presenting an incorrect CLI secret
+[22m[39m[SOCKET] rejected: no token and missing/invalid CLI_SHARED_SECRET
+
+ [32m✓[39m packages/backend/tests/sockets.test.js [2m([22m[2m9 tests[22m[2m)[22m[33m 4289[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mforwards CLI events to authenticated web clients [33m1832[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mforwards build:complete to web clients [33m454[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mforwards watch events to web clients [33m489[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mrejects sockets with an invalid token [33m336[2mms[22m[39m
+ [32m✓[39m packages/backend/tests/migrate-key-enc.test.js [2m([22m[2m7 tests[22m[2m)[22m[33m 13441[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mdry-run reports rotation but writes nothing (no DB write, no backup file) [33m2923[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mapply: backs up ORIGINAL blobs, then rewrites v1 → v2 verifiably [33m3513[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mskips rows already on the current keyId (idempotent second run) [33m494[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mrotates GithubAccount accessToken rows too [33m3706[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mleaves undecryptable rows untouched and reports them as failures [33m528[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mfails closed on unknown keyId (rotation key not in keyring) [33m512[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mclassifies blob formats via parseKeyId (v1 vs v2) [33m1598[2mms[22m[39m
+ [31m❯[39m packages/cli/tests/session-resume.test.js [2m([22m[2m15 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 12869[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 checkpoint + resume (mock provider)[2m > [22mcheckpoints at every wave boundary and ends with status=completed [33m1863[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 checkpoint + resume (mock provider)[2m > [22ma fresh run dispatches every todo (baseline for the resume comparison) [33m317[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 checkpoint + resume (mock provider)[2m > [22ma resumed run only writes the remaining todos (real subagents) [33m328[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 session checkpoint store[2m > [22mtreats a corrupt state file as "no session" instead of crashing [33m906[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 session checkpoint store[2m > [22mrefuses a state written by a newer CLI without breaking the listing [33m1101[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 session checkpoint store[2m > [22mlists sessions newest first [33m963[2mms[22m[39m
+[31m   [31m×[31m MF-001 session checkpoint store[2m > [22mresolves resume targets by id, unique prefix, path and current project[33m 5049[2mms[22m[31m[39m
+[31m     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+   [33m[2m✓[22m[39m MF-001 session checkpoint store[2m > [22mreverts the files an interrupted subagent wrote [33m1043[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 interrupted runs[2m > [22mretries a todo that was mid-flight at crash time [33m546[2mms[22m[39m
+[90mstderr[2m | packages/cli/tests/planner.test.js[2m > [22m[2mparsePlanOutput[2m > [22m[2mnormalizes todos via normalizePlan
+[22m[39m[plan] Todo t1 has unknown domain "invalid" — defaulting to "backend".
+
+ [32m✓[39m packages/cli/tests/planner.test.js [2m([22m[2m11 tests[22m[2m)[22m[90m 271[2mms[22m[39m
+ [32m✓[39m packages/backend/tests/pair.test.js [2m([22m[2m18 tests[22m[2m)[22m[33m 11700[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mround-trips v2 blobs under the dedicated secret [33m979[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mkeeps legacy v1 blobs readable and flags them for rotation [33m2137[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mbinds v2 ciphertext to the owner via AAD (wrong user fails) [33m804[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mreads jwt1 fallback blobs written without a dedicated secret [33m939[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22msupports rotation via a previous-secret keyring entry [33m1390[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mrejects unknown keyIds with an actionable error [33m678[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mkeyManagerFromEnv prefers explicit options over env, and env over nothing [33m2198[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mv2 decrypt rejects tampered blobs [33m1032[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mlegacy v1 round-trip stays byte-compatible [33m1461[2mms[22m[39m
+ [32m✓[39m packages/web/tests/no-silent-catches.test.js [2m([22m[2m2 tests[22m[2m)[22m[33m 2060[2mms[22m[39m
+   [33m[2m✓[22m[39m no silent catches (WEB-015)[2m > [22mhas no new empty catch blocks [33m997[2mms[22m[39m
+   [33m[2m✓[22m[39m no silent catches (WEB-015)[2m > [22mhas not left stale entries in the baseline [33m1052[2mms[22m[39m
+ [32m✓[39m packages/shared/tests/provider.test.js [2m([22m[2m17 tests[22m[2m)[22m[90m 264[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/orchestrator.test.js [2m([22m[2m18 tests[22m[2m)[22m[90m 291[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/techstack.test.js [2m([22m[2m11 tests[22m[2m)[22m[90m 225[2mms[22m[39m
+ [32m✓[39m packages/shared/tests/plan.test.js [2m([22m[2m11 tests[22m[2m)[22m[90m 169[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/subagent-manager.test.js [2m([22m[2m10 tests[22m[2m)[22m[33m 352[2mms[22m[39m
+ [32m✓[39m packages/web/tests/chat-icons.test.js [2m([22m[2m17 tests[22m[2m)[22m[90m 291[2mms[22m[39m
+[90mstderr[2m | packages/cli/tests/config-validation.test.js[2m > [22m[2mMF-007 config validation (isolated HOME)[2m > [22m[2mkeeps last-good config when the file becomes schema-invalid
+[22m[39m[config] ⚠️  config.json failed schema validation — keeping last-known-good config. Issues: Invalid config: concurrency: Too small: expected number to be >0. Run `mcode config validate` for details.
+
+ [32m✓[39m packages/shared/tests/index.test.js [2m([22m[2m12 tests[22m[2m)[22m[33m 1527[2mms[22m[39m
+   [33m[2m✓[22m[39m CostLedger[2m > [22mpersists and reloads rpm/tpm via save/load [33m1275[2mms[22m[39m
+[90mstderr[2m | packages/cli/tests/config-validation.test.js[2m > [22m[2mMF-007 config validation (isolated HOME)[2m > [22m[2mkeeps last-good config when the file is not valid JSON
+[22m[39m[config] ⚠️  config.json is not valid JSON (Expected property name or '}' in JSON at position 2 (line 1 column 3)) — keeping last-known-good config. Run `mcode config validate` for details.
+
+✗ config.json failed schema validation: Invalid config: concurrency: Too small: expected number to be >0
+ [32m✓[39m packages/web/tests/electron-bridge-removed.test.js [2m([22m[2m3 tests[22m[2m)[22m[33m 1435[2mms[22m[39m
+   [33m[2m✓[22m[39m the deleted Electron bridge stays deleted (WEB-027)[2m > [22mhas no executable mcodeElectron reference in src [33m855[2mms[22m[39m
+   [33m[2m✓[22m[39m the deleted Electron bridge stays deleted (WEB-027)[2m > [22mhas no import of the deleted electron-nav module [33m537[2mms[22m[39m
+ [32m✓[39m packages/web/tests/chat-processing-colors.test.js [2m([22m[2m8 tests[22m[2m)[22m[90m 135[2mms[22m[39m
+[
+  {
+    "name": "Node.js",
+    "value": "v24.16.0",
+    "status": "ok"
+  },
+  {
+    "name": "mcode version",
+    "value": "2.4.6",
+    "status": "ok"
+  },
+  {
+    "name": "Config",
+    "value": "~/.mcode/config.json",
+    "status": "present"
+  },
+  {
+    "name": "Config schema",
+    "value": "schema error: Invalid config: concurrency: Too small: expected number to be >0",
+    "status": "warn"
+  },
+  {
+    "name": "Vault",
+    "value": "~/.mcode/vault.json.enc",
+    "status": "empty (use mcode env add)"
+  },
+  {
+    "name": "OPENROUTER_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "OPENCODE_ZEN_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "OPENAI_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "ANTHROPIC_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "GOOGLE_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "GROQ_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "TOGETHER_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "MISTRAL_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "COHERE_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "DEEPSEEK_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "XAI_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "FIREWORKS_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "PERPLEXITY_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "CEREBRAS_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "NOVITA_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "HUGGINGFACE_API_KEY",
+    "value": "not set",
+    "status": "warn"
+  },
+  {
+    "name": "provider:ollama",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:lmstudio",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:lemonade",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:llamafile",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:vllm",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:atomic_chat",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:anaconda",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:llamacpp",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:localai",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:xinference",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:jan",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:gpt4all",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:koboldcpp",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:oobabooga",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:tgi",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:aphrodite",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:tensorrt",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:sglang",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:lmdeploy",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:mlx",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:llamaedge",
+    "value": "unavailable",
+    "status": "warn"
+  },
+  {
+    "name": "provider:mock",
+    "value": "ready (1 models)",
+    "status": "ok"
+  },
+  {
+    "name": "spend (lifetime)",
+    "value": "no recorded usage yet (runs a god build first)",
+    "status": "ok"
+  },
+  {
+    "name": "budget / run",
+    "value": "not set — use --max-cost <usd> or cost.budgetPerRunUsd in config",
+    "status": "ok"
+  }
+]
+ [32m✓[39m packages/cli/tests/config-validation.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 4921[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-007 config validation (isolated HOME)[2m > [22mkeeps last-good config when the file becomes schema-invalid [33m2374[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-007 config validation (isolated HOME)[2m > [22mconfig validate reports schema errors with exit code 1 [33m419[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-007 config validation (isolated HOME)[2m > [22mdoctor surfaces a config-schema row [33m1552[2mms[22m[39m
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/modes.test.js [2m([22m[2m11 tests[22m[2m)[22m[90m 128[2mms[22m[39m
+[vault] could not decrypt vault (Unsupported state or unable to authenticate data) — treating as empty
+ [32m✓[39m packages/cli/tests/hooks.test.js [2m([22m[2m8 tests[22m[2m)[22m[33m 353[2mms[22m[39m
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/explain.test.js [2m([22m[2m3 tests[22m[2m)[22m[33m 491[2mms[22m[39m
+[vault] could not decrypt vault (Unsupported state or unable to authenticate data) — treating as empty
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/review.test.js [2m([22m[2m3 tests[22m[2m)[22m[33m 574[2mms[22m[39m
+[vault] could not decrypt vault (vault too short) — treating as empty
+[vault] existing vault undecryptable — moved to C:\Users\mahen\AppData\Local\Temp\mcode-vault-test-kzRAQC\.mcode\vault.json.enc.corrupt-1790716929594 (vault too short)
+ [32m✓[39m packages/cli/tests/chat-agent-parsing.test.js [2m([22m[2m10 tests[22m[2m)[22m[33m 317[2mms[22m[39m
+✓ TEST_KEY_ABC stored in encrypted vault (~/.mcode/vault.json.enc)
+ [32m✓[39m packages/cli/tests/version.test.js [2m([22m[2m2 tests[22m[2m)[22m[33m 1034[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-006 CLI version[2m > [22mno CLI source file hardcodes the current version literal [33m990[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/vault.test.js [2m([22m[2m7 tests[22m[2m)[22m[33m 18021[2mms[22m[39m
+   [33m[2m✓[22m[39m vault roundtrip (isolated HOME)[2m > [22mround-trips secrets encrypted [33m5483[2mms[22m[39m
+   [33m[2m✓[22m[39m vault roundtrip (isolated HOME)[2m > [22mdeletes keys [33m3923[2mms[22m[39m
+   [33m[2m✓[22m[39m vault roundtrip (isolated HOME)[2m > [22mfails closed on wrong passphrase [33m2440[2mms[22m[39m
+   [33m[2m✓[22m[39m vault roundtrip (isolated HOME)[2m > [22mreads legacy pre-salt vaults [33m2227[2mms[22m[39m
+   [33m[2m✓[22m[39m vault roundtrip (isolated HOME)[2m > [22mbacks up an undecryptable vault on save instead of clobbering [33m3680[2mms[22m[39m
+✓ LIST_ME stored in encrypted vault (~/.mcode/vault.json.enc)
+⚠ .env is NOT in .gitignore — writing a plaintext secret risks committing it. Add ".env" to .gitignore first (continuing anyway).
+✓ PLAIN_KEY written to .env (plaintext, CI mode)
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/shell-sandbox.test.js [2m([22m[2m10 tests[22m[2m)[22m[33m 12380[2mms[22m[39m
+   [33m[2m✓[22m[39m SEC-004 run_shell enforcement[2m > [22mruns allowlisted commands without a shell [33m12238[2mms[22m[39m
+✓ GONE_KEY stored in encrypted vault (~/.mcode/vault.json.enc)
+ [32m✓[39m packages/shared/tests/plugins.test.js [2m([22m[2m5 tests[22m[2m)[22m[90m 115[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/router.test.js [2m([22m[2m4 tests[22m[2m)[22m[33m 616[2mms[22m[39m
+ [32m✓[39m packages/backend/tests/db.test.js [2m([22m[2m4 tests[22m[2m)[22m[90m 278[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/god-e2e-mock.test.js [2m([22m[2m1 test[22m[2m)[22m[33m 4118[2mms[22m[39m
+   [33m[2m✓[22m[39m god pipeline E2E (mock provider)[2m > [22mruns a 2-todo plan to completion and writes files [33m3008[2mms[22m[39m
+✓ GONE_KEY removed
+ [32m✓[39m packages/cli/tests/env-command.test.js [2m([22m[2m4 tests[22m[2m)[22m[33m 10470[2mms[22m[39m
+   [33m[2m✓[22m[39m env command (isolated HOME)[2m > [22mstores in vault by default (never plaintext) [33m1896[2mms[22m[39m
+   [33m[2m✓[22m[39m env command (isolated HOME)[2m > [22mlists keys masked [33m2910[2mms[22m[39m
+   [33m[2m✓[22m[39m env command (isolated HOME)[2m > [22mremove deletes from vault [33m5344[2mms[22m[39m
+ [32m✓[39m packages/shared/tests/domains.test.js [2m([22m[2m3 tests[22m[2m)[22m[90m 50[2mms[22m[39m
+ [32m✓[39m packages/backend/tests/debug-eval.test.js [2m([22m[2m1 test[22m[2m)[22m[33m 2928[2mms[22m[39m
+   [33m[2m✓[22m[39m debug:evaluate via CDP (live debuggee)[2m > [22mevaluates an expression in a real --inspect target [33m2907[2mms[22m[39m
+ [32m✓[39m packages/web/tests/utils.test.js [2m([22m[2m4 tests[22m[2m)[22m[90m 192[2mms[22m[39m
+ [32m✓[39m packages/backend/tests/prompt.test.js [2m([22m[2m4 tests[22m[2m)[22m[90m 52[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/watch-daemon-unit.test.js [2m([22m[2m3 tests[22m[2m)[22m[90m 166[2mms[22m[39m
+• stage 1/4 — build
+⚠ no build script — skipping
+• stage 2/4 — verify
+⚠ no test script — skipping
+• stage 3/4 — tag (env=prod)
+ [32m✓[39m packages/backend/tests/route-policy.test.js [2m([22m[2m10 tests[22m[2m)[22m[33m 378[2mms[22m[39m
+⚠ leaving 1 untracked file(s) unstaged: .env.local
+• staged changes: 1 file(s), +1/-0
+⚠ could not push tag (no remote configured?) — continuing
+✓ tagged v1.0.0-prod
+• stage 4/4 — deploy
+⚠ no deploy target configured — run "mcode add deploy-<netlify|vercel|docker|…>" first. Skipping deploy.
+✓ ship complete (env=prod)
+ [32m✓[39m packages/cli/tests/ship-command.test.js [2m([22m[2m1 test[22m[2m)[22m[33m 21879[2mms[22m[39m
+   [33m[2m✓[22m[39m shipCommand[2m > [22mtags without staging untracked secret files [33m12479[2mms[22m[39m
+{"level":40,"time":1790716972493,"pid":10188,"hostname":"mahendra","msg":"[enc] API_KEY_ENCRYPTION_SECRET not set — API keys are encrypted with the JWT-secret fallback (keyId jwt1). Set a dedicated 32+ char secret for production."}
+{"level":40,"time":1790716973238,"pid":10940,"hostname":"mahendra","msg":"[enc] API_KEY_ENCRYPTION_SECRET not set — API keys are encrypted with the JWT-secret fallback (keyId jwt1). Set a dedicated 32+ char secret for production."}
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js
+[22m[39m[routes] policy: 17 protected · 2 public (/api/v1/auth/github, /api/v1/languages) · public app endpoints: /health /metrics /api/docs /api/v1/version /live
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js
+[22m[39m[env] ❌ Missing required variable: MONGODB_URI
+[env] ⚠️  API_KEY_ENCRYPTION_SECRET is not set — stored provider keys fall back to JWT-secret encryption (keyId jwt1). Set a dedicated 32+ char secret.
+[env] ❌ MONGODB_URI is not set — accounts will NOT be persisted to Atlas.
+[cache] ⚠️  REDIS_URI not set — running in pass-through (no cache) mode.
+[queue] ⚠️  Redis not configured — background jobs disabled.
+[queue]    Set REDIS_URI to enable job queuing (BullMQ).
+[queue] Worker not started for "subagents" — Redis unavailable
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp returns a dev code when SMTP is disabled
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716973072,"pid":10188,"hostname":"mahendra","port":0,"storage":"memory","cache":"passthrough","queue":"disabled","msg":"mcode backend listening"}
+{"level":40,"time":1790716973338,"pid":20604,"hostname":"mahendra","msg":"[enc] API_KEY_ENCRYPTION_SECRET not set — API keys are encrypted with the JWT-secret fallback (keyId jwt1). Set a dedicated 32+ char secret for production."}
+{"level":30,"time":1790716973631,"pid":10188,"hostname":"mahendra","req":{"id":1,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"42","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59255},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"59","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-nwc0Tzbc5t10qAUsQWEZN++v3fM\""}},"responseTime":166,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp returns a dev code when SMTP is disabled
+[22m[39m[mail:disabled] to=new@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp returns a dev code when SMTP is disabled
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716973762,"pid":10188,"hostname":"mahendra","req":{"id":2,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"42","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59258},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"58","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-EuIvLHq/FhcRwCm4O1JSpbRPpMI\""}},"responseTime":17,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp rejects existing emails for signup
+[22m[39m[mail:disabled] to=new@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp rejects existing emails for signup
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716973823,"pid":10188,"hostname":"mahendra","req":{"id":3,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"42","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59260},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"57","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-bp7EgXqUA/arSWNtDGdJAFsBBk4\""}},"responseTime":24,"msg":"request completed"}
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp rejects existing emails for signup
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp rejects existing emails for signup
+[22m[39m[mail:disabled] to=new@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstdout[2m | packages/backend/tests/workspaces-diff.test.js
+[22m[39m[routes] policy: 17 protected · 2 public (/api/v1/auth/github, /api/v1/languages) · public app endpoints: /health /metrics /api/docs /api/v1/version /live
+
+[90mstderr[2m | packages/backend/tests/workspaces-diff.test.js
+[22m[39m[env] ❌ Missing required variable: MONGODB_URI
+[env] ⚠️  API_KEY_ENCRYPTION_SECRET is not set — stored provider keys fall back to JWT-secret encryption (keyId jwt1). Set a dedicated 32+ char secret.
+[env] ❌ MONGODB_URI is not set — accounts will NOT be persisted to Atlas.
+[cache] ⚠️  REDIS_URI not set — running in pass-through (no cache) mode.
+[queue] ⚠️  Redis not configured — background jobs disabled.
+[queue]    Set REDIS_URI to enable job queuing (BullMQ).
+[queue] Worker not started for "subagents" — Redis unavailable
+[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716973686,"pid":10940,"hostname":"mahendra","port":0,"storage":"memory","cache":"passthrough","queue":"disabled","msg":"mcode backend listening"}
+{"level":30,"time":1790716973890,"pid":10188,"hostname":"mahendra","req":{"id":4,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"42","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59262},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"56","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-3Q4Ft/B5wRbvEdNy94S54c4PIcE\""}},"responseTime":14,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2mverify-otp creates the account and returns tokens
+[22m[39m[mail:disabled] to=otp@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2mverify-otp creates the account and returns tokens
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+[90mstdout[2m | packages/backend/tests/auth-refresh.test.js
+[22m[39m[routes] policy: 17 protected · 2 public (/api/v1/auth/github, /api/v1/languages) · public app endpoints: /health /metrics /api/docs /api/v1/version /live
+
+[90mstderr[2m | packages/backend/tests/auth-refresh.test.js
+[22m[39m[env] ❌ Missing required variable: MONGODB_URI
+[env] ⚠️  API_KEY_ENCRYPTION_SECRET is not set — stored provider keys fall back to JWT-secret encryption (keyId jwt1). Set a dedicated 32+ char secret.
+[env] ❌ MONGODB_URI is not set — accounts will NOT be persisted to Atlas.
+[cache] ⚠️  REDIS_URI not set — running in pass-through (no cache) mode.
+[queue] ⚠️  Redis not configured — background jobs disabled.
+[queue]    Set REDIS_URI to enable job queuing (BullMQ).
+[queue] Worker not started for "subagents" — Redis unavailable
+
+[90mstderr[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mrotates: old refresh dies, new one works
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716973835,"pid":20604,"hostname":"mahendra","port":0,"storage":"memory","cache":"passthrough","queue":"disabled","msg":"mcode backend listening"}
+{"level":30,"time":1790716974099,"pid":10188,"hostname":"mahendra","req":{"id":5,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"100","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59263},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"55","ratelimit-reset":"60","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:54 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiI2YjdhMzAwOC0yMTk1LTRhYWUtODVhNS1hM2ZhNGQ0MGViNmUiLCJpYXQiOjE3OTA3MTY5NzQsImV4cCI6MTc5MzMwODk3NH0.Ht-3Mg4vu4qPe_r-mAVAoMI3yTEVb0hjE-SfuAEbPoI; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:54 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"510","etag":"W/\"1fe-P5zk0n45Aozn5JbsfXiUr3CYJm0\""}},"responseTime":179,"msg":"request completed"}
+{"level":30,"time":1790716974202,"pid":10188,"hostname":"mahendra","req":{"id":6,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"44","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59265},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"54","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-Xo+zlhYUq/YE1SIGz0iiBfRxIJY\""}},"responseTime":21,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2mverify-otp rejects a wrong code
+[22m[39m[mail:disabled] to=wrong@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2mverify-otp rejects a wrong code
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716974255,"pid":10188,"hostname":"mahendra","req":{"id":7,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"104","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59266},"res":{"statusCode":401,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"53","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"55","etag":"W/\"37-B4ybnbXnerByMs5YggR4kS5VhqQ\""}},"responseTime":20,"msg":"request completed"}
+{"level":30,"time":1790716974278,"pid":10940,"hostname":"mahendra","req":{"id":1,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"43","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59261},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"59","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-jJv/GCn5q7koYlNNUqNptlbKFt0\""}},"responseTime":244,"msg":"request completed"}
+[90mstderr[2m | packages/backend/tests/workspaces-diff.test.js
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+[90mstdout[2m | packages/backend/tests/workspaces-diff.test.js
+[22m[39m[mail:disabled] to=diff@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+{"level":30,"time":1790716974300,"pid":10188,"hostname":"mahendra","req":{"id":8,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"42","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59267},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"52","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-OSn/FMMhAEijzmuvXLbeG+HWVog\""}},"responseTime":8,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp is uniform for already-registered emails (no enumeration)
+[22m[39m[mail:disabled] to=otp@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2msend-otp is uniform for already-registered emails (no enumeration)
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716974360,"pid":10188,"hostname":"mahendra","req":{"id":9,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"42","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59268},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"51","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-PjqMPT+vc7usfo5j1NCQKopFYDk\""}},"responseTime":13,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2mverify-otp signup for an existing address logs in idempotently
+[22m[39m[mail:disabled] to=otp@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2mverify-otp signup for an existing address logs in idempotently
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716974403,"pid":10188,"hostname":"mahendra","req":{"id":10,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"100","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59270},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"50","ratelimit-reset":"60","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:54 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiJjZTI0NGE1My0zYWU0LTQ2Y2UtOWYxOC03ZWFiYWRmYjNjY2IiLCJpYXQiOjE3OTA3MTY5NzQsImV4cCI6MTc5MzMwODk3NH0.tBcPxIaJ5nJ2zI95sFsMjtdVFfcSQR9zKzyMLgGIwKI; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:54 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"509","etag":"W/\"1fd-/F/TYNR5jpOCaH/S1zlmSKoE6SM\""}},"responseTime":18,"msg":"request completed"}
+{"level":30,"time":1790716974408,"pid":20604,"hostname":"mahendra","req":{"id":1,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"43","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59264},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"59","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-uAsQcNLajjQdm2YlTNSM7v98NWA\""}},"responseTime":181,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mrotates: old refresh dies, new one works
+[22m[39m[mail:disabled] to=rot1@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mrotates: old refresh dies, new one works
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716974458,"pid":10188,"hostname":"mahendra","req":{"id":11,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"41","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59271},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"49","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-gqF045H+sqziOvcm6Dfmxx9zSY0\""}},"responseTime":8,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2mverify-otp login intent authenticates an existing account
+[22m[39m[mail:disabled] to=otp@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-otp.test.js[2m > [22m[2mOTP auth flow[2m > [22m[2mverify-otp login intent authenticates an existing account
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716974512,"pid":10188,"hostname":"mahendra","req":{"id":12,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"58","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59272},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"48","ratelimit-reset":"60","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:54 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiI5OTE0OGUwYi1lZDYxLTQ4ZTctODAwYi05YTYxZGZmODcyNTkiLCJpYXQiOjE3OTA3MTY5NzQsImV4cCI6MTc5MzMwODk3NH0.IqhDQb12OdhJhQ3N9sxa3V11u6NPdEBRGvX6_6MRdaQ; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:54 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"510","etag":"W/\"1fe-3hmF+xce0kaV8AoENpSVQnuMFIw\""}},"responseTime":25,"msg":"request completed"}
+{"level":30,"time":1790716974531,"pid":10940,"hostname":"mahendra","req":{"id":2,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"102","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59269},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"58","ratelimit-reset":"60","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:54 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiJhNjMyNjdjYy03ZjNhLTQ0ODMtOGM4My1iY2EyOGRlZWEzNmMiLCJpYXQiOjE3OTA3MTY5NzQsImV4cCI6MTc5MzMwODk3NH0.tAt9XDyKUp_9LrUrVkkrDHxXElPMiTqgJ8SAAKurLGE; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:54 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"512","etag":"W/\"200-WngTp1SKDSRYVmxoBjU2M2opN44\""}},"responseTime":161,"msg":"request completed"}
+{"level":30,"time":1790716974668,"pid":10188,"hostname":"mahendra","req":{"id":13,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59253","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"85","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59274},"res":{"statusCode":400,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"47","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"89","etag":"W/\"59-ppuMbLDYwDwUOSu3C5esasgBrQU\""}},"responseTime":41,"msg":"request completed"}
+ [32m✓[39m packages/backend/tests/auth-otp.test.js [2m([22m[2m8 tests[22m[2m)[22m[33m 2312[2mms[22m[39m
+   [33m[2m✓[22m[39m OTP auth flow[2m > [22msend-otp returns a dev code when SMTP is disabled [33m721[2mms[22m[39m
+{"level":30,"time":1790716974807,"pid":20604,"hostname":"mahendra","req":{"id":2,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"101","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59273},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"58","ratelimit-reset":"60","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:54 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiI0NWQ1MzdiYS04N2E1LTRhZjgtOGFhYi05YmFkOGI0MzhhMDAiLCJpYXQiOjE3OTA3MTY5NzQsImV4cCI6MTc5MzMwODk3NH0.bIwdm-iHQI7-sODq2lKR5FklqSv1qNAtnf8ljBi2ZNE; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:54 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"511","etag":"W/\"1ff-JqdQcGYLrcTIZcJltxrnF8zsBPw\""}},"responseTime":279,"msg":"request completed"}
+{"level":30,"time":1790716974886,"pid":20604,"hostname":"mahendra","req":{"id":3,"method":"POST","url":"/api/v1/auth/refresh","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"238","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59276},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"57","ratelimit-reset":"60","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:54 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiJkMjgzOTk5MS0wMWFmLTQ3MTMtOGUyOS04N2VlNWI2NzE3NDQiLCJpYXQiOjE3OTA3MTY5NzQsImV4cCI6MTc5MzMwODk3NH0.f3qm-LNKpIcStuufhivqMjXLylsDbpwYt4i3ShQo3BI; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:54 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"413","etag":"W/\"19d-/N8r5FE2zH4w+q5hniFCOw6R+mw\""}},"responseTime":39,"msg":"request completed"}
+{"level":30,"time":1790716974948,"pid":20604,"hostname":"mahendra","req":{"id":4,"method":"POST","url":"/api/v1/auth/refresh","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"238","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59277},"res":{"statusCode":401,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"56","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"104","etag":"W/\"68-atU0zdTlJwPITb+WcC8p5fFiOBQ\""}},"responseTime":13,"msg":"request completed"}
+{"level":30,"time":1790716975005,"pid":20604,"hostname":"mahendra","req":{"id":5,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"43","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59278},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"55","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-WTGTNQYypDR3Tt+D75j0hzaWw2k\""}},"responseTime":16,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mreuse of a rotated token revokes all sessions
+[22m[39m[mail:disabled] to=rot2@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mreuse of a rotated token revokes all sessions
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716975094,"pid":20604,"hostname":"mahendra","req":{"id":6,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"101","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59279},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"54","ratelimit-reset":"60","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NSwiZXhwIjoxNzkwNzE3ODc1fQ.kSpSi2sDY1TgtzyAOs7u7rizDOzfT9m3XEbtsqOdemo; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:55 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiI4YzkzNTg0ZC1mN2UzLTRjZmItYjE1ZS0wYzQ3ZmY3ZDNkMDkiLCJpYXQiOjE3OTA3MTY5NzUsImV4cCI6MTc5MzMwODk3NX0.BuLNcUhXp5Ah9ak85iPSbr_dfFtubIwwFjV6fSm7Du8; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:55 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"511","etag":"W/\"1ff-06T21fgW99OcGhG/zHZ6vCw30pM\""}},"responseTime":54,"msg":"request completed"}
+{"level":30,"time":1790716975160,"pid":20604,"hostname":"mahendra","req":{"id":7,"method":"POST","url":"/api/v1/auth/refresh","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"238","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59280},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"53","ratelimit-reset":"60","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NSwiZXhwIjoxNzkwNzE3ODc1fQ.kSpSi2sDY1TgtzyAOs7u7rizDOzfT9m3XEbtsqOdemo; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:55 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiIyNzZjZGM5Yy04ODk4LTRkOTYtOGQxOS1mOWQ1YmE2YWIyMTQiLCJpYXQiOjE3OTA3MTY5NzUsImV4cCI6MTc5MzMwODk3NX0.5ReQtb6fFzIKV7hEJsScTCiDkg5l6ETdPP3beRmWr_Y; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:55 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"413","etag":"W/\"19d-YmipcSRqAjyQ9IpKfdLEEYv8JCo\""}},"responseTime":8,"msg":"request completed"}
+{"level":30,"time":1790716975205,"pid":20604,"hostname":"mahendra","req":{"id":8,"method":"POST","url":"/api/v1/auth/refresh","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"238","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59281},"res":{"statusCode":401,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"52","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"104","etag":"W/\"68-atU0zdTlJwPITb+WcC8p5fFiOBQ\""}},"responseTime":17,"msg":"request completed"}
+{"level":30,"time":1790716975237,"pid":20604,"hostname":"mahendra","req":{"id":9,"method":"POST","url":"/api/v1/auth/refresh","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"238","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59282},"res":{"statusCode":401,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"51","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"104","etag":"W/\"68-atU0zdTlJwPITb+WcC8p5fFiOBQ\""}},"responseTime":7,"msg":"request completed"}
+{"level":30,"time":1790716975304,"pid":20604,"hostname":"mahendra","req":{"id":10,"method":"GET","url":"/api/v1/auth/sessions","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NSwiZXhwIjoxNzkwNzE3ODc1fQ.kSpSi2sDY1TgtzyAOs7u7rizDOzfT9m3XEbtsqOdemo","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59283},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"50","ratelimit-reset":"60","content-type":"application/json; charset=utf-8","content-length":"15","etag":"W/\"f-B4CJ7xPoUVqbtHp+E2r8zsgEV7k\""}},"responseTime":18,"msg":"request completed"}
+{"level":30,"time":1790716975350,"pid":20604,"hostname":"mahendra","req":{"id":11,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"43","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59284},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"49","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-F4q6ojTBLcjB5w2ndtD0/L50BQQ\""}},"responseTime":11,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mlists and revokes a single session
+[22m[39m[mail:disabled] to=rot3@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mlists and revokes a single session
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716975482,"pid":20604,"hostname":"mahendra","req":{"id":12,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"101","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59285},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"48","ratelimit-reset":"59","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NSwiZXhwIjoxNzkwNzE3ODc1fQ.J2fXQCE74Tv8gIWyPD_WJwSa6QQMTUBg1_6if7NDL6o; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:55 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiIwOTMyYjRlNi1jY2ZhLTQzYjUtYjJiYi05Mjk0ZGMyMTUyYTQiLCJpYXQiOjE3OTA3MTY5NzUsImV4cCI6MTc5MzMwODk3NX0.pOTB1p_mgR0YbdeHh_8LTkM1VBddw7gCjINh5HjBrpc; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:55 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"511","etag":"W/\"1ff-6Dzlq7BcwioFfB4wAEdnC2GESy0\""}},"responseTime":94,"msg":"request completed"}
+{"level":30,"time":1790716975549,"pid":20604,"hostname":"mahendra","req":{"id":13,"method":"GET","url":"/api/v1/auth/sessions","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NSwiZXhwIjoxNzkwNzE3ODc1fQ.J2fXQCE74Tv8gIWyPD_WJwSa6QQMTUBg1_6if7NDL6o","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59286},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"47","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"139","etag":"W/\"8b-XfB9SlRuhhtROgFYs5rhDiDaD0Q\""}},"responseTime":34,"msg":"request completed"}
+{"level":30,"time":1790716975614,"pid":20604,"hostname":"mahendra","req":{"id":14,"method":"DELETE","url":"/api/v1/auth/sessions/0932b4e6-ccfa-43b5-b2bb-9294dc2152a4","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NSwiZXhwIjoxNzkwNzE3ODc1fQ.J2fXQCE74Tv8gIWyPD_WJwSa6QQMTUBg1_6if7NDL6o","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59287},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"46","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"11","etag":"W/\"b-Ai2R8hgEarLmHKwesT1qcY913ys\""}},"responseTime":8,"msg":"request completed"}
+{"level":30,"time":1790716975668,"pid":20604,"hostname":"mahendra","req":{"id":15,"method":"POST","url":"/api/v1/auth/refresh","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"238","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59288},"res":{"statusCode":401,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"45","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"104","etag":"W/\"68-atU0zdTlJwPITb+WcC8p5fFiOBQ\""}},"responseTime":24,"msg":"request completed"}
+{"level":30,"time":1790716975708,"pid":20604,"hostname":"mahendra","req":{"id":16,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"43","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59289},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"44","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-QwcUlEvMwLmPRGeRTKV2Auuuaxo\""}},"responseTime":9,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mresets a password via OTP and revokes sessions
+[22m[39m[mail:disabled] to=rot4@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mresets a password via OTP and revokes sessions
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716975785,"pid":20604,"hostname":"mahendra","req":{"id":17,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"101","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59290},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"43","ratelimit-reset":"59","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0IiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NSwiZXhwIjoxNzkwNzE3ODc1fQ.D7wB77Ec62RmF5Qc4P0LzB_G3Z04RLdfqZQYFtB8UPE; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:55 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0IiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiJjNGQzNmQ1Ny0xN2QyLTQ2YWMtYTM1MC1lZTI4MGNkZGJiYmUiLCJpYXQiOjE3OTA3MTY5NzUsImV4cCI6MTc5MzMwODk3NX0.hxxD1PaaQoyKdtgnffnZGmKFFcBs4QS9dinotXRFmcY; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:55 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"511","etag":"W/\"1ff-bhcGvmJL0H5gYO5vcZedRfHHeCQ\""}},"responseTime":42,"msg":"request completed"}
+{"level":30,"time":1790716975820,"pid":20604,"hostname":"mahendra","req":{"id":18,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"42","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59291},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"42","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-b8+FF7APE/6qiJS1M8bw6z8gCro\""}},"responseTime":6,"msg":"request completed"}
+[90mstderr[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mresets a password via OTP and revokes sessions
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+[90mstdout[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2mresets a password via OTP and revokes sessions
+[22m[39m[mail:disabled] to=rot4@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+{"level":30,"time":1790716975860,"pid":20604,"hostname":"mahendra","req":{"id":19,"method":"POST","url":"/api/v1/auth/reset-password","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"68","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59292},"res":{"statusCode":401,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"41","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"55","etag":"W/\"37-B4ybnbXnerByMs5YggR4kS5VhqQ\""}},"responseTime":15,"msg":"request completed"}
+{"level":30,"time":1790716975910,"pid":20604,"hostname":"mahendra","req":{"id":20,"method":"POST","url":"/api/v1/auth/reset-password","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"68","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59293},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"40","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"11","etag":"W/\"b-Ai2R8hgEarLmHKwesT1qcY913ys\""}},"responseTime":19,"msg":"request completed"}
+{"level":30,"time":1790716975998,"pid":20604,"hostname":"mahendra","req":{"id":21,"method":"POST","url":"/api/v1/auth/login","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"51","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59294},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"39","ratelimit-reset":"59","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0IiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NSwiZXhwIjoxNzkwNzE3ODc1fQ.D7wB77Ec62RmF5Qc4P0LzB_G3Z04RLdfqZQYFtB8UPE; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:55 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0IiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiI3MDIwYzhhYS03YzIwLTRiODktOTYzYS1lODg2YmNjYzgzNjIiLCJpYXQiOjE3OTA3MTY5NzUsImV4cCI6MTc5MzMwODk3NX0.o3aHxWOdxwBZp5T1YBJC5UiHx4x12pqUXeD3RjuakJk; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:55 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"487","etag":"W/\"1e7-B/S8iQtdhYht9ux+iziSDYusVS0\""}},"responseTime":63,"msg":"request completed"}
+{"level":30,"time":1790716976090,"pid":20604,"hostname":"mahendra","req":{"id":22,"method":"POST","url":"/api/v1/auth/send-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"43","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59295},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"38","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"68","etag":"W/\"44-YZ/T8DzZwwZD8KQxip6QoLdPjaM\""}},"responseTime":14,"msg":"request completed"}
+[90mstdout[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2msets httpOnly cookies and accepts cookie auth
+[22m[39m[mail:disabled] to=rot5@user.dev subject="mcode verification code" (set BREVO_API_KEY to enable)
+
+[90mstderr[2m | packages/backend/tests/auth-refresh.test.js[2m > [22m[2mrefresh rotation (BUG-31)[2m > [22m[2msets httpOnly cookies and accepts cookie auth
+[22m[39m[cache] pass-through mode — no caching active. Configure REDIS_URI for caching.
+
+{"level":30,"time":1790716976147,"pid":20604,"hostname":"mahendra","req":{"id":23,"method":"POST","url":"/api/v1/auth/verify-otp","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"101","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59296},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"37","ratelimit-reset":"59","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1IiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NiwiZXhwIjoxNzkwNzE3ODc2fQ.885-XdEtSx8zK-X3GgIJN3LnLEl64xHsQMUUomypaeY; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:56 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1IiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiIzOGZhMzAzYS0xZWIwLTRkYWEtOWI3Mi0wYmZlY2VlZThhZDkiLCJpYXQiOjE3OTA3MTY5NzYsImV4cCI6MTc5MzMwODk3Nn0._f1Dh3x-_WXLmMrN3gRrf0iV-Ou7lz5DZN3zdpTBYJM; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:56 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"511","etag":"W/\"1ff-uVrKbr+R8qnc0OIDsXnMqHY46jU\""}},"responseTime":26,"msg":"request completed"}
+{"level":30,"time":1790716976195,"pid":20604,"hostname":"mahendra","req":{"id":24,"method":"POST","url":"/api/v1/auth/login","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","content-type":"application/json","content-length":"48","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59297},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"36","ratelimit-reset":"59","set-cookie":["mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1IiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NiwiZXhwIjoxNzkwNzE3ODc2fQ.885-XdEtSx8zK-X3GgIJN3LnLEl64xHsQMUUomypaeY; Max-Age=900; Path=/; Expires=Tue, 29 Sep 2026 21:37:56 GMT; HttpOnly; SameSite=Lax","mcode_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1IiwidHlwZSI6InJlZnJlc2giLCJqdGkiOiIyOTg1YzI3Ny01YTY3LTRmNGEtOTIwMy1kMjk3MDU1ZDg0NTEiLCJpYXQiOjE3OTA3MTY5NzYsImV4cCI6MTc5MzMwODk3Nn0.IhEz3SNAnRzgLsYWlt6teRLZlDvBOKbL0pMIaNqfFAo; Max-Age=2592000; Path=/; Expires=Thu, 29 Oct 2026 21:22:56 GMT; HttpOnly; SameSite=Lax"],"content-type":"application/json; charset=utf-8","content-length":"487","etag":"W/\"1e7-mxMojfsZiYY32rr63eklT1EvV14\""}},"responseTime":26,"msg":"request completed"}
+{"level":30,"time":1790716976257,"pid":20604,"hostname":"mahendra","req":{"id":25,"method":"GET","url":"/api/v1/auth/me","query":{},"params":{},"headers":{"host":"127.0.0.1:59259","accept-encoding":"gzip, deflate","cookie":"mcode_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1IiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NiwiZXhwIjoxNzkwNzE3ODc2fQ.885-XdEtSx8zK-X3GgIJN3LnLEl64xHsQMUUomypaeY","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59298},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"60;w=60","ratelimit-limit":"60","ratelimit-remaining":"35","ratelimit-reset":"59","content-type":"application/json; charset=utf-8","content-length":"153","etag":"W/\"99-QP7oYcEWuFlM+mzLUkyfPQgOYT8\""}},"responseTime":10,"msg":"request completed"}
+ [32m✓[39m packages/backend/tests/auth-refresh.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 2987[2mms[22m[39m
+   [33m[2m✓[22m[39m refresh rotation (BUG-31)[2m > [22mrotates: old refresh dies, new one works [33m1212[2mms[22m[39m
+   [33m[2m✓[22m[39m refresh rotation (BUG-31)[2m > [22mreuse of a rotated token revokes all sessions [33m353[2mms[22m[39m
+   [33m[2m✓[22m[39m refresh rotation (BUG-31)[2m > [22mlists and revokes a single session [33m359[2mms[22m[39m
+   [33m[2m✓[22m[39m refresh rotation (BUG-31)[2m > [22mresets a password via OTP and revokes sessions [33m337[2mms[22m[39m
+{"level":30,"time":1790716981383,"pid":10940,"hostname":"mahendra","req":{"id":3,"method":"GET","url":"/api/v1/workspaces/1/diff?path=a.txt","query":{"path":"a.txt"},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59304},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"300;w=60","ratelimit-limit":"300","ratelimit-remaining":"297","ratelimit-reset":"54","content-type":"application/json; charset=utf-8","content-length":"139","etag":"W/\"8b-ZsyZt0834caR4/RIvIhCQNzDYzc\""}},"responseTime":1131,"msg":"request completed"}
+{"level":50,"time":1790716982306,"pid":10940,"hostname":"mahendra","err":{"type":"Error","message":"invalid path: path traversal not allowed","stack":"Error: invalid path: path traversal not allowed\n    at Module.httpError (D:\\projects\\mcoode\\packages\\backend\\src\\http-error.js:9:59)\n    at safeJoin (D:\\projects\\mcoode\\packages\\backend\\src\\routes\\workspaces.js:846:13)\n    at D:\\projects\\mcoode\\packages\\backend\\src\\routes\\workspaces.js:542:17\n    at processTicksAndRejections (node:internal/process/task_queues:104:5)","status":400},"msg":"invalid path: path traversal not allowed"}
+{"level":30,"time":1790716982395,"pid":10940,"hostname":"mahendra","req":{"id":4,"method":"GET","url":"/api/v1/workspaces/1/diff?path=..%2F..%2Fetc%2Fpasswd","query":{"path":"../../etc/passwd"},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59306},"res":{"statusCode":400,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"300;w=60","ratelimit-limit":"300","ratelimit-remaining":"296","ratelimit-reset":"53","content-type":"application/json; charset=utf-8","content-length":"82","etag":"W/\"52-Tgtg0wI3Mzom5kcaJCFC0gySrlk\""}},"responseTime":634,"msg":"request completed"}
+{"level":30,"time":1790716982466,"pid":10940,"hostname":"mahendra","req":{"id":5,"method":"GET","url":"/api/v1/workspaces/does-not-exist/diff","query":{},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59308},"res":{"statusCode":404,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"300;w=60","ratelimit-limit":"300","ratelimit-remaining":"295","ratelimit-reset":"52","content-type":"application/json; charset=utf-8","content-length":"62","etag":"W/\"3e-14GEfgjGC2+AQxIDTKuVt/RI99o\""}},"responseTime":11,"msg":"request completed"}
+{"level":30,"time":1790716983338,"pid":10940,"hostname":"mahendra","req":{"id":6,"method":"GET","url":"/api/v1/workspaces/1/diff?path=a.txt","query":{"path":"a.txt"},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59309},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"300;w=60","ratelimit-limit":"300","ratelimit-remaining":"294","ratelimit-reset":"52","content-type":"application/json; charset=utf-8","content-length":"139","etag":"W/\"8b-ZsyZt0834caR4/RIvIhCQNzDYzc\""}},"responseTime":827,"msg":"request completed"}
+{"level":30,"time":1790716983410,"pid":10940,"hostname":"mahendra","req":{"id":7,"method":"POST","url":"/api/v1/workspaces/1/hunks","query":{},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8","content-type":"application/json","content-length":"99","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59312},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"300;w=60","ratelimit-limit":"300","ratelimit-remaining":"293","ratelimit-reset":"51","content-type":"application/json; charset=utf-8","content-length":"30","etag":"W/\"1e-LjFcNdeY1B/PE417sqYhq3UFKDk\""}},"responseTime":38,"msg":"request completed"}
+{"level":30,"time":1790716983439,"pid":10940,"hostname":"mahendra","req":{"id":8,"method":"GET","url":"/api/v1/workspaces/1/file?path=a.txt","query":{"path":"a.txt"},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59313},"res":{"statusCode":200,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"300;w=60","ratelimit-limit":"300","ratelimit-remaining":"292","ratelimit-reset":"51","content-type":"application/json; charset=utf-8","content-length":"44","etag":"W/\"2c-zLOhClnC9LgBDE+LgXjpgkJmlUU\""}},"responseTime":9,"msg":"request completed"}
+{"level":30,"time":1790716983462,"pid":10940,"hostname":"mahendra","req":{"id":9,"method":"POST","url":"/api/v1/workspaces/1/hunks","query":{},"params":{},"headers":{"host":"127.0.0.1:59257","accept-encoding":"gzip, deflate","authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc5MDcxNjk3NCwiZXhwIjoxNzkwNzE3ODc0fQ.F9YnELmH-8U-6HUf_EKgp2drUwKNkjfH8mhXDoLmza8","content-type":"application/json","content-length":"65","connection":"close"},"remoteAddress":"::ffff:127.0.0.1","remotePort":59314},"res":{"statusCode":400,"headers":{"content-security-policy":"default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests","cross-origin-opener-policy":"same-origin","cross-origin-resource-policy":"cross-origin","origin-agent-cluster":"?1","referrer-policy":"no-referrer","strict-transport-security":"max-age=31536000; includeSubDomains","x-content-type-options":"nosniff","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-xss-protection":"0","vary":"Origin, Accept-Encoding","access-control-allow-credentials":"true","ratelimit-policy":"300;w=60","ratelimit-limit":"300","ratelimit-remaining":"291","ratelimit-reset":"51","content-type":"application/json; charset=utf-8","content-length":"94","etag":"W/\"5e-fmSRddpqTUXJSIgAAfLNM9Kj9Ao\""}},"responseTime":5,"msg":"request completed"}
+ [32m✓[39m packages/backend/tests/workspaces-diff.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 10373[2mms[22m[39m
+   [33m[2m✓[22m[39m workspace git diff (per-hunk accept API)[2m > [22mreturns a unified diff for a dirty file [33m1217[2mms[22m[39m
+   [33m[2m✓[22m[39m workspace git diff (per-hunk accept API)[2m > [22mrejects path traversal [33m1011[2mms[22m[39m
+   [33m[2m✓[22m[39m workspace git diff (per-hunk accept API)[2m > [22mapplies selected hunks server-side [33m962[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 2 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m packages/cli/tests/init-templates.test.js[2m > [22mMF-008 init template hygiene[2m > [22mapplyTemplate writes .gitignore + .env.example into a fresh project
+[31m[1m[7m FAIL [27m[22m[39m packages/cli/tests/session-resume.test.js[2m > [22mMF-001 session checkpoint store[2m > [22mresolves resume targets by id, unique prefix, path and current project
+[31m[1mError[22m: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m54 passed[39m[22m[90m (56)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m458 passed[39m[22m[90m (460)[39m
+[2m   Start at [22m 02:51:20
+[2m   Duration [22m 103.08s[2m (transform 38.28s, setup 0ms, collect 473.18s, tests 193.06s, environment 306ms, prepare 151.94s)[22m
+

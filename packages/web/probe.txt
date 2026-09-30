@@ -1,0 +1,22 @@
+npm notice run mcode-monorepo@2.4.6 npx
+npm notice run playwright test animations -g probe --reporter=line
+
+Running 1 test using 1 worker
+
+[1/1] [chromium] › e2e\animations.spec.js:4:1 › probe: slash picker DOM
+[chromium] › e2e\animations.spec.js:4:1 › probe: slash picker DOM
+chatTab count: 1
+
+textarea count: 1
+
+visible? true
+
+textarea value: /
+
+buttons containing /clear: 0
+
+all buttons count: 33
+
+WRAP HTML: <div class="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative"><textarea placeholder="Ask a follow-up..." class="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-1 py-1 min-h-[60px] text-[15px]">/</textarea><div class="absolute bottom-full left-0 mb-2 w-[580px] sm:w-[680px] max-h-[460px] bg-[#121316] border border-white/10 rounded-xl shadow-2xl flex flex-col z-50 overflow-hidden text-left text-xs "><div class="px-3 py-2 border-b border-white/5 flex items-center justify-between gap-3 bg-white/[0.02]"><div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-nowrap"><span class="text-[11px] font-semibold text-white/50 uppercase tracking-wider px-1 shrink-0">Available commands</span><button type="button" class="px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 bg-white/10 text-white font-medium border border-white/10 shadow-sm"><span>All</span><span class="text-[11px] text-white/30 font-mono">(0)</span></button><button type="button" class="px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 text-white/40 hover:text-white/70 hover:bg-white/5 border border-transparent"><span>🎯</span><span>Modes</span><span class="text-[11px] text-white/30 font-mono">(0)</span></button><button type="button" class="px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center ga
+
+  1 passed (19.8s)

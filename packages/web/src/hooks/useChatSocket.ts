@@ -388,6 +388,24 @@ export function useChatSocket(workspaceId: string | null = null) {
       );
     };
     const onAgentNeedsReview = (payload: any) => { dispatch(setSubagentNeedsReview(payload)); };
+    // Legacy `subagent:*` payload handlers (WEB-032). These arrive on the
+    // web-driven god-mode path (`ChatSession.runGod`) and carry the *same*
+    // bus payloads as their `agent:*` counterparts, so created/assigned/
+    // started/step/done/failed/file/needs_review reuse the handlers above.
+    //
+    // The two tools-level events are the exception: `tools.js` emits
+    // `SUBAGENT_TOOL_CALL` / `SUBAGENT_TOOL_RESULT` WITHOUT a todoId, so they
+    // cannot be attributed to a row while several subagents run in parallel
+    // (WEB-034, backend gap). Only payloads that do carry one are applied —
+    // guessing "the last started agent" would mislabel the live card.
+    const onSubagentToolCall = (payload: any) => {
+      if (payload?.todoId == null) return;
+      dispatch(setSubagentToolCall(payload));
+    };
+    const onSubagentToolResult = (payload: any) => {
+      if (payload?.todoId == null) return;
+      dispatch(setSubagentToolResult(payload));
+    };
     const onWaveStart = (payload: any) => { dispatch(setWaveStart(payload)); };
     const onWaveComplete = (payload: any) => { dispatch(setWaveComplete(payload)); };
     const onIntegrationPass = (payload: any) => { dispatch(setIntegrationPass(payload)); };
@@ -648,6 +666,21 @@ export function useChatSocket(workspaceId: string | null = null) {
     socket.on(SOCKET_EVENTS.BUILD_COMPLETE, onBuildComplete);
     socket.on('toast', onToast);
 
+    // Legacy `subagent:*` vocabulary (WEB-032) — the web-driven god mode
+    // (`ChatSession.runGod` → `godEventMap` in packages/backend/src/chat-session.js)
+    // forwards the same bus events under these names. Both vocabularies are
+    // bound so the dashboard works whichever producer is on the wire.
+    socket.on(SOCKET_EVENTS.SUBAGENT_CREATED, onAgentStarted);
+    socket.on(SOCKET_EVENTS.SUBAGENT_ASSIGNED, onAgentStarted);
+    socket.on(SOCKET_EVENTS.SUBAGENT_STARTED, onAgentStarted);
+    socket.on(SOCKET_EVENTS.SUBAGENT_STEP, onAgentStep);
+    socket.on(SOCKET_EVENTS.SUBAGENT_DONE, onAgentDone);
+    socket.on(SOCKET_EVENTS.SUBAGENT_FAILED, onAgentFailed);
+    socket.on(SOCKET_EVENTS.SUBAGENT_FILE, onAgentFile);
+    socket.on(SOCKET_EVENTS.SUBAGENT_NEEDS_REVIEW, onAgentNeedsReview);
+    socket.on(SOCKET_EVENTS.SUBAGENT_TOOL_CALL, onSubagentToolCall);
+    socket.on(SOCKET_EVENTS.SUBAGENT_TOOL_RESULT, onSubagentToolResult);
+
     // Web God Mode (Phases 0-10) socket subscriptions
     socket.on('prompt:enhancing', onPromptEnhancing);
     socket.on('prompt:enhanced', onPromptEnhanced);
@@ -778,6 +811,19 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off(SOCKET_EVENTS.INTEGRATION_PASS, onIntegrationPass);
       socket.off(SOCKET_EVENTS.BUILD_COMPLETE, onBuildComplete);
       socket.off('toast', onToast);
+
+      // Legacy `subagent:*` vocabulary cleanup (WEB-032) — must mirror the
+      // subscriptions above exactly, or a remount leaves stale handlers.
+      socket.off(SOCKET_EVENTS.SUBAGENT_CREATED, onAgentStarted);
+      socket.off(SOCKET_EVENTS.SUBAGENT_ASSIGNED, onAgentStarted);
+      socket.off(SOCKET_EVENTS.SUBAGENT_STARTED, onAgentStarted);
+      socket.off(SOCKET_EVENTS.SUBAGENT_STEP, onAgentStep);
+      socket.off(SOCKET_EVENTS.SUBAGENT_DONE, onAgentDone);
+      socket.off(SOCKET_EVENTS.SUBAGENT_FAILED, onAgentFailed);
+      socket.off(SOCKET_EVENTS.SUBAGENT_FILE, onAgentFile);
+      socket.off(SOCKET_EVENTS.SUBAGENT_NEEDS_REVIEW, onAgentNeedsReview);
+      socket.off(SOCKET_EVENTS.SUBAGENT_TOOL_CALL, onSubagentToolCall);
+      socket.off(SOCKET_EVENTS.SUBAGENT_TOOL_RESULT, onSubagentToolResult);
       socket.off('prompt:enhancing', onPromptEnhancing);
       socket.off('prompt:enhanced', onPromptEnhanced);
       socket.off('clarify:ask', onClarifyAsk);

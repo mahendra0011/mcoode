@@ -1,0 +1,240 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/projects/mcoode/packages/web[39m
+
+ [32m✓[39m src/components/chat/__tests__/SpinnerBlock.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 363[2mms[22m[39m
+ [31m❯[39m src/components/chat/__tests__/AgentActionSequence.test.tsx [2m([22m[2m5 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 941[2mms[22m[39m
+   [33m[2m✓[22m[39m AgentActionSequence (spec §1 — never fabricate progress)[2m > [22mshows “Thinking” + elapsed seconds by default [33m493[2mms[22m[39m
+[31m   [31m×[31m AgentActionSequence (spec §1 — never fabricate progress)[2m > [22mthe elapsed counter ticks with real time[90m 197[2mms[22m[31m[39m
+[31m     → Unable to find an element with the text: 4s. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"flex items-center gap-2 py-1.5 w-full max-w-lg text-[13px] select-none font-sans"[31m
+      [33mstyle[31m=[32m"opacity: 0; transform: translateY(6px);"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mstyle[31m=[32m"width: 6px; height: 6px; border-radius: 50%; background: var(--mcode-green, #3ecf8e); flex-shrink: 0;"[31m
+      [36m/>[31m
+      [36m<svg[31m
+        [33mclass[31m=[32m"lucide lucide-brain-circuit text-[var(--mcode-green,#3ecf8e)] flex-shrink-0"[31m
+        [33mfill[31m=[32m"none"[31m
+        [33mheight[31m=[32m"15"[31m
+        [33mstroke[31m=[32m"currentColor"[31m
+        [33mstroke-linecap[31m=[32m"round"[31m
+        [33mstroke-linejoin[31m=[32m"round"[31m
+        [33mstroke-width[31m=[32m"2"[31m
+        [33mviewBox[31m=[32m"0 0 24 24"[31m
+        [33mwidth[31m=[32m"15"[31m
+        [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+      [36m>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M9 13a4.5 4.5 0 0 0 3-4"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M6.003 5.125A3 3 0 0 0 6.401 6.5"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M3.477 10.896a4 4 0 0 1 .585-.396"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M6 18a4 4 0 0 1-1.967-.516"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M12 13h4"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M12 18h6a2 2 0 0 1 2 2v1"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M12 8h8"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M16 8V5a2 2 0 0 1 2-2"[31m
+        [36m/>[31m
+        [36m<circle[31m
+          [33mcx[31m=[32m"16"[31m
+          [33mcy[31m=[32m"13"[31m
+          [33mr[31m=[32m".5"[31m
+        [36m/>[31m
+        [36m<circle[31m
+          [33mcx[31m=[32m"18"[31m
+          [33mcy[31m=[32m"3"[31m
+          [33mr[31m=[32m".5"[31m
+        [36m/>[31m
+        [36m<circle[31m
+          [33mcx[31m=[32m"20"[31m
+          [33mcy[31m=[32m"21"[31m
+          [33mr[31m=[32m".5"[31m
+        [36m/>[31m
+        [36m<circle[31m
+          [33mcx[31m=[32m"20"[31m
+          [33mcy[31m=[32m"8"[31m
+          [33mr[31m=[32m".5"[31m
+        [36m/>[31m
+      [36m</svg>[31m
+      [36m<span[31m
+        [33mclass[31m=[32m"font-semibold flex items-center gap-1.5"[31m
+      [36m>[31m
+        [36m<span[31m
+          [33mclass[31m=[32m"animated-gradient-text"[31m
+          [33mstyle[31m=[32m"opacity: 0; transform: translateY(3px);"[31m
+        [36m>[31m
+          [0mThinking[0m
+        [36m</span>[31m
+        [36m<span[31m
+          [33mclass[31m=[32m"inline-flex items-center gap-1.5 font-mono text-xs text-[var(--mcode-green,#3ecf8e)]"[31m
+          [33mstyle[31m=[32m"opacity: 0; transform: translateX(-4px);"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mstyle[31m=[32m"opacity: 0; transform: rotate(-90deg);"[31m
+          [36m>[31m
+            [0m◑[0m
+          [36m</span>[31m
+          [36m<span />[31m
+        [36m</span>[31m
+      [36m</span>[31m
+      [36m<span[31m
+        [33mclass[31m=[32m"text-white/40 text-xs font-mono ml-auto"[31m
+      [36m>[31m
+        [0m3[0m
+        [0ms[0m
+      [36m</span>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+ [32m✓[39m src/components/ide/__tests__/SearchPanel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1704[2mms[22m[39m
+   [33m[2m✓[22m[39m SearchPanel[2m > [22mrenders the search input and header [33m335[2mms[22m[39m
+   [33m[2m✓[22m[39m SearchPanel[2m > [22mupdates the query as the user types [33m1119[2mms[22m[39m
+ [32m✓[39m src/components/chat/__tests__/mcodeUX.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1348[2mms[22m[39m
+   [33m[2m✓[22m[39m ToolCallCard icon contract (spec §4)[2m > [22mtype="explored" renders lucide-folder-search [33m447[2mms[22m[39m
+   [33m[2m✓[22m[39m GodModeToggle (spec §3 — emerald, not purple)[2m > [22mreports the next value through onChange [33m408[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 1 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m src/components/chat/__tests__/AgentActionSequence.test.tsx[2m > [22mAgentActionSequence (spec §1 — never fabricate progress)[2m > [22mthe elapsed counter ticks with real time
+[31m[1mTestingLibraryElementError[22m: Unable to find an element with the text: 4s. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"flex items-center gap-2 py-1.5 w-full max-w-lg text-[13px] select-none font-sans"[31m
+      [33mstyle[31m=[32m"opacity: 0; transform: translateY(6px);"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mstyle[31m=[32m"width: 6px; height: 6px; border-radius: 50%; background: var(--mcode-green, #3ecf8e); flex-shrink: 0;"[31m
+      [36m/>[31m
+      [36m<svg[31m
+        [33mclass[31m=[32m"lucide lucide-brain-circuit text-[var(--mcode-green,#3ecf8e)] flex-shrink-0"[31m
+        [33mfill[31m=[32m"none"[31m
+        [33mheight[31m=[32m"15"[31m
+        [33mstroke[31m=[32m"currentColor"[31m
+        [33mstroke-linecap[31m=[32m"round"[31m
+        [33mstroke-linejoin[31m=[32m"round"[31m
+        [33mstroke-width[31m=[32m"2"[31m
+        [33mviewBox[31m=[32m"0 0 24 24"[31m
+        [33mwidth[31m=[32m"15"[31m
+        [33mxmlns[31m=[32m"http://www.w3.org/2000/svg"[31m
+      [36m>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M9 13a4.5 4.5 0 0 0 3-4"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M6.003 5.125A3 3 0 0 0 6.401 6.5"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M3.477 10.896a4 4 0 0 1 .585-.396"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M6 18a4 4 0 0 1-1.967-.516"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M12 13h4"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M12 18h6a2 2 0 0 1 2 2v1"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M12 8h8"[31m
+        [36m/>[31m
+        [36m<path[31m
+          [33md[31m=[32m"M16 8V5a2 2 0 0 1 2-2"[31m
+        [36m/>[31m
+        [36m<circle[31m
+          [33mcx[31m=[32m"16"[31m
+          [33mcy[31m=[32m"13"[31m
+          [33mr[31m=[32m".5"[31m
+        [36m/>[31m
+        [36m<circle[31m
+          [33mcx[31m=[32m"18"[31m
+          [33mcy[31m=[32m"3"[31m
+          [33mr[31m=[32m".5"[31m
+        [36m/>[31m
+        [36m<circle[31m
+          [33mcx[31m=[32m"20"[31m
+          [33mcy[31m=[32m"21"[31m
+          [33mr[31m=[32m".5"[31m
+        [36m/>[31m
+        [36m<circle[31m
+          [33mcx[31m=[32m"20"[31m
+          [33mcy[31m=[32m"8"[31m
+          [33mr[31m=[32m".5"[31m
+        [36m/>[31m
+      [36m</svg>[31m
+      [36m<span[31m
+        [33mclass[31m=[32m"font-semibold flex items-center gap-1.5"[31m
+      [36m>[31m
+        [36m<span[31m
+          [33mclass[31m=[32m"animated-gradient-text"[31m
+          [33mstyle[31m=[32m"opacity: 0; transform: translateY(3px);"[31m
+        [36m>[31m
+          [0mThinking[0m
+        [36m</span>[31m
+        [36m<span[31m
+          [33mclass[31m=[32m"inline-flex items-center gap-1.5 font-mono text-xs text-[var(--mcode-green,#3ecf8e)]"[31m
+          [33mstyle[31m=[32m"opacity: 0; transform: translateX(-4px);"[31m
+        [36m>[31m
+          [36m<span[31m
+            [33mstyle[31m=[32m"opacity: 0; transform: rotate(-90deg);"[31m
+          [36m>[31m
+            [0m◑[0m
+          [36m</span>[31m
+          [36m<span />[31m
+        [36m</span>[31m
+      [36m</span>[31m
+      [36m<span[31m
+        [33mclass[31m=[32m"text-white/40 text-xs font-mono ml-auto"[31m
+      [36m>[31m
+        [0m3[0m
+        [0ms[0m
+      [36m</span>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/chat/__tests__/AgentActionSequence.test.tsx:[2m45:19[22m[39m
+    [90m 43| [39m      vi[33m.[39m[34madvanceTimersByTime[39m([34m3100[39m)[33m;[39m
+    [90m 44| [39m    })[33m;[39m
+    [90m 45| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'4s'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 46| [39m  })[33m;[39m
+    [90m 47| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m3 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m22 passed[39m[22m[90m (23)[39m
+[2m   Start at [22m 01:57:41
+[2m   Duration [22m 11.81s[2m (transform 970ms, setup 3.85s, collect 6.82s, tests 4.36s, environment 17.45s, prepare 1.95s)[22m
+

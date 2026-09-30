@@ -1,0 +1,14 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/projects/mcoode[39m
+
+ [32m✓[39m packages/cli/tests/init-templates.test.js [2m([22m[2m9 tests[22m[2m)[22m[33m 1084[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-008 init template hygiene[2m > [22mapplyTemplate writes .gitignore + .env.example into a fresh project [33m423[2mms[22m[39m
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/session-resume.test.js [2m([22m[2m15 tests[22m[2m)[22m[33m 1797[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 session checkpoint store[2m > [22mresolves resume targets by id, unique prefix, path and current project [33m318[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m24 passed[39m[22m[90m (24)[39m
+[2m   Start at [22m 02:55:21
+[2m   Duration [22m 11.55s[2m (transform 2.40s, setup 0ms, collect 5.91s, tests 2.88s, environment 6ms, prepare 2.97s)[22m
+

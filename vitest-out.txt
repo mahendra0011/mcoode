@@ -1,0 +1,130 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/projects/mcoode[39m
+
+ [32m✓[39m packages/web/tests/socket-contract.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 1600[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22msubscribes only to events the backend can emit [33m361[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22mlists every unreachable subscription in KNOWN_UNWIRED [33m584[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22mnever subscribes to the dead `subagent:*` namespace [33m639[2mms[22m[39m
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/subagent.test.js [2m([22m[2m8 tests[22m[2m)[22m[90m 134[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/test-mode.test.js [2m([22m[2m17 tests[22m[2m)[22m[33m 1577[2mms[22m[39m
+   [33m[2m✓[22m[39m Test Mode (doc 48) — autonomous self-healing testing agent[2m > [22mFinal report (docs 43/47 MD shape, test-scoped)[2m > [22msaveTestReport writes to .mcode/reports/ [33m395[2mms[22m[39m
+   [33m[2m✓[22m[39m Test Mode (doc 48) — autonomous self-healing testing agent[2m > [22mPlumbing[2m > [22mrunTestMode rejects remote targets without consent and reports on local ones [33m579[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/security-checkup.test.js [2m([22m[2m12 tests[22m[2m)[22m[33m 348[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/slash-commands.test.js [2m([22m[2m13 tests[22m[2m)[22m[33m 528[2mms[22m[39m
+   [33m[2m✓[22m[39m Slash Commands Parity & Execution (Doc 01–53)[2m > [22mexecutes every single command in AI Code Assistant without throwing [33m353[2mms[22m[39m
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.
+ [32m✓[39m packages/cli/tests/undo-thread.test.js [2m([22m[2m10 tests[22m[2m)[22m[33m 5246[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22mwrite_file returns an undoId and edit_file returns a different undoId [33m821[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22medit_file returns an undoId [33m392[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22mUndoStack.undo(id) reverts the specific snapshot and returns the file [33m1040[2mms[22m[39m
+   [33m[2m✓[22m[39m undoId threading (Bug #18, #25, #26)[2m > [22mOrchestrator.undo(id) accepts and passes id parameter [33m2464[2mms[22m[39m
+ [32m✓[39m packages/shared/tests/events.test.js [2m([22m[2m10 tests[22m[2m)[22m[90m 47[2mms[22m[39m
+ [32m✓[39m packages/web/tests/provider-catalog.test.js [2m([22m[2m4 tests[22m[2m)[22m[33m 861[2mms[22m[39m
+   [33m[2m✓[22m[39m provider catalog does not drift from the CLI (WEB-029)[2m > [22mthere is exactly ONE fallback provider list in src [33m839[2mms[22m[39m
+[
+  {
+    "name": "tool",
+    "enabled": true,
+    "version": "1.1.0",
+    "registry": "https://reg.test/registry.json",
+    "installedAt": "2026-09-29T20:14:48.101Z"
+  }
+]
+ [32m✓[39m packages/cli/tests/audit-mode.test.js [2m([22m[2m11 tests[22m[2m)[22m[33m 3076[2mms[22m[39m
+   [33m[2m✓[22m[39m Audit Mode (Doc 52)[2m > [22mPerformance Scan (Doc 52 — zero AI calls)[2m > [22mdetects missing indexes in schema files [33m502[2mms[22m[39m
+   [33m[2m✓[22m[39m Audit Mode (Doc 52)[2m > [22mFull runAudit()[2m > [22mruns across all 5 categories and aggregates grades [33m699[2mms[22m[39m
+   [33m[2m✓[22m[39m Audit Mode (Doc 52)[2m > [22mPDF Report & Markdown Report generation[2m > [22mgenerates a PDF file via generateAuditPDF [33m1528[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/mf-cost-plan-conflicts.test.js [2m([22m[2m15 tests[22m[2m)[22m[33m 4023[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-002 cost attribution + budget ceiling[2m > [22maborts the run cleanly after the wave in flight and keeps a resumable checkpoint [33m374[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-004 writer audit + conflicts[2m > [22mresolveOverlaps rolls back the later write when asked to keep the first [33m738[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-004 writer audit + conflicts[2m > [22mToolExecutor notifies the writer audit on write_file and edit_file [33m754[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-003 dry-run + execute-plan[2m > [22mexecute-plan runs the saved DAG without re-planning [33m979[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/plugin-registry.test.js [2m([22m[2m22 tests[22m[2m)[22m[33m 6308[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 registry loading (cache + offline)[2m > [22mfetches remotely, caches for 24h and then serves from cache [33m637[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22minstalls a remote plugin, records provenance and persists the config [33m1460[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22mrefuses an entry whose integrity does not match [33m1452[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-005 install / upgrade / list[2m > [22mfails loudly for an unknown plugin name [33m1215[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/session-resume.test.js [2m([22m[2m15 tests[22m[2m)[22m[33m 5282[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 checkpoint + resume (mock provider)[2m > [22mcheckpoints at every wave boundary and ends with status=completed [33m371[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-001 session checkpoint store[2m > [22mresolves resume targets by id, unique prefix, path and current project [33m3240[2mms[22m[39m
+ [31m❯[39m packages/cli/tests/init-templates.test.js [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 8926[2mms[22m[39m
+   [33m[2m✓[22m[39m MF-008 init template hygiene[2m > [22mserver templates enable helmet + cors + rate limiting by default [33m905[2mms[22m[39m
+[31m   [31m×[31m MF-008 init template hygiene[2m > [22mapplyTemplate writes .gitignore + .env.example into a fresh project[33m 5198[2mms[22m[31m[39m
+[31m     → Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+   [33m[2m✓[22m[39m MF-008 init template hygiene[2m > [22ma pre-existing .gitignore is never clobbered by the safety net [33m2114[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/migrate.test.js [2m([22m[2m13 tests[22m[2m)[22m[33m 6156[2mms[22m[39m
+   [33m[2m✓[22m[39m Migrate Mode (doc 51)[2m > [22mCharacterization & Snapshotting[2m > [22msnapshots project behavior with baseline tests and characterization [33m652[2mms[22m[39m
+   [33m[2m✓[22m[39m Migrate Mode (doc 51)[2m > [22mFull Migration Workflow (runMigrate)[2m > [22mexecutes the full migrate lifecycle [33m5183[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/clean.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 2111[2mms[22m[39m
+   [33m[2m✓[22m[39m Clean Mode — Dead Code + AI-Bloat Detection (Doc 55)[2m > [22mtier 1: findDeadCode scans and returns structured findings [33m1583[2mms[22m[39m
+   [33m[2m✓[22m[39m Clean Mode — Dead Code + AI-Bloat Detection (Doc 55)[2m > [22mrunClean snapshots behavior, executes fixes, and checks equivalence [33m368[2mms[22m[39m
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mforwards CLI events to authenticated web clients
+[22m[39m[SOCKET] connection: 7iKtQp9WY6fN6jpMAAAA role: emitter url: /live/?EIO=4&transport=polling&t=47y4sxf9
+
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mforwards CLI events to authenticated web clients
+[22m[39m[SOCKET] connection: VZbohEcXJAJZO-lzAAAB role: listener url: /live/?EIO=4&transport=polling&t=47xz1oyr
+
+ [32m✓[39m packages/web/tests/no-dead-utilities.test.js [2m([22m[2m2 tests[22m[2m)[22m[90m 90[2mms[22m[39m
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mforwards build:complete to web clients
+[22m[39m[SOCKET] connection: qB-7TrzwlG-rPD7YAAAC role: listener url: /live/?EIO=4&transport=polling&t=47z3kygm
+[SOCKET] connection: fG6ENfQdOtsvmDyQAAAD role: emitter url: /live/?EIO=4&transport=polling&t=47z7l3x8
+
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mforwards watch events to web clients
+[22m[39m[SOCKET] connection: pANxzP7zZ0RYY0sNAAAE role: listener url: /live/?EIO=4&transport=polling&t=47zhavxl
+[SOCKET] connection: GjUSY6Nj6j6t5Nh9AAAF role: emitter url: /live/?EIO=4&transport=polling&t=47zhcxkc
+
+[90mstdout[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mallows CLI emitters that present the shared secret
+[22m[39m[SOCKET] connection: tAuxI64VNn-j-iZ3AAAH role: emitter url: /live/?EIO=4&transport=polling&t=4801i0tm
+
+[90mstderr[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mrejects sockets with no token and no CLI secret
+[22m[39m[SOCKET] rejected: no token and missing/invalid CLI_SHARED_SECRET
+
+[90mstderr[2m | packages/backend/tests/sockets.test.js[2m > [22m[2msocket forwarding[2m > [22m[2mrejects sockets presenting an incorrect CLI secret
+[22m[39m[SOCKET] rejected: no token and missing/invalid CLI_SHARED_SECRET
+
+ [32m✓[39m packages/backend/tests/sockets.test.js [2m([22m[2m9 tests[22m[2m)[22m[33m 4038[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mforwards CLI events to authenticated web clients [33m1560[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mforwards build:complete to web clients [33m555[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mforwards watch events to web clients [33m382[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mrejects sockets with an invalid token [33m345[2mms[22m[39m
+   [33m[2m✓[22m[39m socket forwarding[2m > [22mrejects sockets presenting an incorrect CLI secret [33m431[2mms[22m[39m
+[90mstderr[2m | packages/cli/tests/planner.test.js[2m > [22m[2mparsePlanOutput[2m > [22m[2mnormalizes todos via normalizePlan
+[22m[39m[plan] Todo t1 has unknown domain "invalid" — defaulting to "backend".
+
+ [32m✓[39m packages/cli/tests/planner.test.js [2m([22m[2m11 tests[22m[2m)[22m[90m 148[2mms[22m[39m
+ [32m✓[39m packages/shared/tests/provider.test.js [2m([22m[2m17 tests[22m[2m)[22m[90m 187[2mms[22m[39m
+ [32m✓[39m packages/web/tests/no-silent-catches.test.js [2m([22m[2m2 tests[22m[2m)[22m[33m 1258[2mms[22m[39m
+   [33m[2m✓[22m[39m no silent catches (WEB-015)[2m > [22mhas no new empty catch blocks [33m404[2mms[22m[39m
+   [33m[2m✓[22m[39m no silent catches (WEB-015)[2m > [22mhas not left stale entries in the baseline [33m849[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/orchestrator.test.js [2m([22m[2m18 tests[22m[2m)[22m[90m 46[2mms[22m[39m
+ [32m✓[39m packages/shared/tests/plan.test.js [2m([22m[2m11 tests[22m[2m)[22m[90m 161[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/subagent-manager.test.js [2m([22m[2m10 tests[22m[2m)[22m[33m 357[2mms[22m[39m
+ [32m✓[39m packages/cli/tests/techstack.test.js [2m([22m[2m11 tests[22m[2m)[22m[90m 33[2mms[22m[39m
+ [32m✓[39m packages/backend/tests/migrate-key-enc.test.js [2m([22m[2m7 tests[22m[2m)[22m[33m 15258[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mdry-run reports rotation but writes nothing (no DB write, no backup file) [33m3001[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mapply: backs up ORIGINAL blobs, then rewrites v1 → v2 verifiably [33m4269[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mskips rows already on the current keyId (idempotent second run) [33m463[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mrotates GithubAccount accessToken rows too [33m4147[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mleaves undecryptable rows untouched and reports them as failures [33m564[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mfails closed on unknown keyId (rotation key not in keyring) [33m632[2mms[22m[39m
+   [33m[2m✓[22m[39m BSEC-001 migrate-key-encryption script[2m > [22mclassifies blob formats via parseKeyId (v1 vs v2) [33m1934[2mms[22m[39m
+[90mstderr[2m | packages/cli/tests/config-validation.test.js[2m > [22m[2mMF-007 config validation (isolated HOME)[2m > [22m[2mkeeps last-good config when the file becomes schema-invalid
+[22m[39m[config] ⚠️  config.json failed schema validation — keeping last-known-good config. Issues: Invalid config: concurrency: Too small: expected number to be >0. Run `mcode config validate` for details.
+
+ [32m✓[39m packages/shared/tests/index.test.js [2m([22m[2m12 tests[22m[2m)[22m[33m 696[2mms[22m[39m
+   [33m[2m✓[22m[39m CostLedger[2m > [22mpersists and reloads rpm/tpm via save/load [33m539[2mms[22m[39m
+ [32m✓[39m packages/backend/tests/pair.test.js [2m([22m[2m18 tests[22m[2m)[22m[33m 15316[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mround-trips v2 blobs under the dedicated secret [33m1898[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mkeeps legacy v1 blobs readable and flags them for rotation [33m2566[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mbinds v2 ciphertext to the owner via AAD (wrong user fails) [33m1382[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mreads jwt1 fallback blobs written without a dedicated secret [33m1317[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22msupports rotation via a previous-secret keyring entry [33m1857[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mrejects unknown keyIds with an actionable error [33m540[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mkeyManagerFromEnv prefers explicit options over env, and env over nothing [33m2505[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mv2 decrypt rejects tampered blobs [33m1373[2mms[22m[39m
+   [33m[2m✓[22m[39m Pair Mode Backend Logic (Doc 53)[2m > [22mBSEC-001 envelope encryption (secret-enc key manager)[2m > [22mlegacy v1 round-trip stays byte-compatible [33m1838[2mms[22m[39m

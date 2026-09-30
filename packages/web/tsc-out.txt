@@ -1,0 +1,2 @@
+npm notice run mcode-monorepo@2.4.6 npx
+npm notice run tsc --noEmit

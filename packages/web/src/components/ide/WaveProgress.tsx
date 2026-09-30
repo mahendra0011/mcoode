@@ -51,11 +51,18 @@ export const DOMAIN_ABBREV: Record<string, string> = {
   'ai-ml': 'ai-ml',
 };
 
-const STATUS_ICON = {
+/**
+ * WEB-032: the store can park a subagent row in `assigned` (model chosen, agent
+ * not started yet), so the icon map must be keyed by the *full* status union —
+ * otherwise the `?? STATUS_ICON.pending` fallback stops being reachable and TS
+ * reports the index as an implicit `any` error (TS7053).
+ */
+const STATUS_ICON: Record<Subagent['status'], React.ReactElement> = {
   done: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />,
   failed: <XCircle className="w-3.5 h-3.5 text-red-400" />,
   running: <Loader2 className="w-3.5 h-3.5 text-emerald-400 animate-spin" />,
   pending: <Clock className="w-3.5 h-3.5 text-white/30" />,
+  assigned: <Clock className="w-3.5 h-3.5 text-white/40" />,
   needs_review: <Clock className="w-3.5 h-3.5 text-amber-400" />,
 };
 
@@ -69,9 +76,16 @@ interface Wave {
 interface Subagent {
   todoId: string;
   domain: string;
-  status: 'pending' | 'running' | 'done' | 'failed';
+  // WEB-032: the reducer can also park a row in `assigned` (model picked,
+  // not started) or `needs_review` (turn budget / blocked) — both must be
+  // representable here or the union lies about the store.
+  status: 'pending' | 'assigned' | 'running' | 'done' | 'failed' | 'needs_review';
   message?: string;
   progress?: number;
+  /** Last tool/step reported for this subagent (WEB-034: populated only when
+   *  the producer includes a todoId). */
+  lastTool?: string;
+  lastFile?: string;
 }
 /**
  * `BuildSummary` is declared once, in the store, because that is where the
@@ -177,9 +191,15 @@ export function WaveProgress({
                     <div className="ml-4 flex flex-col gap-1 mt-1">
                       {Object.values(subagents)
                         .filter((s) => {
-                          // Show subagents that are running or done
-                          const todo = w.subagentIds?.includes(s.todoId);
-                          return s.status === 'running' || s.status === 'done';
+                          // Show only the subagents that belong to THIS wave and
+                          // are running/done. `w.subagentIds` is derived from the
+                          // wave's real todo list (WEB-033); without it, finished
+                          // agents from earlier waves were listed here too.
+                          const inWave =
+                            !w.subagentIds ||
+                            w.subagentIds.length === 0 ||
+                            w.subagentIds.includes(String(s.todoId));
+                          return inWave && (s.status === 'running' || s.status === 'done');
                         })
                         .slice(0, 3)
                         .map((s) => (
@@ -191,6 +211,12 @@ export function WaveProgress({
                             <span className="text-white/60 truncate max-w-[180px]">
                               {s.message || 'working...'}
                             </span>
+                            {s.lastTool && (
+                              <span className="text-white/30 font-mono shrink-0">· {s.lastTool}</span>
+                            )}
+                            {s.lastFile && !s.lastTool && (
+                              <span className="text-white/30 font-mono truncate max-w-[140px]">· {s.lastFile}</span>
+                            )}
                           </div>
                         ))}
                     </div>

@@ -1,0 +1,19 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/projects/mcoode/packages/web[39m
+
+ [32m✓[39m src/components/chat/__tests__/SpinnerBlock.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 736[2mms[22m[39m
+   [33m[2m✓[22m[39m SpinnerBlock (spec §4/§5)[2m > [22madvances exactly one frame per 80ms tick [33m495[2mms[22m[39m
+ [32m✓[39m src/components/chat/__tests__/AgentActionSequence.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 976[2mms[22m[39m
+   [33m[2m✓[22m[39m AgentActionSequence (spec §1 — never fabricate progress)[2m > [22mshows “Thinking” + elapsed seconds by default [33m668[2mms[22m[39m
+ [32m✓[39m src/components/chat/__tests__/mcodeUX.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[33m 2000[2mms[22m[39m
+   [33m[2m✓[22m[39m ToolCallCard icon contract (spec §4)[2m > [22mtype="explored" renders lucide-folder-search [33m621[2mms[22m[39m
+   [33m[2m✓[22m[39m GodModeToggle (spec §3 — emerald, not purple)[2m > [22mreports the next value through onChange [33m970[2mms[22m[39m
+ [32m✓[39m src/components/ide/__tests__/SearchPanel.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 2588[2mms[22m[39m
+   [33m[2m✓[22m[39m SearchPanel[2m > [22mrenders the search input and header [33m661[2mms[22m[39m
+   [33m[2m✓[22m[39m SearchPanel[2m > [22mupdates the query as the user types [33m1434[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m23 passed[39m[22m[90m (23)[39m
+[2m   Start at [22m 02:49:02
+[2m   Duration [22m 21.82s[2m (transform 2.75s, setup 6.14s, collect 15.14s, tests 6.30s, environment 36.57s, prepare 6.14s)[22m
+

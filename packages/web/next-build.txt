@@ -1,0 +1,50 @@
+npm notice run mcode-monorepo@2.4.6 npx
+npm notice run next build
+▲ Next.js 16.3.5 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.mjs took 205ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 101s
+  Running TypeScript ...
+✓ Finished filesystem cache database compaction in 10.4s
+  Finished TypeScript in 62s ...
+  Collecting page data using 15 workers ...
+  Generating static pages using 15 workers (0/4) ...
+  Generating static pages using 15 workers (1/4) 
+  Generating static pages using 15 workers (2/4) 
+  Generating static pages using 15 workers (3/4) 
+✓ Generating static pages using 15 workers (4/4) in 1400ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /ai
+├ ƒ /ai/chat
+├ ƒ /api/android/devices
+├ ƒ /api/android/devices/[id]/start
+├ ƒ /api/docker/containers
+├ ƒ /api/docker/images
+├ ƒ /changelog
+├ ƒ /cli
+├ ƒ /commands
+├ ƒ /docs
+├ ƒ /extensions
+├ ƒ /forgot-password
+├ ƒ /live
+├ ƒ /login
+├ ƒ /mcode
+├ ƒ /plugins
+├ ƒ /preview
+├ ƒ /sessions
+├ ƒ /sessions/[id]
+├ ƒ /settings
+├ ƒ /signup
+└ ƒ /tools
+
+
+ƒ Proxy (Middleware)
+
+ƒ  (Dynamic)  server-rendered on demand
+

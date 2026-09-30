@@ -19,7 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EVENT_TO_SOCKET } from '../../shared/src/events.js';
+import { EVENT_TO_SOCKET, SOCKET } from '../../shared/src/events.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const webSrc = join(here, '..', 'src');
@@ -156,9 +156,35 @@ describe('web ⇄ backend socket contract', () => {
     ).toEqual([]);
   });
 
-  it('never subscribes to the dead `subagent:*` namespace', () => {
-    const dead = [...socketLiterals().keys()].filter((n) => n.startsWith('subagent:'));
-    expect(dead, 'nothing emits `subagent:*` — use the canonical `agent:*` names').toEqual([]);
+  it('only subscribes to `subagent:*` names that chat-session.js really forwards (WEB-032)', async () => {
+    // WEB-001 banned every `subagent:*` subscription on the premise that the
+    // CLI→backend relay never emits them. That premise was only half true: the
+    // web-driven god mode (`ChatSession.runGod`) forwards the same bus events
+    // under `SOCKET.SERVER_TO_CLIENT.SUBAGENT_*` via its `godEventMap`, so the
+    // blanket ban silently killed the web's own god-mode progress UI. The rule
+    // is now: a `subagent:*` listener must be one of the names the ChatSession
+    // actually forwards; anything else is still dead and fails here.
+    const sessionSrc = readFileSync(
+      join(repoRoot, 'packages', 'backend', 'src', 'chat-session.js'),
+      'utf8'
+    );
+    const forwarded = new Set();
+    for (const m of sessionSrc.matchAll(/S2C\.SUBAGENT_([A-Z_]+)/g)) {
+      forwarded.add(`subagent:${m[1].toLowerCase().replace(/_/g, '_')}`);
+    }
+    // The socket name is not simply the snake-cased key: read the real values
+    // from the shared registry, keyed by the same constant suffix.
+    const allowed = new Set(
+      Object.entries(SOCKET.SERVER_TO_CLIENT)
+        .filter(([k]) => k.startsWith('SUBAGENT_'))
+        .map(([, v]) => v)
+    );
+    expect(forwarded.size, 'chat-session.js godEventMap no longer forwards SUBAGENT_* — update this test').toBeGreaterThan(0);
+
+    const dead = [...socketLiterals().keys()].filter(
+      (n) => n.startsWith('subagent:') && !allowed.has(n)
+    );
+    expect(dead, 'these `subagent:*` names are not forwarded by chat-session.js — use the canonical `agent:*` names').toEqual([]);
   });
 
   it('uses exactly the relay god-mode event names', () => {

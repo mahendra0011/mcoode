@@ -1,0 +1,37 @@
+npm notice run mcode-monorepo@2.4.6 npx
+npm notice run next build
+▲ Next.js 16.3.5 (Turbopack)
+- Environments: .env.local
+✓ Running next.config.mjs took 263ms
+
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 1 error:
+./packages/web/src/lib/slashCommands.js:138:52
+Error: Expected ',', got ':'
+  [90m136 |[0m [90m * `switchToAssistantTab`, so running a command from Chat does the right thing.[0m
+  [90m137 |[0m [90m */[0m
+[31m[1m>[0m [90m138 |[0m [36mexport[0m [36mfunction[0m getAvailableSlashCommands(activeTab: string) {
+  [90m    |[0m                                                    [31m[1m^[0m
+  [90m139 |[0m   [36mreturn[0m [33mWEB_SLASH_COMMANDS[0m;
+  [90m140 |[0m }
+  [90m141 |[0m
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./packages/web/src/lib/slashCommands.js [Client Component Browser]
+    ./packages/web/src/components/pages/CommandsPage.tsx [Client Component Browser]
+    ./packages/web/src/app/commands/page.tsx [Client Component Browser]
+    ./packages/web/src/app/commands/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./packages/web/src/lib/slashCommands.js [Client Component SSR]
+    ./packages/web/src/components/pages/CommandsPage.tsx [Client Component SSR]
+    ./packages/web/src/app/commands/page.tsx [Client Component SSR]
+    ./packages/web/src/app/commands/page.tsx [Server Component]
+
+
+    at <unknown> (./packages/web/src/lib/slashCommands.js:138:52)

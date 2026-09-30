@@ -2,12 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { findDeadCode } from '../src/core/clean/tier1-dead-code.js';
 import { findBloat } from '../src/core/clean/tier2-bloat.js';
 import { runClean } from '../src/core/clean/run-clean.js';
-import {
-  WEB_SLASH_COMMANDS,
-  handleSlashCommand,
-  isSlashCommand,
-  getAvailableSlashCommands,
-} from '../../web/src/lib/slashCommands.js';
 
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -125,27 +119,5 @@ console.log('hello');
     } finally {
       await rm(tmp, { recursive: true, force: true }).catch(() => {});
     }
-  });
-
-  it('/clean command is registered in WEB_SLASH_COMMANDS with modes category', () => {
-    const cleanCmd = WEB_SLASH_COMMANDS.find((c) => c.cmd === 'clean');
-    expect(cleanCmd).toBeDefined();
-    expect(cleanCmd.category).toBe('modes');
-    expect(cleanCmd.icon).toBe('✂️');
-  });
-
-  it('handles /clean slash command in AI Code Assistant', () => {
-    const dispatch = vi.fn();
-    const runCleanMode = vi.fn();
-    const socket = { send: vi.fn(), undo: vi.fn(), emit: vi.fn() };
-
-    const handled = handleSlashCommand('/clean', dispatch, socket, {
-      activeTab: 'AI Code Assistant',
-      runCleanMode,
-    });
-
-    expect(handled).toBe(true);
-    expect(runCleanMode).toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalled();
   });
 });

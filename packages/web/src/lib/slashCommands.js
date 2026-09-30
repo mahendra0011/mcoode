@@ -1,6 +1,7 @@
 import { addMessage, setMode } from '../store/chatSlice';
 import { clearTokens } from './api';
 import { useIDEStore } from '../store/ideStore';
+import { reportError } from './logger';
 
 /**
  * In-memory macro recording buffer for /record and /replay
@@ -121,13 +122,21 @@ export const CODE_MODE_COMMANDS = new Set([
 
 /**
  * Return slash commands available for the given active tab.
- * In AI Code Assistant and AI Code Editor, curated web commands are available.
- * In Chat mode, NO slash commands are shown (pure conversational chat).
+ *
+ * AUDIT-014: this used to return `[]` for the Chat tab. That was not merely a
+ * design choice — it was a *visible* bug: the Chat composer renders
+ * `<SlashCommandPicker>` whenever the prompt starts with `/` (AIChatPage.tsx),
+ * so typing `/` in Chat mode popped an empty panel reading "Available commands
+ * · All (0) · Modes (0) · … · 0 commands". Every handler (`clear`, `help`,
+ * `god`, `model`, `context`, `export`) was fully implemented in
+ * `handleSlashCommand` and wired into `handleSubmit`, but `isSlashCommand()`
+ * returned false for Chat so none of them could ever run.
+ *
+ * All three tabs now expose the command list. `handleSlashCommand` already
+ * routes tab-switching commands (`/god`, `/agent`) through
+ * `switchToAssistantTab`, so running a command from Chat does the right thing.
  */
 export function getAvailableSlashCommands(activeTab) {
-  if (activeTab === 'Chat') {
-    return [];
-  }
   return WEB_SLASH_COMMANDS;
 }
 
@@ -178,11 +187,11 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
   if (!trimmed.startsWith('/')) return false;
 
   const { activeTab } = state;
-  const isCodeMode = activeTab === 'AI Code Assistant' || activeTab === 'AI Code Editor';
-  if (!isCodeMode) {
-    // Chat mode has no slash commands — fall through as normal message
-    return false;
-  }
+  // AUDIT-014: was `activeTab === 'Chat' → return false`. Combined with the
+  // `getAvailableSlashCommands('Chat') → []` branch this made every command
+  // dead in the Chat tab while the composer still rendered the (empty) picker.
+  // The handlers below all guard their own prerequisites, so the tab gate is
+  // unnecessary — a leading `/` is a slash command in every tab.
 
   const [name, ...rest] = trimmed.slice(1).split(' ');
   const { toggleWatchMode, switchToAssistantTab } = state;
@@ -207,7 +216,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
       const sub = (rest[0] || '').toLowerCase();
       // 876: reset the activity bar on mode switches so panels from the
       // previous mode don't linger in a conflicting state.
-      try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch { /* store unavailable */ }
+      try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch (err) { reportError('setActiveActivityBar', err, { userVisible: false }); }
       dispatch(setMode('agent'));
       // 737: actually propagate the role — previously the message claimed
       // it while nothing was dispatched.
@@ -394,7 +403,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
       try {
         clearTokens();
         window.dispatchEvent(new CustomEvent('mcode:auth:logout'));
-      } catch {}
+      } catch (err) { reportError('auth:logout', err, { userVisible: false }); }
       if (state.router?.push) {
         state.router.push('/login');
       } else if (typeof window !== 'undefined') {
@@ -537,12 +546,12 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
           text: `⚙️ Current mode: ${state.mode || 'agent'}. Available modes: chat, agent, god, explain, plan, review. Use: /mode <name>`
         }));
       } else if (target === 'god') {
-        try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch { /* store unavailable */ }
+        try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch (err) { reportError('setActiveActivityBar', err, { userVisible: false }); }
         dispatch(setMode('agent'));
         if (state.setGodMode) state.setGodMode(true);
         dispatch(addMessage({ kind: 'ok', text: '⚡ Switched to God-mode (parallel multi-agent builds).' }));
       } else if (['chat', 'agent', 'plan', 'explain', 'review'].includes(target)) {
-        try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch { /* store unavailable */ }
+        try { useIDEStore.getState().setActiveActivityBar?.('explorer'); } catch (err) { reportError('setActiveActivityBar', err, { userVisible: false }); }
         dispatch(setMode(target));
         if (target === 'agent' && state.setGodMode) state.setGodMode(false);
         dispatch(addMessage({ kind: 'ok', text: `✓ Switched to ${target} mode.` }));
@@ -676,7 +685,7 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
       } else {
         if (typeof document !== 'undefined') {
           document.documentElement.setAttribute('data-color-scheme', target);
-          try { localStorage.setItem('mcode_color_scheme', target); } catch {}
+          try { localStorage.setItem('mcode_color_scheme', target); } catch (err) { reportError('localStorage', err, { userVisible: false }); }
         }
         dispatch(addMessage({ kind: 'ok', text: `✓ Color scheme set to "${target}".` }));
       }
@@ -836,6 +845,10 @@ export function handleSlashCommand(cmd, dispatch, socket, state = {}) {
  * Only recognized as slash commands when in AI Code Assistant or AI Code Editor.
  */
 export function isSlashCommand(prompt, activeTab) {
-  if (activeTab === 'Chat') return false;
+  // AUDIT-014: was `if (activeTab === 'Chat') return false;`. That made every
+  // command unreachable from the Chat tab even though the composer rendered the
+  // picker and every handler was implemented. The tab argument is kept for API
+  // compatibility with the existing call sites.
+  void activeTab;
   return Boolean(prompt?.trim().startsWith('/'));
 }

@@ -1,6 +1,33 @@
 import { test, expect } from '@playwright/test';
 
-// ── Verification: All pages use Framer Motion animations, no plain buttons ──
+// TEMPORARY diagnostic probe (deleted after the audit).
+test('probe: slash picker DOM', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('mcode_tokens', JSON.stringify({ access: 'fake', refresh: 'fake' }));
+  });
+  await page.goto('/ai/chat');
+  await page.waitForTimeout(1500);
+  const chatTab = page.locator('button').filter({ hasText: /^Chat$/ });
+  console.log('chatTab count:', await chatTab.count());
+  if (await chatTab.count() > 0) await chatTab.click();
+  await page.waitForTimeout(500);
+  const tas = page.locator('textarea');
+  console.log('textarea count:', await tas.count());
+  const ta = tas.first();
+  console.log('visible?', await ta.isVisible());
+  await ta.focus();
+  await ta.fill('/');
+  await page.waitForTimeout(800);
+  console.log('textarea value:', await ta.inputValue());
+  console.log('buttons containing /clear:', await page.locator('button').filter({ hasText: '/clear' }).count());
+  console.log('all buttons count:', await page.locator('button').count());
+  const html = await page.evaluate(() => {
+    const el = document.querySelector('textarea');
+    const wrap = el?.parentElement;
+    return wrap ? wrap.outerHTML.slice(0, 1500) : 'no wrap';
+  });
+  console.log('WRAP HTML:', html);
+});
 
 test.describe('Animation Coverage Across All Pages', () => {
   const pages = [

@@ -1,0 +1,24 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/projects/mcoode[39m
+
+ [32m✓[39m packages/web/tests/chat-icons.test.js [2m([22m[2m17 tests[22m[2m)[22m[90m 40[2mms[22m[39m
+ [32m✓[39m packages/web/tests/utils.test.js [2m([22m[2m4 tests[22m[2m)[22m[90m 85[2mms[22m[39m
+ [32m✓[39m packages/web/tests/chat-processing-colors.test.js [2m([22m[2m8 tests[22m[2m)[22m[90m 40[2mms[22m[39m
+ [32m✓[39m packages/web/tests/god-mode-event-parity.test.js [2m([22m[2m7 tests[22m[2m)[22m[90m 59[2mms[22m[39m
+ [32m✓[39m packages/web/tests/wave-payload.test.js [2m([22m[2m7 tests[22m[2m)[22m[90m 75[2mms[22m[39m
+ [32m✓[39m packages/web/tests/no-silent-catches.test.js [2m([22m[2m2 tests[22m[2m)[22m[33m 782[2mms[22m[39m
+   [33m[2m✓[22m[39m no silent catches (WEB-015)[2m > [22mhas no new empty catch blocks [33m355[2mms[22m[39m
+   [33m[2m✓[22m[39m no silent catches (WEB-015)[2m > [22mhas not left stale entries in the baseline [33m418[2mms[22m[39m
+ [32m✓[39m packages/web/tests/socket-contract.test.js [2m([22m[2m5 tests[22m[2m)[22m[33m 1160[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22msubscribes only to events the backend can emit [33m550[2mms[22m[39m
+   [33m[2m✓[22m[39m web ⇄ backend socket contract[2m > [22monly subscribes to `subagent:*` names that chat-session.js really forwards (WEB-032) [33m308[2mms[22m[39m
+ [32m✓[39m packages/web/tests/provider-catalog.test.js [2m([22m[2m4 tests[22m[2m)[22m[33m 385[2mms[22m[39m
+   [33m[2m✓[22m[39m provider catalog does not drift from the CLI (WEB-029)[2m > [22mthere is exactly ONE fallback provider list in src [33m357[2mms[22m[39m
+ [32m✓[39m packages/web/tests/electron-bridge-removed.test.js [2m([22m[2m3 tests[22m[2m)[22m[33m 496[2mms[22m[39m
+ [32m✓[39m packages/web/tests/no-dead-utilities.test.js [2m([22m[2m2 tests[22m[2m)[22m[90m 47[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m10 passed[39m[22m[90m (10)[39m
+[2m      Tests [22m [1m[32m59 passed[39m[22m[90m (59)[39m
+[2m   Start at [22m 01:57:18
+[2m   Duration [22m 6.20s[2m (transform 1.56s, setup 0ms, collect 6.81s, tests 3.17s, environment 25ms, prepare 10.96s)[22m
+

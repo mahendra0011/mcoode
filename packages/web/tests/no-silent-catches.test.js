@@ -48,11 +48,6 @@ const KNOWN = new Set([
   'src/components/pages/ToolsPage.tsx:100',
   'src/lib/extensions/editorApi.ts:200',
   'src/lib/extensions/editorApi.ts:219',
-  'src/lib/slashCommands.js:189',
-  'src/lib/slashCommands.js:376',
-  'src/lib/slashCommands.js:519',
-  'src/lib/slashCommands.js:524',
-  'src/lib/slashCommands.js:658',
   'src/store/ideStore.ts:674',
   'src/store/ideStore.ts:677',
 ]);

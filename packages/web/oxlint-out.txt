@@ -1,0 +1,47 @@
+npm notice run mcode-monorepo@2.4.6 npx
+npm notice run oxlint src
+file:///D:/projects/mcoode/packages/web/node_modules/oxlint/dist/bindings.js:459
+		let error = /* @__PURE__ */ Error("Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.");
+		                            ^
+
+Error: Cannot find native binding. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828). Please try `npm i` again after removing both package-lock.json and node_modules directory.
+    at file:///D:/projects/mcoode/packages/web/node_modules/oxlint/dist/bindings.js:459:31
+    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+    at async node:internal/modules/esm/loader:633:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  cause: Error: Cannot find module '@oxlint/binding-wasm32-wasi'
+  Require stack:
+  - D:\projects\mcoode\packages\web\node_modules\oxlint\dist\bindings.js
+      at file:///D:/projects/mcoode/packages/web/node_modules/oxlint/dist/bindings.js:392:15
+      ... 5 lines matching cause stack trace ...
+      at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+    cause: Error: Cannot find module './oxlint.wasi.cjs'
+    Require stack:
+    - D:\projects\mcoode\packages\web\node_modules\oxlint\dist\bindings.js
+        at file:///D:/projects/mcoode/packages/web/node_modules/oxlint/dist/bindings.js:392:15
+        ... 5 lines matching cause stack trace ...
+        at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+      cause: Error: Cannot find module '@oxlint/binding-win32-x64-msvc'
+      Require stack:
+      - D:\projects\mcoode\packages\web\node_modules\oxlint\dist\bindings.js
+          at file:///D:/projects/mcoode/packages/web/node_modules/oxlint/dist/bindings.js:392:15
+          ... 5 lines matching cause stack trace ...
+          at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+        cause: Error: Cannot find module './oxlint.win32-x64-msvc.node'
+        Require stack:
+        - D:\projects\mcoode\packages\web\node_modules\oxlint\dist\bindings.js
+            at file:///D:/projects/mcoode/packages/web/node_modules/oxlint/dist/bindings.js:392:15
+            at Array.reduce (<anonymous>)
+            at createLoadErrorChain (file:///D:/projects/mcoode/packages/web/node_modules/oxlint/dist/bindings.js:385:16)
+            at file:///D:/projects/mcoode/packages/web/node_modules/oxlint/dist/bindings.js:460:23
+            at ModuleJob.run (node:internal/modules/esm/module_job:439:25)
+            at async node:internal/modules/esm/loader:633:26
+            at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+          cause: null
+        }
+      }
+    }
+  }
+}
+
+Node.js v24.16.0

@@ -1,21 +1,151 @@
-# BLD-001: local stack — backend (+ optional Piston sandbox).
+# mcode — full local stack.
+#
+# Run everything:      docker compose up -d --build
+# Run without sandbox: docker compose up -d --build mongo redis backend web
+# Tear down:           docker compose down -v
+#
+# Backend  → http://localhost:3100  (API, Swagger at /api/docs, socket at /live)
+# Web      → http://localhost:3000
+#
+# The old compose file had no mongo/redis and no web service, so the backend
+# exited(1) on `connectDb()` and the UI could only be reached via `npm run
+# dev:web`. Both are wired up here.
+
+name: mcode
+
 services:
+  # ─── MongoDB ────────────────────────────────────────────────────────────────
+  # The backend calls process.exit(1) when MONGODB_URI is unreachable, so this
+  # service is mandatory, not optional. MONGODB_URI in .env points at Atlas
+  # (mongodb+srv://) — that works too, but the local instance below means
+  # `docker compose up` works with no cloud dependency at all.
+  mongo:
+    image: mongo:7
+    container_name: mcode-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      # `mongosh` ships with mongo:7. Without this, depends_on would only wait
+      # for the container to start, not for mongod to accept connections.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [mcode]
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
+  # Optional in the code (cache degrades to pass-through, queue to a no-op) but
+  # without it the /health report shows cache: passthrough and BullMQ jobs are
+  # silently dropped.
+  redis:
+    image: redis:7-alpine
+    container_name: mcode-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [mcode]
+
+  # ─── Piston code-execution sandbox (optional) ────────────────────────────────
+  # Kept out of the default `up` because it needs a large image and the
+  # host-runner is the fallback. Start it with:  docker compose --profile sandbox up -d
+  piston:
+    image: ghcr.io/engineer-man/piston
+    container_name: mcode-piston
+    profiles: ["sandbox"]
+    restart: unless-stopped
+    # Piston sandboxes untrusted code via namespaces; it needs these to work.
+    # Dropping them makes every exec fail with a permissions error.
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - piston-data:/var/lib/piston
+    ports:
+      - "2000:2000"
+    networks: [mcode]
+
+  # ─── Backend API ────────────────────────────────────────────────────────────
   backend:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    image: mcode-backend:latest
+    container_name: mcode-backend
+    restart: unless-stopped
     ports:
       - "3100:3100"
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      PISTON_URL: http://piston:2000
+      PORT: "3100"
+      # Service-name addressing: inside the compose network the backend talks
+      # to `mongo`/`redis`/`piston`, never to localhost.
+      MONGODB_URI: ${MONGODB_URI_DOCKER:-mongodb://mongo:27017/mcode}
+      REDIS_URI: ${REDIS_URI_DOCKER:-redis://redis:6379}
+      PISTON_URL: ${PISTON_URL_DOCKER:-http://piston:2000}
+      # CORS allowlist (server.js reads this). The web container is reached from
+      # the browser at localhost:3000, so that origin must be present.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS_DOCKER:-http://localhost:3000,http://127.0.0.1:3000}
+      # node-pty spawns a login shell for terminals; on Alpine there is no
+      # getty, so /bin/sh is the correct default.
+      SHELL: /bin/sh
     depends_on:
-      - piston
-    restart: unless-stopped
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [mcode]
 
-  # Piston code-execution sandbox (optional; host runner is the fallback).
-  piston:
-    image: ghcr.io/engineer-man/piston
-    ports:
-      - "2000:2000"
+  # ─── Web frontend (Next.js) ─────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        # Browser-side calls go through the Next.js proxy on this origin, so
+        # relative URLs are correct and CORS never applies.
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+        # Server-side rewrites (/api, /live) must resolve via the compose
+        # network, not the browser's localhost.
+        BACKEND_URL: http://backend:3100
+    image: mcode-web:latest
+    container_name: mcode-web
     restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Rewrites are evaluated at request time by next start, so this must be
+      # present at runtime as well as at build time.
+      BACKEND_URL: http://backend:3100
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [mcode]
+
+volumes:
+  mongo-data:
+  redis-data:
+  piston-data:
+
+networks:
+  mcode:
+    driver: bridge
+
