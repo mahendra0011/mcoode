@@ -14,6 +14,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "publish:ide": "node scripts/publish-ide.js",
     "mcode": "node packages/cli/bin/mcode.js",
     "dev:cli": "node --watch packages/cli/bin/mcode.js",
     "dev:web": "npm --workspace=web run dev",

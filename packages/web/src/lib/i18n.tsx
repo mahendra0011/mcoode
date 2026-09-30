@@ -74,6 +74,7 @@ const STRINGS: Record<Lang, Record<string, string>> = {
     "chat.send": "भेजें",
     "nav.ai": "एआई",
     "nav.cli": "सीएलआई",
+    "nav.ide": "डेस्कटॉप IDE",
     "nav.tools": "उपकरण",
     "nav.live": "लाइव",
     "nav.docs": "दस्तावेज़",

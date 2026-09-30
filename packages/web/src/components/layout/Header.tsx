@@ -80,6 +80,7 @@ export function Header() {
             {[
               { id: 'ai', label: t('nav.ai'), href: '/ai' },
               { id: 'cli', label: t('nav.cli'), href: '/cli' },
+              { id: 'ide', label: t('nav.ide'), href: '/ide' },
               { id: 'tools', label: t('nav.tools'), href: '/tools' },
               { id: 'live', label: t('nav.live'), href: '/live' },
               { id: 'docs', label: t('nav.docs'), href: '/docs' },
