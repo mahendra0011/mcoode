@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   LayoutDashboard, Component, Settings, Cpu, GitBranch,
   Shield, Plug, Workflow, Puzzle, BarChart3,
-  Terminal, Activity, Layers, ChevronRight, Home, Info,
+  Terminal, Activity, Layers, ChevronRight, Home, Info, Download,
 } from "lucide-react";
 import { McodeAnimationsTab } from "../mcode/McodeAnimationsTab";
 import { McodeArchitectureTab } from "../mcode/McodeArchitectureTab";
@@ -184,10 +184,20 @@ export function McodeDashboard() {
           ))}
         </nav>
 
-        <div className="p-3 border-t border-white/5">
+        <div className="p-3 border-t border-white/5 space-y-1">
+          {/* Desktop installer is published to /downloads/mcode-setup.exe by
+              scripts/publish-ide.js (stable path across versions). */}
+          <a
+            href="/downloads/mcode-setup.exe"
+            download
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Download App
+          </a>
           <a
             href="/ai/chat"
-            className="flex items-center gap-2 text-sm text-white/50 hover:text-white transition"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/[0.03] transition"
           >
             <Home className="w-4 h-4" />
             Back to Chat
@@ -197,11 +207,29 @@ export function McodeDashboard() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="border-b border-white/5 px-6 py-3 flex items-center gap-2 text-xs text-white/40">
-          <LayoutDashboard className="w-3 h-3" />
-          <span>Mcode Dashboard</span>
-          <ChevronRight className="w-3 h-3" />
-          <span className="text-white/60">{activeItem.label}</span>
+        <div className="border-b border-white/5 px-6 py-3 flex items-center justify-between text-xs text-white/40">
+          <div className="flex items-center gap-2">
+            <LayoutDashboard className="w-3 h-3" />
+            <span>Mcode Dashboard</span>
+            <ChevronRight className="w-3 h-3" />
+            <span className="text-white/60">{activeItem.label}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <a
+              href="/downloads/mcode-setup.exe"
+              download
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500 text-black font-semibold text-xs hover:bg-emerald-400 transition-colors shadow-sm"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download Desktop App (.exe)</span>
+            </a>
+            <a
+              href="/"
+              className="hover:text-white transition-colors flex items-center gap-1"
+            >
+              <Home className="w-3 h-3" /> Home
+            </a>
+          </div>
         </div>
         <div className="p-6">
           {/* WEB-028: every /mcode tab is read-only reference — say so on each one. */}

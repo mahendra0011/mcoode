@@ -72,7 +72,7 @@ export function Testimonials() {
               viewport={{ once: true }}
               transition={{ delay: 0.25 }}
             >
-              "This platform completely transformed how our support team operates. Response times dropped by 60% and customer satisfaction is at an all-time high."
+              "mcode's God Mode replaced 3 separate tools in my terminal workflow. Being able to dispatch parallel subagents and watch lint fixes happen in the background is a game changer for solo devs."
             </motion.blockquote>
             <motion.div
               className="text-base font-medium text-neutral-900 sm:text-lg dark:text-neutral-100"
@@ -81,8 +81,8 @@ export function Testimonials() {
               viewport={{ once: true }}
               transition={{ delay: 0.3 }}
             >
-              Jennifer Walsh,{' '}
-              <span className="text-neutral-500">VP of Customer Success @ Commandr</span>
+              Alex Rivera,{' '}
+              <span className="text-neutral-500">Staff Systems Engineer</span>
             </motion.div>
           </motion.div>
         </motion.div>

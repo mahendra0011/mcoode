@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only.
+
+  LAN testing points the app at a plain-HTTP address on the local network
+  (http://192.168.x.x:3000), and Android blocks cleartext HTTP by default since
+  API 28. This file lives under src/debug, so it is merged into debug builds
+  ONLY — a release build still requires HTTPS, which is what you want for a
+  real deployment.
+
+  This is why `allowMixedContent` alone is not enough in capacitor.config.ts:
+  that covers mixed content inside a page, not the top-level load itself.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:usesCleartextTraffic="true"
+        tools:replace="android:usesCleartextTraffic" />
+</manifest>

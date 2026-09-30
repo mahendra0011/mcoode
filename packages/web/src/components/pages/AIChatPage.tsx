@@ -20,6 +20,7 @@ import api from '../../lib/axios';
 import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhancementResolved, clarifyAnswered, watchStatusUpdated, bugcheckStarted, testModeSelectorOpened, testModeSelectorClosed, testModeReset, auditDismissed } from '../../store/chatSlice';
 import { handleSlashCommand, isSlashCommand, getAvailableSlashCommands, getGroupedSlashCommands } from '../../lib/slashCommands';
 import { SlashCommandPicker } from '../chat/SlashCommandPicker';
+import { ChatPanel } from '../chat/ChatPanel';
 import { CleanupReport } from '../chat/CleanupReport';
 import { GodModeToggle } from '../chat/mcodeUX';
 import { zipFilesOffMainThread, WORKSPACE_UPLOAD_TIMEOUT_MS, type ZipEntry } from '../../lib/zipInWorker';
@@ -2924,314 +2925,64 @@ export function AIChatPage() {
                       minSize="280px"
                       maxSize="650px"
                     >
-                      <div className="h-full border-l border-white/5 bg-[#0e0e0e] flex flex-col relative z-20 w-full min-w-[280px] overflow-hidden">
-                    <div className="p-3 px-4 flex items-center justify-between border-b border-white/5 bg-[#121212]/50">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-emerald-400" />
-                        <span className="text-sm font-semibold text-white">AI Assistance</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {/* Mode toggle pill: Chat vs Agent */}
-                        <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 text-[11px]">
-                          <button
-                            type="button"
-                            onClick={() => dispatch(setMode('chat'))}
-                            className={`px-2 py-0.5 rounded-md transition font-medium ${mode === 'chat' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}
-                          >
-                            Chat
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => dispatch(setMode('agent'))}
-                            className={`px-2 py-0.5 rounded-md transition font-medium ${mode === 'agent' ? 'bg-emerald-500/20 text-emerald-400 font-semibold' : 'text-white/40 hover:text-white'}`}
-                          >
-                            Agent
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => dispatch(setMode('explain'))}
-                            className={`px-2 py-0.5 rounded-md transition font-medium ${mode === 'explain' ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-white/40 hover:text-white'}`}
-                          >
-                            Explain
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => useIDEStore.getState().setSecondarySideBarVisible(false)}
-                          className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-white transition cursor-pointer"
-                          title={t('ide.closePanel')}
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  
-                  <div className="flex-1 flex flex-col min-h-0 p-4">
-                    {enhancedPrompt?.pending && (
-                      <ThinkingIndicator label="expanding your prompt..." size="sm" />
-                    )}
-                    {enhancedPrompt && !enhancedPrompt.pending && !enhancedPrompt.accepted && enhancedPrompt.enhanced && (
-                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                        className="w-full mb-4 bg-[#111] rounded-xl border border-white/10 p-4">
-                        <div className="text-xs text-white/50 mb-2">Your prompt looks short — expanded it:</div>
-                        <div className="text-sm text-white/80 bg-black/30 rounded-lg p-3">{enhancedPrompt.enhanced}</div>
-                        <div className="flex gap-2 mt-3">
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                            onClick={() => { dispatch(promptEnhancementResolved(true)); send(enhancedPrompt.enhanced); }}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium">
-                            Use expanded version
-                          </motion.button>
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                            onClick={() => { dispatch(promptEnhancementResolved(false)); send(enhancedPrompt.original); }}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 text-xs font-medium">
-                            Keep original
-                          </motion.button>
-                        </div>
-                      </motion.div>
-                    )}
-                    {clarifyQuestions && clarifyQuestions.map((q) => (
-                      <ClarifyCard key={q.question} question={q} onAnswer={(question, answer) => {
-                        dispatch(clarifyAnswered({ question, answer }));
-                        const socket = getSocket();
-                        if (socket && socket.connected) {
-                          socket.emit('clarify:answer', { question, answer });
-                        }
-                      }} />
-                    ))}
-                    <CodebaseReadingCard state={codebaseReading} />
-                    <RoleAssignmentTable assignments={roleAssignments} />
-                    <TodoCard plan={plan as any} />
-                    {godMode && (
-                      <div className="mb-2">
-                        <WaveProgress
-                          waves={waves as any}
-                          subagents={subagents as any}
-                          buildSummary={buildSummary}
-                          godMode={godMode}
-                          projectTier={projectTier}
-                          concurrency={concurrency}
-                        />
-                      </div>
-                    )}
-                    {comparisonRows && comparisonRows.length > 0 && (
-                      <ComparisonTable rows={comparisonRows} pass={verificationPass} maxPasses={8} title={t('ide.verification')} />
-                    )}
-                    {securityAudit && securityAudit.rows && securityAudit.rows.length > 0 && (
-                      <ComparisonTable rows={securityAudit.rows} pass={securityAudit.pass} maxPasses={5} title={t('ide.securityAudit')} />
-                    )}
-                    {migration && migration.equivalenceRows && migration.equivalenceRows.length > 0 && (
-                      <ComparisonTable rows={migration.equivalenceRows} pass={migration.pass} maxPasses={migration.maxPasses || 5} title={t('ide.equivalence')} />
-                    )}
-                    {playwrightAudit && (
-                      <PlaywrightAuditPanel
-                        active={playwrightAudit.active}
-                        pass={playwrightAudit.pass ?? 1}
-                        maxPasses={5}
-                        issues={playwrightAudit.issues ?? []}
-                        clean={playwrightAudit.clean ?? false}
+                      <ChatPanel
+                        messages={messages}
+                        isStreaming={isStreaming}
+                        mode={mode}
+                        godMode={godMode}
+                        plan={plan}
+                        enhancedPrompt={enhancedPrompt}
+                        clarifyQuestions={clarifyQuestions}
+                        codebaseReading={codebaseReading}
+                        roleAssignments={roleAssignments}
+                        waves={waves}
+                        subagents={subagents}
+                        buildSummary={buildSummary}
+                        projectTier={projectTier}
+                        concurrency={concurrency}
+                        comparisonRows={comparisonRows}
+                        verificationPass={verificationPass}
+                        securityAudit={securityAudit}
+                        migration={migration}
+                        playwrightAudit={playwrightAudit}
+                        bugcheck={bugcheck}
+                        securityCheckup={securityCheckup}
+                        reviewFindings={reviewFindings}
+                        audit={audit}
+                        testMode={testMode}
+                        permissionRequest={permissionRequest}
+                        connectionState={connectionState}
+                        send={send}
+                        interrupt={interrupt}
+                        answerPermission={answerPermission}
+                        undo={undo}
+                        fixSelectedSecurity={fixSelectedSecurity}
+                        runTestMode={runTestMode}
+                        runReview={runReview}
+                        runAudit={runAudit}
+                        runCleanMode={runCleanMode}
+                        prompt={prompt}
+                        setPrompt={setPrompt}
+                        handleSubmit={handleSubmit}
+                        handleChatKeyDown={handleChatKeyDown}
+                        commandPickerRef={commandPickerRef}
+                        showCommandPicker={showCommandPicker}
+                        setShowCommandPicker={setShowCommandPicker}
+                        selectedCmdIndex={selectedCmdIndex}
+                        setSelectedCmdIndex={setSelectedCmdIndex}
+                        activeTab={activeTab}
+                        activeWorkspaceId={activeWorkspaceId}
+                        workspaces={workspaces}
+                        activeBranch={activeBranch}
+                        isUploading={isUploading}
+                        setIsModalsOpen={setIsModalsOpen}
+                        setShowBranchDropdown={setShowBranchDropdown}
+                        isCleanScanning={isCleanScanning}
+                        showThinkingIndicator={showThinkingIndicator}
+                        activeToolLabel={activeToolLabel}
+                        showReactionBurst={showReactionBurst}
+                        streamInterrupted={streamInterrupted}
                       />
-                    )}
-                    {bugcheck && (bugcheck.running || bugcheck.deepFindings?.length > 0 || bugcheck.tierStatus?.some((t) => t.done)) && (
-                      <BugcheckReport
-                        findings={bugcheck.deepFindings}
-                        reportUrl={bugcheck.reportUrl || undefined}
-                        running={bugcheck.running}
-                        tierStatus={bugcheck.tierStatus}
-                      />
-                    )}
-                    {securityCheckup && (securityCheckup.running || securityCheckup.findings?.length > 0) && (
-                      <SecurityChecklistCard
-                        findings={securityCheckup.findings}
-                        onFixSelected={(ids) => fixSelectedSecurity(ids)}
-                      />
-                    )}
-                    {reviewFindings && reviewFindings.length > 0 && (
-                      <ReviewFindingsCard findings={reviewFindings} />
-                    )}
-                    {audit && (audit.running || (audit.grades && Object.keys(audit.grades).length > 0)) && (
-                      <AuditScorecard
-                        grades={audit.grades || {}}
-                        overallGrade={audit.overallGrade || 'A'}
-                        results={audit.results}
-                        onDownloadPDF={() => {
-                          if (audit.pdfUrl) {
-                            window.open(audit.pdfUrl, '_blank');
-                          } else {
-                            runAudit({ pdf: true });
-                          }
-                        }}
-                        onDismiss={() => dispatch(auditDismissed())}
-                      />
-                    )}
-                    {testMode.selecting && (
-                      <TestModeSelector
-                        onStart={(types, targetUrl) => {
-                          dispatch(testModeSelectorClosed());
-                          runTestMode(types, targetUrl);
-                        }}
-                        onCancel={() => dispatch(testModeSelectorClosed())}
-                      />
-                    )}
-                    {(testMode.running || (testMode.features?.length ?? 0) > 0 || !!testMode.summary) && (
-                      <AutonomousTestPanel
-                        active
-                        inventoryCount={testMode.inventoryCount}
-                        features={testMode.features}
-                        traditional={testMode.traditional}
-                        summary={testMode.summary}
-                        reportUrl={testMode.reportUrl}
-                        targetUrl={testMode.targetUrl}
-                      />
-                    )}
-                    <PermissionModal request={permissionRequest as any} onAnswer={answerPermission} />
-                    <VirtualChatMessages
-                      messages={messages}
-                      isStreaming={isStreaming}
-                      size="sm"
-                      isNormalChat={mode === 'chat'}
-                      undo={undo as any}
-                    />
-                    {streamInterrupted && (
-                      <StreamInterruptedNotice connectionState={connectionState} />
-                    )}
-                      {showThinkingIndicator && (
-                        <motion.div
-                          key="thinking-indicator-ide"
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                          className="flex items-start gap-2.5"
-                        >
-                          <div className="w-5 h-5 rounded-full border border-white/10 flex-shrink-0 flex items-center justify-center text-xs">
-                            M
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <AgentActionSequence key="agent-action-sequence-2" mode={mode} statusLabel={activeToolLabel} />
-                          </div>
-                        </motion.div>
-                      )}
-                      <ReactionBurst key="ide-reaction-burst" emoji="✓" show={showReactionBurst} />
-                  </div>
-
-                  {/* Inline Chat Input */}
-                  <div className="p-4 border-t border-white/5 bg-[#0c0c0c]">
-                    <form onSubmit={handleSubmit} className="w-full relative rounded-[20px] group">
-                      <div className="absolute -inset-[1.5px] rounded-[21px] overflow-hidden z-0">
-                        <div className="absolute inset-[-150%] mcode-input-glow-reversed opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
-                      </div>
-                      <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
-                        <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2" ref={commandPickerRef}>
-                          {/* Top Action Bar (Upload & Git Branch) */}
-                          <div className="flex items-center gap-3 px-1 pb-1">
-                            <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
-                              {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
-                              <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}</span>
-                              <ChevronDown className="w-3 h-3 opacity-50"/>
-                            </motion.button>
-                            <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title={t('ide.gitBranch')}>
-                              <GitBranch className="w-4 h-4 text-blue-400"/>
-                              <span>{activeBranch}</span>
-                              <ChevronDown className="w-3 h-3 opacity-50"/>
-                            </motion.button>
-                          </div>
-
-                          <textarea
-                          value={prompt}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setPrompt(val);
-                            if (val.startsWith('/')) { setShowCommandPicker(true); }
-                            else if (!val.includes('/')) { setShowCommandPicker(false); }
-                          }}
-                          placeholder={t('chat.askAgent')}
-                          className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-2 py-1 min-h-[40px] text-sm"
-                          onKeyDown={(e) => handleChatKeyDown(e, handleSubmit)}
-                        />
-                        {/* Slash Command Picker */}
-                        <AnimatePresence>
-                          {showCommandPicker && prompt.startsWith('/') && (
-                            <SlashCommandPicker
-                              activeTab={activeTab}
-                              prompt={prompt}
-                              selectedCmdIndex={selectedCmdIndex}
-                              setSelectedCmdIndex={setSelectedCmdIndex}
-                              onSelectCommand={(cmd) => setPrompt('/' + cmd + ' ')}
-                              onClose={() => setShowCommandPicker(false)}
-                            />
-                          )}
-                        </AnimatePresence>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title={t('ide.uploadProject')}>
-                              {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" /> : <Paperclip className="w-3.5 h-3.5" />}
-                            </motion.button>
-                            <SparkleButton prompt={prompt} setPrompt={setPrompt} />
-                            <motion.button
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              type="button"
-                              onClick={() => runReview('diff')}
-                              className="h-7 px-2 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-1.5 text-[11px] text-white/60 hover:text-white transition backdrop-blur-md border border-white/10 cursor-pointer"
-                              title={t('ide.reviewChanges')}
-                            >
-                              <MessageSquare className="w-3 h-3 text-blue-400" /> Review Changes
-                            </motion.button>
-                            <motion.button
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              type="button"
-                              onClick={() => runCleanMode()}
-                              className="h-7 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-[11px] text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer"
-                              title={t('ide.cleanMode')}
-                            >
-                              {isCleanScanning ? <Loader2 className="w-3 h-3 animate-spin text-amber-400" /> : <Scissors className="w-3 h-3 text-amber-400" />} Clean
-                            </motion.button>
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title={t('ide.cmdPalette')}>
-                              <Slash className="w-4 h-4" />
-                            </motion.button>
-                            {mode === 'agent' && (
-                              <GodModeToggle value={godMode} onChange={(v) => dispatch(setGodMode(v))} size="xs" />
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <ModelSelector />
-                            <AnimatePresence mode="wait">
-                              {isStreaming ? (
-                                <motion.button 
-                                  key="stop-btn"
-                                  type="button" 
-                                  onClick={interrupt} 
-                                  initial={{ scale: 0.9, opacity: 0 }}
-                                  animate={{ scale: 1, opacity: 1 }}
-                                  exit={{ scale: 0.9, opacity: 0 }}
-                                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                                  className="w-7 h-7 rounded-[8px] bg-[#303030] hover:bg-[#404040] flex items-center justify-center transition-all"
-                                >
-                                  <Square className="w-3.5 h-3.5 text-[#d0d0d0] fill-current" />
-                                </motion.button>
-                              ) : (
-                                <motion.button 
-                                  key="send-btn"
-                                  type="submit" 
-                                  initial={{ scale: 0.9, opacity: 0 }}
-                                  animate={{ scale: 1, opacity: 1 }}
-                                  exit={{ scale: 0.9, opacity: 0 }}
-                                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                                  className="w-7 h-7 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 flex items-center justify-center text-emerald-400 transition disabled:opacity-50" 
-                                  disabled={!prompt.trim() || isStreaming}
-                                  title={t('ide.sendMessage')}
-                                >
-                                  <Send className="w-3.5 h-3.5 ml-0.5" />
-                                </motion.button>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        </div>
-                      </div>
-                    </form>
-                  </div>
-                </div>
                 </ResizablePanel>
                 </>
                 )}

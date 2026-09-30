@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mcode</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0c0c0c;
+        color: #e5e7eb;
+        font: 15px/1.6 "Segoe UI", system-ui, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .box {
+        max-width: 420px;
+        padding: 32px 34px;
+        border: 1px solid #26262b;
+        border-radius: 16px;
+        background: #131316;
+        text-align: center;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 8px;
+        color: #a1a1aa;
+      }
+      code {
+        background: #1c1c20;
+        border-radius: 5px;
+        padding: 2px 7px;
+        color: #e5e7eb;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      This page is never shown in normal use.
+
+      capacitor.config.ts points `server.url` at the running mcode server, so the
+      WebView loads the real app. This file exists only because Capacitor
+      requires a valid webDir, and it doubles as the offline fallback: if the
+      app cannot reach the server you get an explanation instead of a blank
+      white screen.
+    -->
+    <div class="box">
+      <h1>Cannot reach the mcode server</h1>
+      <p>The app needs your mcode server to be running and reachable.</p>
+      <p>Check that Docker is up, and that this device is on the same network.</p>
+      <p>Then pull down to reload.</p>
+    </div>
+  </body>
+</html>

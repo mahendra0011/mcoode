@@ -1,11 +1,23 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CalendarCheck, Users, Rocket } from 'lucide-react';
+import { Terminal, Sparkles, CheckCircle2 } from 'lucide-react';
 
 const steps: { icon: React.ComponentType<{ className?: string }>; title: string; desc: string }[] = [
-  { icon: CalendarCheck, title: 'Schedule kickoff', desc: 'Align on scope, structure, and timeline. Whether it\'s a quick setup or a full migration, we\'ll take it from there.' },
-  { icon: Users, title: 'Real-time collaboration', desc: 'Work alongside our team with full visibility. Every step follows best practices and thorough QA to ensure quality.' },
-  { icon: Rocket, title: 'Launch and scale', desc: 'Go live with confidence. Our AI continuously learns and improves, helping your team scale effortlessly.' }
+  { 
+    icon: Terminal, 
+    title: 'Install', 
+    desc: 'npm install -g mcode — works out of the box with Node 20+, macOS, Linux, and Windows.' 
+  },
+  { 
+    icon: Sparkles, 
+    title: 'Describe your task', 
+    desc: 'Run mcode god "add JWT auth to this API" — mcode plans the work and dispatches subagents in parallel.' 
+  },
+  { 
+    icon: CheckCircle2, 
+    title: 'Review and ship', 
+    desc: 'Diff review, integration tests run automatically, then mcode ship builds, verifies, and tags your release.' 
+  }
 ];
 
 export function HowItWorks() {
@@ -35,11 +47,11 @@ export function HowItWorks() {
             transition={{ delay: 0.15 }}
             className="mt-6 max-w-md text-lg leading-relaxed text-foreground/60"
           >
-            Your platform, configured by experts and launched on an{' '}
-            <span className="font-medium text-foreground">Enterprise plan</span>, ready to grow with you.
+            From terminal command to verified production code in{' '}
+            <span className="font-medium text-foreground">three automated steps</span>.
           </motion.p>
           <motion.a
-            href="/ai/chat"
+            href="/cli"
             initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -48,7 +60,7 @@ export function HowItWorks() {
             whileHover={{ scale: 1.03, boxShadow: '0 0 20px rgba(74, 222, 128, 0.3)' }}
             whileTap={{ scale: 0.98 }}
           >
-            Schedule kickoff
+            Get Started with CLI
           </motion.a>
         </motion.div>
         <motion.div

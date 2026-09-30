@@ -100,9 +100,22 @@ export function getSocket(): Socket {
       // WEB-027: the Electron `mcodeElectron.backendUrl` branch was deleted.
       const host = window.location.hostname;
       const isLocal = host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.');
-      backendUrl = isLocal
-        ? (process.env.NEXT_PUBLIC_API_URL || `http://${host}:3100`)
-        : window.location.origin;
+
+      // On a phone the web app may be served from a LAN address (192.168.x.x)
+      // rather than a public domain, so the browser talks to the backend
+      // directly on :3100 instead of going through the Next rewrites.
+      //
+      // A bare `192.168.x.x:3000` host means "the dev machine on my Wi-Fi" —
+      // that is not a deployment, so the same-origin rewrite path is used and
+      // BACKEND_URL resolves server-side. Only an explicit non-local API URL
+      // (a real deployment) bypasses it.
+      const isBareLanHost = isLocal && /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+
+      backendUrl = isBareLanHost
+        ? window.location.origin
+        : isLocal
+          ? `http://${host}:3100`
+          : window.location.origin;
     } else {
       backendUrl = 'http://localhost:3100';
     }

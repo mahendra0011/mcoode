@@ -40,6 +40,10 @@ const INITIAL_PATH = process.env.MCODE_INITIAL_PATH || '/login';
  *      history call and therefore does NOT raise will-navigate
  * The guard in installNavigationGuard() covers the case the second one misses;
  * see README.md for why this is done in the shell rather than in the web app.
+ *
+ * NOTE: the shell still never *loads* a marketing page — it starts on /login —
+ * but these three are blocked too, because the global command palette links to
+ * /cli (CommandPalette.tsx:8) and that link is on every page, including login.
  */
 const ALLOWED_ROUTES = new Set([
   '/login',
@@ -58,6 +62,8 @@ const ALLOWED_ROUTES = new Set([
   '/docs',
   '/commands',
   '/changelog',
+  '/vscode',
+  '/ide',
 ]);
 
 /** Routes that exist only to sell the product. Never loadable from the shell. */

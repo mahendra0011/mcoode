@@ -101,25 +101,34 @@ or `packages/cli`.** They are all Electron main-process concerns.
 
 ## 5. Two genuine problems that DO need care
 
-### 5.1 Cmd+K can still reach `/cli`
+### 5.1 Cmd+K reaches `/cli` — and that is intentional on desktop
 
-This is where the "zero code change" claim is false. The command palette is
-global and contains a link to the CLI marketing page:
+The command palette is mounted globally and contains a link to the CLI page:
 
 ```
 CommandPalette.tsx:7   { label: 'AI Chat',   href: '/ai/chat' }
-CommandPalette.tsx:8   { label: 'CLI',        href: '/cli'    }  ← marketing
+CommandPalette.tsx:8   { label: 'CLI',        href: '/cli'    }  ← allowed on desktop
 CommandPalette.tsx:9   { label: 'Extensions', href: '/extensions' }
 CommandPalette.tsx:10  { label: 'Preview',    href: '/preview' }
 CommandPalette.tsx:11  { label: 'Settings',   href: '/settings' }
 ```
 
+**This is no longer a problem on desktop.** `/cli` is a Windows product — it
+runs in a real terminal — so the desktop shell deliberately allows it. The
+pushState guard is still needed, because it is what keeps the genuinely
+marketing routes (`/`, `/ai`) unreachable; `will-navigate` alone does not fire
+for Next.js `router.push`.
+
+The Android shell (`packages/android/routes.mjs`) inverts this decision and
+blocks the whole CLI surface, because an Android app has no terminal to spawn
+`mcode` into.
+
 Technical detail that matters: Next.js routes via `router.push` (a same-document
-`pushState`), and Electron's `will-navigate` **does not fire** for those. So
-blocking it needs either:
+`pushState`), and Electron's `will-navigate` **does not fire** for those. So the
+guard has to be injected into the page:
 
 - **(A) One-line web change** — drop/filter the `CLI` entry in the palette
-  array. Cleanest; touches nothing else.
+  array. Not needed on desktop; would be the Android option.
 - **(B) A `preload` shim** wrapping `history.pushState` to reject marketing
   paths, leaving all web source untouched. Works, but it is a monkey-patch that
   silently breaks the next time a marketing link is added.

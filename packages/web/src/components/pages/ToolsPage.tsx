@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { reportError } from '../../lib/logger';
 import api from '../../lib/axios';
 import { getSocket } from '../../hooks/useChatSocket';
+import { Layout } from '../layout/Layout';
 
 type Tab = 'search' | 'ports' | 'watch' | 'enhance' | 'coverage';
 
@@ -336,22 +337,27 @@ function CoverageTab() {
 export function ToolsPage() {
   const [tab, setTab] = useState<Tab>('search');
   return (
-    <div className="min-h-screen bg-[#0c0c0c] text-white p-6 max-w-4xl mx-auto">
-      <h1 className="text-xl font-bold mb-4">Tools</h1>
-      <div className="flex gap-1 mb-6 bg-white/5 rounded-lg p-1 w-fit" role="tablist">
-        {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium ${tab === t.id ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'}`}>
-            {t.label}
-          </button>
-        ))}
+    <Layout>
+      <div className="pt-28 pb-20 px-6 max-w-4xl mx-auto">
+        <h1 className="text-3xl font-extrabold mb-2 text-foreground">Tools & Diagnostics</h1>
+        <p className="text-sm text-muted-foreground mb-6">Built-in developer tools, live ports inspection, background watch status, and test coverage.</p>
+        <div className="flex gap-1 mb-8 bg-foreground/5 border border-foreground/10 rounded-xl p-1 w-fit" role="tablist">
+          {TABS.map((t) => (
+            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t.id ? 'bg-foreground text-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="rounded-2xl border border-foreground/10 bg-frame p-6 shadow-md">
+          {tab === 'search' && <WebSearchTab />}
+          {tab === 'ports' && <PortsTab />}
+          {tab === 'watch' && <WatchTab />}
+          {tab === 'enhance' && <EnhanceTab />}
+          {tab === 'coverage' && <CoverageTab />}
+        </div>
       </div>
-      {tab === 'search' && <WebSearchTab />}
-      {tab === 'ports' && <PortsTab />}
-      {tab === 'watch' && <WatchTab />}
-      {tab === 'enhance' && <EnhanceTab />}
-      {tab === 'coverage' && <CoverageTab />}
-    </div>
+    </Layout>
   );
 }
 

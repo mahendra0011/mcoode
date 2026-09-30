@@ -38,33 +38,36 @@ export function proxy(request: NextRequest) {
     .filter(Boolean)
     .join(' ');
 
-  const cspHeader = [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''} blob:`,
-    // The UI themes itself at runtime (inline style attributes on dynamic
-    // values), so style-src has to stay on 'unsafe-inline'.
-    "style-src 'self' 'unsafe-inline'",
-    // `img-src` still allows https: because web-search result favicons are
-    // loaded from provider CDNs — that is WEB-009 (favicon proxy), tracked
-    // separately. connect-src below is the one that carries credentials.
-    "img-src 'self' blob: data: https:",
-    "font-src 'self' data:",
-    `connect-src ${connectSources}`,
-    "worker-src 'self' blob:",
-    "frame-src 'self' blob:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    // WEB-012: the app renders source, diffs and terminal output — it must not be
-    // framable. The backend already sends `frame-ancestors 'none'`; the web
-    // origin did not.
-    "frame-ancestors 'none'",
-    "report-uri /csp-report",
-    ...(isDev ? [] : ['upgrade-insecure-requests']),
-  ]
-    .join('; ')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  const cspHeader = isDev
+    ? [
+        "default-src 'self' http://localhost:* ws://localhost:*",
+        "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: http://localhost:* ws://localhost:*",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' blob: data: https: http://localhost:*",
+        "font-src 'self' data:",
+        `connect-src ${connectSources} ws://* http://*`,
+        "worker-src 'self' blob:",
+        "frame-src 'self' blob:",
+      ].join('; ')
+    : [
+        "default-src 'self'",
+        `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:`,
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' blob: data: https:",
+        "font-src 'self' data:",
+        `connect-src ${connectSources}`,
+        "worker-src 'self' blob:",
+        "frame-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "report-uri /csp-report",
+        'upgrade-insecure-requests',
+      ]
+        .join('; ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);

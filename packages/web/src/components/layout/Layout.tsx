@@ -1,13 +1,18 @@
+"use client";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Header } from './Header';
 
 const FOOTER_LINKS = [
-  { label: 'AI Chat', href: '/ai/chat' },
+  { label: 'Home', href: '/' },
+  { label: 'Web IDE', href: '/web-ide' },
+  { label: 'IDE', href: '/ide' },
   { label: 'CLI', href: '/cli' },
-  { label: 'Extensions', href: '/extensions' },
-  { label: 'Preview', href: '/preview' },
+  { label: 'Extension', href: '/vscode' },
+  { label: 'App', href: '/mcode' },
+  { label: 'Pricing', href: '/pricing' },
+  { label: 'Tools', href: '/tools' },
   { label: 'Settings', href: '/settings' },
 ];
 
@@ -28,7 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <motion.main
         className="flex-1"
         id="main-content"
-        initial={{ opacity: 0, y: 10 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
       >

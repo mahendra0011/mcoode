@@ -2,8 +2,14 @@ import React from 'react';
 import { Layout } from '../../components/layout/Layout';
 import { CLIHero } from '../../components/sections/CLIHero';
 import { CLIDemoPreview } from '../../components/sections/CLIDemoPreview';
+import { CommandShowcase } from '../../components/sections/CommandShowcase';
+import { AgentFeature } from '../../components/sections/AgentFeature';
+import { LogoTicker } from '../../components/sections/LogoTicker';
 import { FeaturesGrid } from '../../components/sections/FeaturesGrid';
+import { Ecosystem } from '../../components/sections/Ecosystem';
+import { Installation } from '../../components/sections/Installation';
 import { HowItWorks } from '../../components/sections/HowItWorks';
+import { Testimonials } from '../../components/sections/Testimonials';
 import { Pricing } from '../../components/sections/Pricing';
 import cliBg from '../../assets/cli-bg.png';
 
@@ -23,8 +29,18 @@ export function CLIPage() {
         <CLIDemoPreview />
       </div>
       
+      <CommandShowcase />
+      
+      <div className="relative w-full">
+        <AgentFeature />
+      </div>
+
+      <LogoTicker />
       <FeaturesGrid />
+      <Ecosystem />
+      <Installation />
       <HowItWorks />
+      <Testimonials />
       <Pricing />
     </Layout>
   );

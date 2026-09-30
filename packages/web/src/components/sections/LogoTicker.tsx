@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 
-const logos = ['Acme Corp', 'Altshift', 'Biosynthesis', 'Boltshift', 'Capsule', 'Catalog'];
+const logos = ['OpenRouter', 'Anthropic', 'OpenAI', 'Google Gemini', 'Groq', 'Ollama', 'LM Studio'];
 
 export function LogoTicker() {
   return (

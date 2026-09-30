@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">mcode</string>
+    <string name="title_activity_main">mcode</string>
+    <string name="package_name">com.mcode.desktop</string>
+    <string name="custom_url_scheme">com.mcode.desktop</string>
+</resources>

@@ -31,27 +31,31 @@ const sandbox = {
 vm.createContext(sandbox);
 new vm.Script(script).runInContext(sandbox);
 
-// The guard replaces history.pushState, so call the new one.
-sandbox.history.pushState({}, '', '/cli');
-sandbox.history.pushState({}, '', '/ai');
-sandbox.history.pushState({}, '', '/');
-sandbox.history.pushState({}, '', '/ai/chat');
-sandbox.history.pushState({}, '', '/mcode');
+// Drive every configured route through the guard instead of hard-coding a few.
+// The assertions below then stay correct when the route lists change, which is
+// what kept this test honest when /cli moved from blocked to allowed.
+for (const route of BLOCKED_ROUTES) sandbox.history.pushState({}, '', route);
+for (const route of ALLOWED_ROUTES) sandbox.history.pushState({}, '', route);
 sandbox.history.pushState({}, '', '/sessions/abc');
-sandbox.history.replaceState({}, '', '/cli/');
+sandbox.history.replaceState({}, '', '/');
+
+const leaked = [...BLOCKED_ROUTES].filter((r) => pushed.includes(r));
+const missing = [...ALLOWED_ROUTES].filter((r) => !pushed.includes(r));
 
 const results = [
   { name: 'injected script parses', pass: true },
-  { name: 'blocked /cli', pass: !pushed.includes('/cli') },
-  { name: 'blocked /ai', pass: !pushed.includes('/ai') },
-  { name: 'blocked /', pass: !pushed.includes('/') },
-  { name: 'blocked /cli/ (trailing slash)', pass: !pushed.includes('/cli/') },
+  { name: 'no blocked route leaked', pass: leaked.length === 0 },
+  { name: 'no allowed route missing', pass: missing.length === 0 },
   { name: 'allowed /ai/chat', pass: pushed.includes('/ai/chat') },
   { name: 'allowed /mcode', pass: pushed.includes('/mcode') },
   { name: 'allowed /sessions/abc', pass: pushed.includes('/sessions/abc') },
   { name: 'isAllowed(/ai/chat)', pass: isAllowed('http://localhost:3000/ai/chat') },
-  { name: 'isAllowed(/cli)', pass: !isAllowed('http://localhost:3000/cli') },
-  { name: 'routes configured', pass: BLOCKED_ROUTES.size === 3 && ALLOWED_ROUTES.size > 10 },
+  // /cli is a marketing page, so the shell blocks it even though the global
+  // command palette links to it.
+  { name: 'CLI marketing page blocked', pass: !isAllowed('http://localhost:3000/cli') },
+  { name: 'marketing / blocked', pass: !isAllowed('http://localhost:3000/') },
+  { name: 'marketing /ai blocked', pass: !isAllowed('http://localhost:3000/ai') },
+  { name: 'route lists populated', pass: BLOCKED_ROUTES.size === 3 && ALLOWED_ROUTES.size > 10 },
 ];
 
 let failed = 0;

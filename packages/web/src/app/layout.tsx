@@ -38,7 +38,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ErrorBoundary label="App">
           <Providers>{children}</Providers>
         </ErrorBoundary>
-        <McodeStartupOverlay />
         <PlatformDetect />
       </body>
     </html>

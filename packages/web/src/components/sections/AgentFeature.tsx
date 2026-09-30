@@ -129,8 +129,8 @@ export function AgentFeature() {
             viewport={{ once: true }}
           >
             <motion.p className="text-black text-lg" custom={3} variants={textVariants}>
-              <strong className="font-medium text-xl">Build / Debug / Review</strong><br />
-              any code and turn your ideas directly into real products.
+              <strong className="font-medium text-xl">Plan → Dispatch Subagents → Integrate & Test</strong><br />
+              Turn complex tasks into verified production releases automatically.
             </motion.p>
           </motion.div>
         </div>

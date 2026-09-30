@@ -8,7 +8,7 @@ export function DashboardPreview() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 40 }}
+      initial={{ opacity: 1, y: 0 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-20% 0px 0px' }}
       transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
@@ -16,7 +16,7 @@ export function DashboardPreview() {
     >
       <motion.div
         className="relative max-w-5xl mx-auto"
-        initial={{ opacity: 0 }}
+        initial={{ opacity: 1 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true }}
         transition={{ delay: 0.1 }}

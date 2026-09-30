@@ -1,4 +1,4 @@
 "use client";
-import { IdePage } from "../../components/pages/IdePage";
+import { IDEPage } from "../../components/pages/IdePage";
 export const dynamic = "force-dynamic";
-export default function Page() { return <IdePage />; }
+export default function Page() { return <IDEPage />; }

@@ -84,3 +84,6 @@ nul
 # Generated local seed data
 /todos/
 /subscribers/
+
+# Built desktop installer (~107 MB) - published to the website by scripts/publish-ide.js
+packages/web/public/downloads/*.exe

@@ -1,0 +1,23 @@
+{
+  "name": "@mcode/android",
+  "version": "2.4.6",
+  "private": true,
+  "description": "mcode Android app — Capacitor shell around the existing web app",
+  "scripts": {
+    "guard": "node build-guard.mjs",
+    "test": "node guard.test.mjs",
+    "sync": "npm run guard && cap sync",
+    "open": "cap open android",
+    "run:android": "npm run guard && cap run android",
+    "build:apk": "npm run guard && cap build android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "typescript": "~5.6.0"
+  }
+}

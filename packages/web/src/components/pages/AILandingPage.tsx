@@ -3,8 +3,11 @@ import { Layout } from '../../components/layout/Layout';
 import { AIHero } from '../../components/sections/AIHero';
 import { AIChatPreview } from '../../components/sections/AIChatPreview';
 import { AgentFeature } from '../../components/sections/AgentFeature';
+import { ModesShowcase } from '../../components/sections/ModesShowcase';
+import { GodModeDeepDive } from '../../components/sections/GodModeDeepDive';
 import { LogoTicker } from '../../components/sections/LogoTicker';
 import { FeaturesGrid } from '../../components/sections/FeaturesGrid';
+import { Ecosystem } from '../../components/sections/Ecosystem';
 import { Testimonials } from '../../components/sections/Testimonials';
 import { HowItWorks } from '../../components/sections/HowItWorks';
 import { Pricing } from '../../components/sections/Pricing';
@@ -30,8 +33,13 @@ export function AILandingPage() {
       <div className="relative w-full">
         <AgentFeature />
       </div>
+
+      <ModesShowcase />
+      <GodModeDeepDive />
+
       <LogoTicker />
       <FeaturesGrid />
+      <Ecosystem />
       <Testimonials />
       <HowItWorks />
       <Pricing />

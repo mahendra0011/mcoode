@@ -5,7 +5,7 @@ import { ArrowDownRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const heroContainer = {
-  hidden: { opacity: 0 },
+  hidden: { opacity: 1 },
   visible: {
     opacity: 1,
     transition: { staggerChildren: 0.1, delayChildren: 0.1 }
@@ -13,7 +13,7 @@ const heroContainer = {
 };
 
 const heroItem = {
-  hidden: { opacity: 0, y: 40, filter: 'blur(10px)' },
+  hidden: { opacity: 1, y: 0, filter: 'blur(0px)' },
   visible: {
     opacity: 1,
     y: 0,

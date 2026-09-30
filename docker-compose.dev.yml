@@ -139,4 +139,4 @@ services:
         # react to host-side saves on the Windows bind mount even with
         # watchOptions.pollIntervalMs set, so edits never reached the browser.
         # webpack + watchpack polling (WATCHPACK_POLLING) does react.
-        exec /app/node_modules/.bin/next dev --webpack -p 3000 -H 0.0.0.0
+        cd /app/packages/web && exec /app/node_modules/.bin/next dev --webpack -p 3000 -H 0.0.0.0
