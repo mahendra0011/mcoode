@@ -55,7 +55,7 @@
     "cli-highlight": "^2.1.11",
     "commander": "^13.0.0",
     "dotenv": "^16.4.7",
-    "eslint": "^9.18.0",
+    "eslint": "^10.11.0",
     "execa": "^9.5.2",
     "gradient-string": "^3.0.0",
     "p-retry": "^8.0.1",
