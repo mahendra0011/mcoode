@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: '#0c0c0c',
+  themeColor: '#ffffff',
 };
 
 // WEB-012: without a viewport meta the dashboard renders zoomed-out on phones.
@@ -33,8 +33,8 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="m-0 bg-[#0c0c0c] text-white antialiased overflow-x-hidden">
+    <html lang="en" className="light" suppressHydrationWarning>
+      <body className="m-0 bg-[#f8fafc] text-[#09090b] antialiased overflow-x-hidden selection:bg-emerald-500/20 selection:text-emerald-900">
         <ErrorBoundary label="App">
           <Providers>{children}</Providers>
         </ErrorBoundary>

@@ -1,5 +1,6 @@
 import { createSlice } from './sliceFactory';
-import type { ChatMessage } from '../types/chat';
+import type { ChatMessage, OutputLength } from '../types/chat';
+export type { OutputLength };
 import type { ProblemEntry } from '../components/ide/BottomPanel';
 
 function safeHostname(url: string | null | undefined): string {
@@ -235,6 +236,7 @@ export interface ChatState {
   status: Status;
   keysError: string | null;
   mode: Mode;
+  outputLength: OutputLength;
   messages: ChatMessage[];
   plan: Plan | null;
   permissionRequest: PermissionRequest | null;
@@ -332,7 +334,8 @@ export interface ChatState {
 export const initialState: ChatState = {
   status: 'idle',
   keysError: null,
-  mode: 'chat',
+  mode: 'agent',
+  outputLength: 'xhigh',
   messages: [],
   plan: null,
   permissionRequest: null,
@@ -485,6 +488,9 @@ const chatSlice = createSlice({
     setMode: (state, action) => {
       state.mode = action.payload;
     },
+    setOutputLength: (state, action) => {
+      state.outputLength = action.payload;
+    },
     setSelectedModel: (state, action) => {
       state.selectedModel = action.payload;
     },
@@ -494,9 +500,8 @@ const chatSlice = createSlice({
       if (state.models.length > 0) {
         const valid = state.models.some((m) => m.ref === state.selectedModel);
         if (!valid) {
-          const poolSide = state.models.find((m) => m.provider === 'poolside');
-          const first = poolSide || state.models[0];
-          state.selectedModel = first.ref || first.id || null;
+          const defaultModel = state.models.find((m: any) => m.isDefault) || state.models[0];
+          state.selectedModel = defaultModel.ref || defaultModel.id || null;
         }
       } else {
         state.selectedModel = null;
@@ -507,6 +512,27 @@ const chatSlice = createSlice({
       state.isStreaming = true;
       state._turnDone = false;
       state.keysError = null;
+    },
+    editMessage: (state, action) => {
+      const { id, index, text } = action.payload;
+      let target: ChatMessage | undefined;
+      if (id !== undefined) {
+        target = state.messages.find((m) => String(m.id) === String(id));
+      }
+      if (!target && index !== undefined && index >= 0 && index < state.messages.length) {
+        target = state.messages[index];
+      }
+      if (target) {
+        target.text = text;
+      }
+    },
+    deleteMessage: (state, action) => {
+      const { id, index } = action.payload;
+      if (id !== undefined) {
+        state.messages = state.messages.filter((m) => String(m.id) !== String(id));
+      } else if (index !== undefined && index >= 0 && index < state.messages.length) {
+        state.messages.splice(index, 1);
+      }
     },
     streamUpdate: (state, action) => {
       if (state._turnDone) return;
@@ -786,7 +812,7 @@ const chatSlice = createSlice({
       for (let i = state.messages.length - 1; i >= 0; i--) {
         const m = state.messages[i];
         if (m.kind === 'stream') {
-          if (i === lastStreamIdx && payloadText && (!m.text || payloadText.startsWith(m.text))) {
+          if (i === lastStreamIdx && payloadText) {
             m.text = payloadText;
           }
           m.kind = 'assistant';
@@ -1022,7 +1048,14 @@ const chatSlice = createSlice({
     },
     addToast: (state, action) => {
       const { id, kind = 'info', text } = action.payload || {};
-      state.toasts.push({ id: id || Date.now().toString(), kind, text });
+      const toastId = id || Date.now().toString();
+      // Remove any existing toast with same id or identical text so they don't stack up
+      state.toasts = state.toasts.filter((t) => t.id !== toastId && t.text !== text);
+      state.toasts.push({ id: toastId, kind, text });
+      // Keep only the 2 most recent toasts
+      if (state.toasts.length > 2) {
+        state.toasts = state.toasts.slice(-2);
+      }
     },
     removeToast: (state, action) => {
       state.toasts = state.toasts.filter((t) => t.id !== action.payload);
@@ -1286,9 +1319,12 @@ export const {
   chatReady,
   chatError,
   setMode,
+  setOutputLength,
   setSelectedModel,
   setModels,
   addMessage,
+  editMessage,
+  deleteMessage,
   streamUpdate,
   agentMessage,
   toolCallStarted,

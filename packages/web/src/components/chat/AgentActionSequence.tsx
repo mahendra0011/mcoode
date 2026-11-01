@@ -45,23 +45,25 @@ export const AgentActionSequence = ({ startedAt, statusLabel }: AgentActionSeque
       className="flex items-center gap-2 py-1.5 w-full max-w-lg text-[13px] select-none font-sans"
     >
       <StepPulse active={true} />
-      <BrainCircuit size={15} className="text-[var(--mcode-green,#3ecf8e)] flex-shrink-0" />
+      <BrainCircuit size={16} style={{ color: 'var(--mcode-green)' }} className="drop-shadow-[0_0_8px_rgba(16,185,129,0.7)] flex-shrink-0 animate-pulse" />
 
-      <span className="font-semibold flex items-center gap-1.5">
+      <span className="font-semibold flex items-center gap-2">
         <motion.span
           key={displayLabel}
           initial={{ opacity: 0, y: 3 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -3 }}
           transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-          className="animated-gradient-text"
+          className="animated-gradient-text tracking-tight font-semibold"
         >
           {displayLabel}
         </motion.span>
-        <SpinnerBlock label="" size="sm" color="emerald" active={true} />
+        <SpinnerBlock label="" size="sm" color="white" active={true} />
       </span>
 
-      <span className="text-white/40 text-xs font-mono ml-auto">{seconds}s</span>
+      <span className="text-white/85 text-xs font-mono font-medium ml-auto bg-white/10 border border-white/15 px-2 py-0.5 rounded-full shadow-xs">
+        {seconds}s
+      </span>
     </motion.div>
   );
 };

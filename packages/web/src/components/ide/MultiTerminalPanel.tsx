@@ -566,6 +566,13 @@ function TerminalInstance({
 
     // Forward user keystrokes straight to PTY stdin
     const dataDisposable = term.onData((data) => {
+      // Prevent xterm Cursor Position Reports (CPR: \\x1b[<row>;<col>R) and Device Attributes (DA)
+      // from leaking onto the shell prompt when in normal buffer (e.g. bash/ash readline after resize)
+      const isCPR = /^\x1b\[\d+;\d+R$/.test(data);
+      const isDA = /^\x1b\[\?\d+;?.*c$/.test(data);
+      if ((isCPR || isDA) && term.buffer?.active?.type === 'normal') {
+        return;
+      }
       socket.emit('terminal:input', { id: session.id, data });
     });
 
@@ -660,6 +667,10 @@ function TerminalInstance({
       if (!isActive) return;
 
       const activeEl = document.activeElement;
+      // Only capture terminal shortcuts if the user is currently focused INSIDE this terminal container
+      if (!terminalRef.current || !terminalRef.current.contains(activeEl)) {
+        return;
+      }
       if (activeEl?.tagName === 'INPUT') return;
 
       // Ctrl+F search

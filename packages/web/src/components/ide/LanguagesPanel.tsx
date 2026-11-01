@@ -46,6 +46,45 @@ export function LanguagesPanel() {
 
   const [runnableLanguages, setRunnableLanguages] = useState<Set<string>>(new Set());
 
+  const handleLanguageAction = async (lang: LanguageItem) => {
+    const activeWsId = typeof window !== "undefined" ? localStorage.getItem("mcode_active_workspace_id") : null;
+    if (!activeWsId) {
+      document.dispatchEvent(new CustomEvent("mcode:open-create-project", { detail: { lang } }));
+      return;
+    }
+
+    const ext = lang.extension || ".txt";
+    const baseName = ext.startsWith(".") ? `main${ext}` : ext;
+    let targetPath = baseName;
+    let counter = 1;
+    const currentOpen = useIDEStore.getState().openFiles;
+    while (currentOpen.includes(targetPath)) {
+      targetPath = ext.startsWith(".") ? `main_${counter}${ext}` : `${ext}_${counter}`;
+      counter++;
+    }
+    const boilerplate = (lang.defaultBoilerplate || "").replace(/\r\n/g, "\n");
+    try {
+      await api.post(`/api/v1/workspaces/${activeWsId}/file`, {
+        path: targetPath,
+        content: boilerplate,
+      });
+      useIDEStore.getState().addOpenFile(targetPath);
+      useIDEStore.getState().setActivePath(targetPath);
+      useIDEStore.getState().setFileContent(targetPath, boilerplate);
+      useIDEStore.getState().setSavedContent(targetPath, boilerplate);
+      useIDEStore.getState().bumpRefresh();
+      toast.success(`Created ${targetPath} in active project`);
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        toast.info("Project workspace not found. Please create a new project folder.");
+        try { localStorage.removeItem("mcode_active_workspace_id"); } catch {}
+        document.dispatchEvent(new CustomEvent("mcode:open-create-project", { detail: { lang } }));
+      } else {
+        toast.error(err?.response?.data?.error?.message || "Failed to create file");
+      }
+    }
+  };
+
   useEffect(() => {
     api.get("/api/v1/languages").then((res) => {
       if (res.data.runtimes) {
@@ -204,15 +243,14 @@ export function LanguagesPanel() {
               <div
                 key={lang.id}
                 onDoubleClick={() => {
-                  createLanguageFile(lang.name);
-                  toast.success(`Created new ${lang.name} file`);
+                  handleLanguageAction(lang);
                 }}
                 className={`flex items-center justify-between p-2 rounded-lg border transition group cursor-pointer ${
                   isSelected
                     ? "bg-[#094771]/30 border-[#0078d4]/40 text-white"
                     : "bg-white/[0.02] border-white/5 hover:bg-white/5 text-white/80"
                 }`}
-                title={`Click checkbox to toggle, double-click to create ${lang.extension} file`}
+                title={`Click checkbox to toggle, double-click or click + to create file or project`}
               >
                 {/* Left: Real Library Logo + Name + Extension */}
                 <div
@@ -254,11 +292,10 @@ export function LanguagesPanel() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      createLanguageFile(lang.name);
-                      toast.success(`Created new ${lang.name} file`);
+                      handleLanguageAction(lang);
                     }}
                     className="p-1 rounded bg-white/5 hover:bg-[#0078d4] text-white/60 hover:text-white transition opacity-80 group-hover:opacity-100"
-                    title={`Create new ${lang.extension} file`}
+                    title={`Create ${lang.extension} file or project`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>

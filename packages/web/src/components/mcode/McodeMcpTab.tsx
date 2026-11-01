@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Server, Shield, Zap, AlertTriangle, Image, Database, Wifi, Settings, ChevronDown, ExternalLink, Info } from 'lucide-react';
-import { domainColor } from '../../../../shared/src/domains';
 
 /**
  * mcodeMcpTab — Section 10 (MCP Servers).

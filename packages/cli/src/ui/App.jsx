@@ -14,6 +14,7 @@ import { Header } from './Header.jsx';
 // code-splitting, so variable dynamic import() can never resolve chunks.
 import { CommandPalette } from './CommandPalette.jsx';
 import { ProviderWizard } from './ProviderWizard.jsx';
+import { SelectModal } from './SelectModal.jsx';
 import { AgentStrip } from './AgentStrip.jsx';
 import { ActivePanel } from './ActivePanel.jsx';
 import { PermissionModal } from './PermissionModal.jsx';
@@ -31,6 +32,26 @@ import { MODES, MODE_DESC } from '../core/router.js';
 import { getModeList, describeMode } from '../core/modes.js';
 import { COLOR_SCHEME_NAMES, getThemedColors, ICON_SET_NAMES, getIcons, FONT_SIZE_NAMES, LAYOUT_PRESET_NAMES } from './themes.js';
 
+const ALL_MODES = [
+  { label: '🤖 God Mode', value: 'God', hint: 'Autonomous multi-agent planning & parallel code build waves', category: 'Operational Modes' },
+  { label: '👁️ Watch Mode', value: 'Watch', hint: 'Background file watcher & auto-healing daemon (every 30s)', category: 'Operational Modes' },
+  { label: '🛠️ Build Mode', value: 'Build', hint: 'Interactive multi-tool coding assistant (Default)', category: 'Operational Modes' },
+  { label: '📐 Architect Mode', value: 'Architect', hint: 'High-level system design, schema planning & architectural reviews', category: 'Operational Modes' },
+  { label: '✏️ Edit Mode', value: 'Edit', hint: 'Surgical code modifications & targeted bug fixes', category: 'Operational Modes' },
+  { label: '📖 Read Mode', value: 'Read', hint: 'Read-only codebase exploration, architecture tour & Q&A', category: 'Operational Modes' },
+  { label: '🧪 Test Mode', value: 'Test', hint: 'Self-healing test runner & autonomous test generator', category: 'Specialized Agents' },
+  { label: '🛡️ Audit Mode', value: 'Audit', hint: '17-point industry security, credentials & compliance scan', category: 'Specialized Agents' },
+];
+
+const OUTPUT_REASONING_OPTIONS = [
+  { label: 'low', value: 'low', hint: 'cheap & fast · 1,000 thinking tokens', category: 'Output Reasoning Levels' },
+  { label: 'medium', value: 'medium', hint: 'balanced everyday coding · 2,000 tokens (default)', category: 'Output Reasoning Levels' },
+  { label: 'high', value: 'high', hint: 'strong reasoning & architecture · 4,000 tokens', category: 'Output Reasoning Levels' },
+  { label: 'extra', value: 'extra', hint: 'deep problem solving · 8,000 tokens', category: 'Output Reasoning Levels' },
+  { label: 'max', value: 'max', hint: 'frontier level thinking · 16,000 tokens', category: 'Output Reasoning Levels' },
+  { label: 'god', value: 'god', hint: 'maximum depth thinking · 32,000 tokens', category: 'Output Reasoning Levels' },
+];
+
 const VERSION = 'v2.4.6';
 const MAX_MESSAGES = 400;
 const cap = (list) => list.slice(-MAX_MESSAGES);
@@ -44,6 +65,11 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
   const [agents, setAgents] = useState([]);
   const [plan, setPlan] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const toast = (t) => {
+    const id = Date.now() + Math.random();
+    setToasts((ts) => [...ts, { id, ...t }]);
+    setTimeout(() => setToasts((ts) => ts.filter((x) => x.id !== id)), 4000);
+  };
   const [streamingMessage, setStreamingMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [chatStarted, setChatStarted] = useState(false);
@@ -231,11 +257,7 @@ export function App({ orchestrator, projectName, history = [], onAction }) {
         next[idx] = { ...next[idx], ...msg };
         return next;
       });
-    const toast = (t) => {
-      const id = Date.now() + Math.random();
-      setToasts((ts) => [...ts, { id, ...t }]);
-      setTimeout(() => setToasts((ts) => ts.filter((x) => x.id !== id)), 4000);
-    };
+
 
     const onPlan = (p) => {
       setPlan(p);
@@ -503,6 +525,19 @@ const handleSubmit = async (value) => {
     setMessages((m) => cap([...m, { kind: 'user', text: value }]));
     setIsGenerating(true);
     const t0 = Date.now();
+    if (agentMode === 'God') {
+      try {
+        await orchestrator.runGod(value, {
+          interactive: true,
+          addMessage: (msg) => setMessages((m) => cap([...m, msg]))
+        });
+      } catch (err) {
+        setMessages((m) => cap([...m, { kind: 'error', reason: err.message }]));
+      } finally {
+        setIsGenerating(false);
+      }
+      return;
+    }
     try {
       const reply = await orchestrator.chat(value);
       if (streamTimer.current) clearTimeout(streamTimer.current);
@@ -546,7 +581,32 @@ const handleSlash = async (raw) => {
     switch (name) {
       case 'help':
         setMessages((m) => [...m,
-          { kind: 'system', text: 'commands: /connect /models /init /demo /god /hooks /security /audit /quota /compliance /workspaces /resume /stack /bugfix /watch on|off|status|logs|undo /agents /plan /diff /undo /rollback /mode /ui-mode /agent /analytics /theme /scheme /customize /debug /export /record /replay /clear /help /exit' }
+          {
+            kind: 'system',
+            text: [
+              '── ⚡ Operational Modes & Models ──────────────────────────────',
+              '  /mode            • Switch operational mode (God Mode, Watch, Build, Architect, Edit, Read)',
+              '  /output [level]  • Switch reasoning level (low, medium, high, extra, max, god)',
+              '  /model           • Switch AI model (Llama 3.3, GPT-4o, DeepSeek V3, Gemini, Qwen)',
+              '  /god <prompt>    • Autonomous multi-agent plan & parallel build',
+              '  /watch on|off    • Real-time automated code healer daemon',
+              '',
+              '── 🛠️ Codebase & Development ─────────────────────────────────',
+              '  /diff            • Inspect pending code modifications',
+              '  /undo            • Roll back recent file edits',
+              '  /stack           • Detect project framework, dependencies & architecture',
+              '  /security-check  • Run automated 17-point security analysis',
+              '  /bugfix          • Trigger automated bug detection & auto-healing',
+              '  /analytics       • Launch visual metrics & telemetry',
+              '',
+              '── ⚙️ Settings & System ────────────────────────────────────────',
+              '  /connect         • Configure provider API keys in encrypted vault',
+              '  /theme           • Switch visual color themes',
+              '  /context         • View active project path, model & session info',
+              '  /clear           • Clear terminal chat window',
+              '  /exit            • Quit mcode CLI'
+            ].join('\n')
+          }
         ]);
         break;
       case 'history': {
@@ -621,34 +681,50 @@ const handleSlash = async (raw) => {
       case 'god':
         await orchestrator.runGod(rest.join(' '), { interactive: true, addMessage: (msg) => setMessages((m) => cap([...m, msg])) });
         break;
-      case 'agent': {
-        const AGENTS = ['Build', 'Edit', 'Read', 'Notebook', 'Architect'];
-        const want = (rest[0] || '').toLowerCase();
-        const hit = want ? AGENTS.find((a) => a.toLowerCase() === want) : null;
-        if (want && !hit) {
-          setMessages((m) => [...m, { kind: 'err', text: `unknown agent "${want}" — options: ${AGENTS.join(', ')}` }]);
+      case 'agent':
+      case 'modes':
+      case 'mode': {
+        const target = (rest[0] || '').toLowerCase();
+        if (!target) {
+          setActiveModal('mode');
           break;
         }
-        const next = hit || AGENTS[(AGENTS.indexOf(agentMode) + 1) % AGENTS.length];
-        setAgentMode(next);
-        setMessages((m) => [...m, { kind: 'ok', text: `\u2713 agent mode: ${next}` }]);
+        if (target === 'god') {
+          setAgentMode('God');
+          toast({ kind: 'ok', text: '🤖 God Mode active — next prompt runs multi-agent plan & build' });
+        } else if (target === 'watch') {
+          if (orchestrator.watchStatus === 'active') {
+            await orchestrator.stopWatch();
+            toast({ kind: 'warn', text: '👁️ Watch daemon stopped' });
+          } else {
+            orchestrator.startWatch().catch(console.error);
+            toast({ kind: 'ok', text: '👁️ Watch Mode active — auto-scanning every 30s' });
+          }
+        } else if (['build', 'architect', 'edit', 'read'].includes(target)) {
+          const formatted = target.charAt(0).toUpperCase() + target.slice(1);
+          setAgentMode(formatted);
+          toast({ kind: 'ok', text: `✓ Mode switched to ${formatted}` });
+        } else {
+          setActiveModal('mode');
+        }
         break;
       }
-      case 'mode': {
+      case 'output':
+      case 'output-mode': {
         const level = (rest[0] || '').toLowerCase();
         if (!level) {
-          setMessages((m) => [...m, { kind: 'system', text: `mode: ${mode} (${MODE_DESC[mode]}) — options: ${MODES.join(', ')} — use /mode <level>` }]);
+          setActiveModal('output');
           break;
         }
         if (!MODES.includes(level)) {
-          setMessages((m) => [...m, { kind: 'err', text: `unknown mode "${level}" — use one of: ${MODES.join(', ')}` }]);
+          setMessages((m) => [...m, { kind: 'err', text: `unknown output level "${level}" — options: ${MODES.join(', ')}` }]);
           break;
         }
         orchestrator.setMode(level);
         setMode(level);
         const { saveConfig } = await import('../core/store.js');
         await saveConfig({ mode: level });
-        setMessages((m) => [...m, { kind: 'ok', text: `\u2713 mode set to ${level} (${MODE_DESC[level]})` }]);
+        toast({ kind: 'ok', text: `✓ Output reasoning dial set to ${level} (${MODE_DESC[level]})` });
         break;
       }
       case 'ui-mode': {
@@ -1187,7 +1263,61 @@ const handleSlash = async (raw) => {
           </box>
         </>
       )}
-      {activeModal && <ProviderWizard mode={activeModal} onClose={() => setActiveModal(null)} />}
+      {activeModal === 'mode' && (
+        <SelectModal
+          title="Select Operational Mode"
+          placeholder="Filter modes..."
+          options={ALL_MODES}
+          onSelect={async (opt) => {
+            const val = opt.value;
+            if (val === 'God') {
+              setAgentMode('God');
+              toast({ kind: 'ok', text: '🤖 God Mode active — enter any prompt to trigger multi-agent build' });
+            } else if (val === 'Watch') {
+              if (orchestrator.watchStatus === 'active') {
+                await orchestrator.stopWatch();
+                toast({ kind: 'warn', text: '👁️ Watch daemon stopped' });
+              } else {
+                orchestrator.startWatch().catch(console.error);
+                toast({ kind: 'ok', text: '👁️ Watch Mode active — scanning files every 30s' });
+              }
+            } else if (val === 'Test') {
+              setActiveModal(null);
+              await handleSlash('test');
+              return;
+            } else if (val === 'Audit') {
+              setActiveModal(null);
+              await handleSlash('security-check');
+              return;
+            } else {
+              setAgentMode(val);
+              toast({ kind: 'ok', text: `✓ Mode switched to ${val}` });
+            }
+            setActiveModal(null);
+          }}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+      {activeModal === 'output' && (
+        <SelectModal
+          title="Select Output Reasoning Dial"
+          placeholder="Filter output levels..."
+          options={OUTPUT_REASONING_OPTIONS}
+          onSelect={async (opt) => {
+            const level = opt.value;
+            orchestrator.setMode(level);
+            setMode(level);
+            const { saveConfig } = await import('../core/store.js');
+            await saveConfig({ mode: level });
+            toast({ kind: 'ok', text: `✓ Output reasoning dial set to ${level} (${MODE_DESC[level]})` });
+            setActiveModal(null);
+          }}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+      {['connect', 'models'].includes(activeModal) && (
+        <ProviderWizard mode={activeModal} onClose={() => setActiveModal(null)} />
+      )}
       {analyticsOpen && (
         <AnalyticsPanel
           width={52}

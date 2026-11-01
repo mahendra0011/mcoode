@@ -127,9 +127,11 @@ const EXEC_MAP = {
   bf:     { run: ['beef', '{file}'] },
 
   // ── 26. Assembly (NASM) ────────────────────────────
-  asm:    { compile: ['nasm', '-f', 'elf64', '{file}', '-o', '{out}.o'], run: ['{out}'] },
-  s:      { compile: ['nasm', '-f', 'elf64', '{file}', '-o', '{out}.o'], run: ['{out}'] },
-  nasm:   { compile: ['nasm', '-f', 'elf64', '{file}', '-o', '{out}.o'], run: ['{out}'] },
+  // FIX: nasm emits an OBJECT file ({out}.o) — running {out} with no link
+  // step meant every .asm/.s/.nasm run failed while pretending all was fine.
+  asm:    { compile: ['nasm', '-f', 'elf64', '{file}', '-o', '{out}.o'], link: ['ld', '{out}.o', '-o', '{out}'], run: ['{out}'] },
+  s:      { compile: ['nasm', '-f', 'elf64', '{file}', '-o', '{out}.o'], link: ['ld', '{out}.o', '-o', '{out}'], run: ['{out}'] },
+  nasm:   { compile: ['nasm', '-f', 'elf64', '{file}', '-o', '{out}.o'], link: ['ld', '{out}.o', '-o', '{out}'], run: ['{out}'] },
 
   // ── 27. AWK ────────────────────────────────────────
   awk:    { run: ['awk', '-f', '{file}'] },
@@ -385,6 +387,7 @@ export async function runOnHost(filename, code, stdin = '') {
 
     const vars = { file: filePath, out: outPath, dir: tmpDir };
     let compileOutput = null;
+    let linkOutput = null;
 
     // ── Compile step (if needed) ───────────────────────────────
     if (strategy.compile) {
@@ -403,6 +406,29 @@ export async function runOnHost(filename, code, stdin = '') {
           stderr: compileResult.stderr || 'Compilation failed',
           exitCode: compileResult.exitCode,
           compileOutput,
+        };
+      }
+    }
+
+    // ── Link step (assemblers emit object files) ───────────────
+    if (strategy.link) {
+      const linkArgs = resolveArgs(strategy.link, vars);
+      const [linkCmd, ...linkRest] = linkArgs;
+      let linkResult = await runProcess(linkCmd, linkRest, { timeout: COMPILE_TIMEOUT, cwd: tmpDir });
+      // binutils' ld may be absent even where a full toolchain exists —
+      // gcc finishes the link on its own.
+      if (linkResult.exitCode !== 0) {
+        const [gccCmd, ...gccRest] = resolveArgs(['gcc', '{out}', '{out}.o'], vars);
+        linkResult = await runProcess(gccCmd, gccRest, { timeout: COMPILE_TIMEOUT, cwd: tmpDir });
+      }
+      linkOutput = (linkResult.stdout + linkResult.stderr).trim() || null;
+      if (linkResult.exitCode !== 0) {
+        return {
+          stdout: '',
+          stderr: linkResult.stderr || 'Linking failed',
+          exitCode: linkResult.exitCode,
+          compileOutput,
+          linkOutput,
         };
       }
     }

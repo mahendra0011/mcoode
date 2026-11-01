@@ -104,14 +104,27 @@ export function EditorContextMenu({
   const handlePaste = async () => {
     if (editor) {
       editor.focus();
+      let pasted = false;
       try {
-        const text = await navigator.clipboard.readText();
-        const selection = editor.getSelection();
-        if (selection && text) {
-          editor.executeEdits("paste", [{ range: selection, text }]);
+        if (navigator.clipboard?.readText) {
+          const text = await navigator.clipboard.readText();
+          const selection = editor.getSelection();
+          if (selection && typeof text === 'string') {
+            editor.executeEdits("paste", [{ range: selection, text }]);
+            editor.pushUndoStop();
+            pasted = true;
+          }
         }
       } catch {
-        toast.error("Clipboard access denied");
+        // clipboard readText might require user permission prompt or https
+      }
+      if (!pasted) {
+        try {
+          editor.focus();
+          editor.trigger('contextmenu', 'editor.action.clipboardPasteAction', null);
+        } catch {
+          toast.error("Clipboard access denied. Use Ctrl+V / Cmd+V to paste.");
+        }
       }
     }
     onClose();

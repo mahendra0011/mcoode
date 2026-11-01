@@ -1,18 +1,10 @@
 "use client";
 
-// WEB-005: virtualized message list — only the rows inside the viewport are
-// mounted, so god-mode/test-mode sessions with thousands of stream updates no
-// longer balloon the DOM past ~15k nodes. Rows are measured with a
-// ResizeObserver and re-measured on content growth (streaming), keeping the
-// list scroll position stable while new chunks arrive.
-
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { VariableSizeList, type ListChildComponentProps } from "react-window";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { ChatMessage } from "./ChatMessage";
 import type { ChatMessage as ChatMessageType } from "../../types/chat";
-
-const ESTIMATED_ROW_HEIGHT = 140;
-const OVERSCAN_COUNT = 6;
+import { ArrowDown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface VirtualChatMessagesProps {
   messages: ChatMessageType[];
@@ -20,53 +12,7 @@ interface VirtualChatMessagesProps {
   size?: "sm" | "md";
   isNormalChat?: boolean;
   undo?: any;
-}
-
-interface RowData {
-  messages: ChatMessageType[];
-  isStreaming: boolean;
-  size: "sm" | "md";
-  isNormalChat: boolean;
-  undo?: any;
-  onMeasure: (index: number, height: number) => void;
-}
-
-function Row({ index, style, data }: ListChildComponentProps<RowData>) {
-  const { messages, isStreaming, size, isNormalChat, undo, onMeasure } = data;
-  const msg = messages[index];
-  const measureRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const el = measureRef.current;
-    if (!el) return;
-    const report = () => onMeasure(index, el.getBoundingClientRect().height);
-    report();
-    const ro = new ResizeObserver(report);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [index, onMeasure, msg]);
-
-  const prevMsg = index > 0 ? messages[index - 1] : null;
-  const showAvatar =
-    msg.role === "assistant" &&
-    msg.kind !== "tool" &&
-    (!prevMsg || prevMsg.role !== "assistant" || prevMsg.kind === "tool");
-
-  return (
-    <div style={style}>
-      <div ref={measureRef} className="pb-6">
-        <ChatMessage
-          msg={msg}
-          idx={index}
-          size={size}
-          isStreaming={isStreaming && index === messages.length - 1}
-          undo={undo}
-          isNormalChat={isNormalChat}
-          showAvatar={showAvatar}
-        />
-      </div>
-    </div>
-  );
+  onResubmitPrompt?: (text: string) => void;
 }
 
 export function VirtualChatMessages({
@@ -75,103 +21,129 @@ export function VirtualChatMessages({
   size = "md",
   isNormalChat = false,
   undo,
+  onResubmitPrompt,
 }: VirtualChatMessagesProps) {
-  const listRef = useRef<VariableSizeList>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const sizeMap = useRef<Record<number, number>>({});
-  const [viewportHeight, setViewportHeight] = useState(0);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const prevCountRef = useRef(messages.length);
+  const isUserScrollingRef = useRef(false);
 
-  // Measure the viewport so the list gets a real pixel height (it cannot
-  // size itself from flexbox).
-  useEffect(() => {
+  // Check how close to bottom the user is
+  const handleScroll = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
-    setViewportHeight(el.clientHeight);
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setViewportHeight(entry.contentRect.height);
+    const threshold = 100;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const scrolledUp = distanceFromBottom > threshold;
+    setIsScrolledUp(scrolledUp);
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = containerRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior });
+    } else if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior, block: "end" });
+    }
+    setIsScrolledUp(false);
+  }, []);
+
+  // When a new message is appended (e.g. user sends message or new response arrives)
+  useEffect(() => {
+    const prevCount = prevCountRef.current;
+    prevCountRef.current = messages.length;
+
+    if (messages.length > prevCount) {
+      const lastMsg = messages[messages.length - 1];
+      // If user just sent a message, ALWAYS scroll to bottom
+      if (lastMsg?.role === "user") {
+        requestAnimationFrame(() => scrollToBottom("smooth"));
+      } else if (!isScrolledUp) {
+        // If assistant replied and user is not scrolled up, auto-scroll to bottom
+        requestAnimationFrame(() => scrollToBottom("smooth"));
       }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const onMeasure = useCallback((index: number, height: number) => {
-    if (sizeMap.current[index] !== height) {
-      sizeMap.current[index] = height;
-      listRef.current?.resetAfterIndex(Math.max(0, index - 1), true);
     }
-  }, []);
+  }, [messages.length, isScrolledUp, scrollToBottom, messages]);
 
-  const itemSize = useCallback(
-    (index: number) => sizeMap.current[index] ?? ESTIMATED_ROW_HEIGHT,
-    []
-  );
-
-  // Auto-scroll to the newest message when one is appended or a stream
-  // starts — mirrors the previous scrollIntoView sentinel behavior.
-  const countRef = useRef(messages.length);
+  // When streaming chunks arrive: ONLY scroll if user is NOT scrolled up reading history
   useEffect(() => {
-    const prevCount = countRef.current;
-    countRef.current = messages.length;
-    if (messages.length > prevCount && messages.length > 0) {
-      requestAnimationFrame(() => {
-        listRef.current?.scrollToItem(messages.length - 1, "end");
-      });
+    if (isStreaming && !isScrolledUp) {
+      const el = containerRef.current;
+      if (el) {
+        // Direct assignment without animation prevents lag and rubber-banding during fast token stream
+        el.scrollTop = el.scrollHeight;
+      }
     }
-  }, [messages.length]);
+  }, [isStreaming, isScrolledUp, messages]);
 
-  const streamingRef = useRef(isStreaming);
+  // Initial scroll on mount or when chat session loads
   useEffect(() => {
-    const wasStreaming = streamingRef.current;
-    streamingRef.current = isStreaming;
-    if (isStreaming && !wasStreaming && messages.length > 0) {
-      requestAnimationFrame(() => {
-        listRef.current?.scrollToItem(messages.length - 1, "end");
-      });
+    if (messages.length > 0) {
+      const timer = setTimeout(() => {
+        scrollToBottom("auto");
+      }, 50);
+      return () => clearTimeout(timer);
     }
-  }, [isStreaming, messages.length]);
-
-  const itemData: RowData = {
-    messages,
-    isStreaming,
-    size,
-    isNormalChat,
-    undo,
-    onMeasure,
-  };
+  }, []); // on mount / session change
 
   return (
-    // WEB-019: live region so screen readers announce new/streamed messages.
-    // role="log" carries an implicit polite live region; aria-busy signals
-    // an in-flight stream. (Rows remount during virtualization, so keep
-    // atomic off to avoid re-reading the whole list per update.)
-    <div
-      ref={containerRef}
-      className="flex-1 min-h-0 w-full"
-      role="log"
-      aria-live="polite"
-      aria-atomic="false"
-      aria-busy={isStreaming}
-      aria-label="Chat messages"
-    >
-      {viewportHeight > 0 && (
-        <VariableSizeList
-          ref={listRef}
-          height={viewportHeight}
-          width="100%"
-          itemCount={messages.length}
-          itemSize={itemSize}
-          itemData={itemData}
-          itemKey={(index: number, data: RowData) =>
-            data.messages[index]?.id ?? `msg-${index}`
-          }
-          overscanCount={OVERSCAN_COUNT}
-          estimatedItemSize={ESTIMATED_ROW_HEIGHT}
-        >
-          {Row}
-        </VariableSizeList>
-      )}
+    <div className="relative flex-1 min-h-0 w-full flex flex-col overflow-hidden">
+      {/* Native scrollable message stream */}
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden custom-scrollbar space-y-4 px-1"
+        role="log"
+        aria-live="polite"
+        aria-atomic="false"
+        aria-busy={isStreaming}
+        aria-label="Chat messages"
+      >
+        {messages.map((msg, index) => {
+          const prevMsg = index > 0 ? messages[index - 1] : null;
+          const showAvatar =
+            msg.role === "assistant" &&
+            msg.kind !== "tool" &&
+            (!prevMsg || prevMsg.role !== "assistant" || prevMsg.kind === "tool");
+
+          return (
+            <div key={msg.id || `msg-${index}`} className="w-full">
+              <ChatMessage
+                msg={msg}
+                idx={index}
+                size={size}
+                isStreaming={isStreaming && index === messages.length - 1}
+                undo={undo}
+                isNormalChat={isNormalChat}
+                showAvatar={showAvatar}
+                onResubmitPrompt={onResubmitPrompt}
+              />
+            </div>
+          );
+        })}
+        {/* Scroll anchor */}
+        <div ref={messagesEndRef} className="h-2 w-full flex-shrink-0" />
+      </div>
+
+      {/* Floating "Scroll to bottom" button when user has scrolled up */}
+      <AnimatePresence>
+        {isScrolledUp && (
+          <motion.button
+            initial={{ opacity: 0, y: 10, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.9 }}
+            transition={{ duration: 0.15 }}
+            type="button"
+            onClick={() => scrollToBottom("smooth")}
+            className="absolute bottom-4 right-6 z-30 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1e1e24] hover:bg-[#282832] text-white/90 hover:text-white border border-white/15 shadow-xl backdrop-blur-md text-xs font-medium cursor-pointer transition group"
+            title="Scroll to latest messages"
+          >
+            <ArrowDown className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-y-0.5 transition-transform" />
+            <span>Latest</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -19,6 +19,10 @@ export function ReactionBurst({
   show: boolean;
   onComplete?: () => void;
 }) {
+  const isError = emoji === '✗' || emoji === '❌';
+  const colorClass = isError ? 'text-red-400' : 'text-emerald-400';
+  const particleBg = isError ? 'bg-red-400' : 'bg-emerald-400';
+
   return (
     <AnimatePresence>
       {show && (
@@ -37,7 +41,7 @@ export function ReactionBurst({
         >
           {/* Primary burst icon — uses CSS keyframe for pop */}
           <motion.span
-            className="zcode-reaction-pop mcode-reaction-pop inline-block text-emerald-400"
+            className={`zcode-reaction-pop mcode-reaction-pop inline-block ${colorClass}`}
             style={{ fontSize: '1.125rem' }}
           >
             {emoji}
@@ -52,7 +56,7 @@ export function ReactionBurst({
             return (
               <motion.span
                 key={i}
-                className="zcode-reaction-particles mcode-reaction-particles absolute inline-block w-1 h-1 bg-emerald-400 rounded-full"
+                className={`zcode-reaction-particles mcode-reaction-particles absolute inline-block w-1 h-1 ${particleBg} rounded-full`}
                 style={{ left: '50%', top: '50%', translateX: x, translateY: y }}
                 initial={{ opacity: 0.8, scale: 0 }}
                 animate={{

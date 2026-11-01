@@ -1,4 +1,6 @@
-"use client";
-import { AILandingPage } from "../../components/pages/AILandingPage";
-export const dynamic = "force-dynamic";
-export default function Page() { return <AILandingPage />; }
+import { redirect } from "next/navigation";
+
+export default function Page() {
+  redirect("/web-ide");
+}
+

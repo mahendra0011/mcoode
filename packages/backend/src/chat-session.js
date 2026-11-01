@@ -20,18 +20,21 @@ const SIMPLE_PROMPT_RE = /^(hi\b|hello\b|hey\b|thanks?\b|ok(ay)?\b|yes\b|no\b|ye
 // Only explicit research signals trigger now.
 const AUTO_SEARCH_RE = /\b(web\s*search|google|browse|internet|prices?|cheapest|latest|current|news|tutorial|how to|where to|deal|discount|vs\b|comparison|who is|who was|who are|capital of|when was|when did|history of|tell me about|what happened|today|weather|stocks?|top\s+\d+)\b/i;
 
+const BUILD_KEYWORDS_RE = /\b(create|build|make|generate|develop|implement|design|write|add|setup|init|clone|website|app|application|page|dashboard|store|ecommerce|e-commerce|shop|api|game|service|bot|system|portfolio|calculator|todo|banao|banaye|karo|chahiye)\b/i;
+const QUESTION_CHAT_RE = /^(what|why|how|explain|tell me|who|when|where|which|can you explain|difference between)\b/i;
+
 /**
  * Determine whether a prompt warrants the planning step.
- * Skip planning for short prompts (< 50 chars) or prompts matching
- * trivial patterns (greetings, one-word commands, etc.).
- *
- * CLI's orchestrator.runGod() always plans unconditionally — this only
- * gates the web ChatSession.runAgent() planner invocation.
+ * Any prompt matching build/create keywords (e.g. "make an ecommerce website",
+ * "build a todo app", "create dashboard") automatically plans so granular
+ * todos can be tracked in the UI and executed by the agent.
  */
 function promptNeedsPlanning(prompt) {
   const p = String(prompt || '').trim();
-  if (p.length < 50) return false;
   if (SIMPLE_PROMPT_RE.test(p)) return false;
+  if (BUILD_KEYWORDS_RE.test(p)) return true;
+  if (QUESTION_CHAT_RE.test(p)) return false;
+  if (p.length < 50) return false;
   return true;
 }
 
@@ -40,6 +43,16 @@ function promptNeedsPlanning(prompt) {
  * One session per connected socket. Reuses the CLI's ChatAgent, ModelRouter,
  * and provider adapters directly — no logic is reimplemented.
  */
+export const OUTPUT_LENGTH_MAP = {
+  very_low: 512,
+  low: 1024,
+  mid: 2048,
+  high: 4096,
+  xhigh: 8192,
+  max: 16384,
+  ultra: 32768,
+};
+
 export class ChatSession {
   /**
    * @param {object} [opts]
@@ -50,7 +63,7 @@ export class ChatSession {
    * @param {string|null} [opts.modelRef]
    * @param {(event: string, payload?: any) => void} [opts.onEvent]
    */
-  constructor({ userId, secret, env = process.env, workspacePath, modelRef = null, onEvent = () => {} } = {}) {
+  constructor({ userId, secret, env = process.env, workspacePath, modelRef = null, outputLength = 'xhigh', onEvent = () => {} } = {}) {
     this.userId = userId;
     this.secret = secret;
     this.env = env;
@@ -67,6 +80,7 @@ export class ChatSession {
     this.undoStack = null;
     this.initialized = false;
     this.running = false;
+    this.outputLength = outputLength || 'xhigh';
     this.config = { chatAgentTurns: 15, allowShellAll: false, requireEditApproval: false };
   }
 
@@ -116,6 +130,8 @@ export class ChatSession {
     // (e.g. "poolside:poolside/laguna-s-2.1"), it resolves exactly.
     if (this.modelRef) {
       this.router.modelOverride = this.modelRef;
+    } else {
+      this.router.modelOverride = 'openrouter:openrouter/free';
     }
 
     // Load user settings from DB and apply
@@ -264,6 +280,18 @@ export class ChatSession {
    *  and forwards all events to the web client. */
   async runGod(prompt, { deployTarget = null, noTests = false } = {}) {
     const t0 = Date.now();
+    // FIX: runGod bypassed sendMessage's running flag — a "build" sent while
+    // one already runs double-executed in the same session.
+    this.running = true;
+    try {
+      return await this._runGodInner(prompt, { deployTarget, noTests });
+    } finally {
+      this.running = false;
+    }
+  }
+
+  async _runGodInner(prompt, { deployTarget = null, noTests = false } = {}) {
+    const t0 = Date.now();
     this.onEvent(S2C.CHAT_MESSAGE, {
       kind: 'system',
       text: `⚡ god mode: "${String(prompt).slice(0, 100)}"`,
@@ -293,6 +321,8 @@ export class ChatSession {
     } catch (e) {
       console.error('Planner error:', e);
       this.onEvent(S2C.CHAT_ERROR, { message: `plan failed: ${e.message}` });
+      // FIX: without a terminal CHAT_DONE the client spinner hung forever.
+      this.onEvent(S2C.CHAT_DONE, { mode: 'god', error: true, interrupted: false });
       return null;
     }
 
@@ -316,6 +346,8 @@ export class ChatSession {
     const results = await this.manager.runAll();
     if (!results) {
       this.onEvent(S2C.CHAT_ERROR, { message: 'god-mode build failed' });
+      // FIX: without a terminal CHAT_DONE the client spinner hung forever.
+      this.onEvent(S2C.CHAT_DONE, { mode: 'god', error: true, interrupted: false });
       return null;
     }
 
@@ -461,10 +493,13 @@ export class ChatSession {
     if (this.chatAgent) {
       this.chatAgent.abort();
     }
+    // FIX: god-mode/dispatch still leaves subagents running — stop the
+    // SubagentManager too (was only ever reached via `cleanup`).
+    try { this.manager?.stop?.(); } catch { /* already settled */ }
   }
 
   /** Plain LLM chat with limited tools (read/search only) — no writes, no shell. */
-  async runChat(prompt, mode = 'chat') {
+  async runChat(prompt, mode = 'chat', { maxTokens = 8192, outputLength = 'xhigh' } = {}) {
     const assignment = (this.router.modelOverride && await this.router.find(this.router.modelOverride))
       || await this.router.pick('general');
 
@@ -541,8 +576,10 @@ export class ChatSession {
       ...this.config,
       allowShellAll: false,
       requireEditApproval: true,
-      domain: isExplain ? 'chat' : (this.config.domain || 'chat'),
+      domain: isExplain ? 'chat' : (this.config.domain || 'backend'),
       mode,
+      maxTokens,
+      outputLength,
       // Claude-style: the whole history goes into context fresh — but
       // 046: bounded to the last 100 messages so marathon sessions can't
       // blow past model context limits (400s on overflow).
@@ -600,13 +637,18 @@ export class ChatSession {
         interrupted: Boolean(out.interrupted),
         mode
       });
+    } catch (err) {
+      console.error('[chat-session] runChat failed:', err.message);
+      // Surfacing: the client otherwise waited on a spinner with no reason.
+      this.onEvent(S2C.CHAT_ERROR, { message: err.message || 'chat failed' });
+      this.onEvent(S2C.CHAT_DONE, { text: '', mode, error: true, interrupted: false });
     } finally {
       this.chatAgent = null;
     }
   }
 
   /** Full agent mode — uses ChatAgent with tools (read/write/edit/shell/search/git/test). */
-  async runAgent(prompt) {
+  async runAgent(prompt, { maxTokens = 8192, outputLength = 'xhigh' } = {}) {
     const assignment = (this.router.modelOverride && await this.router.find(this.router.modelOverride))
       || await this.router.pick('build');
 
@@ -630,12 +672,64 @@ export class ChatSession {
       }
     }
 
+    let planContext = '';
+    if (plan && Array.isArray(plan.todos) && plan.todos.length > 0) {
+      planContext = `ACTIVE EXECUTION PLAN:
+Summary: ${plan.summary || 'Execute build'}
+Tasks to complete:
+${plan.todos.map((t, idx) => `${idx + 1}. [${t.id}] ${t.title}${t.description ? ': ' + t.description : ''} (${t.domain || 'code'}) -> Files: ${(t.files || []).join(', ')}`).join('\n\n')}
+
+INSTRUCTIONS:
+- Implement every todo item in the plan by writing or editing files using your tools (write_file, edit_file).
+- Implement each file completely. Do NOT leave placeholder stubs, '// TODO', or empty containers.
+- Write multi-line formatted, production-ready code with full styling, logic, and sample data.
+- After completing all files, summarize your work to the user.`;
+    }
+
+    const agentRules = `You are running in autonomous AGENT mode.
+CRITICAL:
+- If the user sends a greeting (e.g. "hi", "hello", "hey"), asks a question, or chats casually:
+  DO NOT call any tools! DO NOT create, write, or edit any files!
+  Simply respond politely in chat and ask what project or task they want to build or work on.
+- ONLY when explicitly asked to build, create, or modify code:
+  1. Always write complete, robust, full-featured files using write_file or edit_file.
+  2. NEVER emit single-line minified code. Always use proper newlines (\\n) and indentation.
+  3. Tailor the implementation specifically to the user's request (e.g. do not assume every website is an e-commerce store unless asked).
+  4. NEVER write minimal 3-4 line placeholder skeletons or empty container tags. Every project must be comprehensive, production-ready, beautiful, and fully working.
+  5. Never stop until all requested files are created with full detail and completely functional.`;
+
+    let lengthGuidance = '';
+    if (outputLength === 'very_low' || outputLength === 'low') {
+      lengthGuidance = `USER OUTPUT LENGTH PREFERENCE: Concise (${outputLength}).
+- Keep explanations and conversational text brief, to-the-point, and minimal.
+- For small bug fixes or targeted changes, do not add filler or unrequested boilerplate.
+- For code files and functions, ALWAYS generate complete, functional, working code without truncation or broken syntax.`;
+    } else if (outputLength === 'max' || outputLength === 'ultra') {
+      lengthGuidance = `USER OUTPUT LENGTH PREFERENCE: Deep & Comprehensive (${outputLength}).
+- For large project requests or feature builds, provide exhaustive, enterprise-grade implementations covering all features, styling, rich mock data, and edge cases.
+- For small tasks, single-line bug fixes, or quick answers, stay concise and directly fix the issue without adding unnecessary bloat or artificial lines.
+- The exact number of lines is naturally determined by the task requirements. Never truncate or leave code incomplete.`;
+    } else {
+      lengthGuidance = `USER OUTPUT LENGTH PREFERENCE: Balanced (${outputLength}). Provide thorough, well-crafted code with clean explanations. Solve small tasks concisely; build large projects fully without truncation.`;
+    }
+
+    const chatAgentTurns = Math.max(25, (plan?.todos?.length || 5) * 5);
+    const agentConfig = {
+      ...this.config,
+      mode: 'agent',
+      domain: 'backend',
+      chatAgentTurns,
+      maxTokens,
+      outputLength,
+      extraRules: [agentRules, lengthGuidance, planContext].filter(Boolean).join('\n\n')
+    };
+
     const agent = new ChatAgent({
       assignment,
       projectPath: this.workspacePath,
       bus: this.bus,
       undoStack: this.undoStack,
-      config: this.config,
+      config: agentConfig,
       reasoning: this.router?.reasoning || null,
       history: this.history,
       onTool: ({ tool, args, replaceKey }) => {
@@ -691,6 +785,11 @@ export class ChatSession {
         interrupted: Boolean(out.interrupted),
         mode: 'agent'
       });
+    } catch (err) {
+      console.error('[chat-session] runAgent failed:', err.message);
+      // Surfacing: the client otherwise waited on a spinner with no reason.
+      this.onEvent(S2C.CHAT_ERROR, { message: err.message || 'agent run failed' });
+      this.onEvent(S2C.CHAT_DONE, { text: '', mode: 'agent', error: true, interrupted: false });
     } finally {
       this.bus.off(EVENTS.MESSAGE, updateTodos);
       this.chatAgent = null;
@@ -698,7 +797,7 @@ export class ChatSession {
   }
 
   /** Send a message — dispatches to chat or agent mode. */
-  async sendMessage(prompt, mode = 'chat') {
+  async sendMessage(prompt, mode = 'chat', opts = {}) {
     if (this.running) {
       this.onEvent(S2C.CHAT_ERROR, { message: 'a message is already being processed — please wait' });
       return;
@@ -717,10 +816,17 @@ export class ChatSession {
           timestamp: new Date(),
         }).catch(() => {});
       }
-      if (mode === 'agent') {
-        await this.runAgent(prompt);
+      const outputLength = opts?.outputLength || this.outputLength || 'xhigh';
+      this.outputLength = outputLength;
+      const maxTokens = OUTPUT_LENGTH_MAP[outputLength] || 8192;
+      const trimmed = String(prompt || '').trim();
+      const isSimpleGreetingOrCasual = SIMPLE_PROMPT_RE.test(trimmed) && !BUILD_KEYWORDS_RE.test(trimmed);
+      if (mode === 'agent' && !isSimpleGreetingOrCasual) {
+        await this.runAgent(prompt, { maxTokens, outputLength });
+      } else if (promptNeedsPlanning(prompt)) {
+        await this.runAgent(prompt, { maxTokens, outputLength });
       } else {
-        await this.runChat(prompt, mode);
+        await this.runChat(prompt, mode === 'agent' ? 'chat' : mode, { maxTokens, outputLength });
       }
     } finally {
       this.running = false;

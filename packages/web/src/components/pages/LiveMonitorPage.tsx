@@ -38,7 +38,7 @@ function Skeleton() {
   return (
     <div className="animate-pulse space-y-3" role="status" aria-label="Loading live activity">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="h-16 rounded-xl bg-white/5" />
+        <div key={i} className="h-16 rounded-2xl bg-white border border-slate-200/80 shadow-xs" />
       ))}
     </div>
   );
@@ -140,15 +140,17 @@ export function LiveMonitorPage() {
   const list = Object.values(agents).sort((a, b) => b.updatedAt - a.updatedAt);
 
   return (
-    <div className="min-h-screen bg-[#0c0c0c] text-white p-6 max-w-6xl mx-auto">
+    <div className="min-h-screen bg-slate-50 text-neutral-900 py-10 px-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <span aria-hidden="true" className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-        <h1 className="text-xl font-bold">Live monitor</h1>
+        <span aria-hidden="true" className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-emerald-500 ring-4 ring-emerald-100 animate-pulse' : 'bg-red-500 ring-4 ring-red-100'}`} />
+        <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Live monitor</h1>
         {/* WEB-019: polite live region announces connect/disconnect + build completion. */}
-        <span role="status" aria-live="polite" className="text-xs text-white/40">{connected ? 'connected to /live' : 'disconnected — start the backend (`mcode serve`)'}</span>
+        <span role="status" aria-live="polite" className="text-xs text-neutral-500">
+          {connected ? 'connected to /live' : 'disconnected — start backend (`mcode serve`)'}
+        </span>
         {/* WEB-018: backend version chip — correlate with `mcode version`. */}
         {version && (
-          <span title="Backend version — correlate with `mcode version`" className="ml-auto text-[11px] font-mono px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/50">
+          <span title="Backend version — correlate with `mcode version`" className="ml-auto text-[11px] font-mono font-medium px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-neutral-600 shadow-xs">
             mcode v{version}
           </span>
         )}
@@ -157,47 +159,47 @@ export function LiveMonitorPage() {
       {/* WEB-018: live cost line — spend, budget banner, conflicts from the
           `build:complete` payload. Surface-only: resume runs in the CLI. */}
       {summary && (
-        <div data-testid="build-cost-line" role="status" aria-live="polite" className="rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-6">
+        <div data-testid="build-cost-line" role="status" aria-live="polite" className="rounded-2xl border border-slate-200 bg-white p-5 mb-8 shadow-xs">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <span className="font-medium">Build complete — {summary.done ?? 0}/{summary.total ?? 0} done</span>
-            {(summary.failed ?? 0) > 0 && <span className="text-red-400">✗ {summary.failed} failed</span>}
-            {(summary.needsReview ?? 0) > 0 && <span className="text-amber-400">⚑ {summary.needsReview} review</span>}
+            <span className="font-bold text-neutral-900">Build complete — {summary.done ?? 0}/{summary.total ?? 0} done</span>
+            {(summary.failed ?? 0) > 0 && <span className="text-red-600 font-semibold">✗ {summary.failed} failed</span>}
+            {(summary.needsReview ?? 0) > 0 && <span className="text-amber-600 font-semibold">⚑ {summary.needsReview} review</span>}
             {summary.spendUsd != null ? (
-              <span className="text-white/70" title="Ledger-attributed spend">spent ${Number(summary.spendUsd).toFixed(2)}</span>
+              <span className="text-neutral-700 font-semibold" title="Ledger-attributed spend">spent ${Number(summary.spendUsd).toFixed(2)}</span>
             ) : (
               summary.cost != null && summary.cost > 0 && (
-                <span className="text-white/40" title="Legacy rate-table estimate">~${Number(summary.cost).toFixed(2)}</span>
+                <span className="text-neutral-500 font-medium" title="Legacy rate-table estimate">~${Number(summary.cost).toFixed(2)}</span>
               )
             )}
-            {summary.elapsedSecs != null && <span className="text-xs text-white/40">{Math.round(summary.elapsedSecs)}s</span>}
+            {summary.elapsedSecs != null && <span className="text-xs text-neutral-400 font-mono">{Math.round(summary.elapsedSecs)}s</span>}
           </div>
           {summary.budget != null && (
-            <div data-testid="build-budget-banner" className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] px-2.5 py-2 text-xs text-amber-200/90">
-              <strong className="font-medium">Stopped at the cost ceiling.</strong>{' '}
+            <div data-testid="build-budget-banner" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <strong className="font-bold">Stopped at the cost ceiling.</strong>{' '}
               spent ${Number(summary.budget.spentUsd ?? 0).toFixed(2)} of the ${Number(summary.budget.limitUsd ?? 0).toFixed(2)} limit.
-              Resume with <code className="font-mono">mcode god --resume</code>.
+              Resume with <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">mcode god --resume</code>.
             </div>
           )}
           {((summary.overlaps?.length ?? 0) > 0 || (summary.lockConflicts?.length ?? 0) > 0) && (
-            <div data-testid="build-conflicts" className="mt-2 text-xs text-white/50">
+            <div data-testid="build-conflicts" className="mt-2 text-xs text-neutral-500">
               {(summary.overlaps?.length ?? 0) > 0 && (
-                <span className="mr-3 text-amber-300/80">⚠ {summary.overlaps!.length} overlapping file write{summary.overlaps!.length !== 1 && 's'}</span>
+                <span className="mr-3 text-amber-700 font-medium">⚠ {summary.overlaps!.length} overlapping file write{summary.overlaps!.length !== 1 && 's'}</span>
               )}
               {(summary.lockConflicts?.length ?? 0) > 0 && (
-                <span className="text-red-300/80">⛔ {summary.lockConflicts!.length} lock conflict{summary.lockConflicts!.length !== 1 && 's'}</span>
+                <span className="text-red-700 font-medium">⛔ {summary.lockConflicts!.length} lock conflict{summary.lockConflicts!.length !== 1 && 's'}</span>
               )}
             </div>
           )}
         </div>
       )}
 
-      <h2 className="text-sm font-semibold text-white/60 mb-3">Subagents ({list.length})</h2>
+      <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Subagents ({list.length})</h2>
       {!ready ? <Skeleton /> : list.length === 0 ? (
-        <p className="text-sm text-white/40 border border-dashed border-white/10 rounded-xl p-6 text-center">
-          No agent activity yet — run <code className="text-emerald-300">mcode god "…"</code> and watch it here live.
-        </p>
+        <div className="text-sm text-neutral-500 border border-dashed border-slate-300 bg-white rounded-2xl p-8 text-center shadow-xs">
+          No agent activity yet — run <code className="text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">mcode god &quot;…&quot;</code> and watch it here live.
+        </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2" role="log" aria-live="polite" aria-atomic="false" aria-label="Subagent activity">
+        <div className="grid gap-3.5 md:grid-cols-2" role="log" aria-live="polite" aria-atomic="false" aria-label="Subagent activity">
           <AnimatePresence>
             {list.map((a) => (
               <motion.div
@@ -206,20 +208,20 @@ export function LiveMonitorPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
-                className="rounded-xl border border-white/10 bg-white/[0.03] p-4"
+                className="rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs p-5 transition-all shadow-xs"
               >
-                <div className="flex items-center gap-2">
-                  <span aria-hidden="true" className="w-2 h-2 rounded-full animate-pulse" style={{ background: a.status === 'running' ? '#4ade80' : a.status === 'done' ? '#38bdf8' : '#f87171' }} />
-                  <span className="font-medium text-sm truncate">{a.title || a.todoId || a.id}</span>
+                <div className="flex items-center gap-2.5">
+                  <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ background: a.status === 'running' ? '#10b981' : a.status === 'done' ? '#0284c7' : '#ef4444' }} />
+                  <span className="font-bold text-sm text-neutral-900 truncate">{a.title || a.todoId || a.id}</span>
                   {a.domain && (
-                    <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ color: DOMAIN_COLORS[a.domain] || '#fff', background: `${DOMAIN_COLORS[a.domain] || '#fff'}1a` }}>
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full border" style={{ color: DOMAIN_COLORS[a.domain] || '#334155', background: `${DOMAIN_COLORS[a.domain] || '#334155'}15`, borderColor: `${DOMAIN_COLORS[a.domain] || '#334155'}30` }}>
                       {a.domain}
                     </span>
                   )}
                 </div>
-                <div className="mt-1 text-xs text-white/40">
-                  {a.model && <span className="mr-3">{a.model}</span>}
-                  {a.wave != null && <span className="mr-3">wave {a.wave}</span>}
+                <div className="mt-2 text-xs text-neutral-500">
+                  {a.model && <span className="mr-3 font-mono text-neutral-600">{a.model}</span>}
+                  {a.wave != null && <span className="mr-3 font-medium">wave {a.wave}</span>}
                   <span>{a.steps} steps · {a.status}</span>
                 </div>
               </motion.div>
@@ -228,11 +230,13 @@ export function LiveMonitorPage() {
         </div>
       )}
 
-      <h2 className="text-sm font-semibold text-white/60 mt-8 mb-3">Watch fixes ({fixes.length})</h2>
+      <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mt-10 mb-3">Watch fixes ({fixes.length})</h2>
       {fixes.length === 0 ? (
-        <p className="text-sm text-white/40">No auto-fixes streamed yet.</p>
+        <div className="text-sm text-neutral-500 bg-white border border-slate-200 rounded-2xl p-6 text-center shadow-xs">
+          No auto-fixes streamed yet.
+        </div>
       ) : (
-        <ul className="space-y-2" role="log" aria-live="polite" aria-atomic="false" aria-label="Watch fixes">
+        <ul className="space-y-2.5" role="log" aria-live="polite" aria-atomic="false" aria-label="Watch fixes">
           <AnimatePresence>
             {fixes.map((f) => (
               <motion.li
@@ -240,10 +244,10 @@ export function LiveMonitorPage() {
                 layout
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="text-sm rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2"
+                className="text-sm rounded-xl border border-slate-200/80 bg-white px-4 py-3 shadow-xs flex items-center justify-between"
               >
-                <span className="text-emerald-300 font-mono text-xs">{f.file || 'watch'}</span>
-                <span className="text-white/60 text-xs ml-2">{f.detail || f.outcome || 'fixed'}</span>
+                <span className="text-emerald-800 font-mono text-xs font-bold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">{f.file || 'watch'}</span>
+                <span className="text-neutral-600 text-xs ml-2">{f.detail || f.outcome || 'fixed'}</span>
               </motion.li>
             ))}
           </AnimatePresence>

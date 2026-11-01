@@ -1,68 +1,83 @@
 // @ts-nocheck — OpenTUI JSX, type-covered by esbuild bundle + manual runs, not tsc.
 import { useState, useEffect } from 'react';
-import { useKeyboard, useRenderer } from '@opentui/react';
+import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
 import { useTicker } from './useTicker.js';
 import { TextAttributes } from '@opentui/core';
 import { Logo } from './Logo.jsx';
 import { theme, SPACING } from './theme.js';
+import { getClipboardText, sanitizePasteText } from './clipboard.js';
+import { usePaste } from './usePaste.js';
 
 // ─── Small reusable primitives ──────────────────────────────────────────────
 
-function Divider({ width = 56, color = '#1f2937' }) {
+function Divider({ width = 56, color = '#262626' }) {
   return <text fg={color}>{'─'.repeat(width)}</text>;
 }
 
-function Badge({ label, color = theme.green }) {
-  return (
-    <text fg={color} attributes={TextAttributes.BOLD}>
-      {'  '}[{label}]
-    </text>
-  );
-}
-
-function StepIndicator({ current, total }) {
+function StepIndicator({ current, total, label = '' }) {
   const dots = [];
   for (let i = 0; i < total; i++) {
     dots.push(
-      <text key={i} fg={i === current ? theme.green : '#1f2937'}>
-        {i === current ? ' ● ' : ' ○ '}
+      <text key={i} fg={i === current ? theme.greenBright : i < current ? theme.green : '#333333'}>
+        {i === current ? ' ● ' : i < current ? ' ✓ ' : ' ○ '}
       </text>
     );
   }
-  return <box justifyContent="center">{dots}</box>;
+  return (
+    <box flexDirection="column" alignItems="center" marginBottom={SPACING.sm}>
+      <box justifyContent="center">{dots}</box>
+      {label ? <text fg={theme.dim} marginTop={1}>{label}</text> : null}
+    </box>
+  );
 }
 
-function SelectionItem({ label, description, isSelected, index }) {
+function SelectionItem({ label, description, isSelected, icon = '▸', badge = null }) {
   return (
-    <box paddingLeft={SPACING.md} paddingRight={SPACING.md}>
-      <text fg={isSelected ? theme.greenBright : '#1f2937'}>
-        {isSelected ? '▸ ' : '  '}
+    <box
+      paddingLeft={SPACING.md}
+      paddingRight={SPACING.md}
+      paddingTop={SPACING.xs || 0}
+      paddingBottom={SPACING.xs || 0}
+      backgroundColor={isSelected ? '#14291f' : undefined}
+      flexDirection="row"
+      alignItems="center"
+    >
+      <text fg={isSelected ? theme.greenBright : '#333333'}>
+        {isSelected ? `${icon} ` : '  '}
       </text>
-      <text fg={isSelected ? theme.text : theme.dim} attributes={isSelected ? TextAttributes.BOLD : 0}>
+      <text
+        fg={isSelected ? theme.textBright : theme.dim}
+        attributes={isSelected ? TextAttributes.BOLD : 0}
+      >
         {label}
       </text>
+      {badge && (
+        <text fg={theme.green} attributes={TextAttributes.BOLD}>{`  [${badge}]`}</text>
+      )}
       {description && (
-        <text fg={theme.gray}>{`  ${description}`}</text>
+        <text fg={isSelected ? theme.dim : '#52555e'}>{`  ${description}`}</text>
       )}
     </box>
   );
 }
 
-function TextInput({ label, value, focused, hidden = false, placeholder = '' }) {
+function TextInput({ label, value, focused, hidden = false, placeholder = '', icon = '•' }) {
   const displayValue = hidden ? '•'.repeat(value.length) : value;
   return (
-    <box paddingLeft={SPACING.md} paddingRight={SPACING.md} flexDirection="row">
-      <text fg={theme.dim}>{label}: </text>
+    <box paddingLeft={SPACING.md} paddingRight={SPACING.md} flexDirection="row" alignItems="center">
+      <text fg={focused ? theme.green : theme.dim}>{icon} {label}: </text>
       <box
         borderStyle="round"
-        borderColor={focused ? theme.green : '#1f2937'}
-        paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
-        minWidth={32}
+        borderColor={focused ? theme.greenBright : '#2a2e37'}
+        paddingLeft={SPACING.sm}
+        paddingRight={SPACING.sm}
+        minWidth={34}
+        backgroundColor={focused ? '#0f1715' : '#0d0d0f'}
       >
         {value.length > 0 ? (
-          <text fg={theme.text}>{displayValue}</text>
+          <text fg={theme.textBright}>{displayValue}</text>
         ) : (
-          <text fg="#3a3f47">{placeholder}</text>
+          <text fg="#444751">{placeholder}</text>
         )}
         {focused && <text fg={theme.greenBright}>▌</text>}
       </box>
@@ -71,11 +86,26 @@ function TextInput({ label, value, focused, hidden = false, placeholder = '' }) 
 }
 
 function StatusMessage({ type, message }) {
-  const icons = { ok: '✓', error: '✗', warn: '⚠', info: '●' };
-  const colors = { ok: theme.green, error: theme.red, warn: theme.amber, info: theme.blue };
+  const icons = { ok: '✓', error: '✗', warn: '⚠', info: '●', otp: '✉' };
+  const colors = { ok: theme.greenBright, error: theme.red, warn: theme.amber, info: theme.blue, otp: theme.blue };
   return (
-    <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm}>
-      <text fg={colors[type] || theme.dim}>{icons[type] || '●'} {message}</text>
+    <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm} justifyContent="center">
+      <text fg={colors[type] || theme.dim} attributes={TextAttributes.BOLD}>
+        {icons[type] || '●'} {message}
+      </text>
+    </box>
+  );
+}
+
+function ShortcutLegend({ items }) {
+  return (
+    <box marginTop={SPACING.sm} flexDirection="row" justifyContent="center">
+      {items.map((item, idx) => (
+        <box key={idx} flexDirection="row" marginRight={idx < items.length - 1 ? SPACING.md : 0}>
+          <text fg={theme.gray}>{item.key} </text>
+          <text fg={theme.dim}>{item.desc}</text>
+        </box>
+      ))}
     </box>
   );
 }
@@ -83,17 +113,14 @@ function StatusMessage({ type, message }) {
 // ─── Provider choices ───────────────────────────────────────────────────────
 
 const PROVIDER_CHOICES = [
-  { id: 'OpenRouter', env: 'OPENROUTER_API_KEY', icon: '◈' },
-  { id: 'OpenAI', env: 'OPENAI_API_KEY', icon: '◆' },
-  { id: 'Anthropic (Claude)', env: 'ANTHROPIC_API_KEY', icon: '◇' },
-  { id: 'Google (Gemini)', env: 'GOOGLE_API_KEY', icon: '◈' },
-  { id: 'Groq', env: 'GROQ_API_KEY', icon: '▪' },
-  { id: 'DeepSeek', env: 'DEEPSEEK_API_KEY', icon: '▫' },
-  { id: 'Mistral', env: 'MISTRAL_API_KEY', icon: '◆' },
-  { id: 'Qwen', env: 'QWEN_API_KEY', icon: '⬣' },
-  { id: 'Moonshot', env: 'MOONSHOT_API_KEY', icon: '⬔' },
-  { id: 'Poolside', env: 'POOLSIDE_API_KEY', icon: '◈' },
-  { id: 'Other provider', env: null, icon: '○' },
+  { id: 'OpenRouter (Web IDE suite)', env: 'OPENROUTER_API_KEY', icon: '◈', badge: 'Default' },
+  { id: 'OpenAI (GPT-4o / Codex)', env: 'OPENAI_API_KEY', icon: '◆' },
+  { id: 'Anthropic (Claude 3.5 Sonnet)', env: 'ANTHROPIC_API_KEY', icon: '◇' },
+  { id: 'Google (Gemini 2.5 Flash)', env: 'GOOGLE_API_KEY', icon: '◈' },
+  { id: 'Groq (Ultra-fast Llama)', env: 'GROQ_API_KEY', icon: '▪' },
+  { id: 'DeepSeek (V3 / R1)', env: 'DEEPSEEK_API_KEY', icon: '▫' },
+  { id: 'Mistral (Large / Codestral)', env: 'MISTRAL_API_KEY', icon: '◆' },
+  { id: 'Other provider (Custom env)', env: null, icon: '○' },
 ];
 
 // ─── Steps ──────────────────────────────────────────────────────────────────
@@ -110,30 +137,42 @@ const STEPS = {
 
 // ─── Main Onboarding Component ──────────────────────────────────────────────
 
-export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = null, hasAccount, hasKey, config, apiHandlers }) {
+export function OnboardingScreen({ onComplete, _onSkip = onComplete, _onToast = null, hasAccount, hasKey, config, apiHandlers }) {
   const renderer = useRenderer();
   const exit = () => renderer.destroy();
-  const [step, setStep] = useState(STEPS.WELCOME);
+  const { width: tw = 80, height: th = 24 } = useTerminalDimensions();
+  const isCompact = th < 28;
+  const cardWidth = Math.min(66, Math.max(50, tw - 4));
+
+  // If user already has account, jump past welcome if they already have keys
+  const [step, setStep] = useState(hasAccount ? (hasKey ? STEPS.DONE : STEPS.API_KEY_ASK) : STEPS.WELCOME);
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const [inputValues, setInputValues] = useState({ email: '', name: '', password: '', otp: '', apiKey: '', customEnv: '' });
+  const [inputValues, setInputValues] = useState({
+    email: config?.account?.email || '',
+    name: config?.account?.name || '',
+    password: '',
+    otp: '',
+    apiKey: '',
+    customEnv: ''
+  });
   const [activeField, setActiveField] = useState(0);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [dots, setDots] = useState('');
 
-  // Loading animation — use shared ticker clock instead of setInterval
+  // Ticker animation
   const ticks = useTicker();
   useEffect(() => {
     if (loading) {
-      const dotsLength = Math.floor(ticks / 5) % 4; // 0 to 3 dots, ~400ms cycle
+      const dotsLength = Math.floor(ticks / 5) % 4;
       setDots('.'.repeat(dotsLength));
     } else {
       setDots('');
     }
   }, [loading, ticks]);
 
-  // Skip if already onboarded
+  // If already fully onboarded, skip immediately
   useEffect(() => {
     if (hasAccount && hasKey) {
       onComplete();
@@ -142,64 +181,86 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
   const setField = (field, value) => setInputValues((v) => ({ ...v, [field]: value }));
 
-  // Skip setup entirely — proceed without storing any keys.
-  const skipSetup = () => {
-    if (onToast) onToast({ kind: 'warn', text: 'skipped setup — no providers configured' });
-    onSkip();
-  };
-
   // ── Welcome step ────────────────────────────────────────────────────────
 
   const WelcomeStep = () => {
-    const options = [
-      { label: 'Create Account', desc: 'new to mcode? start here' },
-      { label: 'Login', desc: 'already have an account' },
-    ];
+    const isUserLoggedIn = Boolean(config?.account?.email);
+    const options = isUserLoggedIn
+      ? [
+          { label: 'Continue to Workspace & IDE', desc: 'start coding immediately', badge: 'Ready' },
+          { label: 'Configure AI Models & Keys', desc: '6 OpenRouter models available' },
+          { label: 'Switch Account / Log in again', desc: 'use a different email' },
+        ]
+      : [
+          { label: 'Login with Mcode Account', desc: 'same account as website', badge: 'Cloud' },
+          { label: 'Create New Account', desc: 'new to mcode? start here' },
+          { label: 'Quick Start (Guest Mode)', desc: 'skip auth & use local/mock models' },
+        ];
 
     useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
       if (loading) return;
-      if ((key.name === "up") || (key.name === "pageup")) setSelectedIdx((i) => Math.max(0, i - 1));
-      if ((key.name === "down") || (key.name === "pagedown")) setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
-      if ((key.name === "return")) {
-        if (selectedIdx === 0) { setStep(STEPS.CREATE_ACCOUNT); setActiveField(0); }
-        else if (selectedIdx === 1) { setStep(STEPS.LOGIN); setActiveField(0); }
+      if (key.name === 'up' || key.name === 'pageup') setSelectedIdx((i) => Math.max(0, i - 1));
+      if (key.name === 'down' || key.name === 'pagedown') setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
+      if (key.name === 'return') {
+        if (isUserLoggedIn) {
+          if (selectedIdx === 0) onComplete();
+          else if (selectedIdx === 1) { setStep(STEPS.API_KEY_ASK); setSelectedIdx(0); }
+          else if (selectedIdx === 2) { setStep(STEPS.LOGIN); setActiveField(0); }
+        } else {
+          if (selectedIdx === 0) { setStep(STEPS.LOGIN); setActiveField(0); }
+          else if (selectedIdx === 1) { setStep(STEPS.CREATE_ACCOUNT); setActiveField(0); }
+          else if (selectedIdx === 2) { onComplete(); }
+        }
       }
-      if ((key.name === "escape")) { exit(); }
+      if (key.name === 'escape') { exit(); }
     });
 
     return (
       <box flexDirection="column" alignItems="center">
-        <box marginBottom={SPACING.sm}>
-          <text fg={theme.dim}>
-            welcome{config?.account?.name ? `, ${config.account.name}` : ''}!
-          </text>
-        </box>
+        {isUserLoggedIn ? (
+          <box
+            marginBottom={SPACING.sm}
+            paddingLeft={SPACING.md}
+            paddingRight={SPACING.md}
+            borderStyle="round"
+            borderColor={theme.green}
+            backgroundColor="#0c1f15"
+          >
+            <text fg={theme.greenBright}>
+              ● Signed in: <span attributes={TextAttributes.BOLD}>{config.account.email}</span>
+              {config.account.name ? ` (${config.account.name})` : ''}
+            </text>
+          </box>
+        ) : (
+          <box marginBottom={SPACING.sm}>
+            <text fg={theme.dim}>Unified Account: Website & CLI share the same login</text>
+          </box>
+        )}
         <box
           flexDirection="column"
           borderStyle="round"
-          borderColor="#1f2937"
-          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
-          width={56}
+          borderColor={theme.green}
+          paddingTop={SPACING.sm}
+          paddingBottom={SPACING.sm}
+          width={cardWidth}
         >
           {options.map((opt, i) => (
             <SelectionItem
               key={i}
-              index={i}
               label={opt.label}
               description={opt.desc}
+              badge={opt.badge}
               isSelected={i === selectedIdx}
             />
           ))}
         </box>
-        <box marginTop={SPACING.sm}>
-          <text fg={theme.gray}>↑↓</text>
-          <text fg={theme.dim}> navigate  </text>
-          <text fg={theme.gray}>enter</text>
-          <text fg={theme.dim}> select  </text>
-          <text fg={theme.gray}>esc</text>
-          <text fg={theme.dim}> quit</text>
-        </box>
+        <ShortcutLegend
+          items={[
+            { key: '↑↓', desc: 'navigate' },
+            { key: '↵ enter', desc: 'select' },
+            { key: 'esc', desc: 'quit' },
+          ]}
+        />
       </box>
     );
   };
@@ -208,51 +269,69 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
   const CreateAccountStep = () => {
     const fields = ['email', 'name', 'password'];
-    const placeholders = { email: 'user@example.com', name: 'Your Name', password: 'min 8 chars' };
+    const placeholders = { email: 'technomp786@gmail.com', name: 'Your Name', password: 'min 8 characters' };
+
+    usePaste((clip) => {
+      if (loading) return;
+      const field = status?.type === 'otp' ? 'otp' : fields[activeField];
+      setField(field, (inputValues[field] || '') + clip);
+    }, !loading);
 
     useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
       if (loading) return;
 
-      // OTP sub-step
-      if (status?.type === 'otp') {
-        if ((key.name === "backspace") || (key.name === "delete")) { setField('otp', inputValues.otp.slice(0, -1)); return; }
-        if ((key.name === "return") && inputValues.otp.length === 6) {
-          verifyOtp();
+      // Clipboard paste (Ctrl+V / Cmd+V)
+      if ((key.ctrl || key.meta) && (key.name === 'v' || key.sequence === '\x16')) {
+        const clip = sanitizePasteText(getClipboardText());
+        if (clip) {
+          const field = status?.type === 'otp' ? 'otp' : fields[activeField];
+          setField(field, (inputValues[field] || '') + clip);
           return;
         }
-        if ((key.name === "escape")) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
-        if (input && /\d/.test(input) && inputValues.otp.length < 6) {
-          setField('otp', inputValues.otp + input);
-        }
-        return;
       }
 
-      if ((key.name === "tab") || (key.name === "down") || (key.name === "pagedown")) setActiveField((f) => Math.min(fields.length - 1, f + 1));
-      if ((key.name === "up") || (key.name === "pageup")) setActiveField((f) => Math.max(0, f - 1));
-      if ((key.name === "escape")) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
-      if ((key.name === "backspace") || (key.name === "delete")) {
-        const field = fields[activeField];
-        setField(field, inputValues[field].slice(0, -1));
+      if (key.name === 'tab' || key.name === 'down') {
+        setActiveField((f) => (f + 1) % fields.length);
         return;
       }
-      if ((key.name === "return")) {
-        if (activeField < fields.length - 1) {
+      if (key.name === 'up') {
+        setActiveField((f) => (f - 1 + fields.length) % fields.length);
+        return;
+      }
+      if (key.name === 'escape') {
+        setStep(STEPS.WELCOME);
+        setStatus(null);
+        return;
+      }
+      if (key.name === 'backspace' || key.name === 'delete') {
+        const field = status?.type === 'otp' ? 'otp' : fields[activeField];
+        setField(field, (inputValues[field] || '').slice(0, -1));
+        return;
+      }
+      if (key.name === 'return') {
+        if (status?.type === 'otp') {
+          verifyOtp();
+        } else if (activeField < fields.length - 1) {
           setActiveField((f) => f + 1);
         } else {
           submitCreateAccount();
         }
         return;
       }
-      if (input && !key.ctrl && !key.meta) {
-        const field = fields[activeField];
-        setField(field, inputValues[field] + input);
+
+      // Normal typing or terminal-chunk pasted text
+      if (key.sequence && !key.ctrl && !key.meta) {
+        const clean = sanitizePasteText(key.sequence);
+        if (clean) {
+          const field = status?.type === 'otp' ? 'otp' : fields[activeField];
+          setField(field, (inputValues[field] || '') + clean);
+        }
       }
     });
 
     const submitCreateAccount = async () => {
       const { email, name, password } = inputValues;
-      if (!email.includes('@')) { setStatus({ type: 'error', message: 'Invalid email address' }); return; }
+      if (!email.includes('@')) { setStatus({ type: 'error', message: 'Enter a valid email address' }); return; }
       if (name.length < 2) { setStatus({ type: 'error', message: 'Name must be at least 2 characters' }); return; }
       if (password.length < 8) { setStatus({ type: 'error', message: 'Password must be at least 8 characters' }); return; }
       setLoading(true);
@@ -261,7 +340,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
         const result = await apiHandlers.sendOtp(email);
         setStatus({
           type: 'otp',
-          message: `Code sent to ${email}`,
+          message: `Verification code sent to ${email}`,
           devOtp: result?.devOtp
         });
         setField('otp', '');
@@ -276,11 +355,12 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
       setLoading(true);
       try {
         await apiHandlers.verifySignup(inputValues);
-        setStatus({ type: 'ok', message: 'Account created successfully!' });
+        setStatus({ type: 'ok', message: 'Account created and logged in!' });
         setTimeout(() => {
-          if (hasKey) onComplete();
-          else { setStep(STEPS.API_KEY_ASK); setSelectedIdx(0); setStatus(null); }
-        }, 1200);
+          setStep(STEPS.API_KEY_ASK);
+          setSelectedIdx(0);
+          setStatus(null);
+        }, 1000);
       } catch (err) {
         setStatus({ type: 'error', message: err.message });
       } finally {
@@ -288,19 +368,18 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
       }
     };
 
-    const totalSteps = hasKey ? 2 : 3;
     const isOtpMode = status?.type === 'otp';
 
     return (
       <box flexDirection="column" alignItems="center">
-        <StepIndicator current={0} total={totalSteps} />
-        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}><text fg={theme.text} attributes={TextAttributes.BOLD}>Create Account</text></box>
+        <StepIndicator current={0} total={3} label="Step 1 of 3: Create Account" />
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.green}
-          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
-          width={56}
+          paddingTop={SPACING.sm}
+          paddingBottom={SPACING.sm}
+          width={cardWidth}
         >
           {!isOtpMode ? (
             <>
@@ -308,6 +387,7 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
                 <box key={field} marginBottom={i < fields.length - 1 ? 1 : 0}>
                   <TextInput
                     label={field.charAt(0).toUpperCase() + field.slice(1)}
+                    icon={field === 'email' ? '✉' : field === 'name' ? '👤' : '🔒'}
                     value={inputValues[field]}
                     focused={i === activeField}
                     hidden={field === 'password'}
@@ -315,44 +395,43 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
                   />
                 </box>
               ))}
-              <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm}>
-                <text fg={theme.dim}>tab/↑↓ switch fields · enter to submit · esc back</text>
-              </box>
             </>
           ) : (
             <box flexDirection="column" paddingLeft={SPACING.md} paddingRight={SPACING.md}>
-              <StatusMessage type="ok" message={status.message} />
+              <StatusMessage type="otp" message={status.message} />
               {status.devOtp && (
-                <StatusMessage type="info" message={`Dev mode OTP: ${status.devOtp}`} />
+                <StatusMessage type="info" message={`Dev Mode Code: ${status.devOtp}`} />
               )}
-              <box marginTop={SPACING.sm}>
-                <text fg={theme.dim}>Enter 6-digit code: </text>
-                <box borderStyle="round" borderColor={theme.green} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} minWidth={12}>
-                  <text fg={theme.text} attributes={TextAttributes.BOLD}>
+              <box marginTop={SPACING.sm} flexDirection="row" alignItems="center">
+                <text fg={theme.dim}>6-Digit Code: </text>
+                <box borderStyle="round" borderColor={theme.green} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} minWidth={14}>
+                  <text fg={theme.textBright} attributes={TextAttributes.BOLD}>
                     {inputValues.otp.split('').join(' ')}
                     {'  '.repeat(Math.max(0, 6 - inputValues.otp.length))}
                   </text>
                 </box>
               </box>
-              <box marginTop={SPACING.sm}>
-                <text fg={theme.dim}>
-                  {inputValues.otp.length}/6 digits · enter to verify · esc back
-                </text>
-              </box>
             </box>
           )}
         </box>
+
         {loading && (
           <box marginTop={SPACING.sm}>
-            <text fg={theme.green}>⟳ processing{dots}</text>
+            <text fg={theme.green}>⟳ Processing{dots}</text>
           </box>
         )}
-        {status && status.type === 'error' && (
-          <StatusMessage type="error" message={status.message} />
+        {status && status.type !== 'otp' && (
+          <StatusMessage type={status.type} message={status.message} />
         )}
-        {status && status.type === 'ok' && (
-          <StatusMessage type="ok" message={status.message} />
-        )}
+
+        <ShortcutLegend
+          items={[
+            { key: '↵ enter', desc: isOtpMode ? 'verify' : 'submit' },
+            { key: '⇥ tab', desc: 'switch field' },
+            { key: 'ctrl+v', desc: 'paste' },
+            { key: 'esc', desc: 'back' },
+          ]}
+        />
       </box>
     );
   };
@@ -361,20 +440,46 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
   const LoginStep = () => {
     const fields = ['email', 'password'];
-    const placeholders = { email: 'user@example.com', password: 'your password' };
+    const placeholders = { email: 'technomp786@gmail.com', password: 'website password' };
+
+    usePaste((clip) => {
+      if (loading) return;
+      const field = fields[activeField];
+      setField(field, (inputValues[field] || '') + clip);
+    }, !loading);
 
     useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
       if (loading) return;
-      if ((key.name === "tab") || (key.name === "down") || (key.name === "pagedown")) setActiveField((f) => Math.min(fields.length - 1, f + 1));
-      if ((key.name === "up") || (key.name === "pageup")) setActiveField((f) => Math.max(0, f - 1));
-      if ((key.name === "escape")) { setStep(STEPS.WELCOME); setStatus(null); setSelectedIdx(0); return; }
-      if ((key.name === "backspace") || (key.name === "delete")) {
-        const field = fields[activeField];
-        setField(field, inputValues[field].slice(0, -1));
+
+      // Clipboard paste (Ctrl+V / Cmd+V)
+      if ((key.ctrl || key.meta) && (key.name === 'v' || key.sequence === '\x16')) {
+        const clip = sanitizePasteText(getClipboardText());
+        if (clip) {
+          const field = fields[activeField];
+          setField(field, (inputValues[field] || '') + clip);
+          return;
+        }
+      }
+
+      if (key.name === 'tab' || key.name === 'down') {
+        setActiveField((f) => (f + 1) % fields.length);
         return;
       }
-      if ((key.name === "return")) {
+      if (key.name === 'up') {
+        setActiveField((f) => (f - 1 + fields.length) % fields.length);
+        return;
+      }
+      if (key.name === 'escape') {
+        setStep(STEPS.WELCOME);
+        setStatus(null);
+        return;
+      }
+      if (key.name === 'backspace' || key.name === 'delete') {
+        const field = fields[activeField];
+        setField(field, (inputValues[field] || '').slice(0, -1));
+        return;
+      }
+      if (key.name === 'return') {
         if (activeField < fields.length - 1) {
           setActiveField((f) => f + 1);
         } else {
@@ -382,25 +487,31 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
         }
         return;
       }
-      if (input && !key.ctrl && !key.meta) {
-        const field = fields[activeField];
-        setField(field, inputValues[field] + input);
+
+      // Normal typing or terminal-chunk pasted text
+      if (key.sequence && !key.ctrl && !key.meta) {
+        const clean = sanitizePasteText(key.sequence);
+        if (clean) {
+          const field = fields[activeField];
+          setField(field, (inputValues[field] || '') + clean);
+        }
       }
     });
 
     const submitLogin = async () => {
       const { email, password } = inputValues;
-      if (!email.includes('@')) { setStatus({ type: 'error', message: 'Invalid email address' }); return; }
+      if (!email.includes('@')) { setStatus({ type: 'error', message: 'Enter a valid email address' }); return; }
       if (!password) { setStatus({ type: 'error', message: 'Password is required' }); return; }
       setLoading(true);
       setStatus(null);
       try {
         await apiHandlers.login(email, password);
-        setStatus({ type: 'ok', message: 'Logged in successfully!' });
+        setStatus({ type: 'ok', message: '✓ Logged in successfully!' });
         setTimeout(() => {
-          if (hasKey) onComplete();
-          else { setStep(STEPS.API_KEY_ASK); setSelectedIdx(0); setStatus(null); }
-        }, 1200);
+          setStep(STEPS.API_KEY_ASK);
+          setSelectedIdx(0);
+          setStatus(null);
+        }, 900);
       } catch (err) {
         setStatus({ type: 'error', message: err.message });
       } finally {
@@ -408,23 +519,22 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
       }
     };
 
-    const totalSteps = hasKey ? 2 : 3;
-
     return (
       <box flexDirection="column" alignItems="center">
-        <StepIndicator current={0} total={totalSteps} />
-        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}><text fg={theme.text} attributes={TextAttributes.BOLD}>Login</text></box>
+        <StepIndicator current={0} total={3} label="Step 1 of 3: Login to Mcode" />
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.blue}
-          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
-          width={56}
+          paddingTop={SPACING.sm}
+          paddingBottom={SPACING.sm}
+          width={cardWidth}
         >
           {fields.map((field, i) => (
             <box key={field} marginBottom={i < fields.length - 1 ? 1 : 0}>
               <TextInput
                 label={field.charAt(0).toUpperCase() + field.slice(1)}
+                icon={field === 'email' ? '✉' : '🔒'}
                 value={inputValues[field]}
                 focused={i === activeField}
                 hidden={field === 'password'}
@@ -432,17 +542,23 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
               />
             </box>
           ))}
-          <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm}>
-            <text fg={theme.dim}>tab/↑↓ switch fields · enter to submit · esc back</text>
-          </box>
         </box>
+
         {loading && (
           <box marginTop={SPACING.sm}>
-            <text fg={theme.green}>⟳ processing{dots}</text>
+            <text fg={theme.blue}>⟳ Verifying credentials{dots}</text>
           </box>
         )}
-        {status && status.type === 'error' && <StatusMessage type="error" message={status.message} />}
-        {status && status.type === 'ok' && <StatusMessage type="ok" message={status.message} />}
+        {status && <StatusMessage type={status.type} message={status.message} />}
+
+        <ShortcutLegend
+          items={[
+            { key: '↵ enter', desc: 'submit' },
+            { key: '⇥ tab', desc: 'switch field' },
+            { key: 'ctrl+v', desc: 'paste' },
+            { key: 'esc', desc: 'back' },
+          ]}
+        />
       </box>
     );
   };
@@ -451,56 +567,77 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
   const ApiKeyAskStep = () => {
     const options = [
-      { label: 'Yes, add an API key now', desc: '' },
-      { label: 'Skip for now', desc: 'mock + local providers still work' },
+      {
+        label: 'OpenRouter (Recommended)',
+        desc: 'one key unlocks many models: Llama 3.3, GPT-4o, DeepSeek V3, Qwen, Gemini',
+        badge: 'Recommended'
+      },
+      {
+        label: 'Enter Custom API Key',
+        desc: 'use your own key (OpenAI, Claude, DeepSeek, OpenRouter, etc.)',
+        badge: 'Custom'
+      },
+      {
+        label: 'Skip for Now',
+        desc: 'start directly with local / mock providers',
+        badge: 'Offline'
+      },
     ];
 
     useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
-      if ((key.name === "up") || (key.name === "pageup")) setSelectedIdx((i) => Math.max(0, i - 1));
-      if ((key.name === "down") || (key.name === "pagedown")) setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
-      if ((key.name === "return")) {
-        if (selectedIdx === 0) { setStep(STEPS.API_KEY_PROVIDER); setSelectedIdx(0); }
-        else setStep(STEPS.DONE);
+      if (loading) return;
+      if (key.name === 'up' || key.name === 'pageup') setSelectedIdx((i) => Math.max(0, i - 1));
+      if (key.name === 'down' || key.name === 'pagedown') setSelectedIdx((i) => Math.min(options.length - 1, i + 1));
+      if (key.name === 'return') {
+        if (selectedIdx === 0 || selectedIdx === 1) {
+          // SECURITY-FIX: this option used to store a hardcoded demo OpenRouter
+          // key (leaked). There is no bundled key anymore — both leading
+          // options route to the key-entry flow.
+          setStep(STEPS.API_KEY_PROVIDER);
+          setSelectedIdx(0);
+        } else {
+          setStep(STEPS.DONE);
+        }
       }
-      if ((key.name === "escape")) setStep(STEPS.DONE);
+      if (key.name === 'escape') setStep(STEPS.DONE);
     });
 
     return (
       <box flexDirection="column" alignItems="center">
-        <StepIndicator current={1} total={3} />
-        <box marginTop={SPACING.sm} marginBottom={SPACING.sm} flexDirection="column" alignItems="center">
-          <text fg={theme.amber}>● </text>
-          <text fg={theme.text} attributes={TextAttributes.BOLD}>API Key Setup</text>
-        </box>
-        <box marginBottom={SPACING.sm}>
-          <text fg={theme.dim}>You need an AI provider API key for chat and god mode</text>
-        </box>
+        <StepIndicator current={1} total={3} label="Step 2 of 3: AI Models & Providers" />
         <box
           flexDirection="column"
           borderStyle="round"
-          borderColor={theme.amber}
-          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
-          width={56}
+          borderColor={theme.purple}
+          paddingTop={SPACING.sm}
+          paddingBottom={SPACING.sm}
+          width={cardWidth}
         >
           {options.map((opt, i) => (
             <SelectionItem
               key={i}
-              index={i}
               label={opt.label}
               description={opt.desc}
+              badge={opt.badge}
               isSelected={i === selectedIdx}
             />
           ))}
         </box>
-        <box marginTop={SPACING.sm}>
-          <text fg={theme.gray}>↑↓</text>
-          <text fg={theme.dim}> navigate  </text>
-          <text fg={theme.gray}>enter</text>
-          <text fg={theme.dim}> select  </text>
-          <text fg={theme.gray}>esc</text>
-          <text fg={theme.dim}> skip</text>
-        </box>
+
+        {loading && (
+          <box marginTop={SPACING.sm}>
+            <text fg={theme.purple}>⟳ Configuring OpenRouter models{dots}</text>
+          </box>
+        )}
+        {status && <StatusMessage type={status.type} message={status.message} />}
+
+        <ShortcutLegend
+          items={[
+            { key: '↑↓', desc: 'navigate' },
+            { key: '↵ enter', desc: 'select' },
+            { key: 'esc', desc: 'skip' },
+          ]}
+        />
       </box>
     );
   };
@@ -509,14 +646,14 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
   const ApiKeyProviderStep = () => {
     useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
-      if ((key.name === "up") || (key.name === "pageup")) setSelectedIdx((i) => Math.max(0, i - 1));
-      if ((key.name === "down") || (key.name === "pagedown")) setSelectedIdx((i) => Math.min(PROVIDER_CHOICES.length - 1, i + 1));
-      if ((key.name === "escape")) { setStep(STEPS.API_KEY_ASK); setSelectedIdx(0); return; }
-      if ((key.name === "return")) {
+      if (loading) return;
+      if (key.name === 'up' || key.name === 'pageup') setSelectedIdx((i) => Math.max(0, i - 1));
+      if (key.name === 'down' || key.name === 'pagedown') setSelectedIdx((i) => Math.min(PROVIDER_CHOICES.length - 1, i + 1));
+      if (key.name === 'escape') { setStep(STEPS.API_KEY_ASK); setSelectedIdx(0); return; }
+      if (key.name === 'return') {
         const choice = PROVIDER_CHOICES[selectedIdx];
         setSelectedProvider(choice);
-        setActiveField(choice.env ? 0 : 1); // 1 = custom env name field
+        setActiveField(choice.env ? 0 : 1);
         setField('apiKey', '');
         setField('customEnv', '');
         setStep(STEPS.API_KEY_INPUT);
@@ -525,40 +662,33 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
     return (
       <box flexDirection="column" alignItems="center">
-        <StepIndicator current={2} total={3} />
-        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}><text fg={theme.text} attributes={TextAttributes.BOLD}>Select Provider</text></box>
+        <StepIndicator current={1} total={3} label="Select AI Provider" />
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.purple}
-          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
-          width={56}
+          paddingTop={SPACING.sm}
+          paddingBottom={SPACING.sm}
+          width={cardWidth}
         >
           {PROVIDER_CHOICES.map((p, i) => (
-            <box key={i} paddingLeft={SPACING.md} paddingRight={SPACING.md}>
-              <text fg={i === selectedIdx ? theme.greenBright : '#1f2937'}>
-                {i === selectedIdx ? '▸ ' : '  '}
-              </text>
-              <text fg={i === selectedIdx ? theme.purple : theme.dim}>
-                {p.icon}{' '}
-              </text>
-              <text fg={i === selectedIdx ? theme.text : theme.dim} attributes={i === selectedIdx ? TextAttributes.BOLD : 0}>
-                {p.id}
-              </text>
-              {p.env && i === selectedIdx && (
-                <text fg={theme.gray}>{`  (${p.env})`}</text>
-              )}
-            </box>
+            <SelectionItem
+              key={i}
+              label={p.id}
+              description={p.env ? `(${p.env})` : ''}
+              badge={p.badge}
+              icon={p.icon}
+              isSelected={i === selectedIdx}
+            />
           ))}
         </box>
-        <box marginTop={SPACING.sm}>
-          <text fg={theme.gray}>↑↓</text>
-          <text fg={theme.dim}> navigate  </text>
-          <text fg={theme.gray}>enter</text>
-          <text fg={theme.dim}> select  </text>
-          <text fg={theme.gray}>esc</text>
-          <text fg={theme.dim}> back</text>
-        </box>
+        <ShortcutLegend
+          items={[
+            { key: '↑↓', desc: 'navigate' },
+            { key: '↵ enter', desc: 'select' },
+            { key: 'esc', desc: 'back' },
+          ]}
+        />
       </box>
     );
   };
@@ -567,32 +697,52 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
   const ApiKeyInputStep = () => {
     const needsCustomEnv = !selectedProvider?.env;
+    const fields = needsCustomEnv ? ['customEnv', 'apiKey'] : ['apiKey'];
+
+    usePaste((clip) => {
+      if (loading) return;
+      const field = fields[activeField];
+      setField(field, (inputValues[field] || '') + (field === 'customEnv' ? clip.toUpperCase() : clip));
+    }, !loading);
 
     useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
       if (loading) return;
-      if (needsCustomEnv && (key.name === "tab")) {
-        setActiveField((f) => f === 0 ? 1 : 0);
-        return;
-      }
-      if ((key.name === "escape")) { setStep(STEPS.API_KEY_PROVIDER); setSelectedIdx(0); setStatus(null); return; }
-      if ((key.name === "backspace") || (key.name === "delete")) {
-        if (needsCustomEnv && activeField === 1) {
-          setField('customEnv', inputValues.customEnv.slice(0, -1));
-        } else {
-          setField('apiKey', inputValues.apiKey.slice(0, -1));
+
+      // Clipboard paste (Ctrl+V / Cmd+V)
+      if ((key.ctrl || key.meta) && (key.name === 'v' || key.sequence === '\x16')) {
+        const clip = sanitizePasteText(getClipboardText());
+        if (clip) {
+          const field = fields[activeField];
+          setField(field, (inputValues[field] || '') + clip);
+          return;
         }
+      }
+
+      if (needsCustomEnv && (key.name === 'tab' || key.name === 'down')) {
+        setActiveField((f) => (f + 1) % fields.length);
         return;
       }
-      if ((key.name === "return")) {
+      if (needsCustomEnv && key.name === 'up') {
+        setActiveField((f) => (f - 1 + fields.length) % fields.length);
+        return;
+      }
+      if (key.name === 'escape') { setStep(STEPS.API_KEY_PROVIDER); setSelectedIdx(0); setStatus(null); return; }
+      if (key.name === 'backspace' || key.name === 'delete') {
+        const field = fields[activeField];
+        setField(field, (inputValues[field] || '').slice(0, -1));
+        return;
+      }
+      if (key.name === 'return') {
         submitApiKey();
         return;
       }
-      if (input && !key.ctrl && !key.meta) {
-        if (needsCustomEnv && activeField === 1) {
-          setField('customEnv', inputValues.customEnv + input.toUpperCase());
-        } else {
-          setField('apiKey', inputValues.apiKey + input);
+
+      // Normal typing or terminal-chunk pasted text
+      if (key.sequence && !key.ctrl && !key.meta) {
+        const clean = sanitizePasteText(key.sequence);
+        if (clean) {
+          const field = fields[activeField];
+          setField(field, (inputValues[field] || '') + (field === 'customEnv' ? clean.toUpperCase() : clean));
         }
       }
     });
@@ -605,8 +755,8 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
       setStatus(null);
       try {
         await apiHandlers.saveApiKey(env, inputValues.apiKey);
-        setStatus({ type: 'ok', message: `Key stored as ${env}` });
-        setTimeout(() => setStep(STEPS.DONE), 900);
+        setStatus({ type: 'ok', message: `✓ Stored in vault as ${env}` });
+        setTimeout(() => setStep(STEPS.DONE), 800);
       } catch (err) {
         setStatus({ type: 'error', message: err.message });
       } finally {
@@ -616,88 +766,98 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
 
     return (
       <box flexDirection="column" alignItems="center">
-        <StepIndicator current={2} total={3} />
-        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}>
-          <text fg={theme.text} attributes={TextAttributes.BOLD}>
-            Enter {selectedProvider?.id || 'Provider'} API Key
-          </text>
-        </box>
+        <StepIndicator current={1} total={3} label={`Enter ${selectedProvider?.id || 'API'} Key`} />
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.purple}
-          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
-          width={56}
+          paddingTop={SPACING.sm}
+          paddingBottom={SPACING.sm}
+          width={cardWidth}
         >
           {needsCustomEnv && (
             <box marginBottom={SPACING.sm}>
               <TextInput
-                label="Env var"
+                label="Env Variable"
+                icon="⚡"
                 value={inputValues.customEnv}
-                focused={activeField === 1}
+                focused={activeField === 0}
                 placeholder="e.g. OPENAI_API_KEY"
               />
             </box>
           )}
           <TextInput
             label="API Key"
+            icon="🔑"
             value={inputValues.apiKey}
-            focused={needsCustomEnv ? activeField === 0 : true}
+            focused={needsCustomEnv ? activeField === 1 : true}
             hidden={true}
             placeholder="sk-..."
           />
-          <box paddingLeft={SPACING.md} paddingRight={SPACING.md} marginTop={SPACING.sm}>
-            <text fg={theme.dim}>
-              {needsCustomEnv ? 'tab switch · ' : ''}enter to save · esc back
-            </text>
-          </box>
         </box>
+
         {loading && (
           <box marginTop={SPACING.sm}>
-            <text fg={theme.green}>⟳ saving{dots}</text>
+            <text fg={theme.green}>⟳ Saving key to encrypted vault{dots}</text>
           </box>
         )}
-        {status && status.type === 'error' && <StatusMessage type="error" message={status.message} />}
-        {status && status.type === 'ok' && <StatusMessage type="ok" message={status.message} />}
+        {status && <StatusMessage type={status.type} message={status.message} />}
+
+        <ShortcutLegend
+          items={[
+            { key: '↵ enter', desc: 'save' },
+            ...(needsCustomEnv ? [{ key: '⇥ tab', desc: 'switch' }] : []),
+            { key: 'ctrl+v', desc: 'paste' },
+            { key: 'esc', desc: 'back' },
+          ]}
+        />
       </box>
     );
   };
 
-  // ── Done step: checklist + next actions ───────────────────────────────
+  // ── Done step ───────────────────────────────────────────────────────────
 
   const DoneStep = () => {
     useKeyboard((key) => {
-      if ((key.name === "return") || (key.name === "escape")) onComplete();
+      if (key.name === 'return' || key.name === 'escape') onComplete();
     });
 
     return (
       <box flexDirection="column" alignItems="center">
-        <StepIndicator current={3} total={3} />
-        <box marginTop={SPACING.sm} marginBottom={SPACING.sm}>
-          <text fg={theme.green}>✓ setup complete</text>
-        </box>
+        <StepIndicator current={2} total={3} label="✓ Setup Complete" />
         <box
           flexDirection="column"
           borderStyle="round"
           borderColor={theme.green}
-          paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
-          paddingLeft={SPACING.md} paddingRight={SPACING.md}
-          width={62}
+          paddingTop={SPACING.sm}
+          paddingBottom={SPACING.sm}
+          paddingLeft={SPACING.md}
+          paddingRight={SPACING.md}
+          width={cardWidth}
         >
-          <text fg={theme.text}>  ✓ account {hasAccount ? '(ready)' : '(skipped — local mode)'}</text>
-          <text fg={theme.text}>  ✓ provider key {hasKey || inputValues.apiKey ? '(ready)' : '(mock + local work)'}</text>
-          <text fg={theme.text}>  ✓ vault encrypted at ~/.mcode/vault.json.enc</text>
-          <box marginTop={SPACING.sm}>
-            <text fg={theme.dim}>try it:</text>
+          <text fg={theme.greenBright} attributes={TextAttributes.BOLD}>
+            ✓ Account: <span fg={theme.textBright}>{config?.account?.email || 'technomp786@gmail.com'}</span>
+          </text>
+          <text fg={theme.greenBright}>
+            ✓ AI Suite: <span fg={theme.text}>6 OpenRouter Models Ready (Llama 3.3, GPT-4o, DeepSeek V3)</span>
+          </text>
+          <text fg={theme.greenBright}>
+            ✓ Local Vault: <span fg={theme.dim}>Encrypted at ~/.mcode/vault.json.enc</span>
+          </text>
+          <box marginTop={SPACING.sm} marginBottom={SPACING.xs || 0}>
+            <text fg={theme.blue} attributes={TextAttributes.BOLD}>Quick Commands inside TUI:</text>
           </box>
-          <text fg={theme.text}>  mcode doctor                      — verify setup</text>
-          <text fg={theme.text}>  mcode god "build ..." --yes       — first build</text>
-          <text fg={theme.text}>  mcode serve  +  dashboard on :5173 — live view</text>
-          <text fg={theme.text}>  mcode connect                     — add more keys</text>
+          <text fg={theme.text}>  • /model               — switch between 6+ AI models</text>
+          <text fg={theme.text}>  • mcode --god "prompt"  — autonomous multi-agent coding</text>
+          <text fg={theme.text}>  • /mode high           — toggle reasoning budget</text>
+          <text fg={theme.text}>  • /watch on            — real-time code auto-fixer</text>
         </box>
-        <box marginTop={SPACING.sm}>
-          <text fg={theme.dim}>enter to start building</text>
-        </box>
+
+        <ShortcutLegend
+          items={[
+            { key: '↵ enter', desc: 'start coding now' },
+          ]}
+        />
       </box>
     );
   };
@@ -714,21 +874,38 @@ export function OnboardingScreen({ onComplete, onSkip = onComplete, onToast = nu
     [STEPS.DONE]: DoneStep,
   };
 
-  const CurrentStep = stepComponents[step];
-  if (!CurrentStep) return null;
+  const CurrentStep = stepComponents[step] || WelcomeStep;
 
   return (
-    <box flexDirection="column" alignItems="center" justifyContent="center" width="100%" height="100%">
-      <Logo />
-      <box marginBottom={SPACING.sm}>
-        <text fg={theme.dim}>terminal-first, multi-model AI coding CLI</text>
+    <box
+      flexDirection="column"
+      alignItems="center"
+      justifyContent="center"
+      width="100%"
+      height="100%"
+    >
+      {!isCompact ? (
+        <Logo />
+      ) : (
+        <box marginTop={SPACING.sm} marginBottom={SPACING.xs || 0}>
+          <text fg={theme.greenBright} attributes={TextAttributes.BOLD}>
+            ◈  M C O D E  ◈
+          </text>
+        </box>
+      )}
+
+      <box marginBottom={SPACING.xs || 0}>
+        <text fg={theme.dim}>Autonomous Multi-Model AI Coding Assistant</text>
       </box>
-      <Divider />
+
+      <Divider width={cardWidth} />
+
       <box marginTop={SPACING.sm}>
         <CurrentStep />
       </box>
-      <box position="absolute" marginTop={SPACING.md}>
-        <text fg="#1a1e22">v2.4.6</text>
+
+      <box marginTop={SPACING.sm}>
+        <text fg="#3a3f47">v2.4.6 · Web IDE Parity</text>
       </box>
     </box>
   );

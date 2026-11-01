@@ -108,16 +108,15 @@ function modelsFor(ids, map) {
  *  registry caused 404s (e.g. poolside/moonshot-only models); google goes
  *  through the direct Gemini provider. */
 const OPENROUTER_MODELS = Object.freeze([
-  'openai:gpt-5.6-sol', 'openai:gpt-5.6-terra', 'openai:gpt-5.6-luna',
-  'openai:gpt-5.5', 'openai:gpt-5.4', 'openai:gpt-5.3-codex',
-  'anthropic:claude-fable-5', 'anthropic:claude-mythos-5', 'anthropic:claude-opus-5',
-  'anthropic:claude-opus-4-8', 'anthropic:claude-sonnet-5', 'anthropic:claude-sonnet-4-6',
-  'anthropic:claude-haiku-4-5',
-  'deepseek:deepseek-v4-pro', 'deepseek:deepseek-v4-flash-0731', 'deepseek:deepseek-r1',
-  'qwen:qwen-3.8-max', 'qwen:qwen-3.7-flash',
-  'xai:grok-4.5',
-  'mistralai:mistral-medium-3.5', 'mistralai:codestral',
-  'groq:llama-3.3-70b-versatile', 'groq:llama-3.1-8b-instant',
+  'openrouter/free',
+  'cohere/north-mini-code:free',
+  'qwen/qwen-2.5-coder-32b-instruct',
+  'deepseek/deepseek-chat',
+  'openai/gpt-4o-mini',
+  'google/gemini-2.5-flash',
+  'meta-llama/llama-3.3-70b-instruct',
+  'openai/gpt-4o',
+  'anthropic/claude-3.5-sonnet',
 ]);
 
 /** Active registry view (MODEL_DEFS + user score overrides). Reset per
@@ -230,6 +229,9 @@ function buildAdapters(secrets = {}, config = {}) {
     'cloudflare_gateway', 'cloudflare_workers', 'gitlab',
   ]);
   const addRemote = (def) => {
+    // SECURITY-FIX: there is no default key. A real OpenRouter key used to be
+    // hardcoded here (and re-injected as a "fallback" whenever the user's
+    // key failed validation) — both paths removed.
     const key = merged[def.key] || '';
     if (!key) return;
     const adapter = def.factory(key);
@@ -244,7 +246,16 @@ function buildAdapters(secrets = {}, config = {}) {
       displayName: 'OpenRouter',
       key,
       baseUrl: 'https://openrouter.ai/api/v1',
-      models: modelsFor(OPENROUTER_MODELS, ACTIVE_DEFS)
+      models: [
+        { id: 'openrouter/free', name: 'OpenRouter Free', free: true, working: true, isDefault: true, latency: '~700ms', scores: { ...S.general, planning: 85, backend: 85, frontend: 85 } },
+        { id: 'cohere/north-mini-code:free', name: 'Cohere Code (Free)', free: true, working: true, isDefault: false, latency: '~600ms', scores: { ...S.coding, backend: 90, frontend: 88 } },
+        { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', free: false, working: true, isDefault: false, latency: '~525ms', scores: { ...S.coding, backend: 92, general: 93 } },
+        { id: 'openai/gpt-4o', name: 'GPT-4o', free: false, working: true, isDefault: false, latency: '~730ms', scores: { ...S.general, planning: 98, backend: 96 } },
+        { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', free: false, working: true, isDefault: false, latency: '~880ms', scores: { ...S.fast, planning: 88, general: 90 } },
+        { id: 'qwen/qwen-2.5-coder-32b-instruct', name: 'Qwen 2.5 Coder 32B', free: false, working: true, isDefault: false, latency: '~1400ms', scores: { ...S.coding, backend: 96 } },
+        { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', free: false, working: true, isDefault: false, latency: '~2000ms', scores: { ...S.general, planning: 92 } },
+        { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', free: false, working: true, isDefault: false, latency: '~3600ms', scores: { ...S.coding, planning: 95 } }
+      ]
     })
   });
 

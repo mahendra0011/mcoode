@@ -8,7 +8,9 @@ import {
   FileType2,
   FileText,
   Folder,
+  FolderPlus,
   File,
+  Plus,
   AlertTriangle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -30,11 +32,13 @@ import api from "../../lib/axios";
 interface FlatFile {
   path: string;
   name: string;
+  isDir?: boolean;
 }
 
 interface TreeNodeData {
   name: string;
   path: string;
+  isDir?: boolean;
   children?: TreeNodeData[];
 }
 
@@ -77,8 +81,8 @@ const getFileIcon = (name: string) => {
 };
 
 const sortNodes = (a: TreeNodeData, b: TreeNodeData) => {
-  const aDir = Boolean(a.children?.length);
-  const bDir = Boolean(b.children?.length);
+  const aDir = a.isDir ?? (a.children !== undefined);
+  const bDir = b.isDir ?? (b.children !== undefined);
   if (aDir === bDir) return a.name.localeCompare(b.name);
   return aDir ? -1 : 1; // folders first
 };
@@ -270,7 +274,7 @@ const TreeNode = ({ node, level = 0 }: { node: TreeNodeData; level?: number }) =
   const setTimelineFile = useIDEStore((s) => s.setTimelineFile);
   const expandedPaths = useIDEStore((s) => s.expandedPaths);
   const expandPathAncestors = useIDEStore((s) => s.expandPathAncestors);
-  const isDir = !!node.children?.length;
+  const isDir = node.isDir ?? (node.children !== undefined);
 
   useEffect(() => {
     if (expandedPaths[node.path]) {
@@ -663,6 +667,7 @@ export function FileTree({ workspaceId }: FileTreeProps) {
     data: files = [],
     isLoading: loading,
     refetch,
+    error: filesError,
   } = useQuery<FlatFile[]>({
     queryKey: ["workspaceFiles", workspaceId, triggerRefresh],
     queryFn: () =>
@@ -672,6 +677,7 @@ export function FileTree({ workspaceId }: FileTreeProps) {
     enabled: !!workspaceId,
     staleTime: 0,
     refetchOnWindowFocus: true,
+    retry: false,
   });
 
   // Listen to file change events from AI tools or external changes
@@ -728,7 +734,13 @@ export function FileTree({ workspaceId }: FileTreeProps) {
   };
 
   const submitCreate = async (name: string) => {
-    if (!creatingItem || !workspaceId) return;
+    if (!creatingItem) return;
+    if (!workspaceId) {
+      toast.info("Please create or select an active project first.");
+      document.dispatchEvent(new CustomEvent("mcode:open-create-project"));
+      setCreatingItem(null);
+      return;
+    }
     const trimmed = name.trim();
     if (!trimmed) {
       setCreatingItem(null);
@@ -749,7 +761,11 @@ export function FileTree({ workspaceId }: FileTreeProps) {
     const rawTarget = creatingItem.parentPath
       ? `${creatingItem.parentPath}/${sanitizedName}`
       : sanitizedName;
-    const targetPath = rawTarget.replace(/\\/g, "/").replace(/\/+/g, "/");
+    const targetPath = rawTarget
+      .replace(/\\/g, "/")
+      .replace(/\/+/g, "/")
+      .replace(/^\/+/, "")
+      .replace(/\/+$/, "");
 
     const isFolder = creatingItem.type === "folder";
     setCreatingItem(null);
@@ -770,7 +786,13 @@ export function FileTree({ workspaceId }: FileTreeProps) {
       bumpRefresh();
       refetch();
     } catch (err: any) {
-      toast.error(`Creation failed: ${err?.response?.data?.error?.message || err.message}`);
+      if (err?.response?.status === 404) {
+        toast.error("Project workspace not found on server. Please create a new project.");
+        try { localStorage.removeItem("mcode_active_workspace_id"); } catch {}
+        document.dispatchEvent(new CustomEvent("mcode:open-create-project"));
+      } else {
+        toast.error(`Creation failed: ${err?.response?.data?.error?.message || err.message}`);
+      }
     }
   };
 
@@ -844,11 +866,14 @@ export function FileTree({ workspaceId }: FileTreeProps) {
     }
   };
 
-  // Convert flat array [{path, name}] to a nested tree (folders first).
+  // Convert flat array [{path, name, isDir}] to a nested tree (folders first).
   const rootNodes = useMemo(() => {
-    const tree: TreeNodeData = { name: "root", path: "", children: [] };
+    const tree: TreeNodeData = { name: "root", path: "", isDir: true, children: [] };
     for (const file of files) {
-      const normPath = (file.path || "").replace(/\\/g, "/");
+      if (file.name === ".keep") continue;
+
+      const normPath = (file.path || "").replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+      if (!normPath) continue;
       const parts = normPath.split("/");
       let current = tree;
       for (let i = 0; i < parts.length; i++) {
@@ -857,10 +882,18 @@ export function FileTree({ workspaceId }: FileTreeProps) {
         const isLeaf = i === parts.length - 1;
         let child = current.children!.find((c) => c.path === path);
         if (!child) {
-          child = { name: part, path, children: isLeaf ? undefined : [] };
+          const isDirNode = !isLeaf || Boolean(file.isDir);
+          child = {
+            name: part,
+            path,
+            isDir: isDirNode,
+            children: isDirNode ? [] : undefined,
+          };
           current.children!.push(child);
+        } else if (!isLeaf || file.isDir) {
+          child.isDir = true;
+          if (!child.children) child.children = [];
         }
-        if (!isLeaf && !child.children) child.children = [];
         current = child;
       }
     }
@@ -868,7 +901,58 @@ export function FileTree({ workspaceId }: FileTreeProps) {
   }, [files]);
 
   if (!workspaceId) {
-    return <div className="p-4 text-xs text-white/40 italic">Select or create a workspace to begin.</div>;
+    return (
+      <div className="flex flex-col items-center justify-center p-5 text-center h-full space-y-3 select-none">
+        <div className="w-10 h-10 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center text-white/30">
+          <FolderPlus className="w-5 h-5 text-emerald-400/70" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-white/80">No Active Project</p>
+          <p className="text-[11px] text-white/40 leading-relaxed max-w-[210px]">
+            Create a project folder to start adding files and folders.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            useIDEStore.getState().setWelcomeOpen(true);
+            document.dispatchEvent(new CustomEvent("mcode:open-create-project"));
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-medium transition cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Create Project</span>
+        </button>
+      </div>
+    );
+  }
+
+  if ((filesError as any)?.response?.status === 404) {
+    return (
+      <div className="flex flex-col items-center justify-center p-5 text-center h-full space-y-3 select-none">
+        <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+          <AlertTriangle className="w-5 h-5" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-amber-200">Workspace Not Found</p>
+          <p className="text-[11px] text-white/40 leading-relaxed max-w-[210px]">
+            The previously selected workspace no longer exists.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            try { localStorage.removeItem("mcode_active_workspace_id"); } catch {}
+            useIDEStore.getState().setWelcomeOpen(true);
+            document.dispatchEvent(new CustomEvent("mcode:open-create-project"));
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-medium transition cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Create New Project</span>
+        </button>
+      </div>
+    );
   }
 
   const contextValue: FileTreeContextType = {
@@ -902,13 +986,13 @@ export function FileTree({ workspaceId }: FileTreeProps) {
 
           {loading ? (
             <div className="p-4 text-xs text-white/40">Loading files…</div>
-          ) : files.length === 0 && (!creatingItem || creatingItem.parentPath !== "") ? (
+          ) : rootNodes.length === 0 && (!creatingItem || creatingItem.parentPath !== "") ? (
             <div
               className="p-4 text-xs text-white/40 italic cursor-pointer hover:text-white/60 transition"
               onClick={() => startCreate("file", "")}
               title="Click to create a new file"
             >
-              No files in workspace yet. Click here or use "New File" above to begin.
+              No files in workspace yet. Click here or use "New File" / "New Folder" above to begin.
             </div>
           ) : (
             rootNodes.map((node) => (

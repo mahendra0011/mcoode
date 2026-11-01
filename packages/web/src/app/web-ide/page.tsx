@@ -1,8 +1,7 @@
-"use client";
-import { AILandingPage } from "../../components/pages/AILandingPage";
+import { WebIdePage } from "../../components/pages/WebIdePage";
 
 export const dynamic = "force-dynamic";
 
 export default function Page() {
-  return <AILandingPage />;
+  return <WebIdePage />;
 }

@@ -70,12 +70,13 @@ export function authRoutes({ secret } = {}) {
       if (await rateLimited(email)) {
         return res.status(429).json({ error: { code: 'RATE_LIMITED', message: 'too many OTP requests — wait a few minutes' } });
       }
-      // AUTH-002/020: 8 digits (100x the space of 6) and never an
-      // all-identical run (00000000 looks like a placeholder and is every
-      // attacker's first guess).
-      let code = String(randomInt(0, 100_000_000)).padStart(8, '0');
-      if (/^(\d)\1{7}$/.test(code)) {
-        code = String((Number(code) + 11111111) % 100_000_000).padStart(8, '0');
+      // 6 digits (matches the client's OTP input) and never an all-identical
+      // run (000000 looks like a placeholder and is every attacker's first
+      // guess). Fix: the old "+111111 shift" mostly mapped one repdigit onto
+      // another (111111→222222…); redraw with fresh randomness instead.
+      let code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      while (/^(\d)\1{5}$/.test(code)) {
+        code = String(randomInt(0, 1_000_000)).padStart(6, '0');
       }
       const codeHash = hashOtpCode(code, secret);
       await db().otp.deleteMany({ email, intent });
@@ -271,6 +272,12 @@ export function authRoutes({ secret } = {}) {
       if (err?.code === 'REFRESH_REUSED') {
         return res.status(401).json({ error: { code: 'REFRESH_REUSED', message: err.message } });
       }
+      // FIX: an expired or malformed refresh token hit this catch as a plain
+      // JSON.parse/jwt errors and answered 500 INTERNAL_ERROR — the client
+      // (and reviewers) read a server fault instead of "log in again".
+      if (err?.name === 'TokenExpiredError' || err?.name === 'JsonWebTokenError' || err?.message?.includes('jwt')) {
+        return res.status(401).json({ error: { code: 'INVALID_REFRESH', message: 'invalid refresh token' } });
+      }
       if (err?.name?.includes('Mongo') || err?.code === 'ENOTFOUND') {
         return res.status(503).json({ error: { code: 'DB_UNAVAILABLE', message: 'Service temporarily unavailable. Please try again.' } });
       }
@@ -282,7 +289,10 @@ export function authRoutes({ secret } = {}) {
   // Session management — list active refresh sessions + revoke one/all.
   router.get('/sessions', authMiddleware({ secret }), async (req, res, next) => {
     try {
-      const rows = await db().refreshToken.find({ userId: req.userId }, { createdAt: -1 });
+      // FIX: the second argument of find() is a projection in mongo mode, not
+      // a sort — jti/expiresAt silently vanished from the response. paginate()
+      // handles both backends uniformly.
+      const { items: rows } = await db().paginate(db().refreshToken, { userId: req.userId }, 'createdAt', 1, 100);
       res.json({ sessions: rows.map((r) => ({ jti: r.jti, createdAt: r.createdAt, expiresAt: r.expiresAt })) });
     } catch (err) {
       next(err);

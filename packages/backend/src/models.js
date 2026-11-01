@@ -40,6 +40,10 @@ const sessionSchema = new mongoose.Schema({
       }
     ]
   },
+  // sockets.js build:complete relays store the full result payload here;
+  // without an explicit field, Mongoose strict mode silently strips it in
+  // mongo mode (memory storage kept it — an unnoticed data divergence).
+  results: mongoose.Schema.Types.Mixed,
   createdAt: { type: Date, default: Date.now },
   completedAt: Date
 });

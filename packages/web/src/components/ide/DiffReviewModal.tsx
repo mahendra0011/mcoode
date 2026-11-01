@@ -215,6 +215,12 @@ export function DiffReviewModal({ workspaceId }: { workspaceId: string }) {
           original={original}
           modified={modified ?? ''}
           theme="vs-dark"
+          loading={
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-white/50 text-xs font-mono">
+              <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+              <span>Loading diff viewer...</span>
+            </div>
+          }
           options={{ readOnly: true, renderSideBySide: true, minimap: { enabled: false } }}
         />
       )}

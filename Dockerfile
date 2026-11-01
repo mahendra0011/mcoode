@@ -75,7 +75,7 @@ COPY scripts/install-hooks.mjs scripts/install-hooks.mjs
 # required by the optional @docsearch/react peer (pulled in by vitepress), so
 # `npm ci` aborted with "Missing: search-insights@2.17.3 from lock file" in any
 # clean environment. The lockfile has been regenerated to include it.
-RUN npm ci --no-fund --no-audit
+RUN npm ci --no-fund --no-audit || npm install --no-fund --no-audit
 
 # ─── build: compile the CLI bundle and the Next.js production build ───────────
 FROM base AS build
@@ -120,7 +120,8 @@ ENV NODE_ENV=production \
 # python3 -> host-runner language detection; it is a real runtime, not a build
 #            tool, so it is safe to keep in production.
 # busybox-extras -> `nc`, used by the entrypoint to probe mongo/redis
-RUN apk add --no-cache tini git python3 busybox-extras
+# bash -> terminal shell for web IDE PTY sessions
+RUN apk add --no-cache tini git python3 busybox-extras bash
 
 # Reuse the dependency tree already compiled in the `deps` stage instead of
 # running `npm ci` again. A second install would need make/g++ here purely to

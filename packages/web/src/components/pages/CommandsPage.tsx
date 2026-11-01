@@ -38,30 +38,59 @@ export function CommandsPage() {
   const slash = (WEB_SLASH_COMMANDS as any[]).filter((c) => !q || `${c.cmd} ${c.name} ${c.desc}`.toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <div className="min-h-screen bg-[#0c0c0c] text-white p-6 max-w-5xl mx-auto">
-      <h1 className="text-xl font-bold mb-1">Commands</h1>
-      <p className="text-xs text-white/40 mb-4">CLI + TUI slash commands — click any example to copy.</p>
-      <input
-        value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter… (e.g. watch, model, god)"
-        className="mb-6 w-full max-w-sm rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm placeholder:text-white/30 focus:outline-none focus:border-emerald-400/50"
-      />
-      <h2 className="text-sm font-semibold text-white/60 mb-2">CLI ({cli.length})</h2>
-      <div className="space-y-2 mb-8">
+    <div className="min-h-screen bg-slate-50 text-neutral-900 py-10 px-6 max-w-5xl mx-auto">
+      <h1 className="text-2xl font-bold text-neutral-900 tracking-tight mb-1">Commands Reference</h1>
+      <p className="text-sm text-neutral-500 mb-6">CLI and TUI slash commands — click any example to copy to clipboard.</p>
+      
+      <div className="relative mb-8 max-w-sm">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter commands... (e.g. watch, model, god)"
+          className="w-full rounded-xl bg-white border border-slate-200 px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-emerald-500 shadow-xs transition"
+        />
+      </div>
+
+      <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">CLI Commands ({cli.length})</h2>
+      <div className="space-y-2.5 mb-10">
         {cli.map((c) => (
-          <button key={c.cmd} type="button" onClick={() => copy(c.ex)}
-            className="w-full text-left rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] px-4 py-3 transition-colors">
-            <code className="text-sm text-emerald-300 font-mono">{c.cmd}</code>
-            <p className="text-xs text-white/50 mt-0.5">{c.desc} {copied === c.ex && <span className="text-emerald-300">· copied ✓</span>}</p>
+          <button
+            key={c.cmd}
+            type="button"
+            onClick={() => copy(c.ex)}
+            className="w-full text-left rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs px-5 py-3.5 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <code className="text-sm text-emerald-800 font-mono font-bold group-hover:text-emerald-600 transition">{c.cmd}</code>
+              {copied === c.ex && (
+                <span className="text-xs text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 shadow-xs">
+                  Copied ✓
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-neutral-500 mt-1">{c.desc}</p>
           </button>
         ))}
       </div>
-      <h2 className="text-sm font-semibold text-white/60 mb-2">TUI slash ({slash.length})</h2>
-      <div className="grid gap-2 md:grid-cols-2">
+
+      <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">TUI Slash Commands ({slash.length})</h2>
+      <div className="grid gap-3 md:grid-cols-2">
         {slash.map((c: any) => (
-          <button key={c.cmd} type="button" onClick={() => copy(`/${c.cmd}`)}
-            className="text-left rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] px-4 py-3 transition-colors">
-            <code className="text-sm text-sky-300 font-mono">/{c.cmd}</code>
-            <p className="text-xs text-white/50 mt-0.5">{c.name} — {c.desc}</p>
+          <button
+            key={c.cmd}
+            type="button"
+            onClick={() => copy(`/${c.cmd}`)}
+            className="text-left rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs px-5 py-3.5 transition-all group cursor-pointer"
+          >
+            <div className="flex items-center justify-between">
+              <code className="text-sm text-blue-700 font-mono font-bold group-hover:text-blue-800 transition">/{c.cmd}</code>
+              {copied === `/${c.cmd}` && (
+                <span className="text-xs text-blue-700 font-semibold bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 shadow-xs">
+                  Copied ✓
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-neutral-500 mt-1">{c.name} — {c.desc}</p>
           </button>
         ))}
       </div>

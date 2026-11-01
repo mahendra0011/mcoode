@@ -138,13 +138,30 @@ export async function execInContainer(socketId, command, onData) {
   });
 
   const stream = await exec.start({ hijack: true, stdin: false });
-return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     container.modem.demuxStream(
       stream,
       { write: (chunk) => onData(chunk.toString()) }, // stdout
       { write: (chunk) => onData(chunk.toString()) }  // stderr
     );
-    stream.on('end', resolve);
+    // FIX: this promise used to resolve ONLY on 'end'. A long-running
+    // command (npm start never exits) or an errored stream meant the caller
+    // awaited forever — project:run never emitted run-ready under Docker.
+    let settled = false;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      fn(arg);
+    };
+    stream.on('end', () => finish(resolve));
+    stream.on('close', () => finish(resolve));
+    stream.on('error', (err) => finish(reject, err));
+    // Poll the exec: once its backing process is gone, stop waiting — the
+    // 'end' event above may never fire on some Docker/stream combinations.
+    exec.inspect().catch(() => finish(reject, new Error('exec stream failed')))
+      .then((info) => {
+        if (info && info.Running === false) finish(resolve);
+      });
   });
 }
 

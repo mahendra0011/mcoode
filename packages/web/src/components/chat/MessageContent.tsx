@@ -144,10 +144,10 @@ function ToolCallAccordion({ content, toolName, isStreaming }: { content: string
           ) : (
             <Wrench size={13} className="text-white/50" />
           )}
-          <span className="text-xs text-white/80 font-mono font-medium">{title}</span>
+          <span className="text-xs text-neutral-100 font-mono font-medium">{title}</span>
         </div>
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronDown size={13} className="text-white/40" />
+          <ChevronDown size={13} className="text-white/60" />
         </motion.div>
       </button>
 
@@ -158,7 +158,7 @@ function ToolCallAccordion({ content, toolName, isStreaming }: { content: string
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="border-t border-white/[0.06] p-2.5 text-[11px] text-white/70 font-mono overflow-y-auto max-h-[160px] whitespace-pre-wrap"
+            className="border-t border-white/[0.08] p-3 text-[11.5px] text-neutral-200 font-mono overflow-y-auto max-h-[160px] whitespace-pre-wrap leading-relaxed bg-[#0c0c10]"
           >
             {cleanContent}
           </motion.div>
@@ -225,6 +225,9 @@ export function MessageContent({ msg, text, size = "md", isStreaming = false, ch
             </code>
           );
         }
+
+        const rawCode = String(codeChildren || "").trim();
+        if (!rawCode) return null;
 
         return (
           <div className="relative my-3 group">

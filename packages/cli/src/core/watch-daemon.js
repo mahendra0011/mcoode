@@ -444,14 +444,16 @@ export class WatchDaemon extends EventEmitter {
     }
     if (!hasTestScript) return { passed: true };
     try {
-      const { stdout, stderr } = await execa('npm', ['test', '--', relative(this.projectPath, testFile)], {
+      const { stdout, stderr, exitCode } = await execa('npm', ['test', '--', relative(this.projectPath, testFile)], {
         cwd: this.projectPath,
         timeout: 120_000,
         reject: false,
         env: { ...process.env, FORCE_COLOR: '0' }
       });
       const output = stdout + stderr;
-      return { passed: !/FAIL|failed|✗|✖|Missing script/i.test(output), output: output.slice(-1200) };
+      // The runner's exit code is authoritative — the old !/FAIL|failed/i
+      // regex false-positived on benign output like "0 failed".
+      return { passed: exitCode === 0, output: output.slice(-1200) };
     } catch (err) {
       return { passed: false, output: err.message };
     }
@@ -492,6 +494,15 @@ export class WatchDaemon extends EventEmitter {
 
     const full = join(this.projectPath, rel);
     const source = await readFile(full, 'utf8').catch(() => '');
+    // FIX (truncation): the prompt only fed the model the first 8k chars but
+    // asked it to return the FULL file — for any larger file the "fixed"
+    // content came back missing the tail and got written to disk as-is.
+    // Only attempt auto-fix on files that fit the prompt budget.
+    const MAX_FIX_SOURCE = 12_000; // chars
+    if (source.length > MAX_FIX_SOURCE) {
+      this._pushActivity({ file: rel, outcome: 'needs-review', detail: `file too large for auto-fix (${source.length} chars > ${MAX_FIX_SOURCE})` });
+      return;
+    }
     let fixed = source;
     let attempts = 0;
     let verified = false;
@@ -570,6 +581,10 @@ You are mcode's bugfix subagent. Fix the reported problem in the file below. Res
     try {
       // never accept an unchanged echo — the model refused or gave up
       if (candidate.trim() === String(source || '').trim()) return false;
+      // Structural sanity: a shrunken result on a sizable source can only be
+      // a truncated generation (the model echoed back partial content) —
+      // accepting it would delete half the file.
+      if (source.length > 2000 && candidate.length < Math.floor(source.length * 0.5)) return false;
       // structural gate: the reported issue must actually be gone
       const issues = await this._staticCheck(tmp);
       if (issues.length > 0) return false;

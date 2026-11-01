@@ -69,3 +69,33 @@ describe('SEC-004 run_shell enforcement', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('ToolExecutor argument normalization & path safety', () => {
+  it('rejects empty or missing paths in _abs', () => {
+    const t = new ToolExecutor({ projectPath: process.cwd() });
+    expect(() => t._abs('')).toThrow(/path is required/);
+    expect(() => t._abs(null)).toThrow(/path is required/);
+    expect(() => t._abs(undefined)).toThrow(/path is required/);
+  });
+  it('normalizes tool argument aliases for read_file, write_file, edit_file', async () => {
+    const tmpFile = 'test-alias-sample.txt';
+    const t = new ToolExecutor({ projectPath: process.cwd() });
+    try {
+      const wRes = await t.run('write_file', { file: tmpFile, text: 'Hello World\nLine 2' });
+      expect(wRes.ok).toBe(true);
+
+      const rRes = await t.run('read_file', { filePath: tmpFile });
+      expect(rRes.ok).toBe(true);
+      expect(rRes.content).toContain('Hello World');
+
+      const eRes = await t.run('edit_file', { file: tmpFile, old_str: 'Hello World', new_str: 'Hello Universe' });
+      expect(eRes.ok).toBe(true);
+
+      const rRes2 = await t.run('read_file', { path: tmpFile });
+      expect(rRes2.content).toContain('Hello Universe');
+    } finally {
+      const fsPromises = await import('node:fs/promises');
+      await fsPromises.unlink(tmpFile).catch(() => {});
+    }
+  });
+});

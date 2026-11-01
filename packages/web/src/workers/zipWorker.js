@@ -59,12 +59,13 @@ self.onmessage = async (event) => {
       },
       (metadata) => {
         self.postMessage({ type: 'progress', percent: Math.round(metadata.percent) });
-    if (metadata.percent === 100 && uint8.byteLength > MAX_ZIP_COMPRESSED_BYTES) {
+      }
+    );
+
+    if (uint8.byteLength > MAX_ZIP_COMPRESSED_BYTES) {
       self.postMessage({ type: 'error', message: 'Compressed selection exceeds 500MB — select fewer/smaller files' });
       return;
     }
-      }
-    );
 
     self.postMessage({ type: 'done', buf: uint8 }, [uint8.buffer]);
   } catch (err) {

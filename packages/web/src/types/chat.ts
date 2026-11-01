@@ -12,6 +12,9 @@ import type { ReactNode } from "react";
 /** Engine/chat mode carried by the Redux store. */
 export type Mode = "chat" | "agent";
 
+/** Output length budget levels for Codex-style length control. */
+export type OutputLength = "very_low" | "low" | "mid" | "high" | "xhigh" | "max" | "ultra";
+
 /** UI tab key used by AIChatPage's segmented control. */
 export type ActiveTab = "Chat" | "AI Code Assistant" | "AI Code Editor";
 
@@ -113,6 +116,7 @@ export interface ChatMessageProps {
   undo?: (msg: ChatMessage) => void;
   isNormalChat?: boolean;
   showAvatar?: boolean;
+  onResubmitPrompt?: (text: string) => void;
 }
 
 export interface IDEActivitySidebarProps {

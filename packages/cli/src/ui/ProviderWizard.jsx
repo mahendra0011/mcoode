@@ -181,8 +181,8 @@ export function ProviderWizard({ mode = 'connect', onClose }) {
     const options = models.map(m => ({
       label: m.name || m.id,
       value: m.id,
-      category: 'Available models',
-      hint: m.free ? 'Free' : '',
+      category: m.isDefault ? 'Web IDE Models (Ready)' : 'All Models',
+      hint: m.latency ? `${m.latency}` : (m.free ? 'Free' : ''),
       raw: m
     }));
 

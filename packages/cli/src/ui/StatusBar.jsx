@@ -55,8 +55,9 @@ export function StatusBar({ tokens = 0, percent = 0, cwd = '', isGenerating = fa
           </>
         ) : (
           <>
-            <text fg={theme.purple}>{agentMode} </text>
-            <text fg={modeColor}>{mode}</text>
+            <text fg={theme.purple}>Mode: {agentMode} </text>
+            <text fg={theme.dim}>· </text>
+            <text fg={modeColor}>Output: {mode}</text>
             {watching && <text fg={theme.amber}>{'  '}{spinFrame} watch</text>}
             {specialMode && <text fg={theme.blue}>{'  '}{'◉'} {specialMode}</text>}
             <text fg={theme.dim}>{sep}</text>

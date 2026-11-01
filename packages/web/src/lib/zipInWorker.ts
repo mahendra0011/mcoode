@@ -55,6 +55,20 @@ export async function zipFilesOffMainThread(
       fn();
     };
 
+    const fallbackMainThread = async () => {
+      try {
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+        for (const { path, file } of entries) zip.file(path, file);
+        const out = await zip.generateAsync({ type: 'blob', compression: 'STORE' }, (meta) => {
+          onProgress?.(Math.round(meta.percent));
+        });
+        resolve(out);
+      } catch (fallbackErr) {
+        reject(fallbackErr instanceof Error ? fallbackErr : new Error(String(fallbackErr)));
+      }
+    };
+
     worker.onmessage = (e: MessageEvent<{ type: string; percent?: number; blob?: Blob; buf?: Uint8Array; message?: string }>) => {
       const { type, percent, blob, buf, message } = e.data;
       if (type === 'progress' && typeof percent === 'number') {
@@ -63,12 +77,14 @@ export async function zipFilesOffMainThread(
         const out = buf ? new Blob([buf as BlobPart], { type: 'application/zip' }) : (blob as Blob);
         settle(() => resolve(out));
       } else if (type === 'error') {
-        settle(() => reject(new Error(message || 'Zip worker failed')));
+        console.warn('Zip worker reported error, falling back to main thread JSZip:', message);
+        settle(() => fallbackMainThread());
       }
     };
 
     worker.onerror = (err) => {
-      settle(() => reject(err instanceof ErrorEvent ? new Error(err.message) : err));
+      console.warn('Zip worker crashed, falling back to main thread JSZip:', err);
+      settle(() => fallbackMainThread());
     };
 
     // WEB-006: read each File into an ArrayBuffer up front, then TRANSFER the

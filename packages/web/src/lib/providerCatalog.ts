@@ -39,6 +39,8 @@ export interface FallbackModel {
   id: string;
   name: string;
   free: boolean;
+  latency?: string;
+  working?: boolean;
   scores?: Record<string, number>;
 }
 
@@ -64,10 +66,12 @@ export const FALLBACK_PROVIDERS: FallbackProvider[] = [
     displayName: 'OpenRouter',
     envVar: 'OPENROUTER_API_KEY',
     models: [
-      { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', free: false, scores: { coding: 95 } },
-      { id: 'openai/gpt-4o', name: 'GPT-4o', free: false, scores: { coding: 93 } },
-      { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', free: false, scores: { coding: 91 } },
-      { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', free: true },
+      { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', free: true, working: true, latency: '~525ms', scores: { coding: 92 } },
+      { id: 'openai/gpt-4o', name: 'GPT-4o', free: false, working: true, latency: '~730ms', scores: { coding: 96 } },
+      { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', free: true, working: true, latency: '~880ms', scores: { coding: 88 } },
+      { id: 'qwen/qwen-2.5-coder-32b-instruct', name: 'Qwen 2.5 Coder 32B', free: true, working: true, latency: '~1400ms', scores: { coding: 96 } },
+      { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', free: true, working: true, latency: '~2000ms', scores: { coding: 92 } },
+      { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', free: false, working: true, latency: '~3600ms', scores: { coding: 95 } },
     ],
   },
   {

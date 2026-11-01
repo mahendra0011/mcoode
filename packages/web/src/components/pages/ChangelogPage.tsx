@@ -15,9 +15,9 @@ const ENTRIES: { version: string; date: string; items: string[] }[] = [
 
 export function ChangelogPage() {
   return (
-    <div className="min-h-screen bg-[#0c0c0c] text-white p-6 max-w-3xl mx-auto">
-      <h1 className="text-xl font-bold mb-6">Changelog</h1>
-      <div className="relative border-l border-white/10 ml-2 space-y-8">
+    <div className="min-h-screen bg-slate-50 text-neutral-900 py-10 px-6 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold text-neutral-900 tracking-tight mb-8">Changelog</h1>
+      <div className="relative border-l-2 border-slate-200 ml-2 space-y-8">
         {ENTRIES.map((e) => (
           <motion.section
             key={e.version}
@@ -26,18 +26,27 @@ export function ChangelogPage() {
             viewport={{ once: true }}
             className="pl-6 relative"
           >
-            <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-emerald-400" />
+            <span className="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-100" />
             <div className="flex items-center gap-3">
-              <span className="text-sm font-mono px-2 py-0.5 rounded bg-emerald-400/10 text-emerald-300">v{e.version}</span>
-              <span className="text-xs text-white/40">{e.date}</span>
+              <span className="text-sm font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                v{e.version}
+              </span>
+              <span className="text-xs font-medium text-neutral-400">{e.date}</span>
             </div>
-            <ul className="mt-2 space-y-1.5">
-              {e.items.map((it, i) => <li key={i} className="text-sm text-white/60">{it}</li>)}
-            </ul>
+            <div className="mt-3 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
+              <ul className="space-y-2.5">
+                {e.items.map((it, i) => (
+                  <li key={i} className="text-sm text-neutral-600 leading-relaxed flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0" />
+                    <span>{it}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </motion.section>
         ))}
       </div>
-      <p className="mt-8 text-xs text-white/30">Full history in CHANGELOG.md at the repo root.</p>
+      <p className="mt-10 text-xs text-neutral-400">Full history in CHANGELOG.md at the repo root.</p>
     </div>
   );
 }

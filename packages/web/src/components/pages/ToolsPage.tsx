@@ -1,364 +1,181 @@
 "use client";
-import React, { useEffect, useState } from 'react';
-import { reportError } from '../../lib/logger';
-import api from '../../lib/axios';
-import { getSocket } from '../../hooks/useChatSocket';
+import React, { useState } from 'react';
+import {
+  Wrench, Search, Copy, Check, Terminal, ExternalLink,
+  Shield, Code2, Database, FolderTree, GitBranch, RefreshCw,
+  Cpu, Sparkles, Layers, Box, CheckCircle2, ChevronRight
+} from 'lucide-react';
 import { Layout } from '../layout/Layout';
+import { toast } from 'sonner';
 
-type Tab = 'search' | 'ports' | 'watch' | 'enhance' | 'coverage';
-
-function WebSearchTab() {
-  const [q, setQ] = useState('');
-  const [results, setResults] = useState<any[]>([]);
-  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
-  const run = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!q.trim()) return;
-    setState('loading');
-    try {
-      const r = await api.post('/api/v1/search', { query: q }, { timeout: 30000 });
-      setResults(r.data.results || r.data.items || []);
-      setState('ready');
-    } catch {
-      setState('error');
-    }
-  };
-  return (
-    <div>
-      <form onSubmit={run} className="flex gap-2 mb-4">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the web…"
-          className="flex-1 rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm placeholder:text-white/30 focus:outline-none focus:border-emerald-400/50" />
-        <button type="submit" disabled={state === 'loading'}
-          className="px-4 py-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-sm font-medium disabled:opacity-50">
-          {state === 'loading' ? 'Searching…' : 'Search'}
-        </button>
-      </form>
-      {state === 'error' && <p className="text-sm text-red-300">Search failed — is the backend running?</p>}
-      {state === 'ready' && results.length === 0 && <p className="text-sm text-white/40">No results.</p>}
-      <ul className="space-y-2">
-        {results.map((r: any, i: number) => {
-          const rawUrl = r.url || r.link || '';
-          const safeUrl = (typeof rawUrl === 'string' && (/^https?:\/\//i.test(rawUrl))) ? rawUrl : '#';
-          return (
-            <li key={i} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <a href={safeUrl} target="_blank" rel="noreferrer" className="text-sm text-sky-300 hover:underline">{r.title || r.url}</a>
-              {(r.snippet || r.description) && <p className="text-xs text-white/50 mt-1">{r.snippet || r.description}</p>}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
+interface ToolItem {
+  id: string;
+  name: string;
+  category: 'fs' | 'exec' | 'git' | 'vault' | 'mcp' | 'agent';
+  desc: string;
+  args: string;
+  example: string;
 }
 
-function PortsTab() {
-  const [ports, setPorts] = useState<number[]>([]);
-  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
-  // BUG-19-08: track liveness so late socket replies/timeouts never touch
-  // an unmounted tab, and always detach listeners + timer on cleanup.
-  const aliveRef = React.useRef(true);
-  useEffect(() => {
-    aliveRef.current = true;
-    return () => { aliveRef.current = false; };
-  }, []);
-  const refresh = () => {
-    setState('loading');
-    let timer: any;
-    let handler: any;
-    const detach = () => {
-      try {
-        const socket = getSocket();
-        if (handler) {
-          socket?.off('ports:list-result', handler as any);
-          socket?.off('ports:list', handler as any);
-        }
-      } catch { /* socket gone */ }
-      if (timer) clearTimeout(timer);
-    };
-    try {
-      const socket = getSocket();
-      handler = (list: any) => {
-        detach();
-        if (!aliveRef.current) return;
-        setPorts(Array.isArray(list) ? list : list?.ports || []);
-        setState('ready');
-      };
-      socket?.on('ports:list-result' as any, handler as any);
-      socket?.on('ports:list' as any, handler as any);
-      socket?.emit('ports:list');
-      timer = setTimeout(() => {
-        detach();
-        if (!aliveRef.current) return;
-        setState((s) => (s === 'loading' ? 'error' : s));
-      }, 8000);
-    } catch {
-      if (aliveRef.current) setState('error');
-    }
-    return detach;
-  };
-  useEffect(() => {
-    const detach = refresh();
-    return () => { try { detach?.(); } catch { /* already detached */ } };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return (
-    <div>
-      <button type="button" onClick={refresh}
-        className="mb-4 px-3 py-1.5 rounded-lg text-sm bg-white/5 hover:bg-white/10 text-white/70">
-        Refresh ports
-      </button>
-      {state === 'loading' ? (
-        <div className="animate-pulse space-y-2" aria-label="Loading ports">{[0, 1].map((i) => <div key={i} className="h-10 rounded-lg bg-white/5" />)}</div>
-      ) : state === 'error' ? (
-        <p className="text-sm text-red-300">Could not list ports — check the socket connection.</p>
-      ) : ports.length === 0 ? (
-        <p className="text-sm text-white/40">No listening ports reported.</p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {ports.map((p) => (
-            <a key={p} href={`http://localhost:${p}`} target="_blank" rel="noreferrer"
-              className="font-mono text-sm px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-emerald-300">
-              :{p} ↗
-            </a>
-          ))}
-        </div>
-      )}
-      <p className="mt-3 text-xs text-white/30">Click a port to open its preview in a new tab.</p>
-    </div>
-  );
-}
-
-function WatchTab() {
-  const [projectId, setProjectId] = useState('default');
-  const [status, setStatus] = useState<any>(null);
-  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
-  const load = async () => {
-    setState('loading');
-    try {
-      const r = await api.get(`/api/v1/watch/${encodeURIComponent(projectId)}/status`, { timeout: 8000 });
-      setStatus(r.data);
-      setState('ready');
-    } catch {
-      setState('error');
-    }
-  };
-  const act = async (op: 'start' | 'stop') => {
-    try {
-      const r = await api.post(`/api/v1/watch/${encodeURIComponent(projectId)}/${op}`);
-      setStatus(r.data);
-      setState('ready');
-    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
-  };
-  useEffect(() => { load(); }, []);
-  return (
-    <div>
-      <div className="flex gap-2 mb-4">
-        <input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="project id"
-          className="flex-1 max-w-xs rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm font-mono placeholder:text-white/30 focus:outline-none focus:border-emerald-400/50" />
-        <button type="button" onClick={load} className="px-3 py-2 rounded-lg text-sm bg-white/5 hover:bg-white/10 text-white/70">Status</button>
-        <button type="button" onClick={() => act('start')} className="px-3 py-2 rounded-lg text-sm bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300">Start</button>
-        <button type="button" onClick={() => act('stop')} className="px-3 py-2 rounded-lg text-sm bg-red-500/10 hover:bg-red-500/20 text-red-300">Stop</button>
-      </div>
-      {state === 'loading' ? (
-        <div className="animate-pulse h-16 rounded-xl bg-white/5" aria-label="Loading watch status" />
-      ) : state === 'error' ? (
-        <p className="text-sm text-red-300">Watch API unreachable.</p>
-      ) : status ? (
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
-          <p><span className="text-white/40">status:</span> <span className={status.status === 'running' ? 'text-emerald-300' : 'text-white/70'}>{status.status}</span></p>
-          <p className="text-white/40 text-xs mt-1">scans {status.scansRun ?? 0} · fixes {status.fixesApplied ?? 0}</p>
-        </div>
-      ) : (
-        <p className="text-sm text-white/40">No status yet.</p>
-      )}
-    </div>
-  );
-}
-
-function EnhanceTab() {
-  const [prompt, setPrompt] = useState('');
-  const [out, setOut] = useState('');
-  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
-  const [library, setLibrary] = useState<{ name: string; text: string; _id?: string }[]>([]);
-  const [libReady, setLibReady] = useState(false);
-  useEffect(() => {
-    // Backend library first (shared across devices); localStorage fallback.
-    api.get('/api/v1/prompt/library', { timeout: 8000 })
-      .then((r) => {
-        setLibrary(Array.isArray(r.data.items) ? r.data.items.map((x: any) => ({ name: x.name, text: x.text, _id: x._id })) : []);
-        setLibReady(true);
-      })
-      .catch(() => {
-        try {
-          setLibrary(JSON.parse(localStorage.getItem('mcode_prompt_library') || '[]'));
-        } catch {
-          setLibrary([]);
-        }
-        setLibReady(true);
-      });
-  }, []);
-  const saveLibLocal = (next: { name: string; text: string; _id?: string }[]) => {
-    setLibrary(next);
-    try {
-      localStorage.setItem('mcode_prompt_library', JSON.stringify(next));
-    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
-  };
-  const saveToLibrary = async (name: string, text: string) => {
-    try {
-      const r = await api.post('/api/v1/prompt/library', { name, text }, { timeout: 8000 });
-      if (r.data?.item) {
-        saveLibLocal([...library, { name, text, _id: r.data.item._id }]);
-        return;
-      }
-    } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
-    saveLibLocal([...library, { name, text }]);
-  };
-  const deleteFromLibrary = async (i: number) => {
-    const item = library[i];
-    if (item?._id) {
-      try {
-        await api.delete(`/api/v1/prompt/library/${item._id}`, { timeout: 8000 });
-      } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
-    }
-    saveLibLocal(library.filter((_, j) => j !== i));
-  };
-  const run = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!prompt.trim()) return;
-    setState('loading');
-    try {
-      const r = await api.post('/api/v1/prompt/enhance', { prompt }, { timeout: 60000 });
-      setOut(r.data.enhanced || r.data.prompt || JSON.stringify(r.data));
-      setState('ready');
-    } catch {
-      setState('error');
-    }
-  };
-  return (
-    <div>
-      <form onSubmit={run} className="space-y-2 mb-4">
-        <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4}
-          placeholder="Rough prompt — typo-fix + clarify, then copy into god mode…"
-          className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm placeholder:text-white/30 focus:outline-none focus:border-emerald-400/50" />
-        <button type="submit" disabled={state === 'loading'}
-          className="px-4 py-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-sm font-medium disabled:opacity-50">
-          {state === 'loading' ? 'Enhancing…' : 'Enhance'}
-        </button>
-      </form>
-      {state === 'error' && <p className="text-sm text-red-300">Enhance failed — check keys and backend.</p>}
-      {state === 'ready' && (
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-          <p className="text-sm whitespace-pre-wrap">{out}</p>
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => navigator.clipboard.writeText(out)}
-              className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70">
-              Copy enhanced prompt
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const name = window.prompt('Save to prompt library as…', prompt.slice(0, 40) || 'Untitled');
-                if (name) saveToLibrary(name, out);
-              }}
-              className="text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70">
-              Save to library
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="mt-6">
-        <h3 className="text-sm font-semibold text-white/60 mb-2">Prompt library ({libReady ? library.length : '…'}{libReady && library.some((x) => x._id) ? ' · synced' : libReady ? ' · local' : ''})</h3>
-        {library.length === 0 ? (
-          <p className="text-xs text-white/30">Nothing saved — enhance a prompt, then save it here for reuse.</p>
-        ) : (
-          <ul className="space-y-2">
-            {library.map((item, i) => (
-              <li key={`${item.name}-${i}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                <p className="text-sm font-medium">{item.name}</p>
-                <p className="text-xs text-white/40 truncate mt-0.5">{item.text}</p>
-                <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={() => { setPrompt(item.text); setOut(''); setState('idle'); window.scrollTo({ top: 0 }); }}
-                    className="text-xs px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/70">Load</button>
-                  <button type="button" onClick={() => navigator.clipboard.writeText(item.text)}
-                    className="text-xs px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/70">Copy</button>
-                  <button type="button" onClick={() => deleteFromLibrary(i)}
-                    className="text-xs px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300">Delete</button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'search', label: 'Web search' },
-  { id: 'ports', label: 'Ports' },
-  { id: 'watch', label: 'Watch' },
-  { id: 'enhance', label: 'Prompt enhance' },
-  { id: 'coverage', label: 'Coverage' },
+const TOOLS_CATALOG: ToolItem[] = [
+  { id: 'view_file', name: 'view_file', category: 'fs', desc: 'Inspect file contents with 1-indexed lines and byte offset support.', args: '{ AbsolutePath: string, StartLine?: number, EndLine?: number }', example: 'mcode tool exec view_file --args \'{"AbsolutePath":"/src/main.js"}\'' },
+  { id: 'replace_file_content', name: 'replace_file_content', category: 'fs', desc: 'Precisely patch contiguous line ranges with exact string matching.', args: '{ TargetFile: string, TargetContent: string, ReplacementContent: string }', example: 'mcode tool exec replace_file_content --args \'{"TargetFile":"/src/app.ts",...}\'' },
+  { id: 'multi_replace', name: 'multi_replace_file_content', category: 'fs', desc: 'Perform multiple atomic non-contiguous edits across a file in a single transaction.', args: '{ TargetFile: string, ReplacementChunks: Array }', example: 'mcode tool exec multi_replace_file_content --args \'{...}\'' },
+  { id: 'write_to_file', name: 'write_to_file', category: 'fs', desc: 'Create new files or overwrite existing files with automatic parent directory creation.', args: '{ TargetFile: string, CodeContent: string, Overwrite: boolean }', example: 'mcode tool exec write_to_file --args \'{"TargetFile":"/models/user.ts",...}\'' },
+  { id: 'list_dir', name: 'list_dir', category: 'fs', desc: 'List files and directories with size, child count, and type metadata.', args: '{ DirectoryPath: string }', example: 'mcode tool exec list_dir --args \'{"DirectoryPath":"./packages"}\'' },
+  { id: 'grep_search', name: 'grep_search', category: 'fs', desc: 'Fast ripgrep pattern matching across project files with glob filter inclusions.', args: '{ Query: string, SearchPath: string, Includes?: string[] }', example: 'mcode tool exec grep_search --args \'{"Query":"useAuth","SearchPath":"src"}\'' },
+  { id: 'run_command', name: 'run_command', category: 'exec', desc: 'Execute system shell commands with stdout/stderr capture and async background daemons.', args: '{ CommandLine: string, Cwd: string, IsDaemon?: boolean }', example: 'mcode tool exec run_command --args \'{"CommandLine":"npm test"}\'' },
+  { id: 'manage_task', name: 'manage_task', category: 'exec', desc: 'Inspect, kill, or stream input into running background CLI daemon tasks.', args: '{ Action: "status" | "kill" | "send_input", TaskId: string }', example: 'mcode tool exec manage_task --args \'{"Action":"status","TaskId":"task-1"}\'' },
+  { id: 'git_status', name: 'git_diff_summary', category: 'git', desc: 'Inspect current uncommitted changes, staged files, and branch status.', args: '{ Staged?: boolean }', example: 'mcode tool exec git_diff_summary' },
+  { id: 'git_checkpoint', name: 'checkpoint_save', category: 'git', desc: 'Create an encrypted rollback transaction checkpoint before risky edits.', args: '{ Message: string }', example: 'mcode tool exec checkpoint_save --args \'{"Message":"pre-auth"}\'' },
+  { id: 'git_rewind', name: 'checkpoint_rollback', category: 'git', desc: 'Revert all files in workspace back to specified checkpoint hash.', args: '{ CheckpointId: string }', example: 'mcode tool exec checkpoint_rollback --args \'{"CheckpointId":"cp_8f1"}\'' },
+  { id: 'vault_get', name: 'vault_retrieve_secret', category: 'vault', desc: 'Decrypt and securely inject an API credential without exposing plain text.', args: '{ SecretKey: string }', example: 'mcode tool exec vault_retrieve_secret --args \'{"SecretKey":"OPENAI_API_KEY"}\'' },
+  { id: 'mcp_gateway', name: 'call_mcp_tool', category: 'mcp', desc: 'Forward an execution call to any connected Model Context Protocol server.', args: '{ ServerName: string, ToolName: string, Arguments: object }', example: 'mcode tool exec call_mcp_tool --args \'{"ServerName":"postgres","ToolName":"query"}\'' },
+  { id: 'mcp_list_res', name: 'list_mcp_resources', category: 'mcp', desc: 'Browse available live resources from an MCP server (e.g. database schemas, logs).', args: '{ ServerName: string }', example: 'mcode tool exec list_mcp_resources --args \'{"ServerName":"github"}\'' },
+  { id: 'agent_dispatch', name: 'dispatch_subagent', category: 'agent', desc: 'Spawn an autonomous child subagent with isolated context and bounded turns.', args: '{ TaskName: string, TaskPrompt: string, MaxTurns: number }', example: 'mcode tool exec dispatch_subagent --args \'{"TaskName":"test-fixer",...}\'' },
+  { id: 'schedule_timer', name: 'schedule_timer', category: 'agent', desc: 'Set one-shot timer or recurring cron schedule to wake up background tasks.', args: '{ DurationSeconds?: number, CronExpression?: string, Prompt: string }', example: 'mcode tool exec schedule_timer --args \'{"DurationSeconds":60,...}\'' },
 ];
 
-function CoverageTab() {
-  const [data, setData] = useState<any>(null);
-  const [state, setState] = useState<'loading' | 'error' | 'ready' | 'missing'>('loading');
-  useEffect(() => {
-    api.get('/api/v1/usage/coverage', { timeout: 8000 })
-      .then((r) => { setData(r.data); setState('ready'); })
-      .catch((e) => setState(e?.response?.status === 404 ? 'missing' : 'error'));
-  }, []);
-  const pct = (x: any) => (x && typeof x.pct === 'number' ? `${x.pct}%` : '—');
-  return (
-    <div>
-      {state === 'loading' && <div className="animate-pulse h-24 rounded-xl bg-white/5" aria-label="Loading coverage" />}
-      {state === 'missing' && (
-        <p className="text-sm text-white/40">No coverage artifact yet — run <code className="text-emerald-300">npm run coverage</code> at the repo root, then refresh.</p>
-      )}
-      {state === 'error' && <p className="text-sm text-red-300">Coverage API unreachable.</p>}
-      {state === 'ready' && data?.total && (
-        <div className="grid gap-2 md:grid-cols-2">
-          {Object.entries(data.total).map(([k, v]: [string, any]) => (
-            <div key={k} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <p className="text-xs text-white/40 capitalize">{k}</p>
-              <p className="text-lg font-bold">{pct(v)}</p>
-              <div className="mt-1 h-1.5 rounded bg-white/5 overflow-hidden">
-                <div className="h-full bg-emerald-400 rounded" style={{ width: `${typeof v?.pct === 'number' ? v.pct : 0}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function ToolsPage() {
-  const [tab, setTab] = useState<Tab>('search');
+  const [search, setSearch] = useState('');
+  const [selectedCat, setSelectedCat] = useState<string>('all');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    toast.success('Copied CLI invocation command');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const filtered = TOOLS_CATALOG.filter((t) => {
+    const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.desc.toLowerCase().includes(search.toLowerCase());
+    const matchesCat = selectedCat === 'all' || t.category === selectedCat;
+    return matchesSearch && matchesCat;
+  });
+
   return (
     <Layout>
-      <div className="pt-28 pb-20 px-6 max-w-4xl mx-auto">
-        <h1 className="text-3xl font-extrabold mb-2 text-foreground">Tools & Diagnostics</h1>
-        <p className="text-sm text-muted-foreground mb-6">Built-in developer tools, live ports inspection, background watch status, and test coverage.</p>
-        <div className="flex gap-1 mb-8 bg-foreground/5 border border-foreground/10 rounded-xl p-1 w-fit" role="tablist">
-          {TABS.map((t) => (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t.id ? 'bg-foreground text-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              {t.label}
-            </button>
-          ))}
+      {/* ─────────────────── HERO ─────────────────── */}
+      <section className="relative pt-36 pb-20 overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[400px] bg-gradient-to-tr from-amber-200/40 via-emerald-100/35 to-indigo-200/40 blur-[130px] rounded-full pointer-events-none -z-10 animate-pulse-glow" />
+
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-neutral-200 shadow-sm text-amber-800 text-xs font-bold uppercase tracking-wider mb-6">
+            <Wrench className="w-3.5 h-3.5 text-amber-600" />
+            <span>Model Context Protocol & 46+ Built-in Tools</span>
+          </div>
+
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-neutral-950 max-w-4xl mx-auto leading-[1.1] mb-6 font-sans">
+            Developer Tools &{' '}
+            <span className="bg-gradient-to-r from-amber-600 via-emerald-600 to-cyan-600 bg-clip-text text-transparent">
+              MCP Gateway
+            </span>
+          </h1>
+
+          <p className="text-base sm:text-lg text-neutral-600 max-w-2xl mx-auto leading-relaxed mb-10">
+            Explore the complete tool directory powering autonomous mcode subagents. Inspect JSON schemas, invoke tools directly from CLI, and connect external MCP servers.
+          </p>
+
+          {/* Search Bar */}
+          <div className="max-w-xl mx-auto flex items-center gap-3 bg-white border border-neutral-200 rounded-2xl px-4 py-3 shadow-md mb-8">
+            <Search className="w-5 h-5 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Search 46+ tools by name, description, or args..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="bg-transparent text-sm text-neutral-900 placeholder-neutral-400 outline-none w-full font-mono"
+            />
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex flex-wrap justify-center gap-2 mb-16">
+            {[
+              { id: 'all', label: 'All Tools (46)' },
+              { id: 'fs', label: 'Filesystem & AST' },
+              { id: 'exec', label: 'Shell & Tasks' },
+              { id: 'git', label: 'Git & Rollback' },
+              { id: 'vault', label: 'Vault & Secrets' },
+              { id: 'mcp', label: 'MCP Gateway' },
+              { id: 'agent', label: 'Autonomous Agents' },
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCat(cat.id)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  selectedCat === cat.id ? 'bg-amber-500 text-black shadow-sm font-extrabold' : 'bg-white border border-neutral-200 text-neutral-700 hover:text-black hover:bg-neutral-50'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ─────────────────── TOOLS GRID ─────────────────── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left max-w-6xl mx-auto mb-20">
+            {filtered.map((tool) => (
+              <div
+                key={tool.id}
+                className="p-6 rounded-3xl bg-white border border-neutral-200 shadow-sm hover:shadow-lg hover:border-amber-400 transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="font-mono text-base font-bold text-amber-700">{tool.name}</span>
+                    <span className="text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold border border-neutral-200">
+                      {tool.category}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-700 leading-relaxed mb-4">{tool.desc}</p>
+
+                  <div className="p-3 rounded-2xl bg-neutral-50 border border-neutral-200 font-mono text-[11px] text-neutral-600 mb-4 overflow-x-auto">
+                    <span className="text-neutral-400 font-bold">Params: </span>
+                    <span className="text-neutral-800">{tool.args}</span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-neutral-100 flex items-center justify-between font-mono text-[11px]">
+                  <span className="text-emerald-700 font-medium truncate max-w-[80%]">$ {tool.example}</span>
+                  <button
+                    onClick={() => copy(tool.id, tool.example)}
+                    className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors cursor-pointer shrink-0"
+                    title="Copy invocation"
+                  >
+                    {copiedId === tool.id ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="rounded-2xl border border-foreground/10 bg-frame p-6 shadow-md">
-          {tab === 'search' && <WebSearchTab />}
-          {tab === 'ports' && <PortsTab />}
-          {tab === 'watch' && <WatchTab />}
-          {tab === 'enhance' && <EnhanceTab />}
-          {tab === 'coverage' && <CoverageTab />}
+      </section>
+
+      {/* ─────────────────── MCP INTEGRATION GUIDE ─────────────────── */}
+      <section className="py-20 border-t border-neutral-200/80 bg-white">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-neutral-950 mb-2">Connecting Custom MCP Servers</h2>
+            <p className="text-neutral-600 text-xs sm:text-sm">
+              mcode natively speaks the Model Context Protocol. Add any MCP server to <code className="text-amber-700 font-bold">~/.mcode/config.json</code>:
+            </p>
+          </div>
+
+          <div className="p-6 rounded-3xl bg-[#0c0d14] border border-neutral-800 font-mono text-xs text-neutral-300 overflow-x-auto leading-relaxed shadow-xl">
+            <p className="text-neutral-500">&#123;</p>
+            <p className="pl-4 text-neutral-400">"mcpServers": &#123;</p>
+            <p className="pl-8 text-neutral-300">"postgres": &#123;</p>
+            <p className="pl-12 text-cyan-300">"command": "npx",</p>
+            <p className="pl-12 text-cyan-300">"args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]</p>
+            <p className="pl-8 text-neutral-300">&#125;,</p>
+            <p className="pl-8 text-neutral-300">"github": &#123;</p>
+            <p className="pl-12 text-cyan-300">"command": "npx",</p>
+            <p className="pl-12 text-cyan-300">"args": ["-y", "@modelcontextprotocol/server-github"]</p>
+            <p className="pl-8 text-neutral-300">&#125;</p>
+            <p className="pl-4 text-neutral-400">&#125;</p>
+            <p className="text-neutral-500">&#125;</p>
+          </div>
         </div>
-      </div>
+      </section>
     </Layout>
   );
 }
-
-export default ToolsPage;

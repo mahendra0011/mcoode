@@ -127,7 +127,7 @@ export function WebSearchAnimation({
       <button
         type="button"
         onClick={() => setUserToggled(!isOpen)}
-        className="flex items-center gap-1.5 text-[13.5px] text-neutral-600 dark:text-white/70 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer select-none py-1 group bg-transparent border-0 focus:outline-none"
+        className="flex items-center gap-1.5 text-[13.5px] text-white/80 hover:text-white transition-colors cursor-pointer select-none py-1 group bg-transparent border-0 focus:outline-none"
       >
         {isSearching ? (
           <span className="flex items-center gap-2">

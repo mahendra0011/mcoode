@@ -3,30 +3,47 @@ import { useState } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
+import { getClipboardText, sanitizePasteText } from './clipboard.js';
+import { usePaste } from './usePaste.js';
 
 export function TextInputModal({ title, placeholder, onSubmit, onClose, password = false, error = null }) {
   const [value, setValue] = useState('');
 
+  usePaste((clip) => {
+    setValue((s) => s + clip);
+  });
+
   useKeyboard((key) => {
-    const input = key.sequence && !key.sequence.includes('\u001b') ? key.sequence : '';
-    if ((key.name === "escape")) {
+    // 1. Explicit Ctrl+V / Cmd+V paste from system clipboard
+    if ((key.ctrl || key.meta) && (key.name === 'v' || key.sequence === '\x16')) {
+      const clip = sanitizePasteText(getClipboardText());
+      if (clip) {
+        setValue((s) => s + clip);
+        return;
+      }
+    }
+
+    if (key.name === 'escape') {
       onClose();
       return;
     }
     
-    if ((key.name === "return")) {
+    if (key.name === 'return') {
       onSubmit(value);
       return;
     }
     
-    if ((key.name === "backspace") || (key.name === "delete")) {
-      setValue(s => s.slice(0, -1));
+    if (key.name === 'backspace' || key.name === 'delete') {
+      setValue((s) => s.slice(0, -1));
       return;
     }
     
     // Normal character input or pasted text, avoiding ANSI escapes
-    if (input && !input.includes('\u001b') && !key.ctrl && !key.meta) {
-      setValue(s => s + input);
+    if (key.sequence && !key.ctrl && !key.meta) {
+      const clean = sanitizePasteText(key.sequence);
+      if (clean) {
+        setValue((s) => s + clean);
+      }
     }
   });
 
@@ -45,33 +62,34 @@ export function TextInputModal({ title, placeholder, onSubmit, onClose, password
         paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
       >
         <box justifyContent="space-between" marginBottom={SPACING.sm}>
-        <text attributes={TextAttributes.BOLD}>{title}</text>
-        <text fg="gray">esc</text>
-      </box>
-
-      <box marginBottom={SPACING.sm}>
-        {value.length === 0 ? (
-          <text fg={theme.gray}>
-            <span fg={theme.green}>{placeholder.charAt(0)}</span>
-            {placeholder.slice(1)}
-          </text>
-        ) : (
-          <text>{displayValue}<span fg={theme.green}>█</span></text>
-        )}
-      </box>
-
-      {error && (
-        <box marginBottom={SPACING.sm}>
-          <text fg="red">{error}</text>
+          <text attributes={TextAttributes.BOLD}>{title}</text>
+          <text fg="gray">esc</text>
         </box>
-      )}
 
-      <box>
-        <text fg="white">
-          <span attributes={TextAttributes.BOLD}>enter</span> <span fg="gray">submit</span>
-        </text>
+        <box marginBottom={SPACING.sm}>
+          {value.length === 0 ? (
+            <text fg={theme.gray}>
+              <span fg={theme.green}>{placeholder.charAt(0)}</span>
+              {placeholder.slice(1)}
+            </text>
+          ) : (
+            <text>{displayValue}<span fg={theme.green}>█</span></text>
+          )}
+        </box>
+
+        {error && (
+          <box marginBottom={SPACING.sm}>
+            <text fg="red">{error}</text>
+          </box>
+        )}
+
+        <box justifyContent="space-between">
+          <text fg="white">
+            <span attributes={TextAttributes.BOLD}>enter</span> <span fg="gray">submit</span>
+          </text>
+          <text fg={theme.dim}>ctrl+v paste</text>
+        </box>
       </box>
-    </box>
     </box>
   );
 }

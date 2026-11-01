@@ -35,7 +35,7 @@ export interface GodModeToggleProps {
 
 const SIZES = {
   sm: { box: 'px-3 h-8 rounded-lg', icon: 'w-3.5 h-3.5' },
-  xs: { box: 'px-3 h-7 rounded-lg', icon: 'w-3 h-3' },
+  xs: { box: 'px-2 h-6 rounded-md text-[10.5px]', icon: 'w-2.5 h-2.5' },
 } as const;
 
 export function GodModeToggle({ value, onChange, size = 'sm', label = 'God' }: GodModeToggleProps) {
@@ -118,15 +118,9 @@ export function StepPulse({ active }: StepPulseProps) {
   if (!active) return <div style={{ width: 6, height: 6 }} />;
   return (
     <motion.div
-      animate={{ opacity: [1, 0.3, 1], scale: [1, 1.3, 1] }}
+      animate={{ opacity: [1, 0.4, 1], scale: [1, 1.25, 1] }}
       transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
-      style={{
-        width: 6,
-        height: 6,
-        borderRadius: "50%",
-        background: "var(--mcode-green, #3ecf8e)",
-        flexShrink: 0,
-      }}
+      className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)] flex-shrink-0"
     />
   );
 }
@@ -134,33 +128,30 @@ export function StepPulse({ active }: StepPulseProps) {
 export function ToolCallCard({ type = "explored", label, summary, children, defaultOpen = false, active = false }: ToolCallCardProps) {
   const [open, setOpen] = useState(defaultOpen);
   const Icon = (ICONS[type as IconKey] ?? FolderSearch);
+  const isFailed = typeof summary === 'string' && summary.includes('(Failed)');
 
   return (
-    <div style={{ marginBottom: 8, fontFamily: "var(--mcode-font)" }}>
+    <div className="mb-2 font-mono">
       <button
+        type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          width: "100%",
-          padding: "4px 0",
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-          color: "var(--mcode-text)",
-          textAlign: "left",
-        }}
+        className="flex items-center gap-2 w-full py-1.5 bg-transparent border-0 cursor-pointer text-left group"
       >
-        <Icon size={14} className="text-emerald-400" style={{ flexShrink: 0 }} />
-        <span style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon size={14} className={isFailed ? "text-red-400 shrink-0" : "text-emerald-400 shrink-0"} />
+        <span className="text-[13px] font-semibold text-neutral-100 group-hover:text-white flex items-center gap-1.5 transition-colors">
           {label}
         </span>
-        <span style={{ fontSize: 13, color: "var(--mcode-text-dim)", marginLeft: 4 }}>
-          {summary}
-        </span>
-        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center" }}>
-          <ChevronRight size={12} className={`transition-transform duration-200 text-white/30 ${open ? 'rotate-90' : ''}`} />
+        {summary && (
+          <span className={`text-[12.5px] ml-1 transition-colors ${
+            isFailed
+              ? 'text-red-400 font-semibold'
+              : 'text-neutral-300 group-hover:text-white'
+          }`}>
+            {summary}
+          </span>
+        )}
+        <span className="ml-auto flex items-center">
+          <ChevronRight size={13} className={`transition-transform duration-200 text-white/50 group-hover:text-white/90 ${open ? 'rotate-90' : ''}`} />
         </span>
       </button>
 
@@ -171,20 +162,8 @@ export function ToolCallCard({ type = "explored", label, summary, children, defa
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            // Spec timing for the collapse: 0.3s ease-in-out. The element used to
-            // carry `data-state="open"` + `data-mcode-collapsible-animate-close`,
-            // but the CSS rule requires `[data-state="closed"]` and this node only
-            // exists while open — so the spec'd animation could never run and
-            // framer did the work at 0.25s instead (audit WEB-005). One mechanism,
-            // spec duration.
             transition={{ duration: 0.3, ease: [0.65, 0, 0.35, 1] }}
-            style={{
-              padding: "8px 0 8px 24px",
-              fontSize: 12.5,
-              color: "var(--mcode-text-dim)",
-              fontFamily: "var(--mcode-mono)",
-              overflow: "hidden",
-            }}
+            className="pl-6 py-2 text-[12.5px] text-neutral-300 font-mono overflow-hidden"
           >
             {children}
           </motion.div>
@@ -200,18 +179,11 @@ export function WroteFile({ filename, lang, lines }: WroteFileProps) {
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 0",
-        fontFamily: "var(--mcode-mono)",
-        fontSize: 12.5,
-      }}
+      className="flex items-center gap-2 py-1.5 font-mono text-[12.5px]"
     >
-      <FileCode size={14} style={{ color: LANG_COLOR[lang ?? ""] ?? "var(--mcode-green, #3ecf8e)", flexShrink: 0 }} />
-      <span style={{ color: "var(--mcode-text)" }}>{filename}</span>
-      <span style={{ color: "var(--mcode-green)", fontWeight: 600 }}>+{lines}</span>
+      <FileCode size={14} style={{ color: LANG_COLOR[lang ?? ""] ?? "#34d399", flexShrink: 0 }} />
+      <span className="text-neutral-100 font-medium">{filename}</span>
+      <span className="text-emerald-400 font-semibold">+{lines}</span>
     </motion.div>
   );
 }
@@ -219,29 +191,29 @@ export function WroteFile({ filename, lang, lines }: WroteFileProps) {
 export function DiffBlock({ filename, added, removed }: DiffBlockProps) {
   const total = added + removed || 1;
   return (
-    <div style={{ fontFamily: "var(--mcode-mono)", fontSize: 12.5 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0" }}>
-        <span style={{ color: "var(--mcode-text)", display: "flex", alignItems: "center", gap: 6 }}>
+    <div className="font-mono text-[12.5px] my-1">
+      <div className="flex justify-between items-center py-1">
+        <span className="text-neutral-100 flex items-center gap-1.5 font-medium">
           <Pencil size={12} className="text-emerald-400 shrink-0" />
           {filename}
         </span>
-        <span>
-          <span style={{ color: "var(--mcode-green)" }}>+{added}</span>{" "}
-          <span style={{ color: "var(--mcode-red)" }}>-{removed}</span>
+        <span className="font-semibold text-xs">
+          <span className="text-emerald-400">+{added}</span>{" "}
+          <span className="text-red-400">-{removed}</span>
         </span>
       </div>
-      <div style={{ display: "flex", height: 4, borderRadius: 2, overflow: "hidden", background: "var(--mcode-border)" }}>
+      <div className="flex h-1 rounded overflow-hidden bg-white/10">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${(added / total) * 100}%` }}
           transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-          style={{ background: "var(--mcode-green)" }}
+          className="bg-emerald-400"
         />
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${(removed / total) * 100}%` }}
           transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1], delay: 0.05 }}
-          style={{ background: "var(--mcode-red)" }}
+          className="bg-red-400"
         />
       </div>
     </div>
@@ -271,26 +243,20 @@ export function TerminalOutput({ command, output }: TerminalOutputProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      style={{
-        background: "transparent",
-        border: "1px solid var(--mcode-border)",
-        borderRadius: 6,
-        padding: "8px 10px",
-        fontFamily: "var(--mcode-mono)",
-        fontSize: 12,
-      }}
+      className="bg-[#0e0e12] border border-white/10 rounded-lg p-3 font-mono text-xs my-1.5"
     >
-      <div style={{ color: "var(--mcode-text, #ffffff)", display: "flex", alignItems: "center", gap: 6 }}>
-        <Terminal size={12} className="text-emerald-400 shrink-0" />
-        <span className="font-semibold text-emerald-400">$</span>
-        <span className="text-white/90">{command}</span>
+      <div className="flex items-center gap-2 font-medium">
+        <Terminal size={13} className="text-emerald-400 shrink-0" />
+        <span className="font-bold text-emerald-400">$</span>
+        <span className="text-white font-mono">{command}</span>
       </div>
-      <pre style={{ margin: "4px 0 0", whiteSpace: "pre-wrap", color: "var(--mcode-text-dim)" }}>
+      <pre className="mt-2 whitespace-pre-wrap text-neutral-200 font-mono text-[11.5px] leading-relaxed">
         {output ? output.slice(0, visibleChars) : ""}
         {output && visibleChars < output.length && (
           <motion.span
             animate={{ opacity: [1, 0] }}
             transition={{ duration: 0.6, repeat: Infinity }}
+            className="text-emerald-400 font-bold"
           >
             ▌
           </motion.span>

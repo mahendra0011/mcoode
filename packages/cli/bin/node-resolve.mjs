@@ -59,6 +59,10 @@ export function findCompatibleNodeSync() {
   const home = process.env.HOME || process.env.USERPROFILE || '';
   const candidates = isWin
     ? [
+        // Dedicated node26 installations
+        'D:/programs/node26/node.exe',
+        'D:/programs/nodejs26/node.exe',
+        'C:/Program Files/nodejs26/node.exe',
         // nvm-windows-style
         join(process.env.LOCALAPPDATA || home, 'nvm', 'versions', 'node', 'v26.4.0', 'node.exe'),
         // fnm/volta-style

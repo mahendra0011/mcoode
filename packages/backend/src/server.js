@@ -24,6 +24,7 @@ import { connectDb, db } from './db.js';
 import { connectRedis, cache, getRedisClient } from './cache.js';
 import { connectQueue, jobQueue, startWorker } from './queue.js';
 import { attachSockets } from './sockets.js';
+import { killAllNow as killAllPtys } from './pty-manager.js';
 import { configureMailer, sendMail } from './mailer.js';
 import { mountApiRoutes, logRoutePolicy } from './route-policy.js';
 import { validateEnv } from './config/envValidator.js';
@@ -110,6 +111,9 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     crossOriginEmbedderPolicy: false,
   }));
   const allowedOrigins = String(env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000,http://localhost:5174').split(',').map((s) => s.trim()).filter(Boolean);
+  const allowedHosts = new Set(allowedOrigins.map((u) => {
+    try { return new URL(u).host; } catch { return u; }
+  }));
   app.use(cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (Electron, curl, server-to-server) or explicit allowlist + local dev origins
@@ -137,12 +141,22 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
     if (req.headers.authorization?.startsWith('Bearer ')) return next();
     if (!req.headers.cookie) return next();
+    // Public auth endpoints establish or reset sessions without relying on ambient cookies
+    if (['/api/v1/auth/login', '/api/v1/auth/signup', '/api/v1/auth/send-otp', '/api/v1/auth/verify-otp', '/api/v1/auth/reset-password'].includes(req.path)) {
+      return next();
+    }
     const origin = req.headers.origin || req.headers.referer || '';
     if (!origin) return next();
     try {
       const host = req.headers.host || '';
+      const fHost = req.headers['x-forwarded-host'];
       const oHost = new URL(origin, `http://${host}`).host;
-      if (oHost && oHost !== host) {
+      const isAllowed = oHost === host
+        || (fHost && fHost === oHost)
+        || allowedHosts.has(oHost)
+        || allowedOrigins.includes(origin)
+        || (/^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin));
+      if (!isAllowed) {
         return res.status(403).json({ error: { code: 'CSRF_BLOCKED', message: 'cross-origin request refused' } });
       }
     } catch {
@@ -330,6 +344,8 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
   // ARCH-005: graceful shutdown — stop accepting, drain sockets, then exit.
   const shutdown = (signal) => {
     logger.info({ signal }, 'shutting down');
+    // Terminal PTY shells would survive the server process otherwise.
+    try { killAllPtys(); } catch { /* already dead */ }
     try { io?.close?.(); } catch { /* already closed */ }
     httpServer.close(() => {
       logger.info('HTTP server closed — exiting');

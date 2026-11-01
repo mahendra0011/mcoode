@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/logger';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -181,6 +182,7 @@ export function BottomPanel({
   const [terminalListOpen, setTerminalListOpen] = useState(false);
   const [terminals, setTerminals] = useState<TerminalSessionMeta[]>([]);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+  const lastMirrorRef = useRef<string | null>(null);
 
   // Menu states
   const [shellProfileMenuOpen, setShellProfileMenuOpen] = useState(false);
@@ -243,6 +245,13 @@ export function BottomPanel({
         return list;
       });
       setActiveTerminalId((prev) => (prev === activeId ? prev : activeId));
+      // Mirror the REAL active PTY id into the IDE store so other consumers
+      // (e.g. "Run file in terminal") no longer target the stale seeded
+      // 'term-1' id that no real session ever has.
+      if (lastMirrorRef.current !== activeId) {
+        lastMirrorRef.current = activeId;
+        useIDEStore.getState().setActiveTerminalId(activeId);
+      }
     },
     []
   );
@@ -290,12 +299,13 @@ export function BottomPanel({
       if (!mountedRef.current) return;
       // 015: only open http(s) preview URLs — never javascript:/data: schemes.
       const raw = String(payload.previewUrl || '');
-      if (/^https?:\/\//i.test(raw)) {
-        toast.success(`Project running in Docker container: ${raw}`, {
+      if (/^(?:https?:\/\/|\/api\/v1\/workspaces\/)/i.test(raw)) {
+        const fullUrl = raw.startsWith('/') ? `${window.location.origin}${raw}` : raw;
+        toast.success(`Project server ready: ${raw}`, {
           action: {
             label: 'Open Preview',
             onClick: () =>
-              window.open(`/preview?url=${encodeURIComponent(raw)}`, '_blank'),
+              window.open(`/preview?url=${encodeURIComponent(fullUrl)}`, '_blank'),
           },
         });
       }
@@ -495,7 +505,9 @@ export function BottomPanel({
         setPanelHeight((h) => {
           try {
             localStorage.setItem('mcode_bottom_panel_height', String(h));
-          } catch {}
+          } catch (err) {
+            reportError('BottomPanel:saveHeight', err, { userVisible: false });
+          }
           return h;
         });
       };
@@ -1156,7 +1168,7 @@ interface RecentListModalProps {
 
 function RecentListModal({ title, icon, items, emptyText, onSelect, onClose }: RecentListModalProps) {
   const [filter, setFilter] = useState('');
-  const filtered = items.filter((it) => it.toLowerCase().includes(filter.toLowerCase()));
+  const filtered = items.filter((it) => String(it).toLowerCase().includes(String(filter).toLowerCase()));
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-24">

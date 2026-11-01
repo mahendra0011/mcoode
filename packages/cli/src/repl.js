@@ -27,6 +27,7 @@ export async function startRepl({ watchAfter = null } = {}) {
       clearOnShutdown: true,
       backgroundColor: '#0a0a0a',
     });
+    process.env.MCCODE_TUI_ACTIVE = '1';
   } catch (err) {
     console.error(`mcode: TUI failed to start (${err?.message || err}).`);
     console.error('OpenTUI needs Node.js 26.4.0+ started with --experimental-ffi.');
@@ -52,13 +53,28 @@ export async function startRepl({ watchAfter = null } = {}) {
   const accountExists = Boolean(config?.account?.email);
   const keyExists = await hasApiKey(config);
 
+  // Auto-wire onboarded flag for previously logged-in users so they never get prompted repeatedly
+  if (accountExists && !config?.onboarded) {
+    config.onboarded = true;
+    await saveConfig({ onboarded: true });
+  }
+
+  // Auto-set default role to OpenRouter Llama 3.3 70B if none set yet
+  if (!config?.roles?.build) {
+    config.roles = {
+      ...(config.roles || {}),
+      build: 'openrouter:meta-llama/llama-3.3-70b-instruct',
+      docs: 'openrouter:meta-llama/llama-3.3-70b-instruct'
+    };
+    await saveConfig(config);
+  }
+
   // move any legacy plaintext refresh token into the encrypted vault
   await migrateLegacyRefreshToken(config);
 
   // ── Onboarding (if needed) ────────────────────────────────────────────
-  // Local-first: only block when there's no provider key at all (env or
-  // vault). An account is optional — the tool works fully without one.
-  const needsOnboarding = !keyExists;
+  // Only show onboarding if user has not onboarded AND has no account AND has no key
+  const needsOnboarding = !config?.onboarded && !accountExists && !keyExists;
 
   if (needsOnboarding) {
     await new Promise(/** @type {(v?: any) => void} */ ((resolve) => {
@@ -119,7 +135,8 @@ export async function startRepl({ watchAfter = null } = {}) {
       const onboardingRoot = createRoot(renderer);
       onboardingRoot.render(
         <OnboardingScreen
-          onComplete={() => {
+          onComplete={async () => {
+            await saveConfig({ onboarded: true });
             onboardingRoot.unmount();
             resolve();
           }}

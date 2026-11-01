@@ -16,7 +16,7 @@ const schemas = {
   }),
   verifyOtp: z.object({
     email: z.string().email(),
-    otp: z.string().regex(/^\d{8}$/),
+    otp: z.string().regex(/^\d{6,8}$/),
     intent: z.enum(['signup', 'login', 'reset']),
     name: z.string().min(2).max(60).optional(),
     password: z.string().min(8).optional()
@@ -33,7 +33,7 @@ const schemas = {
   refresh: z.object({ refresh: z.string().optional() }),
   resetPassword: z.object({
     email: z.string().email(),
-    otp: z.string().regex(/^\d{8}$/),
+    otp: z.string().regex(/^\d{6,8}$/),
     password: z.string().min(8)
   }),
   createSession: z.object({

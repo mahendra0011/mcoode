@@ -1,6 +1,5 @@
 // @ts-nocheck — OpenTUI JSX, type-covered by esbuild bundle + manual runs, not tsc.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { highlight } from 'cli-highlight';
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
@@ -8,6 +7,9 @@ import { BgBox } from './BgBox.jsx';
 import { SpinnerBlock, ThoughtBlock, ReadBlock, WriteBlock, DiffBlock, CommandBlock, TodoBlock, InterruptBlock, ErrorBlock, PermissionBlock, ChangeSummaryBlock, RunningToolBlock, TOOL_VERBS, READ_MAX, CMD_MAX, SPIN_FRAMES } from './blocks.jsx';
 import { useTicker } from './useTicker.js';
 import { BuildSummaryCard } from './SummaryCard.jsx';
+
+// eslint-disable-next-line no-control-regex
+const stripAnsiAndCr = (str) => String(str ?? '').replace(/\r/g, '').replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
 
 export function MainPane({ messages, streamingMessage, isGenerating = false, onInterrupt = null, onRetry = null, pendingPermission = null, onPermission = null, agentMode = 'Build' }) {
   const { width: termWidth } = useTerminalDimensions();
@@ -32,13 +34,9 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
   const renderCode = (id, title, code, index) => {
     const isExpanded = expanded === index;
     const isFocused = focus === index;
-    let highlighted = '';
-    if (isExpanded) {
-      try {
-        highlighted = highlight(code, { language: 'javascript', ignoreIllegals: true });
-      } catch { /* unparseable code */ }
-    }
-    const lines = isExpanded ? highlighted.split('\n') : [];
+    const clean = stripAnsiAndCr(code || '');
+    const lines = isExpanded ? clean.split('\n') : [];
+    const pad = Math.max(2, String(lines.length).length);
     return (
       <box key={id} flexDirection="column" marginTop={SPACING.sm} flexShrink={0} paddingLeft={SPACING.sm}>
         <box flexDirection="column" backgroundColor={theme.surface} borderStyle="round" border borderColor={isFocused ? theme.accent : theme.divider} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
@@ -49,7 +47,10 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
           {isExpanded && (
             <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
               {lines.slice(0, 30).map((l, i) => (
-                <text key={i}>{l || ' '}</text>
+                <box key={i} flexDirection="row" width="100%">
+                  <text fg={theme.dim}>{String(i + 1).padStart(pad)} │ </text>
+                  <text fg={theme.textBright}>{l || ' '}</text>
+                </box>
               ))}
               {lines.length > 30 && <text fg={theme.dim}>... {lines.length - 30} more lines</text>}
             </box>
@@ -66,9 +67,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
 
   const renderReadWrite = (msg, key, isFirst) => {
     const lines = msg.lines || [];
-    const truncated = lines.length > READ_MAX;
-    // Register items for expand/collapse — read blocks always registerable
-    const iIdx = (truncated || msg.block === 'read') ? registerItem({ type: 'tool', key }) : null;
+    const iIdx = registerItem({ type: 'tool', key });
     const isExpanded = iIdx !== null && expanded === iIdx;
     return msg.block === 'write'
       ? <WriteBlock key={key} path={msg.path} lines={lines} expanded={isExpanded} marginTop={isFirst ? 0 : 1} />
@@ -89,9 +88,7 @@ export function MainPane({ messages, streamingMessage, isGenerating = false, onI
 
   const renderDiff = (msg, key, isFirst) => {
     const lines = msg.diffLines || [];
-    const maxRows = 60;
-    const truncated = lines.length > maxRows;
-    const iIdx = truncated ? registerItem({ type: 'tool', key }) : null;
+    const iIdx = registerItem({ type: 'tool', key });
     const isExpanded = iIdx !== null && expanded === iIdx;
     return <DiffBlock key={key} path={msg.path} lines={lines} expanded={isExpanded} marginTop={isFirst ? 0 : 1} />;
   };

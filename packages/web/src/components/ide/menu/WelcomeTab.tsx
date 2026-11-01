@@ -4,6 +4,7 @@ import {
   FilePlus,
   FolderOpen,
   Folder,
+  FolderPlus,
   GitBranch,
   Terminal,
   Sparkles,
@@ -13,6 +14,7 @@ import {
   ChevronRight,
   Plus,
   X,
+  FileCode,
 } from "lucide-react";
 import { useIDEStore } from "../../../store/ideStore";
 import { ALL_LANGUAGES } from "../../../lib/languagesData";
@@ -54,6 +56,11 @@ export function WelcomeTab({
 
   const [showOnStartup, setShowOnStartup] = useState(true);
   const langScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSelectLanguage = (lang: any) => {
+    toggleLanguage(lang.name);
+    document.dispatchEvent(new CustomEvent("mcode:open-create-project", { detail: { lang } }));
+  };
 
   useEffect(() => {
     try {
@@ -111,42 +118,45 @@ export function WelcomeTab({
             setActivePath(cur[0]);
           }
         }}
-        className="absolute top-4 right-6 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 hover:text-white text-white/50 flex items-center justify-center transition cursor-pointer border border-white/10 z-30 group"
+        className="absolute top-4 right-6 w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] hover:text-white text-white/40 flex items-center justify-center transition cursor-pointer border border-white/[0.08] z-30"
         title="Close Welcome Page"
       >
-        <X className="w-4 h-4 group-hover:scale-110 transition-transform" />
+        <X className="w-3.5 h-3.5" />
       </button>
 
       <div className="max-w-4xl mx-auto w-full space-y-6">
         
         {/* Header: mcode Brand */}
-        <div className="flex items-center gap-3.5 pt-1">
+        <div className="flex items-center gap-3.5 pt-2">
           <div className="relative group flex items-center justify-center flex-shrink-0">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-50"></div>
-            <div className="relative w-11 h-11 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-1 flex items-center justify-center">
+            <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/30 to-blue-500/30 rounded-2xl blur-md opacity-60"></div>
+            <div className="relative w-12 h-12 rounded-2xl overflow-hidden bg-[#0c0c0e] border border-white/15 p-1 flex items-center justify-center shadow-xl">
               <img
                 src="/logo.png"
                 alt="MCODE"
-                className="w-full h-full object-cover rounded-lg"
+                className="w-full h-full object-cover rounded-xl"
               />
             </div>
           </div>
           <div>
-            <h1 className="text-[34px] font-bold tracking-tight text-[#e8e8e8] leading-tight font-sans">
-              mcode
-            </h1>
-            <p className="text-[14px] text-[#858585] mt-0.5 font-sans">Editing evolved</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-[28px] font-bold tracking-tight text-white leading-tight font-sans">
+                mcode
+              </h1>
+              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">v2.5</span>
+            </div>
+            <p className="text-[13px] text-white/50 font-sans">Editing evolved · Agentic AI IDE</p>
           </div>
         </div>
 
-        {/* 2-line Horizontal Scrollable Languages Selector (Centrally Framed) */}
+        {/* 2-line Horizontal Scrollable Languages Selector */}
         <div className="w-full max-w-3xl space-y-2 pt-1 pb-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-[#858585] uppercase tracking-wider">
-                Languages & Technologies
+              <span className="text-[11px] font-semibold text-white/50 uppercase tracking-wider">
+                Languages &amp; Technologies
               </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#0078d4]/20 text-[#4fc1ff] border border-[#0078d4]/30">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 {selectedLanguages.length} selected
               </span>
               <button
@@ -155,7 +165,7 @@ export function WelcomeTab({
                   setActiveActivityBar("languages");
                   setSidebarOpen(true);
                 }}
-                className="text-[11px] text-[#4fc1ff] hover:underline flex items-center gap-0.5 cursor-pointer ml-1"
+                className="text-[11px] text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-0.5 cursor-pointer ml-1"
                 title="Open Languages Panel in Left Sidebar (Ctrl+Shift+L)"
               >
                 <span>Open in Sidebar</span>
@@ -169,18 +179,18 @@ export function WelcomeTab({
                 <button
                   type="button"
                   onClick={() => setSelectedLanguages([])}
-                  className="text-[11px] text-[#858585] hover:text-white transition hover:underline mr-1 cursor-pointer"
+                  className="text-[11px] text-white/40 hover:text-white transition hover:underline mr-1 cursor-pointer"
                 >
                   Clear
                 </button>
               )}
-              <span className="text-[11px] text-[#858585] hidden sm:inline mr-1">
+              <span className="text-[11px] text-white/30 hidden sm:inline mr-1">
                 (54+ languages)
               </span>
               <button
                 type="button"
                 onClick={() => handleScrollLang("left")}
-                className="w-6 h-6 rounded bg-[#252526] hover:bg-[#333336] text-[#cccccc] hover:text-white flex items-center justify-center transition border border-white/5 cursor-pointer shadow-sm"
+                className="w-6 h-6 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-white/60 hover:text-white flex items-center justify-center transition border border-white/[0.06] cursor-pointer"
                 title="Scroll Left"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -188,7 +198,7 @@ export function WelcomeTab({
               <button
                 type="button"
                 onClick={() => handleScrollLang("right")}
-                className="w-6 h-6 rounded bg-[#252526] hover:bg-[#333336] text-[#cccccc] hover:text-white flex items-center justify-center transition border border-white/5 cursor-pointer shadow-sm"
+                className="w-6 h-6 rounded-md bg-white/[0.04] hover:bg-white/[0.08] text-white/60 hover:text-white flex items-center justify-center transition border border-white/[0.06] cursor-pointer"
                 title="Scroll Right"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -214,27 +224,26 @@ export function WelcomeTab({
                   <button
                     key={lang.id}
                     type="button"
-                    onClick={() => toggleLanguage(lang.name)}
-                    onDoubleClick={() => createLanguageFile(lang.name)}
-                    className={`flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs border transition-all duration-150 flex-shrink-0 cursor-pointer shadow-sm ${
+                    onClick={() => handleSelectLanguage(lang)}
+                    className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs border transition-all duration-150 flex-shrink-0 cursor-pointer shadow-xs ${
                       isSelected
-                        ? "bg-[#094771] text-white border-[#0078d4]"
-                        : "bg-[#252526] text-[#cccccc] border-[#2d2d2d] hover:bg-[#2e2e30] hover:text-white"
+                        ? "bg-emerald-500/15 text-white border-emerald-500/40"
+                        : "bg-white/[0.03] text-white/80 border-white/[0.06] hover:bg-white/[0.06] hover:text-white"
                     }`}
-                    title={`${lang.name} (${lang.category}) · Double-click to create new ${lang.extension} file`}
+                    title={`${lang.name} (${lang.category}) · Click to create new project & folder`}
                   >
                     {/* Authentic Language Vector Logo from Library */}
                     <LanguageIcon
                       id={lang.id}
                       name={lang.name}
                       color={lang.color}
-                      className="w-6 h-6 flex-shrink-0 rounded shadow-sm"
+                      className="w-5 h-5 flex-shrink-0 rounded shadow-xs"
                     />
-                    <span className="font-semibold tracking-tight text-[13px]">{lang.name}</span>
-                    <span className="text-[10px] text-[#858585] font-mono px-1.5 py-0.5 rounded bg-black/30 border border-white/5">
+                    <span className="font-medium text-[12.5px]">{lang.name}</span>
+                    <span className="text-[9.5px] text-white/40 font-mono px-1.5 py-0.5 rounded bg-black/40 border border-white/5">
                       {lang.extension}
                     </span>
-                    {isSelected && <Check className="w-4 h-4 text-[#4fc1ff] ml-0.5" />}
+                    {isSelected && <Check className="w-3.5 h-3.5 text-emerald-400 ml-0.5" />}
                   </button>
                 );
               })}
@@ -243,81 +252,107 @@ export function WelcomeTab({
         </div>
 
         {/* Two-Column Grid: Start & Recent (Left) | Walkthroughs (Right) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 pt-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-1">
           
           {/* LEFT COLUMN: Start & Recent */}
-          <div className="space-y-7">
+          <div className="space-y-6">
             
             {/* Start Section */}
             <div>
-              <h2 className="text-[13px] font-semibold text-[#cccccc] mb-3">
+              <h2 className="text-[11px] font-semibold text-white/40 uppercase tracking-wider mb-2.5">
                 Start
               </h2>
 
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultLang = ALL_LANGUAGES.find((l) => l.name === "Python") || ALL_LANGUAGES[0];
+                    handleSelectLanguage(defaultLang);
+                  }}
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] text-white/80 hover:text-white bg-white/[0.02] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition group cursor-pointer text-left shadow-xs"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <FolderPlus className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">New Project / Folder...</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => createUntitledFile()}
-                  className="flex items-center gap-2.5 text-[13px] text-[#3794ff] hover:underline text-left group transition cursor-pointer"
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] text-white/80 hover:text-white bg-white/[0.02] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition group cursor-pointer text-left shadow-xs"
                 >
-                  <FilePlus className="w-4 h-4 text-[#4fc1ff] flex-shrink-0" />
-                  <span>New File...</span>
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <FilePlus className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">New File...</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={onOpenFile}
-                  className="flex items-center gap-2.5 text-[13px] text-[#3794ff] hover:underline text-left group transition cursor-pointer"
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] text-white/80 hover:text-white bg-white/[0.02] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition group cursor-pointer text-left shadow-xs"
                 >
-                  <FolderOpen className="w-4 h-4 text-[#4fc1ff] flex-shrink-0" />
-                  <span>Open File...</span>
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <FolderOpen className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">Open File...</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={onOpenFolder}
-                  className="flex items-center gap-2.5 text-[13px] text-[#3794ff] hover:underline text-left group transition cursor-pointer"
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] text-white/80 hover:text-white bg-white/[0.02] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition group cursor-pointer text-left shadow-xs"
                 >
-                  <Folder className="w-4 h-4 text-[#4fc1ff] flex-shrink-0" />
-                  <span>Open Folder...</span>
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <Folder className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">Open Folder...</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={onCloneRepo}
-                  className="flex items-center gap-2.5 text-[13px] text-[#3794ff] hover:underline text-left group transition cursor-pointer"
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] text-white/80 hover:text-white bg-white/[0.02] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition group cursor-pointer text-left shadow-xs"
                 >
-                  <GitBranch className="w-4 h-4 text-[#4fc1ff] flex-shrink-0" />
-                  <span>Clone Git Repository...</span>
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <GitBranch className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">Clone Git Repository...</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => toggleCommandPalette()}
-                  className="flex items-center gap-2.5 text-[13px] text-[#3794ff] hover:underline text-left group transition cursor-pointer"
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] text-white/80 hover:text-white bg-white/[0.02] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition group cursor-pointer text-left shadow-xs"
                 >
-                  <Terminal className="w-4 h-4 text-[#4fc1ff] flex-shrink-0" />
-                  <span>Connect to...</span>
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <Terminal className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">Connect to...</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleGenerateWorkspace}
-                  className="flex items-center gap-2.5 text-[13px] text-[#3794ff] hover:underline text-left group transition cursor-pointer"
+                  className="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] text-white/80 hover:text-white bg-white/[0.02] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition group cursor-pointer text-left shadow-xs"
                 >
-                  <Sparkles className="w-4 h-4 text-[#4fc1ff] flex-shrink-0" />
-                  <span>Generate New Workspace...</span>
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-emerald-500/20 to-blue-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">Generate New Workspace...</span>
                 </button>
               </div>
             </div>
 
             {/* Recent Section - Connected to REAL Backend Workspaces */}
             <div>
-              <h2 className="text-[13px] font-semibold text-[#cccccc] mb-3">
+              <h2 className="text-[11px] font-semibold text-white/40 uppercase tracking-wider mb-2.5">
                 Recent
               </h2>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
                 {workspaces && workspaces.length > 0 ? (
                   workspaces.slice(0, 6).map((ws: any) => {
                     const name = ws.name || "Untitled Project";
@@ -329,13 +364,14 @@ export function WelcomeTab({
                           if (onSelectWorkspace) onSelectWorkspace(ws._id);
                           toast.success(`Switched to workspace: ${name}`);
                         }}
-                        className="flex items-baseline gap-3 text-left cursor-pointer group py-0.5"
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] text-left cursor-pointer group transition shadow-xs"
                         title={`Open workspace: ${name}`}
                       >
-                        <span className="text-[13px] text-[#3794ff] hover:underline flex-shrink-0">
+                        <Folder className="w-4 h-4 text-emerald-400 flex-shrink-0 opacity-70 group-hover:opacity-100" />
+                        <span className="text-[13px] text-white/90 group-hover:text-emerald-400 font-medium transition-colors flex-shrink-0">
                           {name}
                         </span>
-                        <span className="text-[12px] text-[#858585] truncate font-sans">
+                        <span className="text-[11.5px] text-white/30 truncate font-mono ml-auto">
                           {pathInfo}
                         </span>
                       </div>
@@ -351,27 +387,28 @@ export function WelcomeTab({
                           addOpenFile(file);
                           setActivePath(file);
                         }}
-                        className="flex items-baseline gap-3 text-left cursor-pointer group py-0.5"
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-transparent hover:border-white/[0.08] text-left cursor-pointer group transition shadow-xs"
                       >
-                        <span className="text-[13px] text-[#3794ff] hover:underline flex-shrink-0">
+                        <FilePlus className="w-4 h-4 text-blue-400 flex-shrink-0 opacity-70 group-hover:opacity-100" />
+                        <span className="text-[13px] text-white/90 group-hover:text-blue-400 font-medium transition-colors flex-shrink-0">
                           {name}
                         </span>
-                        <span className="text-[12px] text-[#858585] truncate font-sans">
+                        <span className="text-[11.5px] text-white/30 truncate font-mono ml-auto">
                           {file}
                         </span>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="text-[12px] text-[#858585] italic py-1">
-                    No recent workspaces. Click <span className="text-[#3794ff] cursor-pointer hover:underline" onClick={onOpenFolder}>Open Folder</span> or <span className="text-[#3794ff] cursor-pointer hover:underline" onClick={handleGenerateWorkspace}>New Workspace</span> to start.
+                  <div className="text-[12px] text-white/40 italic py-2 px-1">
+                    No recent workspaces. Click <span className="text-emerald-400 cursor-pointer hover:underline" onClick={onOpenFolder}>Open Folder</span> or <span className="text-emerald-400 cursor-pointer hover:underline" onClick={handleGenerateWorkspace}>New Workspace</span> to start.
                   </div>
                 )}
                 
                 <button
                   type="button"
                   onClick={() => toggleCommandPalette()}
-                  className="text-[13px] text-[#3794ff] hover:underline text-left mt-1 cursor-pointer"
+                  className="text-[12px] text-white/40 hover:text-white transition text-left mt-1 px-1 cursor-pointer"
                 >
                   More...
                 </button>
@@ -379,42 +416,40 @@ export function WelcomeTab({
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Walkthroughs (Bigger Cards & Icons) */}
+          {/* RIGHT COLUMN: Walkthroughs */}
           <div>
-            <h2 className="text-[13px] font-semibold text-[#cccccc] mb-3">
+            <h2 className="text-[11px] font-semibold text-white/40 uppercase tracking-wider mb-2.5">
               Walkthroughs
             </h2>
 
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {/* Card 1: Get started with mcode */}
               <div
                 onClick={() => setReleaseNotesOpen(true)}
-                className="p-3.5 rounded-lg bg-[#252526] hover:bg-[#2a2d2e] border border-transparent hover:border-[#3e3e42] transition cursor-pointer group relative overflow-hidden shadow-sm"
+                className="p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/15 transition cursor-pointer group relative overflow-hidden shadow-xs"
               >
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#0078d4] text-white flex items-center justify-center flex-shrink-0 shadow-md">
-                    <span className="text-sm font-bold">★</span>
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <Sparkles className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-[13px] font-semibold text-white group-hover:text-[#4fc1ff] transition">
+                    <h3 className="text-[13px] font-semibold text-white group-hover:text-blue-400 transition">
                       Get started with mcode
                     </h3>
-                    <p className="text-[12px] text-[#858585] mt-0.5 leading-snug">
+                    <p className="text-[12px] text-white/40 mt-0.5 leading-snug">
                       Customize your editor, learn the basics, and start coding
                     </p>
                   </div>
                 </div>
-                {/* Blue progress bar across bottom */}
-                <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-[#0078d4]" />
               </div>
 
               {/* Card 2: Learn the Fundamentals */}
               <div
                 onClick={() => setShortcutsOpen(true)}
-                className="p-3.5 rounded-lg bg-[#252526] hover:bg-[#2a2d2e] border border-transparent hover:border-[#3e3e42] transition cursor-pointer group flex items-center gap-3 shadow-sm"
+                className="p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/15 transition cursor-pointer group flex items-center gap-3 shadow-xs"
               >
-                <div className="w-7 h-7 rounded-md bg-cyan-500/10 flex items-center justify-center flex-shrink-0">
-                  <Lightbulb className="w-4.5 h-4.5 text-[#4fc1ff]" />
+                <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center flex-shrink-0">
+                  <Lightbulb className="w-4 h-4 text-cyan-400" />
                 </div>
                 <span className="text-[13px] font-medium text-white/90 group-hover:text-white transition">
                   Learn the Fundamentals
@@ -424,29 +459,32 @@ export function WelcomeTab({
               {/* Card 3: Get started with mcode AI Agent */}
               <div
                 onClick={() => toggleCommandPalette()}
-                className="p-3.5 rounded-lg bg-[#252526] hover:bg-[#2a2d2e] border border-transparent hover:border-[#3e3e42] transition cursor-pointer group flex items-center justify-between shadow-sm"
+                className="p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/15 transition cursor-pointer group flex items-center justify-between shadow-xs"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-md bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center flex-shrink-0 text-white text-xs shadow-md">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center flex-shrink-0 text-xs shadow-sm">
                     ✦
                   </div>
                   <span className="text-[13px] font-medium text-white/90 group-hover:text-white transition">
                     Get started with mcode AI Agent
                   </span>
                 </div>
-                <span className="text-[10px] font-medium text-[#4fc1ff] bg-[#0078d4]/20 border border-[#0078d4]/30 px-2 py-0.5 rounded">
+                <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                   Updated
                 </span>
               </div>
 
               {/* Card 4: Get Started with Python Development */}
               <div
-                onClick={() => createLanguageFile("Python")}
-                className="p-3.5 rounded-lg bg-[#252526] hover:bg-[#2a2d2e] border border-transparent hover:border-[#3e3e42] transition cursor-pointer group flex items-center justify-between shadow-sm"
+                onClick={() => {
+                  const py = ALL_LANGUAGES.find((l) => l.name === "Python");
+                  if (py) handleSelectLanguage(py);
+                }}
+                className="p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/15 transition cursor-pointer group flex items-center justify-between shadow-xs"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-md bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M11.91 0C5.77 0 6.13 2.67 6.13 2.67L6.14 5.43H12.02V6.26H3.77S0 5.83 0 12.01C0 18.19 3.29 17.88 3.29 17.88H5.24V15.14S5.06 11.91 8.3 11.91H14.15S17.06 12.02 17.06 9.17V2.85S17.48 0 11.91 0ZM8.93 1.71C9.53 1.71 10.02 2.2 10.02 2.8C10.02 3.4 9.53 3.89 8.93 3.89C8.33 3.89 7.84 3.4 7.84 2.8C7.84 2.2 8.33 1.71 8.93 1.71Z" fill="#387EB8"/>
                       <path d="M12.09 24C18.23 24 17.87 21.33 17.87 21.33L17.86 18.57H11.98V17.74H20.23S24 18.17 24 11.99C24 5.81 20.71 6.12 20.71 6.12H18.76V8.86S18.94 12.09 15.7 12.09H9.85S6.94 11.98 6.94 14.83V21.15S6.52 24 12.09 24ZM15.07 22.29C14.47 22.29 13.98 21.8 13.98 21.2C13.98 20.6 14.47 20.11 15.07 20.11C15.67 20.11 16.16 20.6 16.16 21.2C16.16 21.8 15.67 22.29 15.07 22.29Z" fill="#FFE052"/>
                     </svg>
@@ -455,25 +493,28 @@ export function WelcomeTab({
                     Get Started with Python Development
                   </span>
                 </div>
-                <span className="text-[10px] font-medium text-[#4fc1ff] bg-[#0078d4]/20 border border-[#0078d4]/30 px-2 py-0.5 rounded">
+                <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                   Updated
                 </span>
               </div>
 
               {/* Card 5: Get Started with PowerShell */}
               <div
-                onClick={() => createLanguageFile("Shell Script (Bash)")}
-                className="p-3.5 rounded-lg bg-[#252526] hover:bg-[#2a2d2e] border border-transparent hover:border-[#3e3e42] transition cursor-pointer group flex items-center justify-between shadow-sm"
+                onClick={() => {
+                  const sh = ALL_LANGUAGES.find((l) => l.name.includes("Shell"));
+                  if (sh) handleSelectLanguage(sh);
+                }}
+                className="p-3.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.06] hover:border-white/15 transition cursor-pointer group flex items-center justify-between shadow-xs"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-md bg-[#0078d4]/20 border border-[#0078d4]/40 flex items-center justify-center text-[#4fc1ff] text-xs font-mono font-bold flex-shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white/70 text-xs font-mono font-bold flex-shrink-0">
                     &gt;_
                   </div>
                   <span className="text-[13px] font-medium text-white/90 group-hover:text-white transition">
                     Get Started with PowerShell &amp; Shell
                   </span>
                 </div>
-                <span className="text-[10px] font-medium text-[#4fc1ff] bg-[#0078d4]/20 border border-[#0078d4]/30 px-2 py-0.5 rounded">
+                <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                   Updated
                 </span>
               </div>
@@ -481,7 +522,7 @@ export function WelcomeTab({
               <button
                 type="button"
                 onClick={() => setReleaseNotesOpen(true)}
-                className="text-[13px] text-[#3794ff] hover:underline text-left mt-2 block cursor-pointer"
+                className="text-[12px] text-white/40 hover:text-white transition text-left mt-2 px-1 block cursor-pointer"
               >
                 More...
               </button>
@@ -514,7 +555,6 @@ export function WelcomeTab({
           <span>Show welcome page on startup</span>
         </label>
       </div>
-
     </div>
   );
 }

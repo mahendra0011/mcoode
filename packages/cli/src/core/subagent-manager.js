@@ -1077,8 +1077,15 @@ export class SubagentManager {
       onWrite: (info) => this._recordWrite(info?.todoId || `${todo.id}-fix`, info?.file, info?.undoId),
       onEvent: () => {}
     });
-    const result = await sub.run();
+    // Register BEFORE running so stop()/Ctrl+C can interrupt in-flight
+    // bugfix subs (tracking used to happen only after completion).
     this._fixers.add(sub);
+    let result;
+    try {
+      result = await sub.run();
+    } finally {
+      this._fixers.delete(sub);
+    }
     this._tokens.in += sub.tokens?.in || 0;
     this._tokens.out += sub.tokens?.out || 0;
 
@@ -1154,13 +1161,16 @@ export class SubagentManager {
   stop() {
     this._stopped = true;
     this._notifyDrain();
+    // FIX: `sub.id` does not exist on a Subagent (locks are keyed by
+    // `todo.id` in acquireLock) — releaseAllFor(sub.id) was a no-op, so
+    // Ctrl+C left every file lock stuck until process exit.
     for (const sub of this.subagents.values()) {
       sub.interrupt?.();
-      this.fileLocks.releaseAllFor(sub.id);
+      this.fileLocks.releaseAllFor(sub.todo?.id);
     }
     for (const sub of this._fixers) {
       sub.interrupt?.();
-      this.fileLocks.releaseAllFor(sub.id);
+      this.fileLocks.releaseAllFor(sub.todo?.id);
     }
     this.queue = [];
     // MF-001: Ctrl+C / interrupt must leave a resumable checkpoint behind

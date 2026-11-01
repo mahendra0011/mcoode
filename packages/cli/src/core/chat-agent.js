@@ -34,9 +34,42 @@ ${Object.entries(tools)
   .map(([name, spec]) => `- ${name}: ${spec.description} (args: ${JSON.stringify(spec.parameters)})`)
   .join('\n')}
 
+CRITICAL - CONVERSATIONAL VS TASK HANDLING:
+- If the user sends a greeting (e.g. "hi", "hello", "hey", "namaste"), asks who you are, asks for help, or says something conversational:
+  * DO NOT invoke any tools! DO NOT create, write, or edit any files!
+  * Simply reply politely in text, introduce yourself as mcode, and ask what they would like to build or work on.
+- ONLY invoke file-writing tools when the user EXPLICITLY requests code, files, or a project to be created, built, or modified!
+
 HOW TO WORK:
-- If the user asks about code or wants changes, explore first: read the relevant files before writing anything.
+- When working on an EXISTING codebase or modifying existing files: explore first by reading relevant files before making edits.
+- When creating a NEW project or generating new files requested by the user:
+  * Write the files directly without preliminary exploration.
+  * NEVER re-read files you just wrote. You already know what was written. Re-reading freshly written files wastes turns and delays response by minutes.
+  * NEVER call list_files or search_code on files you just created.
+  * For Web Applications requested by the user (HTML / CSS / JavaScript):
+    - Create the core assets requested (e.g. index.html, style.css, script.js).
+    - If index.html includes <script src="script.js"></script>, immediately write script.js with complete features, state, mock data, and event listeners!
+    - NEVER attempt to read script.js before writing it! Write script.js directly with complete functionality!
+    - NEVER finish or stop without writing script.js if index.html or the user requested interactive functionality.
+  * Once all required files are written:
+    - Immediately STOP tool calls and provide your final response to the user with a summary of what you built and how to run or view it. Do NOT make extra verification tool calls.
 - Keep your narration short and technical. Tell the user what you are doing.
+
+CODE WRITING & PROJECT CRAFTSMANSHIP:
+- NEVER write minimal skeletons, placeholder comments, toy snippets, or 3-4 line files.
+- When asked to build a website, app, or component, produce comprehensive, fully-styled, production-grade implementations tailored to what the user requested.
+- Always use clean indentation, modern syntax, and multi-line formatting with newlines.
+
+For Web Applications (HTML / CSS / JavaScript):
+1. Semantic & Complete HTML (index.html):
+   - Full semantic layout tailored to the requested application (Header, navigation, hero/banner, main interactive sections, and footer).
+   - Rich interactive components, clean containers, and modal/drawer templates when appropriate for the application.
+2. Modern, Responsive CSS (style.css):
+   - Comprehensive styling with design tokens (:root custom properties for colors, spacing, radius).
+   - Clean typography, smooth transitions, hover effects, CSS Grid/Flexbox layouts, and responsive media queries.
+3. Feature-Rich JavaScript (script.js):
+   - Realistic mock data and state management tailored to the user's specific application.
+   - Event listeners for interactive controls, dynamic DOM rendering, and user feedback.
 
 WHEN TO USE web_search / web_fetch (do this WITHOUT being asked):
 - Anything about current events, prices, versions, releases, or "latest" X.
@@ -53,6 +86,12 @@ WHEN TO USE web_search / web_fetch (do this WITHOUT being asked):
 - After you see the TOOL RESULT, continue in your next reply (read more, fix, test, ...).
 - When the task is complete, reply with a plain final answer and NO action fence.
 
+CRITICAL - NEVER OUTPUT CODE IN NARRATION:
+- NEVER write markdown code blocks (\`\`\`html, \`\`\`css, \`\`\`js, etc.) in your chat narration!
+- ALL code MUST be written directly to files using the write_file tool.
+- Your narration must be ONLY 1 short sentence (e.g. "Creating index.html...", "Adding style.css..."), followed immediately by the \`\`\`mcode-action fence.
+- Outputting raw code in text instead of using write_file is strictly forbidden.
+
 RULES:
 - Only use tools from the list above. Paths are relative to the project root.
 - Read a file before overwriting it. Never invent files that already exist.
@@ -64,6 +103,38 @@ RULES:
 const ACTION_FENCE = /```mcode-action\s*([\s\S]*?)```/g;
 const TOOL_CALL_XML = /<tool_call>\s*([\w_-]+)([\s\S]*?)<\/tool_call>/g;
 const ARG_PAIR = /<arg_key>\s*([^<]+?)\s*<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/g;
+export const TOOL_CALL_STREAM_REGEX = /```mcode-action|```(?:json)?\s*\{\s*"tool"|<tool_call|^\s*\{\s*"(?:tool|path|write_file|read_file|edit_file|run_shell)"|\n\s*\{\s*"(?:tool|path|write_file|read_file|edit_file|run_shell)"/i;
+
+function sanitizeJson(str) {
+  let inString = false;
+  let escape = false;
+  let out = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (escape) {
+      escape = false;
+      out += ch;
+      continue;
+    }
+    if (ch === '\\') {
+      escape = true;
+      out += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    if (inString) {
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') { out += '\\r'; continue; }
+      if (ch === '\t') { out += '\\t'; continue; }
+    }
+    out += ch;
+  }
+  return out;
+}
 
 function parseJsonSubstring(str) {
   if (!str) return null;
@@ -103,17 +174,27 @@ function parseJsonSubstring(str) {
   }
 
   if (end !== -1) {
+    const raw = str.slice(start, end + 1).trim();
     try {
-      return JSON.parse(str.slice(start, end + 1).trim());
-    } catch {}
+      return JSON.parse(raw);
+    } catch {
+      try {
+        return JSON.parse(sanitizeJson(raw));
+      } catch {}
+    }
   }
 
   // Fallback: try parsing up to last closing brace
   const lastBrace = str.lastIndexOf('}');
   if (lastBrace > start) {
+    const raw = str.slice(start, lastBrace + 1).trim();
     try {
-      return JSON.parse(str.slice(start, lastBrace + 1).trim());
-    } catch {}
+      return JSON.parse(raw);
+    } catch {
+      try {
+        return JSON.parse(sanitizeJson(raw));
+      } catch {}
+    }
   }
   return null;
 }
@@ -171,7 +252,12 @@ export function extractActions(text) {
       // Check if body is a JSON object
       if (body.startsWith('{') && body.endsWith('}')) {
         try {
-          const parsed = JSON.parse(body);
+          let parsed;
+          try {
+            parsed = JSON.parse(body);
+          } catch {
+            parsed = JSON.parse(sanitizeJson(body));
+          }
           const tool = parsed.tool || parsed.name || parsed.function;
           const args = parsed.args || parsed.parameters || parsed.arguments || {};
           if (tool) {
@@ -229,6 +315,42 @@ export function extractActions(text) {
       }
 
       actions.push({ tool, args });
+    }
+  }
+
+  // Fallback: parse raw unfenced JSON tool invocation in source
+  if (actions.length === 0) {
+    const parsed = parseJsonSubstring(source);
+    if (parsed && typeof parsed.tool === 'string') {
+      actions.push({
+        tool: parsed.tool,
+        args: parsed.args && typeof parsed.args === 'object' ? parsed.args : (parsed.parameters && typeof parsed.parameters === 'object' ? parsed.parameters : {})
+      });
+    }
+  }
+
+  // Fallback: parse markdown code blocks if the model dumped code instead of using write_file
+  if (actions.length === 0) {
+    const codeBlockRegex = /```([a-zA-Z0-9_-]+)?(?:\s+([a-zA-Z0-9_\-./\\]+))?\n([\s\S]*?)```/g;
+    for (const match of source.matchAll(codeBlockRegex)) {
+      const lang = (match[1] || '').toLowerCase();
+      let fileCandidate = match[2] || '';
+      const code = match[3];
+      if (lang === 'mcode-action' || lang === 'json') continue;
+      if (!fileCandidate && (lang === 'html' || lang === 'htm')) fileCandidate = 'index.html';
+      if (!fileCandidate && lang === 'css') fileCandidate = 'style.css';
+      if (!fileCandidate && (lang === 'js' || lang === 'javascript')) fileCandidate = 'script.js';
+      if (!fileCandidate) {
+        const preceding = source.slice(0, match.index).split('\n').slice(-3).join('\n');
+        const fileMatch = preceding.match(/(?:file|filename|path|create|edit|save|wrote)?\s*:?\s*[`"]?([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)[`"]?/i);
+        if (fileMatch) fileCandidate = fileMatch[1];
+      }
+      if (fileCandidate && code && code.trim().length > 10) {
+        actions.push({
+          tool: 'write_file',
+          args: { path: fileCandidate.replace(/^[./\\]+/, ''), content: code.trim() }
+        });
+      }
     }
   }
 
@@ -517,7 +639,7 @@ export class ChatAgent {
       return {
         block: 'read',
         path: this._fullPath(args.path),
-        lines: String(result?.content || '').split('\n').slice(0, 400),
+        lines: String(result?.content || '').replace(/\r/g, '').split('\n').slice(0, 400),
         diffLines: [],
         command: '',
         relDir: '',
@@ -531,8 +653,8 @@ export class ChatAgent {
         block: created ? 'write' : 'edit',
         path: this._fullPath(result?.file || args.path),
         created,
-        lines: String(result?.content || '').split('\n').slice(0, 200),
-        diffLines: (result?.diffLines || []).slice(0, 200),
+        lines: String(result?.content || '').replace(/\r/g, '').split('\n').slice(0, 200),
+        diffLines: (result?.diffLines || []).map((l) => ({ ...l, text: String(l.text || '').replace(/\r/g, '') })).slice(0, 200),
         command: '',
         relDir: '',
         title: '',
@@ -545,8 +667,8 @@ export class ChatAgent {
         block: 'edit',
         path: this._fullPath(args.path),
         created: false,
-        lines: String(result?.content || '').split('\n').slice(0, 200),
-        diffLines: (result?.diffLines || []).slice(0, 200),
+        lines: String(result?.content || '').replace(/\r/g, '').split('\n').slice(0, 200),
+        diffLines: (result?.diffLines || []).map((l) => ({ ...l, text: String(l.text || '').replace(/\r/g, '') })).slice(0, 200),
         command: '',
         relDir: '',
         title: '',
@@ -704,7 +826,8 @@ export class ChatAgent {
       domain: this.domain || this.config.domain || /** @type {any} */(this.config).forceDomain || 'backend',
       todoId: null,
       memoryDir: this.memoryDir,
-      cancelSignal: signal
+      cancelSignal: signal,
+      mode: this.config.mode || null
     });
 
     // Load the user's saved memory (if provided) so it enters the system context.
@@ -720,14 +843,21 @@ export class ChatAgent {
       ...this.history,
       { role: 'user', content: prompt }
     ];
+    // The prompt enters history exactly once — the turn loop below used to
+    // re-push it every turn, so a 3-turn answer left 3 user copies behind.
+    this.history.push({ role: 'user', content: prompt });
 
     for (this.turn = 0; this.turn < this.maxTurns; this.turn++) {
       let text = '';
       try {
         let streamedLength = 0;
+        // Ensure turnMaxTokens has a safe floor (at least 4096) during tool/file generation
+        // so code is never truncated mid-file, while honoring higher tiers (up to 32k).
+        const turnMaxTokens = Math.max(4096, this.config.maxTokens || 8192);
         for await (const chunk of streamText(this.assignment, this.assignment.model.id, {
           messages,
-          temperature: 0.15,
+          temperature: 0.35,
+          maxTokens: turnMaxTokens,
           reasoning: this.reasoning,
           signal
         })) {
@@ -736,7 +866,7 @@ export class ChatAgent {
 
           // FINDING-703: suppress tool-call tags more aggressively —
           // match <tool_call>, ```mcode-action, ```json, and raw action JSON
-          const toolCallIdx = text.search(/<tool_call|```(?:mcode-action|json)?|^\s*\{\s*"(?:tool|path|write_file|read_file|edit_file|run_shell)"|\n\s*\{\s*"(?:tool|path|write_file|read_file|edit_file|run_shell)"/i);
+          const toolCallIdx = text.search(TOOL_CALL_STREAM_REGEX);
           if (toolCallIdx !== -1) {
             if (streamedLength < toolCallIdx) {
               const safeChunk = text.slice(streamedLength, toolCallIdx);
@@ -753,11 +883,31 @@ export class ChatAgent {
         }
       } catch (err) {
         if (this.aborted) break;
+        // Auto-fallback: If OpenRouter paid model failed with 402 (Credits Exhausted),
+        // try fallback to openrouter/free so user's work isn't blocked!
+        if (
+          this.assignment?.provider?.id === 'openrouter' &&
+          this.assignment?.model?.id !== 'openrouter/free' &&
+          /402|credits exhausted/i.test(err.message) &&
+          !this._fellBackToFree
+        ) {
+          this._fellBackToFree = true;
+          this.bus?.emit(EVENTS.MESSAGE, {
+            kind: 'system',
+            text: `⚠️ OpenRouter credits exhausted for ${this.assignment.model.id}. Auto-switching to OpenRouter Free...`
+          });
+          this.assignment = {
+            ...this.assignment,
+            model: { id: 'openrouter/free', name: 'OpenRouter Free' }
+          };
+          this.turn--;
+          continue;
+        }
+
         this.bus?.emit(EVENTS.MESSAGE, { kind: 'system', text: `model error: ${err.message}` });
         break;
       }
       if (this.aborted) break;
-      this.history.push({ role: 'user', content: prompt });
       messages.push({ role: 'assistant', content: text });
       this.history.push({ role: 'assistant', content: stripActions(text) });
 
@@ -911,14 +1061,29 @@ export class ChatAgent {
           ...meta
         });
 
-        if (ok && action.tool === 'write_file') {
+        if (ok && (action.tool === 'write_file' || action.tool === 'edit_file')) {
+          const filePath = result?.file || this._fullPath(action.args?.path || action.args?.file || '');
+          const isCreated = Boolean(result?.created);
           const diff = Array.isArray(result?.diffLines) ? result.diffLines : [];
-          this.changedFiles.push({
-            path: result?.file || this._fullPath(action.args?.path || action.args?.file || ''),
-            added: diff.filter((l) => l.kind === 'add').length,
-            removed: diff.filter((l) => l.kind === 'remove').length,
-            created: Boolean(result?.created)
-          });
+          const addedCount = isCreated
+            ? String(result?.content || '').split('\n').length
+            : diff.filter((l) => l.kind === 'add').length;
+          const removedCount = isCreated
+            ? 0
+            : diff.filter((l) => l.kind === 'remove').length;
+
+          const existing = this.changedFiles.find((f) => f.path === filePath);
+          if (existing) {
+            existing.added += addedCount;
+            existing.removed += removedCount;
+          } else {
+            this.changedFiles.push({
+              path: filePath,
+              added: addedCount,
+              removed: removedCount,
+              created: isCreated
+            });
+          }
         }
 
         messages.push({ role: 'user', content: `TOOL RESULT: ${JSON.stringify(result).slice(0, 4000)}` });
@@ -928,7 +1093,7 @@ export class ChatAgent {
 
     if (this.aborted) {
       this.bus?.emit(EVENTS.MESSAGE, { kind: 'interrupt', replaceKey: `interrupt${Date.now()}` });
-    } else if (this.changedFiles.length >= 2) {
+    } else if (this.changedFiles.length >= 1) {
       this.bus?.emit(EVENTS.MESSAGE, {
         kind: 'summary',
         replaceKey: `summary${Date.now()}`,

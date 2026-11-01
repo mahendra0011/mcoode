@@ -34,6 +34,7 @@ export function WelcomeScreen({ tip, onQuickAction = null, onTemplate = null, ch
   const frame = Math.floor(ticks / 25) % GRADIENT_COLORS.length;
 
   const activeTip = tip || TIPS[tipIdx];
+  const isCompact = (th || 24) < 28;
 
   const [tipStartTick, setTipStartTick] = useState(ticks);
   useEffect(() => {
@@ -114,7 +115,13 @@ export function WelcomeScreen({ tip, onQuickAction = null, onTemplate = null, ch
 
   return (
     <box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1} backgroundColor={bg} width="100%" height={th || 24}>
-      <Logo />
+      {!isCompact ? (
+        <Logo />
+      ) : (
+        <box marginTop={SPACING.sm} marginBottom={SPACING.xs || 0}>
+          <text fg={theme.greenBright}>◈  M C O D E  ◈  <span fg={theme.dim}>AI Engine</span></text>
+        </box>
+      )}
 
       {/* Project stats — staggered reveal when loaded */}
       {statsLoaded && statsStartTick !== null && (
@@ -140,7 +147,9 @@ export function WelcomeScreen({ tip, onQuickAction = null, onTemplate = null, ch
         <text fg={theme.muted}>  {'│  '}</text>
         <text fg={theme.dim}>ctrl+p </text><text fg={theme.text}>commands</text>
         <text fg={theme.muted}>  {'│  '}</text>
-        <text fg={theme.dim}>/ </text><text fg={theme.text}>slash cmds</text>
+        <text fg={theme.dim}>/model </text><text fg={theme.text}>models</text>
+        <text fg={theme.muted}>  {'│  '}</text>
+        <text fg={theme.dim}>/ </text><text fg={theme.text}>commands</text>
         <text fg={theme.muted}> {'│'}</text>
       </box>
 

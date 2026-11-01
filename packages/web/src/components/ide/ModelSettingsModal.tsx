@@ -244,7 +244,11 @@ export function ModelSettingsModal({ isOpen, onClose }: ModelSettingsModalProps)
                       <button className="text-white/40 hover:text-white transition">
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      {existingKey ? (
+                      {activeProvider.id === 'openrouter' ? (
+                        <div className="px-3 py-1 rounded-full bg-amber-400 text-black text-xs font-semibold shadow-[0_0_10px_rgba(251,191,36,0.3)]">
+                          🌟 System Default Included
+                        </div>
+                      ) : existingKey ? (
                         <>
                           <div className="px-3 py-1 rounded-full bg-emerald-500 text-black text-xs font-semibold shadow-[0_0_10px_rgba(16,185,129,0.3)]">
                             Enabled

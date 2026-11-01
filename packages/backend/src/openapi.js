@@ -55,7 +55,7 @@ paths:
               required: [email, otp, intent]
               properties:
                 email: { type: string, format: email }
-                otp: { type: string, pattern: '^\\d{8}$' }
+                otp: { type: string, pattern: '^\\d{6}$' }
                 intent: { type: string, enum: [signup, login, reset] }
                 name: { type: string, minLength: 2, maxLength: 60 }
                 password: { type: string, minLength: 8 }
@@ -134,7 +134,7 @@ paths:
               required: [email, otp, password]
               properties:
                 email: { type: string, format: email }
-                otp: { type: string, pattern: '^\\d{8}$' }
+                otp: { type: string, pattern: '^\\d{6}$' }
                 password: { type: string, minLength: 8 }
       responses:
         '200':

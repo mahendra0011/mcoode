@@ -19,6 +19,10 @@ const chatSessions = new Map();
 // PTY terminal sessions live in pty-manager.js (single owner).
 // (Removed duplicate local ptySessionsMap — BUG-34.)
 
+const { join } = path;
+const { resolve: pathResolve, relative: pathRelative, isAbsolute: pathIsAbsolute } = path;
+const WORKSPACE_ROOT = path.join(os.homedir(), 'mcode-workspaces');
+
 // Per-socket debug sessions & project processes
 const activeDebugSessions = new Map(); // socket.id -> { child, port }
 const activeProjectProcesses = new Map(); // socket.id -> child process
@@ -60,11 +64,11 @@ function detectShells() {
     shells.push({ id: 'node', label: 'Node.js', path: process.execPath });
   } else {
     // Unix shells
-    shells.push({ id: 'bash', label: 'bash', path: '/bin/bash' });
-    try {
-      if (fs.existsSync('/bin/zsh')) shells.push({ id: 'zsh', label: 'zsh', path: '/bin/zsh' });
-      if (fs.existsSync('/usr/bin/fish')) shells.push({ id: 'fish', label: 'fish', path: '/usr/bin/fish' });
-    } catch {}
+    if (fs.existsSync('/bin/bash')) shells.push({ id: 'bash', label: 'bash', path: '/bin/bash' });
+    if (fs.existsSync('/bin/sh')) shells.push({ id: 'sh', label: 'sh', path: '/bin/sh' });
+    if (fs.existsSync('/bin/ash')) shells.push({ id: 'ash', label: 'ash', path: '/bin/ash' });
+    if (fs.existsSync('/bin/zsh')) shells.push({ id: 'zsh', label: 'zsh', path: '/bin/zsh' });
+    if (fs.existsSync('/usr/bin/fish')) shells.push({ id: 'fish', label: 'fish', path: '/usr/bin/fish' });
     shells.push({ id: 'node', label: 'Node.js', path: process.execPath });
   }
 
@@ -339,6 +343,11 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
    */
   io.on('connection', (/** @type {McodeSocket} */ socket) => {
     console.log('[SOCKET] connection:', socket.id, 'role:', socket.role, 'url:', socket.handshake.url);
+    // SECURITY: private per-user room — authed relay traffic (agent progress,
+    // watch results, …) goes to its owner only, never to every client.
+    if (socket.userId) socket.join(`user:${socket.userId}`);
+    // Authenticated web listeners (shared-secret CLI emitters relay here).
+    if (socket.role === 'listener') socket.join('web');
     // BKD-006: per-IP connection cap + per-key identity for global budgets.
     const ip = socketIp(socket);
     socket.rateKey = socket.userId ? `user:${socket.userId}` : `ip:${ip}`;
@@ -395,6 +404,18 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       }
       return true;
     };
+    /** SECURITY: authed relays are scoped to the sender's identity.
+     *  - A user-JWT socket (web dashboard) relays only to its own private
+     *    room: the previous io.emit() broadcast every user's agent/watch/
+     *    bugcheck results to all connected clients.
+     *  - A shared-secret CLI emitter owns no user identity, so its relay
+     *    stays visible to all authenticated dashboards (the `web` room),
+     *    which is the pre-existing behavior for that connection class. */
+    const relayEvent = (event, payload) => {
+      if (socket.userId) io.to(`user:${socket.userId}`).emit(event, payload);
+      else if (socket.emitterAuthed) io.to('web').emit(event, payload);
+      else socket.emit(event, payload);
+    };
     socket.on('terminal:command', (payload) => {
       // SOCK-037: sanitize control characters before logging
       // eslint-disable-next-line no-control-regex -- matching control chars is the point here
@@ -404,8 +425,20 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     socket.on('session:join', ({ sessionId }) => {
       socket.join(`session:${sessionId}`);
     });
-    socket.on('project:join', ({ projectId }) => {
-      socket.join(`project:${projectId}`);
+    socket.on('project:join', async ({ projectId } = {}) => {
+      // SECURITY: project rooms carry audit/security/watch results — joining
+      // another user's room let any connected client read them. Only owners.
+      if (!socket.userId || !projectId) return;
+      try {
+        const ws = await db().workspace.findOne({
+          _id: String(projectId),
+          userId: socket.userId
+        });
+        if (!ws) return;
+        socket.join(`project:${projectId}`);
+      } catch {
+        /* malformed projectId — do not join */
+      }
     });
 
     /**
@@ -450,7 +483,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     for (const event of ['session:start', 'plan:generated', 'agent:started', 'agent:step', 'agent:file', 'agent:done', 'agent:failed', 'agent:needs_review', 'integration:pass', 'build:complete', 'toast']) {
       socket.on(event, async (payload = {}) => {
         if (!requireEmitterAuth(event)) return;
-        io.emit(event, payload);
+        relayEvent(event, payload);
         // persistence for build results
         if (event === 'build:complete' && payload.sessionId) {
           try {
@@ -471,7 +504,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     for (const event of ['watch:scan', 'watch:fix', 'watch:status', 'watch:activity']) {
       socket.on(event, async (payload = {}) => {
         if (!requireEmitterAuth(event)) return;
-        io.emit(event, payload);
+        relayEvent(event, payload);
         if (payload.projectId) {
           io.to(`project:${payload.projectId}`).emit(event, payload);
         }
@@ -486,7 +519,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
             timestamp: payload.timestamp || new Date()
           };
           if (event === 'watch:fix') {
-            io.emit('watch:activity', item);
+            relayEvent('watch:activity', item);
             if (payload.projectId) {
               io.to(`project:${payload.projectId}`).emit('watch:activity', item);
             }
@@ -507,7 +540,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         io.to(`project:${projectId}`).emit('watch:start-signal', payload);
         io.to(`project:${projectId}`).emit('watch:status', { status: 'running', projectId });
       }
-      io.emit('watch:status', { status: 'running', ...payload });
+      relayEvent('watch:status', { status: 'running', ...payload });
     });
 
     socket.on('watch:stop', (payload = {}) => {
@@ -517,14 +550,14 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         io.to(`project:${projectId}`).emit('watch:stop-signal', payload);
         io.to(`project:${projectId}`).emit('watch:status', { status: 'stopped', projectId });
       }
-      io.emit('watch:status', { status: 'stopped', ...payload });
+      relayEvent('watch:status', { status: 'stopped', ...payload });
     });
 
     // ── Bug Check mode events (doc 44) ──────────────────────────
     for (const event of ['bugcheck:tier-start', 'bugcheck:tier-done', 'bugcheck:done']) {
       socket.on(event, (payload = {}) => {
         if (!requireEmitterAuth(event)) return;
-        io.emit(event, payload);
+        relayEvent(event, payload);
         if (payload.projectId) {
           io.to(`project:${payload.projectId}`).emit(event, payload);
         }
@@ -540,7 +573,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       if (projectId) {
         io.to(`project:${payload.projectId}`).emit('bugcheck:start-signal', payload);
       }
-      io.emit('bugcheck:start', payload);
+      relayEvent('bugcheck:start', payload);
 
       const session = chatSessions.get(socket.id);
       let projectPath = session?.workspacePath;
@@ -553,7 +586,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
 
       const noAI = !!payload.noAI;
       const emitTier = (ev, data) => {
-        io.emit(ev, data);
+        relayEvent(ev, data);
         if (projectId) io.to(`project:${projectId}`).emit(ev, data);
       };
 
@@ -866,7 +899,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     for (const event of ['clean:scan-start', 'clean:tier1-done', 'clean:tier2-done', 'clean:findings', 'clean:status', 'clean:pass-result', 'clean:done']) {
       socket.on(event, (payload = {}) => {
         if (!requireEmitterAuth(event)) return;
-        io.emit(event, payload);
+        relayEvent(event, payload);
         if (payload.projectId) {
           io.to(`project:${payload.projectId}`).emit(event, payload);
         }
@@ -985,7 +1018,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         return;
       }
 
-      const { workspaceId, modelRef } = payload;
+      const { workspaceId, modelRef, outputLength } = payload;
 
       // Resolve workspace path
       let workspacePath = null;
@@ -1014,6 +1047,9 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
           if (session.router) {
             session.router.modelOverride = modelRef;
           }
+          if (outputLength) {
+            session.outputLength = outputLength;
+          }
           socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_READY, {
             models: session.providers?.map((p) => ({ id: p.id, displayName: p.displayName })) || []
           });
@@ -1029,6 +1065,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         env,
         workspacePath,
         modelRef,
+        outputLength: outputLength || 'xhigh',
         onEvent: (event, payload) => socket.emit(event, payload)
       });
       chatSessions.set(socket.id, session);
@@ -1048,7 +1085,7 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         socket.emit('chat:error', { message: 'chat session not started — send chat:start first' });
         return;
       }
-      const { prompt, mode = 'chat' } = payload;
+      const { prompt, mode = 'chat', outputLength } = payload;
       if (!prompt && mode !== 'test') return;
       try {
         if (mode === 'god') {
@@ -1060,11 +1097,15 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
             allowRemote: Boolean(payload.allowRemote)
           });
         } else {
-          await session.sendMessage(prompt, mode);
+          await session.sendMessage(prompt, mode, { outputLength });
         }
       } catch (err) {
+        console.error('[chat:send] handler error:', err.message);
         // SOCK-045: only send chat:done if the session hasn't already emitted
-        // one (double-emit would overwrite the real response with an empty one)
+        // one (double-emit would overwrite the real response with an empty one).
+        // FIX: tell the client WHY it failed — the old bare chat:done showed a
+        // spinner that ended with no explanation.
+        socket.emit(SOCKET.SERVER_TO_CLIENT.CHAT_ERROR, { message: err.message || 'chat failed' });
         socket.emit('chat:done', { text: '', mode, interrupted: false, error: true });
       }
     });
@@ -1210,11 +1251,53 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     });
 
     // ── Full Project Execution (Docker → Host fallback) ────────────────
-    socket.on('project:run', async (payload = {}) => {
+    // FIX (task:restart): the run logic is a named function so both handlers
+    // drive it. Restart used to `socket.emit('project:run')` — a server→
+    // client event the client never listens for — so Restart was dead code.
+    async function runProject(payload = {}) {
       if (!checkRate('project:run')) return;
       if (!requireAuth('project:run')) return;
       const session = chatSessions.get(socket.id);
-      const projectPath = session?.workspacePath;
+      let projectPath = session?.workspacePath;
+      let activeWs = null;
+
+      if (!projectPath && payload?.workspaceId) {
+        const wsId = String(payload.workspaceId || '');
+        // SECURITY: scope the lookup to the authenticated user — accepting
+        // any workspaceId let one client run code inside another user's
+        // workspace tree.
+        try {
+          activeWs = await db().workspace.findOne({ _id: wsId, userId: socket.userId });
+          if (activeWs?.diskPath) projectPath = activeWs.diskPath;
+        } catch {}
+        // Directory fallback only for well-formed ids: `join(WORKSPACE_ROOT,
+        // workspaceId)` with free-form input allowed ../ traversal into
+        // arbitrary directories on the host.
+        if (!projectPath && /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(wsId)) {
+          const candidate = join(WORKSPACE_ROOT, wsId);
+          try {
+            const { stat } = await import('node:fs/promises');
+            const s = await stat(candidate);
+            if (s.isDirectory()) projectPath = candidate;
+          } catch {}
+        }
+      }
+
+      if (!projectPath && socket.userId) {
+        try {
+          const workspaces = await db().workspace.find({ userId: socket.userId });
+          if (Array.isArray(workspaces) && workspaces.length > 0) {
+            workspaces.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+            activeWs = workspaces[0];
+            projectPath = activeWs.diskPath;
+          }
+        } catch {}
+      }
+
+      if (!projectPath) {
+        projectPath = await getDefaultWorkspacePath(socket);
+      }
+
       if (!projectPath) {
         return socket.emit('project:run-error', { error: 'No active workspace found' });
       }
@@ -1226,15 +1309,22 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       try {
         await ensureProjectContainer(socket.id, projectPath, files);
 
-        // Auto-detect and run install + start command
+        // Auto-detect and run install + start command. Install is bounded and
+        // awaited; the dev server is NOT — `npm start` blocks forever and
+        // awaiting it meant `project:run-ready` was never emitted under
+        // Docker (the exec stream never 'end's while the server runs).
         await execInContainer(socket.id, 'npm install', (chunk) => {
           socket.emit('chat:shell_stream', { chunk });
         });
-        await execInContainer(socket.id, 'npm start', (chunk) => {
+
+        execInContainer(socket.id, 'npm start', (chunk) => {
           socket.emit('chat:shell_stream', { chunk });
+        }).catch((startErr) => {
+          socket.emit('chat:shell_stream', { chunk: `\r\n\x1b[31m[start] ${startErr.message}\x1b[0m\r\n` });
         });
 
-        const port = await getContainerPort(socket.id);
+        let port = await getContainerPort(socket.id);
+        if (!port) port = await getContainerPort(socket.id); // extend the 3s poll once more
         socket.emit('project:run-ready', { previewUrl: port ? `http://localhost:${port}` : null });
         return;
       } catch (dockerErr) {
@@ -1250,8 +1340,99 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         socket.emit('chat:shell_stream', { chunk: '\x1b[33m[mcode] Docker unavailable — running project on host...\x1b[0m\r\n' });
 
         // Auto-detect project type and run appropriate commands
-        if (files.includes('package.json')) {
-          // Node.js project
+        if (files.includes('index.html') || files.includes('index.htm')) {
+          const wsId = activeWs?._id || payload?.workspaceId || projectPath.split(/[\\/]/).filter(Boolean).pop();
+          const previewUrl = `/api/v1/workspaces/${wsId}/preview/index.html`;
+
+          // Also attempt to start static port 5500 server as optional local listener
+          try {
+            const { createServer } = await import('node:http');
+            const { readFile, stat } = await import('node:fs/promises');
+            const { join, extname } = await import('node:path');
+
+            const mimeTypes = {
+              '.html': 'text/html; charset=utf-8',
+              '.htm': 'text/html; charset=utf-8',
+              '.css': 'text/css; charset=utf-8',
+              '.js': 'application/javascript; charset=utf-8',
+              '.mjs': 'application/javascript; charset=utf-8',
+              '.json': 'application/json; charset=utf-8',
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.gif': 'image/gif',
+              '.svg': 'image/svg+xml',
+              '.ico': 'image/x-icon',
+              '.webp': 'image/webp',
+              '.woff': 'font/woff',
+              '.woff2': 'font/woff2',
+              '.ttf': 'font/ttf'
+            };
+
+            const staticServer = createServer(async (req, res) => {
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+              res.setHeader('X-Frame-Options', 'ALLOWALL');
+
+              try {
+                let reqPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+                if (reqPath === '/' || !reqPath) reqPath = '/index.html';
+                let filePath = join(projectPath, reqPath);
+
+                // SECURITY: contain every request inside projectPath — without
+                // this check `..%2f` (URL-decoded to ../) read files anywhere
+                // on the host the server runs on.
+                const root = pathResolve(projectPath);
+                const resolved = pathResolve(filePath);
+                const relToRoot = pathRelative(root, resolved);
+                if (!relToRoot || relToRoot.startsWith('..') || pathIsAbsolute(relToRoot)) {
+                  res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+                  res.end('Forbidden');
+                  return;
+                }
+
+                let fileStat = null;
+                try { fileStat = await stat(filePath); } catch {}
+                if (fileStat && fileStat.isDirectory()) {
+                  filePath = join(filePath, 'index.html');
+                }
+
+                const content = await readFile(filePath);
+                const ext = extname(filePath).toLowerCase();
+                res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+                res.end(content);
+              } catch {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('File Not Found');
+              }
+            });
+
+            const existing = activeProjectProcesses.get(socket.id);
+            if (existing && typeof existing.close === 'function') {
+              try { existing.close(); } catch {}
+            }
+
+            // Loopback only — this listener previously bound all interfaces
+            // so anyone on the LAN could browse the user's project files.
+            staticServer.listen(5500, '127.0.0.1', () => {
+              activeProjectProcesses.set(socket.id, {
+                close: () => staticServer.close(),
+                kill: () => staticServer.close()
+              });
+            });
+            // Don't let EADDRINUSE crash the backend; log it loudly instead of
+            // the old silent `staticServer.on('error', () => {})`.
+            staticServer.on('error', (err) => {
+              console.warn(`[project:run] static preview server error: ${err.message}`);
+            });
+          } catch {}
+
+          socket.emit('chat:shell_stream', { chunk: `\r\n\x1b[32m[mcode] Static Web Preview ready at ${previewUrl}\x1b[0m\r\n` });
+          socket.emit('project:run-ready', { previewUrl });
+          return;
+
+        } else if (files.includes('package.json')) {
+          // Node.js project — run on PORT 3001 so it never collides with mcode (port 3000)
           socket.emit('chat:shell_stream', { chunk: '\x1b[34m$ npm install\x1b[0m\r\n' });
           const install = execa('npm', ['install'], { cwd: projectPath, reject: false, env: { ...process.env, FORCE_COLOR: '1' } });
           install.stdout?.on('data', streamChunk);
@@ -1259,11 +1440,26 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
           await install;
 
           socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[34m$ npm start\x1b[0m\r\n' });
-          const start = execa('npm', ['start'], { cwd: projectPath, reject: false, env: { ...process.env, FORCE_COLOR: '1' } });
+          const start = execa('npm', ['start'], {
+            cwd: projectPath,
+            reject: false,
+            env: { ...process.env, PORT: '3001', FORCE_COLOR: '1' }
+          });
           activeProjectProcesses.set(socket.id, start);
-          start.stdout?.on('data', streamChunk);
-          start.stderr?.on('data', streamChunk);
-          // Don't await — npm start usually runs a long-lived server
+
+          let detectedPort = null;
+          const checkOutputForPort = (data) => {
+            const str = data.toString();
+            streamChunk(str);
+            const portMatch = str.match(/localhost:(\d+)/i) || str.match(/127\.0\.0\.1:(\d+)/i) || str.match(/port\s*[:=]?\s*(\d+)/i);
+            if (portMatch && !detectedPort) {
+              detectedPort = portMatch[1];
+              socket.emit('project:run-ready', { previewUrl: `http://localhost:${detectedPort}` });
+            }
+          };
+
+          start.stdout?.on('data', checkOutputForPort);
+          start.stderr?.on('data', checkOutputForPort);
           start.then(() => {
             activeProjectProcesses.delete(socket.id);
             socket.emit('chat:shell_stream', { chunk: '\r\n\x1b[33m[Process exited]\x1b[0m\r\n' });
@@ -1271,10 +1467,13 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
             activeProjectProcesses.delete(socket.id);
           });
 
-          // Give the server a moment to start, then notify
+          // Fallback if port wasn't explicitly output
           setTimeout(() => {
-            socket.emit('project:run-ready', { previewUrl: 'http://localhost:3000' });
+            if (!detectedPort) {
+              socket.emit('project:run-ready', { previewUrl: 'http://localhost:3001' });
+            }
           }, 3000);
+          return;
 
         } else if (files.includes('requirements.txt') || files.includes('main.py') || files.includes('app.py')) {
           // Python project
@@ -1327,11 +1526,19 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
       } catch (err) {
         socket.emit('project:run-error', { error: `Host execution failed: ${err.message}` });
       }
+    }
+
+    socket.on('project:run', (payload = {}) => {
+      if (!requireAuth('project:run')) return;
+      runProject(payload);
     });
 
     socket.on('task:terminate', async () => {
       const child = activeProjectProcesses.get(socket.id);
       if (child) {
+        if (typeof child.close === 'function') {
+          try { child.close(); } catch {}
+        }
         // 042: tree-kill so npm/python subtrees don't linger as zombies.
         const { killTree } = await import('./kill-tree.js');
         killTree(child);
@@ -1343,13 +1550,17 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     });
 
     socket.on('task:restart', async () => {
+      if (!requireAuth('project:restart')) return;
       const child = activeProjectProcesses.get(socket.id);
       if (child) {
+        if (typeof child.close === 'function') {
+          try { child.close(); } catch {}
+        }
         const { killTree } = await import('./kill-tree.js');
         killTree(child);
         activeProjectProcesses.delete(socket.id);
       }
-      socket.emit('project:run', {});
+      runProject({});
     });
 
     // Direct terminal command execution — attempts container execution first,
@@ -1416,7 +1627,8 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
         ({ exitCode, signal }) => {
           socket.emit('terminal:exit', { id, exitCode, signal });
           killPty(socket.id, id);
-        }
+        },
+        socket.userId
       );
       if (adopted) {
         socket.emit('terminal:spawned', { id, shellPath: adopted.shellPath, adopted: true });
@@ -1462,10 +1674,17 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
           shellPath = 'powershell.exe';
         }
       } else {
-        if (shellType === 'zsh') shellPath = '/bin/zsh';
-        else if (shellType === 'fish') shellPath = '/usr/bin/fish';
+        if (shellType === 'zsh' && fs.existsSync('/bin/zsh')) shellPath = '/bin/zsh';
+        else if (shellType === 'fish' && fs.existsSync('/usr/bin/fish')) shellPath = '/usr/bin/fish';
+        else if (shellType === 'bash' && fs.existsSync('/bin/bash')) shellPath = '/bin/bash';
+        else if (shellType === 'sh' && fs.existsSync('/bin/sh')) shellPath = '/bin/sh';
+        else if (shellType === 'ash' && fs.existsSync('/bin/ash')) shellPath = '/bin/ash';
         else if (shellType === 'node') shellPath = process.execPath;
-        else shellPath = '/bin/bash';
+        else if (process.env.SHELL && fs.existsSync(process.env.SHELL)) shellPath = process.env.SHELL;
+        else if (fs.existsSync('/bin/bash')) shellPath = '/bin/bash';
+        else if (fs.existsSync('/bin/sh')) shellPath = '/bin/sh';
+        else if (fs.existsSync('/bin/ash')) shellPath = '/bin/ash';
+        else shellPath = 'sh';
       }
 
       // Single owner for PTY state is pty-manager.js (kill first on re-spawn).
@@ -1482,7 +1701,8 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
             socket.emit('terminal:exit', { id, exitCode, signal });
             killPty(socket.id, id);
           },
-          shellPath
+          shellPath,
+          socket.userId
         );
 
         socket.emit('terminal:spawned', { id, shellPath, cwd: targetCwd });
@@ -1505,6 +1725,11 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
 
     socket.on('terminal:input', async ({ id, data }) => {
       if (!requireAuth('terminal:input')) return;
+      // Filter out accidental CPR / DA responses from leaking onto shell prompt
+      // eslint-disable-next-line no-control-regex
+      if (typeof data === 'string' && (/^\x1b\[\d+;\d+R$/.test(data) || /^\x1b\[\?\d+;?.*c$/.test(data))) {
+        return;
+      }
       writeToPty(socket.id, id, data);
       // Preserve legacy auto-spawn: first keystroke creates the session.
       if (id && data !== undefined) {
@@ -1573,6 +1798,9 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
           const lines = stdout.split('\n').filter(l => l.includes('LISTENING'));
           ports = lines.map(l => {
             const parts = l.trim().split(/\s+/);
+            // FIX: header/blank rows have fewer columns — parts[1] was
+            // undefined and match() threw, silently killing the list.
+            if (parts.length < 2) return null;
             const portMatch = parts[1].match(/:(\d+)$/);
             return portMatch ? parseInt(portMatch[1], 10) : null;
           }).filter(p => p);
@@ -1594,7 +1822,28 @@ export function attachSockets(httpServer, { secret, env = process.env, ioOptions
     socket.on('disconnect', async () => {
       await stopProjectContainer(socket.id);
       disconnectSSH(socket.id);
-      killAllPty(socket.id);
+      killAllPty(socket.id, socket.userId);
+      // FIX: debug sessions and project runs were never torn down on
+      // disconnect — `mcode serve` kept debug servers, dev servers and the
+      // static preview listener alive after the user closed the tab.
+      try {
+        const dbg = activeDebugSessions.get(socket.id);
+        if (dbg) {
+          const { killTree } = await import('./kill-tree.js');
+          if (dbg.child?.pid) killTree(dbg.child);
+          try { dbg.child?.kill?.(); } catch {}
+          activeDebugSessions.delete(socket.id);
+        }
+      } catch { /* best-effort cleanup */ }
+      try {
+        const proc = activeProjectProcesses.get(socket.id);
+        if (proc) {
+          try { typeof proc.close === 'function' && proc.close(); } catch {}
+          const { killTree } = await import('./kill-tree.js');
+          if (proc.pid) killTree(proc);
+          activeProjectProcesses.delete(socket.id);
+        }
+      } catch { /* best-effort cleanup */ }
       const session = chatSessions.get(socket.id);
       if (session) {
         session.cleanup();

@@ -136,7 +136,7 @@ export const CODE_MODE_COMMANDS = new Set([
  * routes tab-switching commands (`/god`, `/agent`) through
  * `switchToAssistantTab`, so running a command from Chat does the right thing.
  */
-export function getAvailableSlashCommands(activeTab) {
+export function getAvailableSlashCommands(_activeTab) {
   return WEB_SLASH_COMMANDS;
 }
 

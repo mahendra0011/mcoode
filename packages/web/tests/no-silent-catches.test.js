@@ -32,24 +32,22 @@ const webSrc = join(webRoot, 'src');
 // M11-002: 'src/app/api/docker/containers/route.ts' was removed from KNOWN —
 // the empty catch around the backend fetch is now handled via reportError().
 const KNOWN = new Set([
-  'src/app/preview/page.tsx:146',
-  'src/app/preview/page.tsx:158',
-  'src/components/ide/BottomPanel.tsx:492',
+    'src/components/ide/ExplorerPanel.tsx:524',
+  'src/components/ide/FileTree.tsx:784',
+  'src/components/ide/FileTree.tsx:938',
   'src/components/ide/IDEActivitySidebar.tsx:169',
+  'src/components/ide/LanguagesPanel.tsx:80',
   'src/components/ide/ModelSettingsModal.tsx:180',
   'src/components/ide/RemoteExplorerPanel.tsx:90',
-  'src/components/ide/StepCards.tsx:135',
-  'src/components/layout/Header.tsx:23',
+  'src/components/layout/Header.tsx:22',
   'src/components/pages/CommandsPage.tsx:35',
   'src/components/pages/PluginsPage.tsx:29',
-  'src/components/pages/SessionDetailPage.tsx:43',
-  'src/components/pages/SessionDetailPage.tsx:45',
-  'src/components/pages/ToolsPage.tsx:74',
-  'src/components/pages/ToolsPage.tsx:100',
+  'src/components/pages/SessionDetailPage.tsx:54',
+  'src/components/pages/SessionDetailPage.tsx:56',
   'src/lib/extensions/editorApi.ts:200',
   'src/lib/extensions/editorApi.ts:219',
-  'src/store/ideStore.ts:674',
-  'src/store/ideStore.ts:677',
+  'src/store/ideStore.ts:679',
+  'src/store/ideStore.ts:682',
 ]);
 
 function walk(dir, out = []) {

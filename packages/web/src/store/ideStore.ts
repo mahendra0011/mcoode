@@ -60,6 +60,7 @@ interface IDEState {
   activePath: string | null;
   triggerRefresh: number;
   addOpenFile: (path: string) => void;
+  setOpenFiles: (paths: string[]) => void;
   setActivePath: (path: string | null) => void;
   closeFile: (path: string) => void;
   bumpRefresh: () => void;
@@ -298,6 +299,10 @@ export const useIDEStore = create<IDEState>()(
       openFiles: s.openFiles.includes(path) ? s.openFiles : [...s.openFiles, path],
       activePath: path,
     }));
+  },
+  setOpenFiles: (paths) => {
+    paths.forEach((p) => get().addRecentFile(p));
+    set({ openFiles: paths });
   },
   setActivePath: (activePath) => {
     if (activePath) get().addRecentFile(activePath);

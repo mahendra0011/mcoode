@@ -31,7 +31,8 @@ Rules:
 - split big work into 4-14 granular todos; each todo should be doable by one agent
 - always include a test todo depending on the core implementation todos
 - plan a fresh build unless the repo context shows an existing app to extend
-- keep titles short (under 8 words)`;
+- keep titles short (under 8 words)
+- In "description", provide detailed specifications of what must be implemented. For websites/apps, specify all sections (navbar, hero, filters, grid, cart drawer, modals, footer), comprehensive CSS (design tokens, glassmorphism, responsive grid, animations), and full JS functionality (mock data array, search, filters, cart state, localStorage, toasts). Never permit 3-4 line placeholder skeletons.`;
 
 const JSON_RE = /```json\s*([\s\S]*?)```|```\s*([\s\S]*?)```|^(\{[\s\S]*\})$/m;
 

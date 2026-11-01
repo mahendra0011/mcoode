@@ -148,7 +148,7 @@ export function getSocket(): Socket {
 export function useChatSocket(workspaceId: string | null = null) {
   const dispatch = useAppDispatch();
   const socketRef = useRef<Socket | null>(null);
-  const { mode, selectedModel } = useAppSelector((state) => state.chat);
+  const { mode, selectedModel, outputLength } = useAppSelector((state) => state.chat);
   const [connectionState, setConnectionState] = useState<'connected' | 'disconnected' | 'reconnecting'>('reconnecting');
 
   // Refs so the onConnect handler always uses the latest workspace/model
@@ -157,6 +157,8 @@ export function useChatSocket(workspaceId: string | null = null) {
   workspaceIdRef.current = workspaceId;
   const selectedModelRef = useRef(selectedModel);
   selectedModelRef.current = selectedModel;
+  const outputLengthRef = useRef(outputLength);
+  outputLengthRef.current = outputLength;
 
   const streamSpeed = useSettingsStore((s) => s.ai.streamSpeed);
   const streamSpeedRef = useRef(streamSpeed);
@@ -240,10 +242,12 @@ export function useChatSocket(workspaceId: string | null = null) {
       dispatch(setStatus('connecting'));
       if (!wasConnected) {
         wasConnected = true;
-        dispatch(addToast({ id: `backend-ok-${Date.now()}`, kind: 'ok', text: 'Backend reconnected' }));
+        const toastId = 'backend-connection-status';
+        dispatch(addToast({ id: toastId, kind: 'ok', text: 'Backend reconnected' }));
+        setTimeout(() => dispatch(removeToast(toastId)), 3000);
       }
       // Emit chat:start with current workspace + model (use refs for latest values)
-      socket.emit('chat:start', { workspaceId: workspaceIdRef.current, modelRef: selectedModelRef.current });
+      socket.emit('chat:start', { workspaceId: workspaceIdRef.current, modelRef: selectedModelRef.current, outputLength: outputLengthRef.current });
     };
 
     const onChatReady = (payload: any) => {
@@ -342,9 +346,11 @@ export function useChatSocket(workspaceId: string | null = null) {
     let lastOfflineToastAt = 0;
     const offlineToast = (text: string) => {
       const now = Date.now();
-      if (now - lastOfflineToastAt < 30000) return;
+      if (now - lastOfflineToastAt < 10000) return;
       lastOfflineToastAt = now;
-      dispatch(addToast({ id: `backend-${now}`, kind: 'warn', text }));
+      const toastId = 'backend-connection-status';
+      dispatch(addToast({ id: toastId, kind: 'warn', text }));
+      setTimeout(() => dispatch(removeToast(toastId)), 4000);
     };
 
     const onDisconnect = () => {
@@ -752,11 +758,16 @@ export function useChatSocket(workspaceId: string | null = null) {
     const onDebugExited = (p: any) => {
       dispatch(addToast({ id: Date.now().toString(), kind: p?.code === 0 ? 'ok' : 'error', text: `Debug process exited (${p?.code ?? 0})` }));
     };
+    // debug:error used to share onChatError — a failing debug session would
+    // end an unrelated streaming chat turn (status=error, isStreaming=false).
+    const onDebugError = (p: any) => {
+      dispatch(addToast({ id: Date.now().toString(), kind: 'error', text: `Debug error: ${p?.message || 'debug session failed'}` }));
+    };
 
     socket.on('debug:started', onDebugStarted);
     socket.on('debug:output', onDebugOutput);
     socket.on('debug:exited', onDebugExited);
-    socket.on('debug:error', onChatError);
+    socket.on('debug:error', onDebugError);
 
     // Load available models on mount (only if authenticated)
     if (getToken()) {
@@ -872,7 +883,7 @@ export function useChatSocket(workspaceId: string | null = null) {
       socket.off('debug:started', onDebugStarted);
       socket.off('debug:output', onDebugOutput);
       socket.off('debug:exited', onDebugExited);
-      socket.off('debug:error', onChatError);
+      socket.off('debug:error', onDebugError);
       window.removeEventListener('mcode:reload-models', reloadHandler);
       window.removeEventListener('storage', storageHandler);
     };
@@ -883,15 +894,15 @@ export function useChatSocket(workspaceId: string | null = null) {
   useEffect(() => {
     const socket = socketRef.current;
     if (socket && socket.connected) {
-      socket.emit('chat:start', { workspaceId, modelRef: selectedModel });
+      socket.emit('chat:start', { workspaceId, modelRef: selectedModel, outputLength });
     }
-  }, [workspaceId, selectedModel]);
+  }, [workspaceId, selectedModel, outputLength]);
 
     const send = useCallback((prompt: string, overrideMode: string | null = null) => {
     if (socketRef.current) {
       doneRef.current = false; // Reset guard for the new turn
       const effectiveMode = overrideMode || mode;
-      socketRef.current.emit('chat:send', { prompt, mode: effectiveMode });
+      socketRef.current.emit('chat:send', { prompt, mode: effectiveMode, outputLength: outputLengthRef.current });
     }
   }, [mode]);
 

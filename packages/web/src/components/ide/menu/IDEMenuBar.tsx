@@ -145,17 +145,32 @@ export function IDEMenuBar({
   };
 
   const pasteSelection = async () => {
-    if (!store.getActiveEditor()) return;
+    const editor = store.getActiveEditor();
+    if (!editor) return;
+    editor.focus();
+    let pasted = false;
     try {
-      const text = await navigator.clipboard.readText();
-      const selection = store.getActiveEditor().getSelection();
-      if (selection) {
-        store.getActiveEditor().executeEdits("menu", [
-          { range: selection, text, forceMoveMarkers: true },
-        ]);
+      if (navigator.clipboard?.readText) {
+        const text = await navigator.clipboard.readText();
+        const selection = editor.getSelection();
+        if (selection && typeof text === 'string') {
+          editor.executeEdits("menu", [
+            { range: selection, text, forceMoveMarkers: true },
+          ]);
+          editor.pushUndoStop();
+          pasted = true;
+        }
       }
     } catch {
-      toast.error("Clipboard access denied");
+      // fallback below
+    }
+    if (!pasted) {
+      try {
+        editor.focus();
+        editor.trigger("menu", "editor.action.clipboardPasteAction", null);
+      } catch {
+        toast.error("Clipboard access denied. Use Ctrl+V / Cmd+V to paste.");
+      }
     }
   };
 
@@ -225,6 +240,12 @@ export function IDEMenuBar({
           label: "New Text File",
           shortcut: "Ctrl+N",
           action: () => store.createUntitledFile(),
+        },
+        {
+          label: "New Project / Folder...",
+          action: () => {
+            document.dispatchEvent(new CustomEvent("mcode:open-create-project"));
+          },
         },
         {
           label: "New File...",
@@ -486,6 +507,12 @@ export function IDEMenuBar({
           label: "Back to Chat",
           action: () => {
             store.setActiveTab("Chat");
+          },
+        },
+        {
+          label: "Exit to Home Page",
+          action: () => {
+            window.location.href = "/";
           },
         },
       ],

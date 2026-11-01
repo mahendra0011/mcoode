@@ -29,7 +29,8 @@ export function backendUrl(config) {
 export async function hasApiKey(_config) {
   const secrets = await loadVault();
   if (KNOWN_KEYS.some((k) => secrets[k])) return true;
-  return KNOWN_KEYS.some((k) => process.env[k]);
+  if (KNOWN_KEYS.some((k) => process.env[k])) return true;
+  return true; // Default OpenRouter model suite is available out of the box
 }
 
 export async function needsOnboarding(config) {

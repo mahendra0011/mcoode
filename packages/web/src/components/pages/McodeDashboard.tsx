@@ -74,25 +74,25 @@ function ReferenceBanner({ path }: { path: string | null }) {
   return (
     <div
       role="note"
-      className="mb-5 flex items-start gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3"
+      className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-xs"
     >
-      <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+      <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
       <div className="text-[12px] leading-relaxed min-w-0">
-        <p className="text-amber-200/90 font-medium">
+        <p className="text-amber-900 font-bold">
           Read-only CLI reference — this page does not read or change your configuration.
         </p>
-        <p className="text-white/50 mt-1">
-          Edit it in <code className="text-white/70 font-mono">~/.mcode/config.json</code> (or run{' '}
-          <code className="text-white/70 font-mono">mcode config</code>), then restart the CLI.
+        <p className="text-neutral-600 mt-1">
+          Edit it in <code className="text-neutral-900 font-mono bg-amber-100/70 px-1 py-0.5 rounded">~/.mcode/config.json</code> (or run{' '}
+          <code className="text-neutral-900 font-mono bg-amber-100/70 px-1 py-0.5 rounded">mcode config</code>), then restart the CLI.
         </p>
         {path ? (
-          <p className="text-white/40 mt-1 flex items-center gap-1.5 flex-wrap">
-            <Terminal className="w-3 h-3 flex-shrink-0" />
+          <p className="text-neutral-500 mt-1 flex items-center gap-1.5 flex-wrap">
+            <Terminal className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
             <span>Governed by:</span>
-            <code className="text-white/60 font-mono">{path}</code>
+            <code className="text-neutral-700 font-mono font-semibold">{path}</code>
           </p>
         ) : (
-          <p className="text-white/40 mt-1">
+          <p className="text-neutral-500 mt-1">
             No on-disk configuration backs this section — it documents product behaviour, not
             machine state.
           </p>
@@ -106,8 +106,8 @@ function DashboardOverview() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-white mb-1">Mcode UI Management Dashboard</h2>
-        <p className="text-sm text-white/40">
+        <h2 className="text-xl font-bold text-neutral-900 mb-1">Mcode UI Management Dashboard</h2>
+        <p className="text-sm text-neutral-500">
           Internal documentation and reference for all mcode UX patterns, animation systems, and CLI integrations.
           Use the sidebar to navigate between sections.
         </p>
@@ -117,15 +117,15 @@ function DashboardOverview() {
         {TAB_ITEMS.filter(t => t.id !== "dashboard").map((tab) => (
           <div
             key={tab.id}
-            className="bg-[#151515] border border-white/5 rounded-xl p-4 hover:border-white/10 transition-colors"
+            className="bg-white border border-slate-200/80 rounded-2xl p-5 hover:border-slate-300 hover:shadow-xs transition-all shadow-xs"
           >
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                <tab.icon className="w-4 h-4 text-emerald-400" />
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200/70 flex items-center justify-center shadow-xs">
+                <tab.icon className="w-4 h-4 text-emerald-700" />
               </div>
-              <span className="text-sm font-medium text-white">{tab.label}</span>
+              <span className="text-sm font-bold text-neutral-900">{tab.label}</span>
             </div>
-            <p className="text-[11px] text-white/40">{tab.section}</p>
+            <p className="text-xs text-neutral-500">{tab.section}</p>
           </div>
         ))}
       </div>
@@ -140,14 +140,13 @@ export function McodeDashboard() {
   const ActiveComponent = activeItem.component;
 
   return (
-    <div className="flex h-screen bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden">
+    <div className="flex h-screen bg-slate-50 text-neutral-900 font-sans overflow-hidden">
       {/* Sidebar */}
-      <div className="w-64 flex-shrink-0 border-r border-white/5 bg-[#0c0c0c] flex flex-col overflow-y-auto">
-        <div className="p-4 border-b border-white/5">
-          <div className="flex items-center gap-2.5 text-sm font-semibold text-white">
+      <div className="w-64 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col overflow-y-auto shadow-xs">
+        <div className="p-4 border-b border-slate-200">
+          <div className="flex items-center gap-2.5 text-sm font-bold text-neutral-900">
             <div className="relative group flex items-center justify-center flex-shrink-0">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-md blur opacity-40"></div>
-              <div className="relative w-6 h-6 rounded-md overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
+              <div className="relative w-7 h-7 rounded-lg overflow-hidden bg-white border border-slate-200 p-0.5 flex items-center justify-center shadow-xs">
                 <img src="/logo.png" alt="Mcode" className="w-full h-full object-cover rounded" />
               </div>
             </div>
@@ -155,10 +154,10 @@ export function McodeDashboard() {
           </div>
         </div>
 
-        <nav className="flex-1 py-2">
+        <nav className="flex-1 py-3">
           {Array.from(new Set(TAB_ITEMS.map((t) => t.section))).map((section) => (
             <div key={section} className="mb-4">
-              <div className="px-4 py-1.5 text-[10px] font-semibold text-white/30 uppercase tracking-wider">
+              <div className="px-4 py-1.5 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
                 {section}
               </div>
               {TAB_ITEMS.filter((t) => t.section === section).map((tab) => {
@@ -168,14 +167,14 @@ export function McodeDashboard() {
                   <motion.button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-1.5 text-left transition-colors ${
+                    className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors cursor-pointer ${
                       isActive
-                        ? "bg-emerald-500/10 text-emerald-300 border-r-2 border-emerald-500"
-                        : "text-white/60 hover:text-white hover:bg-white/[0.03]"
+                        ? "bg-emerald-50 text-emerald-800 font-semibold border-r-2 border-emerald-600"
+                        : "text-neutral-600 hover:text-neutral-900 hover:bg-slate-50"
                     }`}
                     whileHover={{ x: isActive ? 0 : 2 }}
                   >
-                    <Icon className={`w-4 h-4 ${isActive ? "text-emerald-400" : ""}`} />
+                    <Icon className={`w-4 h-4 ${isActive ? "text-emerald-700" : "text-neutral-500"}`} />
                     <span className="text-sm">{tab.label}</span>
                   </motion.button>
                 );
@@ -184,20 +183,20 @@ export function McodeDashboard() {
           ))}
         </nav>
 
-        <div className="p-3 border-t border-white/5 space-y-1">
+        <div className="p-3 border-t border-slate-200 space-y-1.5 bg-slate-50/50">
           {/* Desktop installer is published to /downloads/mcode-setup.exe by
               scripts/publish-ide.js (stable path across versions). */}
           <a
             href="/downloads/mcode-setup.exe"
             download
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors shadow-xs"
           >
             <Download className="w-4 h-4" />
             Download App
           </a>
           <a
             href="/ai/chat"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/[0.03] transition"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-neutral-600 hover:text-neutral-900 hover:bg-slate-100 transition font-medium"
           >
             <Home className="w-4 h-4" />
             Back to Chat
@@ -207,27 +206,27 @@ export function McodeDashboard() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="border-b border-white/5 px-6 py-3 flex items-center justify-between text-xs text-white/40">
+        <div className="border-b border-slate-200 bg-white px-6 py-3 flex items-center justify-between text-xs text-neutral-500 shadow-xs">
           <div className="flex items-center gap-2">
-            <LayoutDashboard className="w-3 h-3" />
+            <LayoutDashboard className="w-3.5 h-3.5 text-neutral-400" />
             <span>Mcode Dashboard</span>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-white/60">{activeItem.label}</span>
+            <ChevronRight className="w-3.5 h-3.5 text-neutral-300" />
+            <span className="text-neutral-900 font-semibold">{activeItem.label}</span>
           </div>
           <div className="flex items-center gap-3">
             <a
               href="/downloads/mcode-setup.exe"
               download
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-500 text-black font-semibold text-xs hover:bg-emerald-400 transition-colors shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition shadow-xs"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download Desktop App (.exe)</span>
             </a>
             <a
               href="/"
-              className="hover:text-white transition-colors flex items-center gap-1"
+              className="hover:text-neutral-900 transition flex items-center gap-1 font-medium"
             >
-              <Home className="w-3 h-3" /> Home
+              <Home className="w-3.5 h-3.5" /> Home
             </a>
           </div>
         </div>
@@ -248,3 +247,5 @@ export function McodeDashboard() {
     </div>
   );
 }
+
+export default McodeDashboard;

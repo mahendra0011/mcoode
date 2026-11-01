@@ -99,6 +99,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3100"
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       # Service-name addressing: inside the compose network the backend talks
       # to `mongo`/`redis`/`piston`, never to localhost.
       MONGODB_URI: ${MONGODB_URI_DOCKER:-mongodb://mongo:27017/mcode}

@@ -1,380 +1,258 @@
 "use client";
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Check, HelpCircle, Shield, Zap, Sparkles, Terminal, Code, Cpu, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import {
+  Check, Sparkles, Shield, Zap, Terminal, HelpCircle,
+  ChevronDown, ChevronUp, ArrowRight, Star
+} from 'lucide-react';
 import { Layout } from '../layout/Layout';
+import { toast } from 'sonner';
 
-interface PlanFeature {
+interface PricingTier {
+  id: string;
   name: string;
-  starter: boolean | string;
-  premium: boolean | string;
-  enterprise: boolean | string;
+  badge?: string;
+  priceMonthly: number;
+  priceYearly: number;
+  desc: string;
+  features: string[];
+  cta: string;
+  highlighted?: boolean;
 }
 
-const COMPARISON_FEATURES: { category: string; features: PlanFeature[] }[] = [
+const TIERS: PricingTier[] = [
   {
-    category: "AI Engines & Models",
+    id: 'free',
+    name: 'Community (BYOK)',
+    priceMonthly: 0,
+    priceYearly: 0,
+    desc: 'For individual developers using their own API keys or running local models.',
     features: [
-      { name: "Bring Your Own Key (BYOK)", starter: true, premium: true, enterprise: true },
-      { name: "Free Mock / Sandbox Mode", starter: true, premium: true, enterprise: true },
-      { name: "Multi-Model Auto-Fallback", starter: "Basic", premium: "Priority", enterprise: "Custom Cascades" },
-      { name: "Included Cloud Fast Credits", starter: "500 credits/mo", premium: "5,000 credits/mo", enterprise: "Unlimited / Pooled" },
-      { name: "Claude 3.5 Sonnet / Opus access", starter: "BYOK", premium: "Included + BYOK", enterprise: "Dedicated SLA" },
-      { name: "GPT-4o & o1-preview access", starter: "BYOK", premium: "Included + BYOK", enterprise: "Dedicated SLA" },
-      { name: "Local LLM via Ollama / LM Studio", starter: true, premium: true, enterprise: true },
-    ]
+      'Unlimited local CLI & Desktop usage',
+      'Bring Your Own Keys (OpenAI, Anthropic, Gemini, Groq, Ollama)',
+      'Local AES-256 hardware-backed vault',
+      'Full 46+ built-in MCP tools catalog',
+      'Community Discord & GitHub support',
+    ],
+    cta: 'Get Started Free',
   },
   {
-    category: "Autonomous Swarms & Modes",
+    id: 'pro',
+    name: 'Developer Pro',
+    badge: 'MOST POPULAR',
+    priceMonthly: 19,
+    priceYearly: 15,
+    desc: 'For professional software engineers who want hosted cloud models and fast swarms.',
     features: [
-      { name: "God Mode Autonomous Engine", starter: "10 runs/day", premium: "Unlimited", enterprise: "Unlimited Parallel" },
-      { name: "Subagent Parallel Waves", starter: "Max 3 waves", premium: "Max 10 waves", enterprise: "Custom Waves" },
-      { name: "Architect & Review Modes", starter: true, premium: true, enterprise: true },
-      { name: "Background Watch Daemon", starter: true, premium: true, enterprise: true },
-      { name: "Auto-Heal & Test-Driven Fixes", starter: "Single file", premium: "Multi-package", enterprise: "Monorepo scale" },
-    ]
+      'Everything in Community',
+      '$30 monthly included Cloud AI credits',
+      'Parallel God Mode swarms (up to 5 concurrent)',
+      'Cloud Web IDE workspace sync',
+      'Priority routing & ultra-fast reasoning models',
+      'Background auto-heal test watcher',
+    ],
+    cta: 'Start 14-Day Free Trial',
+    highlighted: true,
   },
   {
-    category: "Tools, MCP & Extensions",
+    id: 'team',
+    name: 'Team Swarms',
+    badge: 'FOR TEAMS',
+    priceMonthly: 49,
+    priceYearly: 39,
+    desc: 'For engineering teams collaborating on shared codebases and unified API budgets.',
     features: [
-      { name: "Built-in CLI Tools (46+ tools)", starter: true, premium: true, enterprise: true },
-      { name: "Custom MCP Server Connections", starter: "Up to 3", premium: "Unlimited", enterprise: "Private Registry" },
-      { name: "Plugin Registry Access", starter: true, premium: true, enterprise: true },
-      { name: "Curated Skills (15+ workflows)", starter: true, premium: true, enterprise: true },
-      { name: "Encrypted AES-256 Vault", starter: true, premium: true, enterprise: true },
-    ]
+      'Everything in Pro',
+      'Shared Team Vault (unified keys & budget caps)',
+      'Up to 20 concurrent parallel subagents',
+      'Private team MCP server registry',
+      'Team audit logs & Git security scan',
+      'Priority email & Slack support',
+    ],
+    cta: 'Create Team Workspace',
   },
   {
-    category: "Platforms & Support",
+    id: 'enterprise',
+    name: 'Enterprise',
+    priceMonthly: 0,
+    priceYearly: 0,
+    desc: 'For organizations with strict compliance, on-prem security, and custom SLAs.',
     features: [
-      { name: "Terminal CLI (npm / brew / curl)", starter: true, premium: true, enterprise: true },
-      { name: "Web IDE (In-browser workspace)", starter: true, premium: true, enterprise: true },
-      { name: "VS Code Extension", starter: true, premium: true, enterprise: true },
-      { name: "Desktop IDE App (Win / Mac / Linux)", starter: true, premium: true, enterprise: true },
-      { name: "Support Level", starter: "Community Discord", premium: "Priority Email & Discord", enterprise: "Dedicated Slack & CSM" },
-      { name: "SOC2 Compliance & SSO / SAML", starter: false, premium: false, enterprise: true },
-    ]
-  }
+      'Self-hosted air-gapped VPC deployment',
+      'Custom LLM fine-tuning & private endpoints',
+      'Single Sign-On (SAML / Okta / Azure AD)',
+      'Dedicated 99.9% uptime SLA',
+      '24/7 dedicated engineering support',
+      'Custom invoice billing & security audit',
+    ],
+    cta: 'Contact Sales',
+  },
 ];
 
 const FAQS = [
-  {
-    q: "Can I use my own API keys (Anthropic, OpenAI, OpenRouter)?",
-    a: "Yes! mcode is BYOK (Bring Your Own Key) first. All your keys are encrypted locally using AES-256-GCM in your OS vault. You only pay provider token costs directly or use our bundled credits."
-  },
-  {
-    q: "Do I get access to the CLI, Web IDE, VS Code Extension, and Desktop App?",
-    a: "Yes! Every plan includes access to all 4 platforms: the CLI, the Web IDE, the official VS Code Extension, and the standalone Desktop IDE."
-  },
-  {
-    q: "How does the 14-day free trial work?",
-    a: "You get full Premium tier access for 14 days without any commitment. You can explore autonomous God Mode, test parallel subagent swarms, and connect MCP servers."
-  },
-  {
-    q: "Can I run mcode completely offline or air-gapped?",
-    a: "Absolutely. With local Ollama or LM Studio models configured and local tool execution, mcode operates completely without an internet connection."
-  },
-  {
-    q: "What is God Mode?",
-    a: "God Mode is mcode's multi-agent orchestrator. You specify an objective (e.g., 'Refactor auth to Lucia and add passkey support'), and mcode plans the steps, dispatches parallel subagents to execute them, runs tests, and integrates the diff automatically."
-  }
+  { q: 'Can I use mcode completely for free?', a: 'Yes! The Community edition is 100% free and open-source. Simply add your existing API keys (from Anthropic, OpenAI, Google, etc.) or connect local Ollama models on your GPU. There are no artificial limits.' },
+  { q: 'How does Bring Your Own Key (BYOK) work?', a: 'Your API keys are stored locally on your machine in an AES-256 encrypted vault backed by Windows DPAPI, macOS Keychain, or Linux SecretService. Keys are never sent to our servers.' },
+  { q: 'What happens when I hit my God Mode concurrency cap?', a: 'Subagent tasks wait in an optimized dependency queue (DAG) and execute as previous subagents complete. Upgrading to Pro or Team unlocks higher concurrency (5 to 20 parallel waves).' },
+  { q: 'Can I cancel or switch plans at any time?', a: 'Yes. You can upgrade, downgrade, or cancel your subscription at any time with one click from the billing dashboard. Annual plans will be prorated automatically.' },
+  { q: 'Does mcode train on my proprietary source code?', a: 'Never. We have zero-retention agreements with enterprise AI providers. Your code, context tokens, and git diffs are strictly processed in-memory and never logged or stored for model training.' },
 ];
 
 export function PricingPage() {
-  const [annual, setAnnual] = useState(true);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  const handleCta = (tier: PricingTier) => {
+    if (tier.id === 'free') {
+      window.location.href = '/cli';
+    } else if (tier.id === 'enterprise') {
+      toast.info('Enterprise inquiry form: sales@mcode.dev');
+    } else {
+      toast.success(`Redirecting to checkout for ${tier.name}...`);
+    }
+  };
 
   return (
     <Layout>
-      <div className="relative pt-28 pb-20 px-6 max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-4">
-            <Sparkles className="w-3.5 h-3.5" /> Transparent Pricing
+      {/* ─────────────────── HERO ─────────────────── */}
+      <section className="relative pt-36 pb-20 overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[750px] h-[400px] bg-gradient-to-tr from-emerald-200/40 via-teal-100/35 to-indigo-200/40 blur-[130px] rounded-full pointer-events-none -z-10 animate-pulse-glow" />
+
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-neutral-200 shadow-sm text-emerald-800 text-xs font-bold uppercase tracking-wider mb-6">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Transparent & Developer-Friendly Pricing</span>
           </div>
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-foreground mb-6">
-            Invest in Speed. <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
-              Ship 10x Faster with AI.
+
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-neutral-950 max-w-4xl mx-auto leading-[1.1] mb-6 font-sans">
+            Simple Pricing for Solo Devs{' '}
+            <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 bg-clip-text text-transparent">
+              & Engineering Teams
             </span>
           </h1>
-          <p className="text-lg text-muted-foreground">
-            One subscription unlocks mcode across your terminal, browser, VS Code, and desktop IDE.
+
+          <p className="text-base sm:text-lg text-neutral-600 max-w-2xl mx-auto leading-relaxed mb-10">
+            Bring your own API keys for 100% free unlimited local usage, or choose Cloud Swarms for hosted subagents and team synchronization.
           </p>
 
-          {/* Billing Switch */}
-          <div className="mt-8 inline-flex items-center gap-3 p-1.5 rounded-full bg-foreground/5 border border-foreground/10">
+          {/* Billing Cycle Toggle */}
+          <div className="flex items-center justify-center gap-3 mb-16">
+            <span className={`text-xs font-bold ${billingCycle === 'monthly' ? 'text-neutral-950' : 'text-neutral-500'}`}>
+              Monthly
+            </span>
             <button
-              onClick={() => setAnnual(false)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                !annual ? "bg-foreground text-background shadow-md" : "text-foreground/70 hover:text-foreground"
-              }`}
+              onClick={() => setBillingCycle((b) => (b === 'monthly' ? 'yearly' : 'monthly'))}
+              className="w-13 h-7 rounded-full bg-neutral-200 p-1 flex items-center transition-colors relative cursor-pointer"
             >
-              Monthly billing
+              <div
+                className={`w-5 h-5 rounded-full bg-emerald-600 transition-transform ${
+                  billingCycle === 'yearly' ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
             </button>
-            <button
-              onClick={() => setAnnual(true)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
-                annual ? "bg-foreground text-background shadow-md" : "text-foreground/70 hover:text-foreground"
-              }`}
-            >
-              <span>Annual billing</span>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-black">
-                Save 20%
+            <span className={`text-xs font-bold flex items-center gap-1.5 ${billingCycle === 'yearly' ? 'text-neutral-950' : 'text-neutral-500'}`}>
+              <span>Yearly</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">
+                SAVE 20%
               </span>
-            </button>
+            </span>
+          </div>
+
+          {/* ─────────────────── TIERS GRID ─────────────────── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left max-w-6xl mx-auto mb-24">
+            {TIERS.map((tier) => {
+              const price = billingCycle === 'yearly' ? tier.priceYearly : tier.priceMonthly;
+              return (
+                <div
+                  key={tier.id}
+                  className={`p-6 rounded-3xl flex flex-col justify-between transition-all relative ${
+                    tier.highlighted
+                      ? 'bg-white border-2 border-emerald-500 shadow-[0_15px_40px_-10px_rgba(16,185,129,0.25)] scale-[1.02]'
+                      : 'bg-white border border-neutral-200 shadow-sm hover:shadow-lg'
+                  }`}
+                >
+                  {tier.badge && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold tracking-wider shadow-sm">
+                      {tier.badge}
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="text-lg font-bold text-neutral-950 mb-1">{tier.name}</h3>
+                    <p className="text-xs text-neutral-500 leading-relaxed mb-5 min-h-[36px]">{tier.desc}</p>
+
+                    <div className="mb-6 flex items-baseline gap-1">
+                      {tier.id === 'enterprise' ? (
+                        <span className="text-3xl font-black text-neutral-950">Custom</span>
+                      ) : (
+                        <>
+                          <span className="text-4xl font-black text-neutral-950 font-sans">${price}</span>
+                          <span className="text-xs text-neutral-500">/ {tier.id === 'team' ? 'seat / mo' : 'mo'}</span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="space-y-3 mb-8">
+                      {tier.features.map((feat) => (
+                        <div key={feat} className="flex items-start gap-2.5 text-xs text-neutral-700">
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <span>{feat}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleCta(tier)}
+                    className={`w-full py-3.5 rounded-full font-bold text-xs transition-all cursor-pointer ${
+                      tier.highlighted
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md'
+                        : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
+                    }`}
+                  >
+                    {tier.cta}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
+      </section>
 
-        {/* Pricing Cards */}
-        <div className="grid gap-8 lg:grid-cols-3 mb-24 items-stretch">
-          {/* Starter */}
-          <div className="relative flex flex-col rounded-3xl border border-foreground/10 bg-frame p-8 shadow-xl">
-            <div className="mb-6">
-              <h3 className="text-xl font-bold text-foreground">Starter</h3>
-              <p className="text-sm text-muted-foreground mt-1">For indie hackers and developers exploring agentic coding.</p>
-              <div className="mt-6 flex items-baseline gap-2">
-                <span className="text-4xl font-extrabold text-foreground">
-                  ${annual ? "19" : "24"}
-                </span>
-                <span className="text-sm text-muted-foreground">/ month</span>
-              </div>
-            </div>
-
-            <ul className="space-y-3.5 mb-8 flex-1 text-sm text-foreground/85">
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>All 4 Platforms (CLI, Web, VS Code, Desktop)</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Bring Your Own API Keys (Unlimited BYOK)</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>500 fast cloud credits / month</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>10 God Mode agent runs / day</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>46+ built-in tools & 3 MCP servers</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>AES-256 encrypted local vault</span>
-              </li>
-            </ul>
-
-            <Link
-              href="/signup?plan=starter"
-              className="w-full text-center py-3 px-4 rounded-xl border border-foreground/20 hover:border-foreground/40 bg-foreground/5 hover:bg-foreground/10 text-foreground font-semibold text-sm transition-all"
-            >
-              Start 14-day Free Trial
-            </Link>
+      {/* ─────────────────── FAQS ─────────────────── */}
+      <section className="py-20 border-t border-neutral-200/80 bg-white">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-14">
+            <h2 className="text-3xl font-extrabold text-neutral-950 mb-3">Frequently Asked Questions</h2>
+            <p className="text-neutral-600 text-sm">Everything you need to know about mcode subscriptions and security.</p>
           </div>
 
-          {/* Premium / Pro (Popular) */}
-          <div className="relative flex flex-col rounded-3xl border-2 border-emerald-500 bg-gradient-to-b from-emerald-500/10 via-frame to-frame p-8 shadow-2xl scale-[1.03]">
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-emerald-500 text-black text-xs font-bold uppercase tracking-wider shadow-lg">
-              Most Popular
-            </div>
-
-            <div className="mb-6">
-              <h3 className="text-xl font-bold text-foreground flex items-center gap-2">
-                Premium Pro <Zap className="w-4 h-4 text-emerald-400 fill-emerald-400" />
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1">For professional engineers and high-velocity shipping teams.</p>
-              <div className="mt-6 flex items-baseline gap-2">
-                <span className="text-4xl font-extrabold text-foreground">
-                  ${annual ? "79" : "99"}
-                </span>
-                <span className="text-sm text-muted-foreground">/ month</span>
-              </div>
-            </div>
-
-            <ul className="space-y-3.5 mb-8 flex-1 text-sm text-foreground/90">
-              <li className="flex items-center gap-2.5 font-medium text-emerald-300">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Unlimited God Mode Autonomous Engine</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>5,000 fast cloud credits / month</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Up to 10 parallel subagent waves</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Unlimited MCP Server connections</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Watch daemon multi-package auto-healing</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Priority model routing & intelligent fallback</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Priority Email & Discord Engineer Support</span>
-              </li>
-            </ul>
-
-            <Link
-              href="/signup?plan=premium"
-              className="w-full text-center py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm shadow-lg shadow-emerald-500/25 transition-all"
-            >
-              Get Started with Premium
-            </Link>
-          </div>
-
-          {/* Enterprise */}
-          <div className="relative flex flex-col rounded-3xl border border-foreground/10 bg-frame p-8 shadow-xl">
-            <div className="mb-6">
-              <h3 className="text-xl font-bold text-foreground">Enterprise</h3>
-              <p className="text-sm text-muted-foreground mt-1">For organizations requiring compliance, dedicated pools, and custom workflows.</p>
-              <div className="mt-6 flex items-baseline gap-2">
-                <span className="text-4xl font-extrabold text-foreground">Custom</span>
-              </div>
-            </div>
-
-            <ul className="space-y-3.5 mb-8 flex-1 text-sm text-foreground/85">
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Custom agent topologies & wave limits</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Private internal MCP tool registry</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Dedicated model endpoints with strict zero-data retention</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>SAML / Okta / Azure AD Single Sign-On</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Audit logs, security compliance & SOC2 type II</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                <span>Dedicated Solution Architect & 99.9% uptime SLA</span>
-              </li>
-            </ul>
-
-            <Link
-              href="mailto:enterprise@mcode.dev?subject=Enterprise%20Plan%20Inquiry"
-              className="w-full text-center py-3 px-4 rounded-xl border border-foreground/20 hover:border-foreground/40 bg-foreground/5 hover:bg-foreground/10 text-foreground font-semibold text-sm transition-all"
-            >
-              Contact Enterprise Sales
-            </Link>
-          </div>
-        </div>
-
-        {/* Full Feature Comparison Table */}
-        <div className="mb-24">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-2xl sm:text-4xl font-bold text-foreground">
-              Compare All Features
-            </h2>
-            <p className="text-sm text-muted-foreground mt-2">
-              Every detail of what makes each tier unique.
-            </p>
-          </div>
-
-          <div className="overflow-x-auto rounded-2xl border border-foreground/10 bg-frame/60">
-            <table className="w-full text-left border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-foreground/10 bg-foreground/[0.02]">
-                  <th className="py-4 px-6 font-semibold text-foreground w-2/5">Capability</th>
-                  <th className="py-4 px-6 font-semibold text-foreground w-1/5 text-center">Starter</th>
-                  <th className="py-4 px-6 font-semibold text-emerald-400 w-1/5 text-center">Premium</th>
-                  <th className="py-4 px-6 font-semibold text-foreground w-1/5 text-center">Enterprise</th>
-                </tr>
-              </thead>
-              <tbody>
-                {COMPARISON_FEATURES.map((section, idx) => (
-                  <React.Fragment key={idx}>
-                    <tr className="bg-foreground/[0.04] border-t border-b border-foreground/10">
-                      <td colSpan={4} className="py-2.5 px-6 font-bold text-xs uppercase tracking-wider text-muted-foreground">
-                        {section.category}
-                      </td>
-                    </tr>
-                    {section.features.map((feat, fIdx) => (
-                      <tr key={fIdx} className="border-b border-foreground/5 hover:bg-foreground/[0.02] transition-colors">
-                        <td className="py-3 px-6 text-foreground font-medium">{feat.name}</td>
-                        <td className="py-3 px-6 text-center text-muted-foreground">
-                          {typeof feat.starter === 'boolean' ? (
-                            feat.starter ? <Check className="w-4 h-4 text-emerald-400 mx-auto" /> : "—"
-                          ) : feat.starter}
-                        </td>
-                        <td className="py-3 px-6 text-center font-semibold text-foreground">
-                          {typeof feat.premium === 'boolean' ? (
-                            feat.premium ? <Check className="w-4 h-4 text-emerald-400 mx-auto" /> : "—"
-                          ) : feat.premium}
-                        </td>
-                        <td className="py-3 px-6 text-center text-muted-foreground">
-                          {typeof feat.enterprise === 'boolean' ? (
-                            feat.enterprise ? <Check className="w-4 h-4 text-emerald-400 mx-auto" /> : "—"
-                          ) : feat.enterprise}
-                        </td>
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* FAQs */}
-        <div className="max-w-3xl mx-auto mb-20">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground mb-8">
-            Frequently Asked Questions
-          </h2>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {FAQS.map((faq, i) => (
-              <div key={i} className="p-5 rounded-2xl border border-foreground/10 bg-frame">
-                <h3 className="font-semibold text-foreground text-base mb-2">{faq.q}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{faq.a}</p>
+              <div
+                key={faq.q}
+                className="rounded-2xl border border-neutral-200 bg-neutral-50/70 overflow-hidden transition-colors"
+              >
+                <button
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="w-full p-4 flex items-center justify-between text-left text-sm font-bold text-neutral-900 cursor-pointer"
+                >
+                  <span>{faq.q}</span>
+                  {openFaq === i ? (
+                    <ChevronUp className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-neutral-400 shrink-0" />
+                  )}
+                </button>
+                {openFaq === i && (
+                  <div className="px-4 pb-4 text-xs text-neutral-600 leading-relaxed border-t border-neutral-200/80 pt-3">
+                    {faq.a}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
-
-        {/* Bottom CTA Banner */}
-        <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent p-8 sm:p-12 text-center relative overflow-hidden">
-          <h2 className="text-2xl sm:text-4xl font-bold text-foreground mb-4">
-            Ready to Build Faster with AI Swarms?
-          </h2>
-          <p className="text-muted-foreground max-w-xl mx-auto mb-8 text-sm sm:text-base">
-            Join thousands of developers using mcode to plan, code, and deploy in record time.
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link
-              href="/signup"
-              className="px-6 py-3 rounded-xl bg-foreground text-background font-semibold text-sm hover:scale-105 active:scale-95 transition-all inline-flex items-center gap-2"
-            >
-              Start Free Trial <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link
-              href="/cli"
-              className="px-6 py-3 rounded-xl border border-foreground/20 bg-foreground/5 hover:bg-foreground/10 text-foreground font-semibold text-sm transition-all"
-            >
-              Install CLI (`npm i -g mcode`)
-            </Link>
-          </div>
-        </div>
-      </div>
+      </section>
     </Layout>
   );
 }

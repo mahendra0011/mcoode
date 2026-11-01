@@ -1,8 +1,9 @@
 // @ts-nocheck — OpenTUI JSX, type-covered by esbuild bundle + manual runs, not tsc.
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
+import { getClipboardText, sanitizePasteText } from './clipboard.js';
 
 export function SelectModal({ title, options, onSelect, onClose, placeholder = 'Search' }) {
   const [search, setSearch] = useState('');
@@ -11,7 +12,8 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
   // Group options by category
   const filtered = options.filter(o => 
     o.label.toLowerCase().includes(search.toLowerCase()) || 
-    (o.value && String(o.value).toLowerCase().includes(search.toLowerCase()))
+    (o.value && String(o.value).toLowerCase().includes(search.toLowerCase())) ||
+    (o.hint && String(o.hint).toLowerCase().includes(search.toLowerCase()))
   );
 
   const categories = [...new Set(filtered.map(o => o.category || 'Items'))];
@@ -30,40 +32,51 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
   const currentFlatIndex = selectableIndexes[currentCursorIndex];
 
   useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
-    if ((key.name === "escape")) {
+    // 1. Explicit Ctrl+V / Cmd+V paste from system clipboard
+    if ((key.ctrl || key.meta) && (key.name === 'v' || key.sequence === '\x16')) {
+      const clip = sanitizePasteText(getClipboardText());
+      if (clip) {
+        setSearch((s) => s + clip);
+        setCursor(0);
+        return;
+      }
+    }
+
+    if (key.name === 'escape') {
       onClose();
       return;
     }
     
-    if ((key.name === "up")) {
+    if (key.name === 'up') {
       setCursor(c => Math.max(0, c - 1));
       return;
     }
     
-    if ((key.name === "down")) {
+    if (key.name === 'down') {
       setCursor(c => Math.min(selectableIndexes.length - 1, c + 1));
       return;
     }
     
-    if ((key.name === "return")) {
+    if (key.name === 'return') {
       if (selectableIndexes.length > 0) {
         onSelect(flatList[currentFlatIndex]);
       }
       return;
     }
     
-    if ((key.name === "backspace") || (key.name === "delete")) {
+    if (key.name === 'backspace' || key.name === 'delete') {
       setSearch(s => s.slice(0, -1));
       setCursor(0);
       return;
     }
     
-    
-    // Normal character input or pasted text, avoiding ANSI escapes
-    if (input && !input.includes('\u001b') && !key.ctrl && !key.meta) {
-      setSearch(s => s + input);
-      setCursor(0);
+    // Normal character input or pasted text from terminal
+    if (key.sequence && !key.ctrl && !key.meta) {
+      const clean = sanitizePasteText(key.sequence);
+      if (clean) {
+        setSearch(s => s + clean);
+        setCursor(0);
+      }
     }
   });
 
@@ -92,50 +105,52 @@ export function SelectModal({ title, options, onSelect, onClose, placeholder = '
         paddingTop={SPACING.sm} paddingBottom={SPACING.sm}
       >
         <box justifyContent="space-between" marginBottom={SPACING.sm}>
-        <text attributes={TextAttributes.BOLD}>{title}</text>
-        <text fg="gray">esc</text>
-      </box>
+          <text attributes={TextAttributes.BOLD}>{title}</text>
+          <text fg="gray">esc</text>
+        </box>
 
-      <box marginBottom={SPACING.sm}>
-        {search.length === 0 ? (
-          <text fg={theme.gray}>
-            <span fg={theme.green}>{placeholder.charAt(0)}</span>
-            {placeholder.slice(1)}
-          </text>
-        ) : (
-          <text>{search}<span fg={theme.green}>█</span></text>
-        )}
-      </box>
+        <box marginBottom={SPACING.sm}>
+          {search.length === 0 ? (
+            <text fg={theme.gray}>
+              <span fg={theme.green}>{placeholder.charAt(0)}</span>
+              {placeholder.slice(1)}
+            </text>
+          ) : (
+            <text>{search}<span fg={theme.green}>█</span></text>
+          )}
+        </box>
 
-      <box flexDirection="column">
-        {visibleList.length === 0 ? (
-          <text fg="gray">  No results found.</text>
-        ) : (
-          visibleList.map((item, idx) => {
-            const actualIdx = startIdx + idx;
-            if (item.isCategory) {
-              return <box key={`cat-${actualIdx}`} marginTop={idx === 0 ? 0 : 1}>
-                <text fg={theme.blue} attributes={TextAttributes.BOLD}>{item.label}</text>
-              </box>;
-            }
-            const isSelected = actualIdx === currentFlatIndex;
-            return (
-              <box 
-                key={`item-${actualIdx}`} 
-                backgroundColor={isSelected ? theme.green : undefined} 
-                paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
-                width="100%"
-              >
-                <text fg={isSelected ? 'black' : theme.text}>
-                  {item.label}
-                  {item.hint && <span fg={isSelected ? '#14532d' : theme.dim}> {item.hint}</span>}
-                </text>
-              </box>
-            );
-          })
-        )}
+        <box flexDirection="column">
+          {visibleList.length === 0 ? (
+            <text fg="gray">  No results found.</text>
+          ) : (
+            visibleList.map((item, idx) => {
+              const actualIdx = startIdx + idx;
+              if (item.isCategory) {
+                return (
+                  <box key={`cat-${actualIdx}`} marginTop={idx === 0 ? 0 : 1}>
+                    <text fg={theme.blue} attributes={TextAttributes.BOLD}>{item.label}</text>
+                  </box>
+                );
+              }
+              const isSelected = actualIdx === currentFlatIndex;
+              return (
+                <box 
+                  key={`item-${actualIdx}`} 
+                  backgroundColor={isSelected ? theme.green : undefined} 
+                  paddingLeft={SPACING.sm} paddingRight={SPACING.sm}
+                  width="100%"
+                >
+                  <text fg={isSelected ? 'black' : theme.text}>
+                    {item.label}
+                    {item.hint && <span fg={isSelected ? '#14532d' : theme.dim}> {item.hint}</span>}
+                  </text>
+                </box>
+              );
+            })
+          )}
+        </box>
       </box>
-    </box>
     </box>
   );
 }

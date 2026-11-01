@@ -45,8 +45,8 @@ export function ThinkingIndicator({ size = 'md', showAvatar = false, label }: Th
           <span className="text-xs">M</span>
         </div>
       )}
-      <BrainCircuit className="w-4 h-4 shrink-0 text-white/40" />
-      <span className="animated-gradient-text font-medium">
+      <BrainCircuit className="w-4 h-4 shrink-0 text-white/90 drop-shadow-[0_0_8px_rgba(255,255,255,0.7)] animate-pulse" />
+      <span className="animated-gradient-text font-semibold">
         {label || 'Thinking...'}
       </span>
     </motion.div>

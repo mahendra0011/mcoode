@@ -4,10 +4,12 @@ import { clearTokens } from '../../lib/api';
 import JSZip from 'jszip';
 import { useAppDispatch, useAppSelector } from '../../store';
 import {
+  Home,
   Folder, Puzzle, Github, Crown, Settings,
   ChevronDown, Plus, Sparkles, ArrowUp, Send, Square,
   UploadCloud, FolderUp, Download, GitBranch, Share, Loader2, Slash, Zap, Scissors,
   AlertCircle, AlertTriangle, CheckCircle2, X, MessageSquare, FileText, Terminal, GitFork, Wrench, MoreVertical, ChevronRight, Sun, Book, HelpCircle, Search, History, Trash2, Globe, Palette, ZoomIn, BarChart2, Rocket, LogOut, Hash, Minimize2, ListFilter, Archive,
+  FolderPlus, Maximize2, Check,
   PanelLeft, PanelBottom, PanelRight, LayoutGrid, Bell, BellDot,
   Workflow, Monitor, MousePointerClick, Cpu, Paperclip, BrainCircuit, Cloud, Bug
 } from 'lucide-react';
@@ -17,12 +19,13 @@ import { Group as ResizablePanelGroup, Panel as ResizablePanel, Separator as Res
 import Link from 'next/link'; import { useRouter, useSearchParams } from 'next/navigation';
 import { useChatSocket, getSocket } from '../../hooks/useChatSocket';
 import api from '../../lib/axios';
-import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhancementResolved, clarifyAnswered, watchStatusUpdated, bugcheckStarted, testModeSelectorOpened, testModeSelectorClosed, testModeReset, auditDismissed } from '../../store/chatSlice';
+import { setMode, addMessage, clearChat, setGodMode, resetStreaming, promptEnhancementResolved, clarifyAnswered, watchStatusUpdated, bugcheckStarted, testModeSelectorOpened, testModeSelectorClosed, testModeReset, auditDismissed, removeToast } from '../../store/chatSlice';
 import { handleSlashCommand, isSlashCommand, getAvailableSlashCommands, getGroupedSlashCommands } from '../../lib/slashCommands';
 import { SlashCommandPicker } from '../chat/SlashCommandPicker';
 import { ChatPanel } from '../chat/ChatPanel';
 import { CleanupReport } from '../chat/CleanupReport';
 import { GodModeToggle } from '../chat/mcodeUX';
+import { ModeSelector } from '../chat/ModeSelector';
 import { zipFilesOffMainThread, WORKSPACE_UPLOAD_TIMEOUT_MS, type ZipEntry } from '../../lib/zipInWorker';
 import { useI18n } from '../../lib/i18n';
 
@@ -123,6 +126,7 @@ import { ContainersPanel } from '../../components/ide/ContainersPanel';
 import { EditorPane } from '../../components/ide/EditorPane';
 import { BottomPanel } from '../../components/ide/BottomPanel';
 import { WorkspaceModals } from '../../components/ide/WorkspaceModals';
+import { CreateProjectModal } from '../../components/ide/CreateProjectModal';
 import { TodoCard } from '../../components/ide/TodoCard';
 import { PermissionModal } from '../../components/ide/PermissionModal';
 import { IDEActivitySidebar } from '../../components/ide/IDEActivitySidebar';
@@ -143,6 +147,7 @@ import { toast } from 'sonner';
 import ExtensionsMarketplace from '../../components/ExtensionsMarketplace';
 import editorApi from '../../lib/extensions/editorApi';
 import { ModelSelector } from '../../components/ide/ModelSelector';
+import { OutputLengthSelector } from '../chat/OutputLengthSelector';
 import { SparkleButton } from '../../components/ide/SparkleButton';
 import { WaveProgress } from '../../components/ide/WaveProgress';
 import { ClarifyCard } from '../../components/ide/ClarifyCard';
@@ -216,9 +221,13 @@ export function AIChatPage() {
 
   // Persist active workspace to localStorage so refreshes always restore the active project
   useEffect(() => {
-    if (activeWorkspaceId && typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('mcode_active_workspace_id', activeWorkspaceId);
+        if (activeWorkspaceId) {
+          localStorage.setItem('mcode_active_workspace_id', activeWorkspaceId);
+        } else {
+          localStorage.removeItem('mcode_active_workspace_id');
+        }
       } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
     }
   }, [activeWorkspaceId]);
@@ -423,8 +432,65 @@ export function AIChatPage() {
     }
   };
 
+  // Chat sidebar view and grouping state
+  const [chatViewMode, setChatViewMode] = useState<'group' | 'project'>('group');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [chatFilter, setChatFilter] = useState<'all' | 'active_project' | 'today'>('all');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const toggleGroupCollapse = (groupName: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupName)) {
+        next.delete(groupName);
+      } else {
+        next.add(groupName);
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target)) {
+        setShowFilterMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const getChatDateGroup = (createdAt?: string | Date): string => {
+    if (!createdAt) return 'Recent';
+    const d = new Date(createdAt);
+    if (isNaN(d.getTime())) return 'Recent';
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterday = today - 86400000;
+    const last7Days = today - 7 * 86400000;
+    const last30Days = today - 30 * 86400000;
+    
+    const time = d.getTime();
+    if (time >= today) return 'Today';
+    if (time >= yesterday) return 'Yesterday';
+    if (time >= last7Days) return 'Previous 7 Days';
+    if (time >= last30Days) return 'Previous 30 Days';
+    return 'Older';
+  };
+
   const filteredChats = chats.filter(c => c.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
+  const visibleChats = filteredChats.filter(chat => {
+    if (chatFilter === 'active_project' && activeWorkspaceId) {
+      const wsName = workspaces.find(w => w._id === activeWorkspaceId)?.name;
+      return chat.id === activeWorkspaceId || (wsName && chat.title === wsName);
+    }
+    if (chatFilter === 'today') {
+      return getChatDateGroup(chat.createdAt) === 'Today';
+    }
+    return true;
+  });
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -468,8 +534,43 @@ export function AIChatPage() {
     router.push('/login');
   };
 	const [isModalsOpen, setIsModalsOpen] = useState(false);
+	const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+	const [createProjectInitialLang, setCreateProjectInitialLang] = useState<any | null>(null);
 	const [githubAccount, setGithubAccount] = useState<any>(null);
 	const bumpRefresh = useIDEStore((s) => s.bumpRefresh);
+
+	useEffect(() => {
+		const handleOpenPrompt = (e: Event) => {
+			const detail = (e as CustomEvent<{ lang?: any }>).detail;
+			setCreateProjectInitialLang(detail?.lang || null);
+			setIsCreateProjectModalOpen(true);
+		};
+		document.addEventListener('mcode:open-create-project', handleOpenPrompt);
+		return () => document.removeEventListener('mcode:open-create-project', handleOpenPrompt);
+	}, []);
+
+	const handleWorkspaceCreated = useCallback((newId: string, initialFile: { path: string; content: string }) => {
+		setActiveWorkspaceId(newId);
+		try {
+			localStorage.setItem('mcode_active_workspace_id', newId);
+		} catch (err) {
+			reportError('Failed to save active workspace id', err);
+		}
+		api.get('/api/v1/workspaces', { timeout: 10000 })
+			.then(r => r.data?.workspaces && setWorkspaces(r.data.workspaces))
+			.catch(() => {});
+
+		useIDEStore.getState().setWelcomeOpen(false);
+		useIDEStore.getState().setOpenFiles([initialFile.path]);
+		useIDEStore.getState().setActivePath(initialFile.path);
+		useIDEStore.getState().setFileContent(initialFile.path, initialFile.content);
+		useIDEStore.getState().setSavedContent(initialFile.path, initialFile.content);
+
+		useIDEStore.getState().setActiveActivityBar('explorer');
+		useIDEStore.getState().setSidebarOpen(true);
+		leftPanelRef.current?.expand();
+		bumpRefresh();
+	}, [bumpRefresh, leftPanelRef]);
 
   // Branch selector state
   const [branches, setBranches] = useState<any[]>([]);
@@ -548,11 +649,23 @@ export function AIChatPage() {
 		const [localToasts, setLocalToasts] = useState<any[]>([]);
 		const showToast = useCallback((message: string, type: string = 'success') => {
 			const id = Date.now().toString();
-			setLocalToasts((prev) => [...prev, { id, message, type }]);
+			setLocalToasts((prev) => [...prev.slice(-1), { id, message, type }]);
 			setTimeout(() => {
 				setLocalToasts((prev) => prev.filter((t) => t.id !== id));
 			}, 3500);
 		}, []);
+
+  // Auto-dismiss Redux server toasts so connection banners never stack or stick forever
+  useEffect(() => {
+    if (serverToasts && serverToasts.length > 0) {
+      const timers = serverToasts.map((t) =>
+        setTimeout(() => {
+          if (t.id) dispatch(removeToast(t.id));
+        }, 3500)
+      );
+      return () => timers.forEach(clearTimeout);
+    }
+  }, [serverToasts, dispatch]);
 
   const runCleanMode = useCallback(async () => {
     setIsCleanScanning(true);
@@ -651,7 +764,7 @@ export function AIChatPage() {
 	//  AI Code Assistant → agent mode (full CLI: god-mode, waves, step cards, all tools)
 	//  AI Code Editor    → IDE in chat mode (edit + follow-ups, no agent planning)
 	const TABS = ['Chat', 'AI Code Assistant', 'AI Code Editor'];
-	const TAB_MODE: Record<string, string> = { Chat: 'chat', 'AI Code Assistant': 'agent', 'AI Code Editor': 'chat' };
+	const TAB_MODE: Record<string, string> = { Chat: 'chat', 'AI Code Assistant': 'agent', 'AI Code Editor': 'agent' };
 	const TAB_WIDTH: Record<string, number> = { Chat: 76, 'AI Code Assistant': 170, 'AI Code Editor': 170 };
 	const TAB_LEFT = (() => { const m: Record<string, number> = {}; let c = 2; for (const t of TABS) { m[t] = c; c += TAB_WIDTH[t]; } return m; })();
 	const executeTabSwitch = (tab: string, startNewProcess = false) => {
@@ -805,6 +918,14 @@ export function AIChatPage() {
             setActiveWorkspaceId(matched._id);
           } else {
             setActiveWorkspaceId(data.workspaces[0]._id);
+          }
+        } else {
+          setWorkspaces([]);
+          setActiveWorkspaceId(null);
+          try {
+            localStorage.removeItem('mcode_active_workspace_id');
+          } catch (err) {
+            reportError('Failed to clear active workspace id', err);
           }
         }
       })
@@ -1383,10 +1504,12 @@ export function AIChatPage() {
   };
 
   const handleExport = async () => {
-    if (!activeWorkspaceId) return showToast('No active workspace', 'error');
+    const wsId = activeWorkspaceId || workspaces?.[0]?._id;
+    if (!wsId) return showToast('No active workspace', 'error');
+    const wsName = workspaces?.find(w => w._id === wsId)?.name || wsId;
     try {
-      const res = await api.get(`/api/v1/workspaces/${activeWorkspaceId}/export`, {
-        timeout: 10000,
+      const res = await api.get(`/api/v1/workspaces/${wsId}/export`, {
+        timeout: 60000,
         responseType: 'blob'
       });
       if (res.status >= 400) throw new Error('Export failed');
@@ -1394,12 +1517,25 @@ export function AIChatPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `workspace-export-${activeWorkspaceId}.zip`;
+      a.download = `${wsName}.zip`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (err) {
+      showToast('Workspace exported successfully!');
+    } catch (err: any) {
       console.error('Export failed:', err);
-      showToast('Failed to export workspace', 'error');
+      let message = 'Failed to export workspace';
+      if (err?.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.error?.message) message = parsed.error.message;
+        } catch (e) {
+          console.debug('[AIChatPage] export error response was not JSON:', e);
+        }
+      } else if (err?.message) {
+        message = err.message;
+      }
+      showToast(message, 'error');
     }
   };
 
@@ -1588,6 +1724,15 @@ export function AIChatPage() {
         }
       }
     }
+    if (e.key === 'ArrowUp' && !prompt.trim()) {
+      const userMsgs = messages.filter((m) => m.role === 'user' && m.text);
+      if (userMsgs.length > 0) {
+        e.preventDefault();
+        const lastUserPrompt = userMsgs[userMsgs.length - 1].text;
+        if (lastUserPrompt) setPrompt(lastUserPrompt);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       submitFn(e);
     }
@@ -1663,7 +1808,7 @@ export function AIChatPage() {
 
   return (
     <div 
-      className="flex flex-col h-screen w-screen bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden relative"
+      className="dark flex flex-col h-screen w-screen bg-[#0a0a0a] text-[#f4f4f5] font-sans overflow-hidden relative"
       onDragOver={handleGlobalDragOver}
       onDragLeave={handleGlobalDragLeave}
       onDrop={handleGlobalDrop}
@@ -1695,22 +1840,42 @@ export function AIChatPage() {
         className="hidden" 
       />
       <header className="w-full flex items-center justify-between px-3.5 py-2 border-b border-white/10 bg-[#0a0a0d]/90 backdrop-blur-md relative min-h-[52px] z-50 flex-shrink-0 shadow-md select-none">
-        {/* Left: Logo & VS Code Menu Bar */}
-        <div className="flex items-center gap-3 z-20 flex-shrink-0">
+        {/* Left: Logo, Home button & VS Code Menu Bar */}
+        <div className="flex items-center gap-2.5 z-20 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <div className="relative group flex items-center justify-center">
-              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-40 group-hover:opacity-80 transition duration-300"></div>
-              <div className="relative w-7 h-7 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
-                <img
-                  src="/logo.png"
-                  alt="MCODE"
-                  className="w-full h-full object-cover rounded-lg"
-                />
+            <Link
+              href="/"
+              title="Return to Home Page"
+              className="flex items-center gap-2 group cursor-pointer select-none"
+            >
+              <div className="relative group/logo flex items-center justify-center">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-xl blur opacity-40 group-hover/logo:opacity-90 transition duration-300"></div>
+                <div className="relative w-7 h-7 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center transition-transform group-hover/logo:scale-105">
+                  <img
+                    src="/logo.png"
+                    alt="MCODE"
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                </div>
               </div>
-            </div>
-            {activeTab === 'AI Code Editor' ? (
+              <span className="text-white font-bold tracking-tight text-sm bg-clip-text text-transparent bg-gradient-to-r from-white via-white/90 to-white/60 group-hover:text-blue-400 transition-colors">
+                M CODE
+              </span>
+            </Link>
+
+            {/* Dedicated Return to Home Button */}
+            <Link
+              href="/"
+              title="Return to Home Page"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white/75 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-blue-500/40 transition-all hover:scale-105 active:scale-95 shadow-sm ml-0.5"
+            >
+              <Home className="w-3.5 h-3.5 text-blue-400" />
+              <span>Home</span>
+            </Link>
+
+            {activeTab === 'AI Code Editor' && (
               <IDEMenuBar
-                className="bg-transparent border-0 h-auto"
+                className="bg-transparent border-0 h-auto ml-1"
                 onOpenFile={() => fileInputRef.current?.click()}
                 onOpenFolder={() => {
                   if ("showDirectoryPicker" in window) {
@@ -1742,10 +1907,6 @@ export function AIChatPage() {
                   toast.success("All files saved");
                 }}
               />
-            ) : (
-              <span className="text-white font-bold tracking-tight text-sm bg-clip-text text-transparent bg-gradient-to-r from-white via-white/90 to-white/60">
-                M CODE
-              </span>
             )}
           </div>
         </div>
@@ -2016,10 +2177,14 @@ export function AIChatPage() {
             <>
             {/* Header */}
             <div className="h-16 flex items-center justify-between px-5 border-b border-white/5 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="relative group flex items-center justify-center flex-shrink-0">
-                  <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl blur opacity-40 group-hover:opacity-80 transition duration-300"></div>
-                  <div className="relative w-8 h-8 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center">
+              <Link
+                href="/"
+                title="Return to Home Page"
+                className="flex items-center gap-3 group cursor-pointer"
+              >
+                <div className="relative group/logo flex items-center justify-center flex-shrink-0">
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-xl blur opacity-40 group-hover/logo:opacity-90 transition duration-300"></div>
+                  <div className="relative w-8 h-8 rounded-xl overflow-hidden bg-[#09090b] border border-white/15 p-0.5 flex items-center justify-center transition-transform group-hover/logo:scale-105">
                     <img
                       src="/logo.png"
                       alt="MCODE"
@@ -2027,10 +2192,20 @@ export function AIChatPage() {
                     />
                   </div>
                 </div>
-                <span className="text-white font-bold tracking-wider text-sm">MCODE</span>
-              </div>
-              <div className="flex items-center gap-3">
-                  <button onClick={() => setIsHistoryOpen(true)} className="text-white/40 hover:text-white transition-colors flex items-center justify-center rounded-md hover:bg-white/5 p-1">
+                <span className="text-white font-bold tracking-wider text-sm group-hover:text-blue-400 transition-colors">MCODE</span>
+              </Link>
+              <div className="flex items-center gap-1.5">
+                <Link
+                  href="/"
+                  className="text-white/40 hover:text-white hover:bg-white/5 p-1 rounded-md transition-colors flex items-center justify-center"
+                  title="Return to Home Page"
+                >
+                  <Home className="w-4 h-4 text-blue-400" />
+                </Link>
+                  <button onClick={() => setIsHistoryOpen(true)} className="text-white/40 hover:text-white transition-colors flex items-center justify-center rounded-md hover:bg-white/5 p-1" title="Chat History">
+                    <History className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setIsHistoryOpen(true)} className="text-white/40 hover:text-white transition-colors flex items-center justify-center rounded-md hover:bg-white/5 p-1" title="Search Chats">
                     <Search className="w-4 h-4" />
                   </button>
                   {connectionState !== 'connected' && (
@@ -2074,64 +2249,376 @@ export function AIChatPage() {
               {/* Recent Chats Section */}
               <div className="flex flex-col mt-2">
                 <div className="flex items-center justify-between px-4 mb-2">
-                  <h3 className="text-white/30 text-[10px] font-bold tracking-[0.15em] uppercase">Recent Chats</h3>
+                  <div className="flex items-center gap-1.5 text-white/40">
+                    <History className="w-3.5 h-3.5" />
+                    <h3 className="text-white/40 text-[10px] font-bold tracking-[0.15em] uppercase">
+                      {chatViewMode === 'project' ? 'Projects & Workspaces' : 'Recent Chats'}
+                    </h3>
+                  </div>
+                  {chatFilter !== 'all' && (
+                    <span className="text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded font-medium">
+                      {chatFilter === 'active_project' ? 'Project Only' : 'Today Only'}
+                    </span>
+                  )}
                 </div>
 
                 {/* Group/Project Toolbar */}
                 <div className="flex items-center justify-between px-4 mb-3">
                   <div className="flex bg-black/40 rounded-full p-[3px] border border-white/5">
-                    <button className="flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] font-medium transition-colors text-[#666] hover:text-white">
+                    <button
+                      type="button"
+                      onClick={() => setChatViewMode('group')}
+                      className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                        chatViewMode === 'group'
+                          ? 'bg-[#252525] text-white/90 border border-white/5 shadow-sm'
+                          : 'text-[#666] hover:text-white'
+                      }`}
+                      title="Group chats by date"
+                    >
                       <Hash className="w-3.5 h-3.5 opacity-60" />
                       Group
                     </button>
-                    <button className="flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] font-medium transition-colors bg-[#252525] text-white/90 border border-white/5 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => setChatViewMode('project')}
+                      className={`flex items-center gap-1.5 px-3.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                        chatViewMode === 'project'
+                          ? 'bg-[#252525] text-white/90 border border-white/5 shadow-sm'
+                          : 'text-[#666] hover:text-white'
+                      }`}
+                      title="View by Project Workspaces"
+                    >
                       <Folder className="w-3.5 h-3.5 opacity-80" />
                       Project
                     </button>
                   </div>
-                  <div className="flex items-center gap-2.5 pr-1">
-                    <button className="text-[#666] hover:text-white transition-colors">
-                      <Minimize2 className="w-3.5 h-3.5" />
+
+                  <div className="flex items-center gap-1.5 pr-1 relative" ref={filterMenuRef}>
+                    {/* CHAT HISTORY ICON BUTTON */}
+                    <button
+                      type="button"
+                      onClick={() => setIsHistoryOpen(true)}
+                      className="p-1 rounded-md text-white/50 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                      title="Chat History (Search & Browse)"
+                    >
+                      <History className="w-3.5 h-3.5" />
                     </button>
-                    <button className="text-[#666] hover:text-white transition-colors">
-                      <ListFilter className="w-3.5 h-3.5" />
+
+                    {/* ADD PROJECT ICON BUTTON */}
+                    <button
+                      type="button"
+                      onClick={() => setIsModalsOpen(true)}
+                      className="p-1 rounded-md text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-all cursor-pointer"
+                      title="Add / Upload Project (Folder, ZIP, Git)"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
                     </button>
-                    <button className="text-[#666] hover:text-white transition-colors">
+
+                    {/* MINIMIZE / COLLAPSE ALL TOGGLE */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (collapsedGroups.size > 0) {
+                          setCollapsedGroups(new Set());
+                        } else {
+                          const allKeys = chatViewMode === 'group'
+                            ? ['Today', 'Yesterday', 'Previous 7 Days', 'Previous 30 Days', 'Older', 'Recent']
+                            : workspaces.map((w: any) => w._id);
+                          setCollapsedGroups(new Set(allKeys));
+                        }
+                      }}
+                      className={`p-1 rounded-md transition-all cursor-pointer ${
+                        collapsedGroups.size > 0 ? 'text-amber-400 bg-amber-400/10' : 'text-[#666] hover:text-white hover:bg-white/5'
+                      }`}
+                      title={collapsedGroups.size > 0 ? "Expand all groups" : "Collapse all groups"}
+                    >
+                      {collapsedGroups.size > 0 ? (
+                        <Maximize2 className="w-3.5 h-3.5" />
+                      ) : (
+                        <Minimize2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+
+                    {/* LIST FILTER BUTTON & DROPDOWN */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowFilterMenu(!showFilterMenu)}
+                        className={`p-1 rounded-md transition-all cursor-pointer ${
+                          chatFilter !== 'all' ? 'text-blue-400 bg-blue-400/10' : 'text-[#666] hover:text-white hover:bg-white/5'
+                        }`}
+                        title="Filter chats"
+                      >
+                        <ListFilter className="w-3.5 h-3.5" />
+                      </button>
+
+                      {showFilterMenu && (
+                        <div className="absolute right-0 top-full mt-1.5 w-44 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 py-1 text-xs">
+                          <div className="px-3 py-1 text-[10px] uppercase font-bold text-white/40 tracking-wider">
+                            Filter Chats
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { setChatFilter('all'); setShowFilterMenu(false); }}
+                            className={`w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-white/5 cursor-pointer ${chatFilter === 'all' ? 'text-emerald-400 font-semibold' : 'text-white/70'}`}
+                          >
+                            <span>All Chats</span>
+                            {chatFilter === 'all' && <Check className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setChatFilter('active_project'); setShowFilterMenu(false); }}
+                            className={`w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-white/5 cursor-pointer ${chatFilter === 'active_project' ? 'text-emerald-400 font-semibold' : 'text-white/70'}`}
+                          >
+                            <span>Current Project Only</span>
+                            {chatFilter === 'active_project' && <Check className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setChatFilter('today'); setShowFilterMenu(false); }}
+                            className={`w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-white/5 cursor-pointer ${chatFilter === 'today' ? 'text-emerald-400 font-semibold' : 'text-white/70'}`}
+                          >
+                            <span>Today's Chats</span>
+                            {chatFilter === 'today' && <Check className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ARCHIVE / CLEAR ALL CHATS BUTTON */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (visibleChats.length === 0) return;
+                        if (!window.confirm(`Clear ${visibleChats.length} recent chat session(s)?`)) return;
+                        const idsToDelete = visibleChats.map(c => c.id);
+                        setChats(prev => prev.filter(c => !idsToDelete.includes(c.id)));
+                        for (const id of idsToDelete) {
+                          api.delete(`/api/v1/sessions/${id}`).catch(() => {});
+                        }
+                        dispatch(clearChat());
+                        setActiveWorkspaceId(null);
+                        window.history.replaceState({}, '', '/ai/chat');
+                      }}
+                      className="p-1 rounded-md text-[#666] hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
+                      title="Clear all recent chats"
+                    >
                       <Archive className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  {filteredChats.map(chat => (
-                    <button 
-                      key={chat.id} 
-                      onClick={() => setActiveWorkspaceId(chat.id)}
-                      className={`flex items-center justify-between w-full rounded-xl px-4 py-3 group transition-all ${chat.isActive ? 'bg-white/5 text-emerald-400 border border-white/5 hover:border-white/10' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}
+                {/* ─── GROUP VIEW MODE ─── */}
+                {chatViewMode === 'group' && (
+                  <div className="flex flex-col gap-3">
+                    {(() => {
+                      const GROUP_KEYS = ['Today', 'Yesterday', 'Previous 7 Days', 'Previous 30 Days', 'Older', 'Recent'];
+                      const grouped: Record<string, typeof filteredChats> = {};
+
+                      for (const chat of visibleChats) {
+                        const g = getChatDateGroup(chat.createdAt);
+                        if (!grouped[g]) grouped[g] = [];
+                        grouped[g].push(chat);
+                      }
+
+                      const activeGroups = GROUP_KEYS.filter(k => grouped[k] && grouped[k].length > 0);
+
+                      if (activeGroups.length === 0) {
+                        return <div className="text-center py-4 text-white/30 text-xs">No chats found.</div>;
+                      }
+
+                      return activeGroups.map(groupName => {
+                        const items = grouped[groupName];
+                        const isCollapsed = collapsedGroups.has(groupName);
+
+                        return (
+                          <div key={groupName} className="flex flex-col gap-1">
+                            {/* Group Accordion Header */}
+                            <button
+                              type="button"
+                              onClick={() => toggleGroupCollapse(groupName)}
+                              className="flex items-center justify-between w-full px-3 py-1 text-[10px] font-bold text-white/40 uppercase tracking-wider hover:text-white/70 transition-colors cursor-pointer select-none"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+                                <span>{groupName}</span>
+                              </div>
+                              <span className="text-[9px] font-mono font-medium px-1.5 py-0.5 rounded-full bg-white/5 text-white/40">
+                                {items.length}
+                              </span>
+                            </button>
+
+                            {/* Group Chat Items */}
+                            {!isCollapsed && (
+                              <div className="flex flex-col gap-1">
+                                {items.map(chat => (
+                                  <div
+                                    key={chat.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => setActiveWorkspaceId(chat.id)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        setActiveWorkspaceId(chat.id);
+                                      }
+                                    }}
+                                    className={`flex items-center justify-between w-full rounded-xl px-4 py-2.5 group transition-all cursor-pointer select-none ${
+                                      chat.isActive
+                                        ? 'bg-white/10 text-emerald-400 border border-white/10'
+                                        : 'text-white/40 hover:text-white/80 hover:bg-white/5'
+                                    }`}
+                                  >
+                                    <div className="flex gap-3 text-left flex-1 min-w-0 pr-2">
+                                      <MessageSquare className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${chat.isActive ? 'text-blue-400' : 'text-white/40'}`} />
+                                      <span className={`text-xs font-medium leading-relaxed truncate ${chat.isActive ? 'text-white/90 group-hover:text-white transition-colors' : ''}`}>
+                                        {(chat.title as string).split('\n').map((line, i) => (
+                                          <React.Fragment key={i}>
+                                            {line}{i === 0 && <br/>}
+                                          </React.Fragment>
+                                        ))}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => deleteChat(chat.id, e)}
+                                      className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/10 rounded-md text-white/30 hover:text-red-400 transition-all flex-shrink-0 cursor-pointer"
+                                      title="Delete chat"
+                                      aria-label="Delete chat"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
+
+                {/* ─── PROJECT VIEW MODE ─── */}
+                {chatViewMode === 'project' && (
+                  <div className="flex flex-col gap-2">
+                    {/* Top Action: Add New Project */}
+                    <button
+                      type="button"
+                      onClick={() => setIsModalsOpen(true)}
+                      className="flex items-center justify-between w-full px-3.5 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 text-xs font-medium transition cursor-pointer mb-1 shadow-xs"
                     >
-                      <div className="flex gap-3 text-left">
-                        <MessageSquare className={`w-4 h-4 flex-shrink-0 mt-0.5 ${chat.isActive ? 'text-blue-400' : ''}`} />
-                        <span className={`text-xs font-medium leading-relaxed ${chat.isActive ? 'text-white/90 group-hover:text-white transition-colors' : ''}`}>
-                          { (chat.title as string).split('\n').map((line, i) => (
-                            <React.Fragment key={i}>
-                              {line}{i === 0 && <br/>}
-                            </React.Fragment>
-                          ))}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        <FolderPlus className="w-4 h-4 text-emerald-400" />
+                        <span>Add / Upload Project</span>
                       </div>
-                        <button 
-                          onClick={(e) => deleteChat(chat.id, e)} 
-                          className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/10 rounded-md text-white/30 hover:text-red-400 transition-all flex-shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <Plus className="w-3.5 h-3.5 text-emerald-400/70" />
                     </button>
-                  ))}
-                  
-                  {filteredChats.length === 0 && (
-                    <div className="text-center py-4 text-white/30 text-xs">No chats found.</div>
-                  )}
-                </div>
+
+                    {workspaces.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 text-center">
+                        <Folder className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                        <p className="text-xs text-white/40 leading-relaxed mb-3">No projects found. Upload a folder, zip, or clone from Git to start.</p>
+                        <button
+                          type="button"
+                          onClick={() => setIsModalsOpen(true)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 transition cursor-pointer"
+                        >
+                          + Create Project
+                        </button>
+                      </div>
+                    ) : (
+                      workspaces.map((w: any) => {
+                        const isActiveWs = activeWorkspaceId === w._id;
+                        const isCollapsed = collapsedGroups.has(w._id);
+                        const wsChats = filteredChats.filter(c => c.id === w._id || c.title === w.name);
+
+                        return (
+                          <div
+                            key={w._id}
+                            className={`rounded-xl border transition-all overflow-hidden ${
+                              isActiveWs
+                                ? 'bg-white/10 border-emerald-500/30 shadow-xs'
+                                : 'bg-white/[0.02] border-white/5 hover:border-white/10 hover:bg-white/[0.04]'
+                            }`}
+                          >
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                setActiveWorkspaceId(w._id);
+                                if (typeof window !== 'undefined') {
+                                  localStorage.setItem('mcode_active_workspace_id', w._id);
+                                }
+                              }}
+                              className="flex items-center justify-between px-3 py-2.5 cursor-pointer select-none"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                                <Folder className={`w-4 h-4 flex-shrink-0 ${isActiveWs ? 'text-emerald-400' : 'text-white/50'}`} />
+                                <span className={`text-xs font-semibold truncate ${isActiveWs ? 'text-white' : 'text-white/80'}`}>
+                                  {w.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {isActiveWs && (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" />
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleGroupCollapse(w._id);
+                                  }}
+                                  className="p-1 hover:bg-white/10 rounded text-white/40 hover:text-white transition cursor-pointer"
+                                  title={isCollapsed ? "Expand chats" : "Collapse chats"}
+                                >
+                                  <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Project Chats Sublist */}
+                            {!isCollapsed && (
+                              <div className="px-2 pb-2 pt-0.5 space-y-1 border-t border-white/5 bg-black/20">
+                                {wsChats.map(chat => (
+                                  <div
+                                    key={chat.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => setActiveWorkspaceId(chat.id)}
+                                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition cursor-pointer ${
+                                      chat.isActive
+                                        ? 'bg-emerald-500/15 text-emerald-300 font-medium'
+                                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0 pr-1">
+                                      <MessageSquare className="w-3 h-3 opacity-60 flex-shrink-0" />
+                                      <span className="truncate">{chat.title}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => deleteChat(chat.id, e)}
+                                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded text-white/30 hover:text-red-400 transition cursor-pointer"
+                                      title="Delete chat"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                                {wsChats.length === 0 && (
+                                  <div className="text-[11px] text-white/30 italic px-2 py-1">
+                                    No chat session attached to this project
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
 
             </div>
@@ -2252,14 +2739,32 @@ export function AIChatPage() {
             </div>
 
             {/* Footer */}
-            <div className="h-14 flex items-center justify-between px-6 border-t border-white/5 bg-[#121212] flex-shrink-0">
-              <button onClick={() => setIsHistoryOpen(true)} className="text-white/30 hover:text-white transition-colors">
+            <div className="h-14 flex items-center justify-between px-5 border-t border-white/5 bg-[#121212] flex-shrink-0 relative z-20">
+              <Link
+                href="/"
+                className="text-white/40 hover:text-blue-400 transition-colors p-1.5 rounded-lg hover:bg-white/5 cursor-pointer"
+                title="Return to Home Page"
+              >
+                <Home className="w-5 h-5" />
+              </Link>
+              <button 
+                onClick={() => setIsHistoryOpen(true)} 
+                className="text-white/40 hover:text-emerald-400 transition-colors p-1.5 rounded-lg hover:bg-white/5 cursor-pointer"
+                title="Chat History"
+              >
                 <History className="w-5 h-5" />
               </button>
-              <Link href="/settings" className="text-white/30 hover:text-white transition-colors cursor-pointer" title={t('ide.settings')}>
+              <Link 
+                href="/settings" 
+                className="text-white/40 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 cursor-pointer" 
+                title={t('ide.settings')}
+              >
                 <Settings className="w-5 h-5" />
               </Link>
-              <button className="text-white/30 hover:text-white transition-colors">
+              <button 
+                className="text-white/40 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 cursor-pointer"
+                title="Help & Documentation"
+              >
                 <HelpCircle className="w-5 h-5" />
               </button>
             </div>
@@ -2354,21 +2859,33 @@ export function AIChatPage() {
                   
                   <div className="relative z-10 p-4 flex flex-col gap-2">
                     
-                    {/* Top Action Bar (Upload & Git Branch) */}
-                    {activeTab !== 'Chat' && (
-                      <div className="flex items-center gap-3 px-1 pb-1">
-                        <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
-                          {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
-                          <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
-                          <ChevronDown className="w-3 h-3 opacity-50"/>
-                        </motion.button>
-                        <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title={t('ide.gitBranch')}>
-                          <GitBranch className="w-4 h-4 text-blue-400"/>
-                          <span>{activeBranch}</span>
-                          <ChevronDown className="w-3 h-3 opacity-50"/>
-                        </motion.button>
+                    {/* Top Action Bar (Upload, Git Branch & Mode Selection) */}
+                    <div className="flex items-center justify-between gap-1.5 px-1 pb-1 flex-wrap min-w-0">
+                      {activeTab !== 'Chat' ? (
+                        <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
+                          <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-xs font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer flex-shrink-0 whitespace-nowrap" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
+                            {isUploading ? <Loader2 className="w-3 h-3 animate-spin text-purple-400" /> : <UploadCloud className="w-3.5 h-3.5 text-purple-400"/>}
+                            <span className="truncate max-w-[75px] sm:max-w-[120px]" suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
+                            <ChevronDown className="w-2.5 h-2.5 opacity-50"/>
+                          </motion.button>
+                          <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded-md border border-blue-500/20 transition cursor-pointer flex-shrink-0 whitespace-nowrap" title={t('ide.gitBranch')}>
+                            <GitBranch className="w-3 h-3 text-blue-400"/>
+                            <span className="truncate max-w-[50px] sm:max-w-[80px]">{activeBranch}</span>
+                            <ChevronDown className="w-2.5 h-2.5 opacity-50"/>
+                          </motion.button>
+                        </div>
+                      ) : <div />}
+                      <div className="flex-shrink-0 ml-auto">
+                        <ModeSelector
+                          mode={mode}
+                          onModeChange={(m) => dispatch(setMode(m))}
+                          godMode={godMode}
+                          onGodModeChange={(g) => dispatch(setGodMode(g))}
+                          size="xs"
+                          compact
+                        />
                       </div>
-                    )}
+                    </div>
 
                     {/* Textarea Container */}
                     {cleanReportData && (
@@ -2413,16 +2930,12 @@ export function AIChatPage() {
                           />
                         )}
                       </AnimatePresence>
-                      <div className="flex items-center justify-between mt-2">
-                        {/* Left Group: Plus */}
-                        <div className="flex items-center gap-2">
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title={t('ide.attachFile')}>
+                      <div className="flex items-center justify-between mt-2 pt-1 border-t border-white/[0.04] gap-1.5 w-full min-w-0">
+                        {/* Left Action Buttons */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink min-w-0 overflow-x-auto no-scrollbar">
+                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50 flex-shrink-0" title={t('ide.attachFile')}>
                             {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Paperclip className="w-4 h-4" />}
                           </motion.button>
-                        </div>
-
-                        {/* Middle Group: Sparkle, Slash, God (Separated) */}
-                        <div className="flex items-center gap-2 ml-auto mr-6">
                           <SparkleButton prompt={prompt} setPrompt={setPrompt} />
                           {activeTab !== 'Chat' && (
                             <motion.button
@@ -2430,25 +2943,24 @@ export function AIChatPage() {
                               whileTap={{ scale: 0.98 }}
                               type="button"
                               onClick={() => runCleanMode()}
-                              className="h-8 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-xs text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer"
+                              className="h-8 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-xs text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer flex-shrink-0"
                               title={t('ide.cleanMode')}
                             >
                               {isCleanScanning ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Scissors className="w-3.5 h-3.5 text-amber-400" />} Clean
                             </motion.button>
                           )}
                           {activeTab === 'AI Code Assistant' && (
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title={t('ide.cmdPalette')}>
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10 flex-shrink-0" title={t('ide.cmdPalette')}>
                               <Slash className="w-4 h-4" />
                             </motion.button>
                           )}
-                          {activeTab === 'AI Code Assistant' && (
-                            <GodModeToggle value={godMode} onChange={(v) => dispatch(setGodMode(v))} />
-                          )}
                         </div>
 
-                        {/* Right Group: Model Selector and Send/Stop */}
-                        <div className="flex items-center gap-2">
+                        {/* Right Group: Output Length, Model Selector and Send/Stop */}
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto">
+                          <OutputLengthSelector compact />
                           <ModelSelector 
+                            compact
                             onAuthRequired={() => router.push('/login')} 
                           />
                           <AnimatePresence mode="wait">
@@ -2461,7 +2973,7 @@ export function AIChatPage() {
                                 animate={{ scale: 1, opacity: 1 }}
                                 exit={{ scale: 0.9, opacity: 0 }}
                                 transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                                className="w-8 h-8 rounded-[10px] bg-[#303030] hover:bg-[#404040] flex items-center justify-center transition-all"
+                                className="w-8 h-8 rounded-[10px] bg-[#303030] hover:bg-[#404040] flex items-center justify-center transition-all flex-shrink-0"
                               >
                                 <Square className="w-4 h-4 text-[#d0d0d0] fill-current" />
                               </motion.button>
@@ -2473,7 +2985,7 @@ export function AIChatPage() {
                                 animate={{ scale: 1, opacity: 1 }}
                                 exit={{ scale: 0.9, opacity: 0 }}
                                 transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                                className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
+                                className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50 flex-shrink-0" 
                                 disabled={!prompt.trim() || isStreaming}
                                 title={t('ide.sendMessage')}
                               >
@@ -2543,7 +3055,9 @@ export function AIChatPage() {
                         ))}
                         <CodebaseReadingCard state={codebaseReading} />
                         <RoleAssignmentTable assignments={roleAssignments} />
-                        <TodoCard plan={plan as any} />
+                        {Boolean(plan && (plan as any).todos && (plan as any).todos.length > 0) && (
+                          <TodoCard plan={plan as any} defaultCollapsed={messages.length > 0} />
+                        )}
                         {godMode && (
                           <WaveProgress
                             waves={waves as any}
@@ -2633,6 +3147,7 @@ export function AIChatPage() {
                       size="md"
                       isNormalChat={mode === 'chat'}
                       undo={undo as any}
+                      onResubmitPrompt={send}
                     />
                     {streamInterrupted && (
                       <StreamInterruptedNotice connectionState={connectionState} />
@@ -2675,21 +3190,7 @@ export function AIChatPage() {
                     
                     <div className="relative z-10 p-4 flex flex-col gap-2">
                       
-                      {/* Top Action Bar (Upload & Git Branch) */}
-                      {activeTab !== 'Chat' && (
-                        <div className="flex items-center gap-3 px-1 pb-1">
-                          <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
-                            {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
-                            <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
-                            <ChevronDown className="w-3 h-3 opacity-50"/>
-                          </motion.button>
-                          <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title={t('ide.gitBranch')}>
-                            <GitBranch className="w-4 h-4 text-blue-400"/>
-                            <span>{activeBranch}</span>
-                            <ChevronDown className="w-3 h-3 opacity-50"/>
-                          </motion.button>
-                        </div>
-                      )}
+
 
                       {cleanReportData && (
                         <div className="w-full mb-3">
@@ -2706,6 +3207,33 @@ export function AIChatPage() {
                       )}
                       {/* Textarea Container */}
                       <div className="bg-[#161616] rounded-[16px] p-3 flex flex-col border border-white/5 shadow-inner relative" ref={commandPickerRef}>
+                        {/* Top Action Bar in Conversation Mode */}
+                        <div className="flex items-center justify-between gap-1.5 mb-2 pb-1.5 border-b border-white/[0.04] flex-wrap min-w-0">
+                          {activeTab !== 'Chat' ? (
+                            <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
+                              <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-xs font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer flex-shrink-0 whitespace-nowrap" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
+                                {isUploading ? <Loader2 className="w-3 h-3 animate-spin text-purple-400" /> : <UploadCloud className="w-3.5 h-3.5 text-purple-400"/>}
+                                <span className="truncate max-w-[75px] sm:max-w-[120px]" suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find(w => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder / File'}</span>
+                                <ChevronDown className="w-2.5 h-2.5 opacity-50"/>
+                              </motion.button>
+                              <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-xs font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded-md border border-blue-500/20 transition cursor-pointer flex-shrink-0 whitespace-nowrap" title={t('ide.gitBranch')}>
+                                <GitBranch className="w-3 h-3 text-blue-400"/>
+                                <span className="truncate max-w-[50px] sm:max-w-[80px]">{activeBranch}</span>
+                                <ChevronDown className="w-2.5 h-2.5 opacity-50"/>
+                              </motion.button>
+                            </div>
+                          ) : <div />}
+                          <div className="flex-shrink-0 ml-auto">
+                            <ModeSelector
+                              mode={mode}
+                              onModeChange={(m) => dispatch(setMode(m))}
+                              godMode={godMode}
+                              onGodModeChange={(g) => dispatch(setGodMode(g))}
+                              size="xs"
+                              compact
+                            />
+                          </div>
+                        </div>
                         <textarea
                           value={prompt}
                           onChange={(e) => {
@@ -2731,81 +3259,83 @@ export function AIChatPage() {
                             />
                           )}
                         </AnimatePresence>
-                        <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-2">
-                          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title={t('ide.uploadProject')}>
-                            {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Plus className="w-4 h-4" />}
-                          </motion.button>
-                          <SparkleButton prompt={prompt} setPrompt={setPrompt} />
-                          {activeTab !== 'Chat' && (
-                            <motion.button
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              type="button"
-                              onClick={() => runReview('diff')}
-                              className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition backdrop-blur-md border border-white/10 cursor-pointer"
-                              title={t('ide.reviewChanges')}
-                            >
-                              <MessageSquare className="w-3.5 h-3.5 text-blue-400" /> Review Changes
+                        <div className="flex items-center justify-between mt-2 pt-1 border-t border-white/[0.04] gap-1.5 w-full min-w-0">
+                          {/* Left Action Buttons */}
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink min-w-0 overflow-x-auto no-scrollbar">
+                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50 flex-shrink-0" title={t('ide.uploadProject')}>
+                              {isUploading ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Plus className="w-4 h-4" />}
                             </motion.button>
-                          )}
-                          {activeTab !== 'Chat' && (
-                            <motion.button
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              type="button"
-                              onClick={() => runCleanMode()}
-                              className="h-8 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-xs text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer"
-                              title={t('ide.cleanMode')}
-                            >
-                              {isCleanScanning ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Scissors className="w-3.5 h-3.5 text-amber-400" />} Clean
-                            </motion.button>
-                          )}
-                          {(activeTab === 'AI Code Assistant' || activeTab === 'AI Code Editor') && (
-                            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title={t('ide.cmdPalette')}>
-                              <Slash className="w-4 h-4" />
-                            </motion.button>
-                          )}
-                          {activeTab === 'AI Code Assistant' && (
-                            <GodModeToggle value={godMode} onChange={(v) => dispatch(setGodMode(v))} />
-                          )}
+                            <SparkleButton prompt={prompt} setPrompt={setPrompt} />
+                            {activeTab !== 'Chat' && (
+                              <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                type="button"
+                                onClick={() => runReview('diff')}
+                                className="h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-1.5 text-xs text-white/60 hover:text-white transition backdrop-blur-md border border-white/10 cursor-pointer flex-shrink-0"
+                                title={t('ide.reviewChanges')}
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
+                                <span className="hidden sm:inline">Review Changes</span>
+                              </motion.button>
+                            )}
+                            {activeTab !== 'Chat' && (
+                              <motion.button
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                type="button"
+                                onClick={() => runCleanMode()}
+                                className="h-8 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-xs text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer flex-shrink-0"
+                                title={t('ide.cleanMode')}
+                              >
+                                {isCleanScanning ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Scissors className="w-3.5 h-3.5 text-amber-400" />}
+                                <span className="hidden sm:inline">Clean</span>
+                              </motion.button>
+                            )}
+                            {(activeTab === 'AI Code Assistant' || activeTab === 'AI Code Editor') && (
+                              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10 flex-shrink-0" title={t('ide.cmdPalette')}>
+                                <Slash className="w-4 h-4" />
+                              </motion.button>
+                            )}
+                          </div>
+                          {/* Right Group: Output Length, Model Selector and Send/Stop */}
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto">
+                            <OutputLengthSelector compact />
+                            <ModelSelector compact />
+                            <AnimatePresence mode="wait">
+                            {isStreaming ? (
+                              <motion.button
+                                key="stop-btn"
+                                type="button"
+                                onClick={interrupt}
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                                className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center transition-all border border-red-500/50 flex-shrink-0"
+                              >
+                                <Square className="w-3 h-3 text-red-400 fill-current" />
+                              </motion.button>
+                            ) : (
+                              <motion.button
+                                key="send-btn"
+                                type="submit" 
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                                className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50 flex-shrink-0" 
+                                disabled={!prompt.trim() || isStreaming}
+                              >
+                                <ArrowUp className="w-4 h-4 drop-shadow-md" />
+                              </motion.button>
+                            )}
+                            </AnimatePresence>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <ModelSelector />
-                          <AnimatePresence mode="wait">
-                          {isStreaming ? (
-                            <motion.button
-                              key="stop-btn"
-                              type="button"
-                              onClick={interrupt}
-                              initial={{ scale: 0.9, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              exit={{ scale: 0.9, opacity: 0 }}
-                              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                              className="w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center transition-all border border-red-500/50"
-                            >
-                              <Square className="w-3 h-3 text-red-400 fill-current" />
-                            </motion.button>
-                          ) : (
-                            <motion.button
-                              key="send-btn"
-                              type="submit" 
-                              initial={{ scale: 0.9, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              exit={{ scale: 0.9, opacity: 0 }}
-                              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                              className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-400 flex items-center justify-center text-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-50" 
-                              disabled={!prompt.trim() || isStreaming}
-                            >
-                              <ArrowUp className="w-4 h-4 drop-shadow-md" />
-                            </motion.button>
-                          )}
-                          </AnimatePresence>
-                        </div>
-                        </div>
+                      </div>
                     </div>
-                  </div>
-                </form>
+                  </form>
                 </div>
               </motion.div>
             ) : (
@@ -2889,6 +3419,9 @@ export function AIChatPage() {
                           }
                           setActiveWorkspaceId(id);
                           try { localStorage.setItem('mcode_active_workspace_id', id); } catch (e) { reportError('localStorage draft', e, { userVisible: false }); }
+                          api.get('/api/v1/workspaces', { timeout: 10000 })
+                            .then(r => r.data?.workspaces && setWorkspaces(r.data.workspaces))
+                            .catch(() => {});
                           useIDEStore.getState().setActiveActivityBar('explorer');
                           useIDEStore.getState().setSidebarOpen(true);
                           leftPanelRef.current?.expand();
@@ -3123,59 +3656,71 @@ export function AIChatPage() {
         )}
       </AnimatePresence>
 
-      {/* Toast notifications (top-right, auto-dismissing) */}
-      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      {/* Toast notifications (bottom-right, auto-dismissing, modern floating cards) */}
+      <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full">
         <AnimatePresence>
           {(localToasts ?? []).map((toast, i) => (
             <motion.div
               key={toast.id && String(toast.id).trim() ? String(toast.id) : `local-toast-${i}`}
-              initial={{ opacity: 0, x: 100, scale: 0.95 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 100, scale: 0.95 }}
-              transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-              className={`max-w-sm px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 border ${
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className={`px-4 py-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-3 shadow-xl backdrop-blur-md border pointer-events-auto ${
                 toast.type === 'error'
-                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  ? 'bg-red-950/90 border-red-500/40 text-red-200'
+                  : 'bg-[#181820]/95 border-emerald-500/40 text-emerald-300'
               }`}
             >
-              {toast.type === 'error' ? (
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-              )}
-              <span>{toast.message}</span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {toast.type === 'error' ? (
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-400" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+                )}
+                <span className="truncate">{toast.message}</span>
+              </div>
             </motion.div>
           ))}
         </AnimatePresence>
-        {/* Server-side toasts (god-mode, from Redux store) */}
+
+        {/* Server-side toasts (connection, god-mode, from Redux store) */}
         <AnimatePresence>
           {(serverToasts ?? []).map((toast, i) => {
-            const isError = toast.kind === 'error' || toast.kind === 'failed';
+            const isError = toast.kind === 'error' || toast.kind === 'failed' || toast.kind === 'warn';
             return (
               <motion.div
                 key={toast.id && String(toast.id).trim() ? String(toast.id) : `server-toast-${i}`}
-                initial={{ opacity: 0, x: 100, scale: 0.95 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: 100, scale: 0.95 }}
-                transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                className={`max-w-sm px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 border ${
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className={`px-4 py-3 rounded-xl text-xs font-medium flex items-center justify-between gap-3 shadow-xl backdrop-blur-md border pointer-events-auto ${
                   isError
-                    ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                    : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    ? 'bg-[#1a1215]/95 border-amber-500/40 text-amber-200'
+                    : 'bg-[#121c16]/95 border-emerald-500/40 text-emerald-300'
                 }`}
               >
-                {isError ? (
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                ) : (
-                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                )}
-                <span>{toast.text || (toast as any).message}</span>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {isError ? (
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-400" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-400" />
+                  )}
+                  <span className="truncate">{toast.text || (toast as any).message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => dispatch(removeToast(toast.id))}
+                  className="text-neutral-400 hover:text-white p-0.5 rounded transition flex-shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </motion.div>
             );
           })}
         </AnimatePresence>
-	      </div>
+      </div>
 
       {/* Commit Message Modal (replaces window.prompt) */}
       <AnimatePresence>
@@ -3357,15 +3902,22 @@ export function AIChatPage() {
       {/* Mode Switch Modal (Agent -> Editor) */}
       <AnimatePresence>
         {showModeSwitchModal && (
-          <div 
+          <motion.div 
+            key="mode-switch-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             onClick={() => setShowModeSwitchModal(false)}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 cursor-pointer"
           >
             <motion.div
+              key="mode-switch-card"
               onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.15 }}
               className="w-full max-w-lg bg-[#181818] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4 text-white cursor-default"
             >
               <div className="flex items-center gap-3">
@@ -3440,7 +3992,7 @@ export function AIChatPage() {
                 </button>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -3525,6 +4077,14 @@ export function AIChatPage() {
             setUploadProgressText('');
           }
         }}
+      />
+
+      {/* CREATE PROJECT MODAL (Language selection -> Folder name -> Init workspace) */}
+      <CreateProjectModal
+        isOpen={isCreateProjectModalOpen}
+        onClose={() => setIsCreateProjectModalOpen(false)}
+        initialLanguage={createProjectInitialLang}
+        onWorkspaceCreated={handleWorkspaceCreated}
       />
 
       {/* COMMIT & PUSH MODAL */}

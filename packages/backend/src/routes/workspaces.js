@@ -4,8 +4,8 @@ import { keyManagerFromEnv } from '../secret-enc.js';
 import { uploadSingle, uploadFieldArray, UPLOADS_DIR } from '../upload-config.js';
 import { db } from '../db.js';
 import { httpError } from '../http-error.js';
-import { join, resolve as resolvePath, sep as pathSep } from 'node:path';
-import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { join, resolve as resolvePath, sep as pathSep, extname } from 'node:path';
+import { readFile, readdir, mkdir, writeFile, stat } from 'node:fs/promises';
 import { createReadStream, existsSync, symlinkSync, rmSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
@@ -50,6 +50,73 @@ const handleZipfileUpload = uploadSingle('zipfile');
 
 export function workspaceRoutes({ secret, env = process.env } = {}) {
   const router = Router();
+
+  // GET /workspaces/:id/preview* — public static file preview for iframes
+  router.get('/:id/preview*', async (req, res, next) => {
+    try {
+      const wsId = req.params.id;
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: wsId });
+      } catch {}
+      let diskPath = ws?.diskPath;
+      if (!diskPath) {
+        const candidate = join(WORKSPACE_ROOT, wsId);
+        try {
+          const s = await stat(candidate);
+          if (s.isDirectory()) diskPath = candidate;
+        } catch {}
+      }
+      if (!diskPath) {
+        return res.status(404).send('Workspace not found: ' + wsId);
+      }
+
+      let subPath = req.params[0] || '';
+      subPath = subPath.replace(/^\/+/, '');
+      if (!subPath || subPath === '/') subPath = 'index.html';
+
+      const full = safeJoin(diskPath, subPath);
+      let targetFile = full;
+      try {
+        const s = await stat(full);
+        if (s.isDirectory()) {
+          targetFile = join(full, 'index.html');
+        }
+      } catch (err) {
+        if (err.code === 'ENOENT') return res.status(404).send('File not found: ' + subPath);
+        throw err;
+      }
+
+      const mimeTypes = {
+        '.html': 'text/html; charset=utf-8',
+        '.htm': 'text/html; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.js': 'application/javascript; charset=utf-8',
+        '.mjs': 'application/javascript; charset=utf-8',
+        '.json': 'application/json; charset=utf-8',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.ico': 'image/x-icon',
+        '.webp': 'image/webp',
+        '.woff': 'font/woff',
+        '.woff2': 'font/woff2',
+        '.ttf': 'font/ttf'
+      };
+
+      const ext = extname(targetFile).toLowerCase();
+      const content = await readFile(targetFile);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('X-Frame-Options', 'ALLOWALL');
+      res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+      res.send(content);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.use(authMiddleware({ secret }));
 
   // GET /workspaces — list user's workspaces (sorted newest first)
@@ -214,6 +281,7 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit per file
 
       for (const file of files) {
+        if (file.isDir) continue;
         if (results.length >= MAX_TOTAL_MATCHES) break;
         const lowerPath = file.path.toLowerCase();
         if (includes.length > 0 && !includes.some(inc => lowerPath.includes(inc))) continue;
@@ -304,8 +372,11 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
   // POST /workspaces/:id/folder — create a directory
   router.post('/:id/folder', async (req, res, next) => {
     try {
-      const folderPath = req.body?.path || req.query?.path;
+      let folderPath = req.body?.path || req.query?.path;
       if (!folderPath) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path is required' } });
+
+      folderPath = String(folderPath).trim().replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+      if (!folderPath) return res.status(400).json({ error: { code: 'VALIDATION', message: 'valid path is required' } });
 
       let ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
@@ -424,20 +495,46 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
   // gigabytes into a response and exhausting memory/bandwidth.
   router.get('/:id/export', async (req, res, next) => {
     try {
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
-      if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
-      const tooBig = await workspaceExceedsBytes(ws.diskPath, 1_000_000_000);
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {}
+      if (!ws) {
+        try {
+          ws = await db().workspace.findOne({ _id: req.params.id }) || await db().workspace.findOne({ name: req.params.id }) || await db().workspace.findOne({ diskPath: { $regex: req.params.id } });
+        } catch {}
+      }
+      let diskPath = ws?.diskPath;
+      if (!diskPath) {
+        const candidate = join(WORKSPACE_ROOT, req.params.id);
+        try {
+          const s = await stat(candidate);
+          if (s.isDirectory()) diskPath = candidate;
+        } catch {}
+      }
+      if (!diskPath) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+
+      const tooBig = await workspaceExceedsBytes(diskPath, 1_000_000_000);
       if (tooBig) {
         return res.status(413).json({ error: { code: 'WORKSPACE_TOO_LARGE', message: 'workspace exceeds the 1GB export limit — remove build artifacts and retry' } });
       }
 
-      const archiver = (await import('archiver')).default;
-      const archive = archiver('zip', { zlib: { level: 9 } });
-      
-      res.attachment(`${ws.name}.zip`);
+      const mod = await import('archiver');
+      const archiver = mod.default || mod;
+      const archive = typeof archiver === 'function'
+        ? archiver('zip', { zlib: { level: 6 } })
+        : new (archiver.ZipArchive || mod.ZipArchive)({ zlib: { level: 6 } });
+
+      const zipName = `${(ws?.name || req.params.id).replace(/[^\w.-]/g, '_')}.zip`;
+      res.attachment(zipName);
       archive.pipe(res);
-      archive.directory(ws.diskPath, false);
-      
+      archive.on('warning', (err) => console.warn('[workspaces] export warning:', err.message));
+      archive.directory(diskPath, false, (entry) => {
+        const rel = entry.name.replace(/\\/g, '/');
+        if (rel === 'node_modules' || rel.startsWith('node_modules/') || rel === '.git' || rel.startsWith('.git/') || rel === '.next' || rel.startsWith('.next/')) return false;
+        return entry;
+      });
+
       archive.on('error', (err) => next(err));
       await archive.finalize();
     } catch (err) {
@@ -777,8 +874,8 @@ function isIgnoredExtractionPath(normPath) {
   return false;
 }
 
-/** Walk a directory tree and return relative file paths (excludes node_modules, .git, etc.). */
-async function walkDir(dir, base = '', depth = 0, maxDepth = 25) {
+/** Walk a directory tree and return relative file and folder paths (excludes node_modules, .git, etc.). */
+async function walkDir(dir, base = '', depth = 0, maxDepth = 25, includeDirs = true) {
   const files = [];
   if (depth > maxDepth) return files;
   let entries;
@@ -795,12 +892,15 @@ async function walkDir(dir, base = '', depth = 0, maxDepth = 25) {
     const full = join(dir, entry.name);
     const rel = base ? `${base}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
-      files.push(...await walkDir(full, rel, depth + 1, maxDepth));
+      if (includeDirs) {
+        files.push({ path: rel, name: entry.name, isDir: true });
+      }
+      files.push(...await walkDir(full, rel, depth + 1, maxDepth, includeDirs));
     } else {
       if (GLOBAL_SKIP_EXACT_FILES.has(entry.name) || GLOBAL_SKIP_EXACT_FILES.has(entry.name.toLowerCase())) continue;
       const dotIndex = entry.name.lastIndexOf('.');
       if (dotIndex > 0 && GLOBAL_SKIP_EXTENSIONS.has(entry.name.substring(dotIndex + 1).toLowerCase())) continue;
-      files.push({ path: rel, name: entry.name });
+      files.push({ path: rel, name: entry.name, isDir: false });
     }
   }
   return files;

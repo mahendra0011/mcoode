@@ -1,6 +1,6 @@
 /* Placeholder re-export — the real test runner lives in packages/cli/tests/. */
 import { describe, it, expect } from 'vitest';
-import { extractActions, stripActions } from '../src/core/chat-agent.js';
+import { extractActions, stripActions, TOOL_CALL_STREAM_REGEX } from '../src/core/chat-agent.js';
 
 describe('extractActions — model drift tolerance', () => {
   it('parses standard mcode-action fence', () => {
@@ -57,3 +57,32 @@ describe('stripActions — narration purity', () => {
   });
 });
 
+describe('TOOL_CALL_STREAM_REGEX — streaming safety', () => {
+  it('does NOT match standard markdown html code fences', () => {
+    const text = 'The HTML code is:\n```html\n<!DOCTYPE html>\n<html>\n<body>Hello</body>\n</html>\n```';
+    expect(text.search(TOOL_CALL_STREAM_REGEX)).toBe(-1);
+  });
+
+  it('does NOT match standard markdown javascript/typescript/css/python code fences', () => {
+    expect('```javascript\nconsole.log(1);\n```'.search(TOOL_CALL_STREAM_REGEX)).toBe(-1);
+    expect('```ts\nconst x: number = 5;\n```'.search(TOOL_CALL_STREAM_REGEX)).toBe(-1);
+    expect('```css\nbody { color: red; }\n```'.search(TOOL_CALL_STREAM_REGEX)).toBe(-1);
+    expect('```python\nprint("hello")\n```'.search(TOOL_CALL_STREAM_REGEX)).toBe(-1);
+    expect('```\nplain code block\n```'.search(TOOL_CALL_STREAM_REGEX)).toBe(-1);
+  });
+
+  it('matches mcode-action tool fence to suppress streaming', () => {
+    const text = 'Running command:\n```mcode-action\n{"tool":"write_file","args":{"path":"index.html"}}\n```';
+    expect(text.search(TOOL_CALL_STREAM_REGEX)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('matches json action tool fence to suppress streaming', () => {
+    const text = 'Running command:\n```json\n{"tool":"write_file","args":{"path":"index.html"}}\n```';
+    expect(text.search(TOOL_CALL_STREAM_REGEX)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('matches XML tool_call to suppress streaming', () => {
+    const text = 'Calling tool:\n<tool_call>write_file\npath: a.js</tool_call>';
+    expect(text.search(TOOL_CALL_STREAM_REGEX)).toBeGreaterThanOrEqual(0);
+  });
+});

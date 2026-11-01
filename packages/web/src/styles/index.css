@@ -1,63 +1,62 @@
 @import './syntax-highlight.css';
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /* WEB-007: single default theme is always-dark mcode. The shadcn light
-     tokens survive only under `.light` for opt-in use; `:root` carries the
-     dark values so `bg-background`/`text-foreground` (and `body`) are dark
-     by default and cannot drift from `--mcode-*`. */
+  /* LIGHT MODE BY DEFAULT: Crisp, radiant, modern motion-graphics design system */
   :root {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 78 65% 56%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --radius: 0.5rem;
-    --frame: 0 0% 6%;
-  }
-
-  .light {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --background: 210 40% 98%;      /* #f8fafc */
+    --foreground: 222 47% 11%;      /* #09090b deep slate */
+    --card: 0 0% 100%;             /* #ffffff pure white */
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 78 65% 56%; /* Vibrant Green #a8d946 equivalent */
-    --accent-foreground: 0 0% 9%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;     /* #f1f5f9 */
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215 16% 47%; /* #64748b */
+    --accent: 158 64% 52%;          /* #10b981 emerald */
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --radius: 0.5rem;
+    --border: 214 32% 91%;          /* #e2e8f0 clean light border */
+    --input: 214 32% 91%;
+    --ring: 158 64% 52%;
+    --radius: 0.75rem;
     --frame: 0 0% 100%;
   }
 
-  .dark {
+  .light {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 158 64% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 158 64% 52%;
+    --radius: 0.75rem;
+    --frame: 0 0% 100%;
+  }
+
+  .dark,
+  [data-theme="dark"] {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
     --card: 0 0% 3.9%;
@@ -78,28 +77,35 @@
     --input: 0 0% 14.9%;
     --ring: 0 0% 83.1%;
     --frame: 0 0% 6%;
+    --mcode-bg: #09090b;
+    --mcode-panel: #141416;
+    --mcode-border: rgba(255, 255, 255, 0.12);
+    --mcode-text: #f4f4f5;
+    --mcode-text-dim: #a1a1aa;
+    --animated-gradient-text-strong: #ffffff;
+    --animated-gradient-text-soft: #a1a1aa;
   }
 
-  /* mcode color variables — defined at top level so they work without .dark class */
+  /* mcode color variables */
   :root {
-    --mcode-bg: #0d0e12;
-    --mcode-panel: #16171d;
-    --mcode-border: #26272f;
-    --mcode-text: #e6e6ea;
-    --mcode-text-dim: #8b8d98;
-    --mcode-accent: #6c8cff;
-    --mcode-green: #3ecf8e;
-    --mcode-red: #ff6b6b;
-    --mcode-yellow: #f5c451;
-    --mcode-radius: 10px;
-    --mcode-font: 'Inter', -apple-system, sans-serif;
+    --mcode-bg: #f8fafc;
+    --mcode-panel: #ffffff;
+    --mcode-border: #e2e8f0;
+    --mcode-text: #09090b;
+    --mcode-text-dim: #64748b;
+    --mcode-accent: #10b981;
+    --mcode-green: #10b981;
+    --mcode-red: #ef4444;
+    --mcode-yellow: #f59e0b;
+    --mcode-radius: 12px;
+    --mcode-font: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
     --mcode-mono: 'JetBrains Mono', 'SF Mono', monospace;
-    --animated-gradient-text-strong: #fff;
-    --animated-gradient-text-soft: #ffffff38;
+    --animated-gradient-text-strong: #10b981;
+    --animated-gradient-text-soft: #38bdf8;
   }
 
   :root {
-    --color-brand: #3b82f6;
+    --color-brand: #10b981;
     --mcode-interaction-progress: 1;
     --mcode-interaction-remaining-ms: 240000;
     --mcode-stream-animation-delay: 0s;
@@ -111,12 +117,58 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased min-h-screen;
-    background-color: var(--mcode-bg, #0d0e12);
-    color: var(--mcode-text, #e6e6ea);
+    @apply bg-background text-foreground antialiased min-h-screen;
+    font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
     overscroll-behavior: none;
   }
 }
+
+/* Motion graphic keyframes and utility styling */
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-7px) rotate(0.4deg); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.06); }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-float {
+  animation: floatSlow 6s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 5s ease-in-out infinite;
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradientShift 5s ease infinite;
+}
+
+.glass-pill-light {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
 
 .bg-phone-screen {
   background-color: #f3f4f6;
@@ -279,12 +331,12 @@
    animated `color`, which is meaningless for a 1.5px-wide text cursor. The
    streaming cursor animates `opacity` at the spec timing in ChatMessage.tsx. */
 
-/* Animated gradient text — mcode's thinking label animation (4s linear infinite) */
+/* Animated gradient text — vibrant glowing thinking animation (3s continuous cycle) */
 @keyframes gradient-flow {
-  0% { background-position: 100% 0; }
-  50% { background-position: 0 0; }
-  to { background-position: 0 0; }
- }
+  0% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+  100% { background-position: 0% center; }
+}
 
 /* Collapsible animation */
 @keyframes mcode-collapsible-up {
@@ -447,25 +499,29 @@
   animation: pulse-caret 1s step-end infinite;
 }
 
-/* mcode animated gradient text — used for the "Thinking..." label */
+/* Luminous white-silver animated shimmer text — high contrast, ultra clean, maximum visibility */
 .animated-gradient-text {
-  background: linear-gradient(90deg,
-    var(--animated-gradient-text-strong) 0%,
-    var(--animated-gradient-text-strong) 34%,
-    var(--animated-gradient-text-soft) 50%,
-    var(--animated-gradient-text-strong) 66%,
-    var(--animated-gradient-text-strong) 100%
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    rgba(255, 255, 255, 0.4) 25%,
+    #ffffff 50%,
+    rgba(255, 255, 255, 0.4) 75%,
+    #ffffff 100%
   );
-  color: #0000;
+  color: transparent;
   -webkit-text-fill-color: transparent;
   will-change: background-position;
   backface-visibility: hidden;
-  background-size: 300% 100%;
+  background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
-  animation: 4s linear infinite gradient-flow;
+  animation: 2.2s linear infinite gradient-flow;
   display: inline-block;
   transform: translateZ(0);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.7));
 }
 
 /* Tool/stream text fade-in (also applied via data attributes above) */
@@ -534,7 +590,7 @@
 
 .startup-title {
   margin-top: 1.5rem;
-  background: linear-gradient(90deg, #10b981, #3b82f6, #a854f7);
+  background: linear-gradient(90deg, #ffffff, #d4d4d8, #ffffff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

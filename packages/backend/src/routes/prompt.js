@@ -148,6 +148,24 @@ export function promptRoutes({ secret } = {}) {
     }
   });
 
+  router.put('/library/:id', authMiddleware({ secret }), async (req, res, next) => {
+    try {
+      const row = await db().promptTemplate.findOne({ _id: req.params.id, userId: req.userId });
+      if (!row) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'prompt not found' } });
+      const name = req.body?.name !== undefined ? String(req.body.name).slice(0, 80).trim() : row.name;
+      const text = req.body?.text !== undefined ? String(req.body.text).slice(0, 20000) : row.text;
+      if (!name || !text) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'name and text cannot be empty' } });
+      }
+      row.name = name;
+      row.text = text;
+      await row.save();
+      res.json({ item: row });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.delete('/library/:id', authMiddleware({ secret }), async (req, res, next) => {
     try {
       const row = await db().promptTemplate.findOne({ _id: req.params.id, userId: req.userId });

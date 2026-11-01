@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTicker } from './useTicker.js';
 import { useAnimatedProgress } from './useAnimatedProgress.js';
-import { highlight } from 'cli-highlight';
+// eslint-disable-next-line no-control-regex
+const stripAnsiAndCr = (str) => String(str ?? '').replace(/\r/g, '').replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
 import { BgBox } from './BgBox.jsx';
@@ -84,15 +85,18 @@ export function ThoughtBlock({ text, seconds, live = false, expanded = false }) 
 
   const frame = ticks % SPIN_FRAMES.length;
 
+  const rawLines = (text || '')
+    .split('\n')
+    .map((l) => stripAnsiAndCr(l).trim())
+    .filter(Boolean)
+    .filter((l) => !/^(\*|ul|li|div|body|html|import|const|function|class|\{|\}|#|\.)/.test(l));
 
-  const lines = (text || '').split('\n').filter(Boolean);
+  const lines = live ? rawLines.slice(-1) : rawLines;
   const lastLineIdx = lines.length - 1;
-  // Progressive reveal for expanded (non-live) content via shared ticker
   const revealCount = useEntrance(lines.length, 1, expanded);
   const visibleCount = live ? lines.length : revealCount;
 
   const parseLine = (l) => {
-    // Replace markdown bullets/numbers with DAG-like arrows if they match
     let formatted = l;
     const match = l.match(/^(\s*)([-*]|\d+\.)\s(.*)/);
     if (match) {
@@ -109,7 +113,7 @@ export function ThoughtBlock({ text, seconds, live = false, expanded = false }) 
         {live && <span fg={theme.green}>{SPIN_FRAMES[frame]} </span>}
         <span fg={theme.amber}>{label}</span>
       </text>
-      {(live || expanded) && (
+      {(live || expanded) && lines.length > 0 && (
         <box marginTop={SPACING.sm} paddingLeft={SPACING.sm} flexDirection="column">
           {lines.slice(0, visibleCount).map((l, i) => (
             <box key={i} flexDirection="row">
@@ -127,25 +131,18 @@ export function ThoughtBlock({ text, seconds, live = false, expanded = false }) 
 
 // ── Read Block ───────────────────────────────────────────────────
 export function ReadBlock({ path, lines, expanded = false, marginTop = 1 }) {
-  const pad = String(lines.length).length;
-  const truncated = lines.length > READ_MAX;
-  const display = expanded ? lines : lines.slice(0, READ_MAX);
+  const cleanLines = (lines || []).map((l) => stripAnsiAndCr(l));
+  const pad = Math.max(2, String(cleanLines.length).length);
+  const truncated = cleanLines.length > READ_MAX;
+  const display = expanded ? cleanLines : cleanLines.slice(0, READ_MAX);
   
   const visibleLines = useEntrance(display.length, 0.375); // ~30ms per line
   const revealed = display.slice(0, visibleLines);
   const flash = useFlashOnMount();
   const bg = flash ? '#062012' : theme.surface;
-  const borderCol = flash ? theme.green : theme.divider;
+  const borderCol = flash ? theme.diffGreen : theme.divider;
 
-  let highlighted = revealed;
-  try {
-    const ext = path.split('.').pop() || 'js';
-    const joined = revealed.join('\n');
-    const hl = highlight(joined, { language: ext, ignoreIllegals: true });
-    highlighted = hl.split('\n');
-  } catch { /* fallback to plain text */ }
-  
-  const crumbs = path.split('/').join(' \u203a ');
+  const crumbs = path.split(/[/\\]/).join(' \u203a ');
 
   return (
     <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={SPACING.sm}>
@@ -160,15 +157,15 @@ export function ReadBlock({ path, lines, expanded = false, marginTop = 1 }) {
         {/* Only show content lines when expanded — collapsed shows just header */}
         {!expanded && (
           <box flexDirection="row" marginTop={SPACING.sm} paddingLeft={SPACING.sm} paddingBottom={SPACING.sm}>
-            <text fg={theme.dim}>{lines.length} lines · Tab ↵ to expand</text>
+            <text fg={theme.dim}>{cleanLines.length} lines · Tab ↵ to expand</text>
           </box>
         )}
         {expanded && (
           <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
-            {highlighted.map((line, i) => (
-              <box key={i} flexDirection="row">
+            {revealed.map((line, i) => (
+              <box key={i} flexDirection="row" width="100%">
                 <text fg={theme.dim}>{String(i + 1).padStart(pad)} │ </text>
-                <text>{line || ' '}</text>
+                <text fg={theme.textBright}>{line || ' '}</text>
               </box>
             ))}
             {truncated && (
@@ -176,7 +173,7 @@ export function ReadBlock({ path, lines, expanded = false, marginTop = 1 }) {
                 <text fg={theme.accentDim}>
                   {expanded
                     ? '\u2026 press Esc to collapse'
-                    : `\u2026 ${lines.length - READ_MAX} more lines (Tab \u2192 Enter to expand)`}
+                    : `\u2026 ${cleanLines.length - READ_MAX} more lines (Tab \u2192 Enter to expand)`}
                 </text>
               </box>
             )}
@@ -187,144 +184,97 @@ export function ReadBlock({ path, lines, expanded = false, marginTop = 1 }) {
   );
 }
 
-// ── Write Block ──────────────────────────────────────────────────
+// ── Write Block (Claude Code Style New/Written File) ───────────────
 export function WriteBlock({ path, lines, expanded = false, marginTop = 1 }) {
-  const pad = String(lines.length).length;
-  const truncated = lines.length > READ_MAX;
-  const display = expanded ? lines : lines.slice(0, READ_MAX);
-  
-  const visibleLines = useEntrance(display.length, 0.375); // ~30ms per line
-  const revealed = display.slice(0, visibleLines);
+  const cleanLines = (lines || []).map((l) => stripAnsiAndCr(l));
+  const pad = Math.max(2, String(cleanLines.length).length);
   const flash = useFlashOnMount();
   const bg = flash ? '#062012' : theme.surface;
-  const borderCol = flash ? theme.green : theme.divider;
+  const borderCol = flash ? theme.diffGreen : theme.divider;
 
-  let highlighted = revealed;
-  try {
-    const ext = path.split('.').pop() || 'js';
-    const joined = revealed.join('\n');
-    const hl = highlight(joined, { language: ext, ignoreIllegals: true });
-    highlighted = hl.split('\n');
-  } catch { /* fallback to plain text */ }
-
-  const crumbs = path.split('/').join(' \u203a ');
+  const crumbs = path.split(/[/\\]/).join(' \u203a ');
 
   return (
     <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={SPACING.sm}>
       <box flexDirection="column" backgroundColor={bg} borderStyle="round" border borderColor={borderCol} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
-        <box flexDirection="row" paddingBottom={SPACING.sm} borderStyle="single" border={['bottom']} borderColor={theme.divider}>
-          <text fg={flash ? theme.diffGreen : theme.green}>{'\u270e'} </text>
-          <text fg={theme.dim}>Wrote </text>
-          <text fg={theme.textBright}>{crumbs}</text>
+        <box flexDirection="row" paddingBottom={expanded ? SPACING.sm : 0} borderStyle={expanded ? 'single' : undefined} border={expanded ? ['bottom'] : undefined} borderColor={theme.divider}>
+          <text fg={theme.diffGreen} attributes={TextAttributes.BOLD}>+ Created </text>
+          <text fg={theme.textBright} attributes={TextAttributes.BOLD}>{crumbs}</text>
+          <box flexGrow={1} />
+          <text fg={theme.diffGreen} attributes={TextAttributes.BOLD}>+{cleanLines.length} lines </text>
+          <text fg={theme.dim}>{expanded ? '▾' : '▸'}</text>
         </box>
-        <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
-          {highlighted.map((line, i) => (
-            <box key={i} flexDirection="row">
-              <text fg={theme.dim}>{String(i + 1).padStart(pad)} │ </text>
-              <text>{line || ' '}</text>
-            </box>
-          ))}
-          {truncated && (
-            <box flexDirection="row" marginTop={SPACING.sm}>
-              <text fg={theme.accentDim}>
-                {expanded
-                  ? '\u2026 press Esc to collapse'
-                  : `\u2026 ${lines.length - READ_MAX} more lines (Tab \u2192 Enter to expand)`}
-              </text>
-            </box>
-          )}
-        </box>
+        {expanded && (
+          <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
+            {cleanLines.map((line, i) => (
+              <box key={i} flexDirection="row" width="100%">
+                <text fg={theme.dim}>{String(i + 1).padStart(pad)} │ </text>
+                <text fg={theme.diffGreen} attributes={TextAttributes.BOLD}>+ </text>
+                <box flexGrow={1} backgroundColor={theme.diffGreenBg}>
+                  <text fg={theme.textBright}>{line || ' '}</text>
+                </box>
+              </box>
+            ))}
+          </box>
+        )}
       </box>
     </box>
   );
 }
 
-// ── Diff Block ───────────────────────────────────────────────────
+// ── Diff Block (Claude Code Style Diff) ───────────────────────────
 export function DiffBlock({ path, lines, expanded = false, marginTop = 1 }) {
   const padOld = Math.max(2, String(oldMax(lines)).length);
   const padNew = Math.max(2, String(newMax(lines)).length);
-  const maxRows = 60;
-  const truncated = lines.length > maxRows;
-  const display = expanded ? lines : lines.slice(0, maxRows);
-  
-  // Staggered reveal: adds faster (0.2 ticks), context medium (0.375), removes slower (0.5)
-  const staggerTicks = useTicker();
-  const [staggerStart, setStaggerStart] = useState(null);
-  useEffect(() => { setStaggerStart(staggerTicks); }, [display.length, expanded]);
-  let staggerVisible = 0;
-  if (staggerStart !== null) {
-    const elapsed = Math.max(0, staggerTicks - staggerStart);
-    let cumulative = 0;
-    for (let i = 0; i < display.length; i++) {
-      const l = display[i];
-      const delay = l.kind === 'add' ? 0.2 : l.kind === 'remove' ? 0.5 : 0.375;
-      cumulative += delay;
-      if (elapsed >= cumulative) staggerVisible = i + 1;
-      else break;
-    }
-  }
-  const revealed = display.slice(0, staggerVisible);
   const flash = useFlashOnMount();
   const bg = flash ? '#062012' : theme.surface;
-  const borderCol = flash ? theme.green : theme.divider;
+  const borderCol = flash ? theme.diffGreen : theme.divider;
   
-  const crumbs = path.split('/').join(' \u203a ');
-  const ext = path.split('.').pop() || 'js';
+  const crumbs = path.split(/[/\\]/).join(' \u203a ');
 
   const adds = lines.filter((l) => l.kind === 'add').length;
   const rms = lines.filter((l) => l.kind === 'remove').length;
   const isNew = adds > 0 && rms === 0 && lines.length === adds;
-  const badge = isNew ? '[NEW]' : '[EDIT]';
-  const badgeColor = isNew ? theme.teal : theme.amber;
+  const badge = isNew ? '+ Created' : 'Δ Updated';
+  const badgeColor = isNew ? theme.diffGreen : theme.amber;
 
   return (
     <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={SPACING.sm}>
       <box flexDirection="column" backgroundColor={bg} borderStyle="round" border borderColor={borderCol} paddingLeft={SPACING.sm} paddingRight={SPACING.sm} paddingTop={SPACING.none} paddingBottom={SPACING.none}>
-        <box flexDirection="row" paddingBottom={SPACING.sm} borderStyle="single" border={['bottom']} borderColor={theme.divider}>
-          <text fg={flash ? theme.diffGreen : badgeColor}>{badge} </text>
-          <text fg={theme.textBright}>{crumbs}</text>
+        <box flexDirection="row" paddingBottom={expanded ? SPACING.sm : 0} borderStyle={expanded ? 'single' : undefined} border={expanded ? ['bottom'] : undefined} borderColor={theme.divider}>
+          <text fg={flash ? theme.diffGreen : badgeColor} attributes={TextAttributes.BOLD}>{badge} </text>
+          <text fg={theme.textBright} attributes={TextAttributes.BOLD}>{crumbs}</text>
           <box flexGrow={1} />
-          {adds > 0 && <text fg={theme.diffGreen}>+{adds} </text>}
-          {rms > 0 && <text fg={theme.diffRed}>-{rms}</text>}
+          {adds > 0 && <text fg={theme.diffGreen} attributes={TextAttributes.BOLD}>+{adds} </text>}
+          {rms > 0 && <text fg={theme.diffRed} attributes={TextAttributes.BOLD}>-{rms} </text>}
+          <text fg={theme.dim}>{expanded ? '▾' : '▸'}</text>
         </box>
-        <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
-          {revealed.map((l, i) => {
-            const isAdd = l.kind === 'add';
-            const isRm = l.kind === 'remove';
-            const op = isAdd ? '+' : isRm ? '-' : ' ';
-            let code = l.text || ' ';
-            try {
-              code = highlight(code, { language: ext, ignoreIllegals: true });
-            } catch { /* non-JS content */ }
-            
-            const isContext = !isAdd && !isRm;
-            
-            return (
-              <box key={i} flexDirection="row" width="100%">
-                <text fg={theme.dim}>{String(l.oldNo ?? '').padStart(padOld)} │ {String(l.newNo ?? '').padStart(padNew)} │ </text>
-                <text fg={isAdd ? theme.diffGreen : isRm ? theme.diffRed : theme.dim}>
-                  {op} 
-                </text>
-                <box flexGrow={1} backgroundColor={isAdd ? theme.diffGreenBg : isRm ? theme.diffRedBg : undefined}>
-                  {isContext ? (
-                    <text fg={theme.dim}>{l.text || ' '}</text>
-                  ) : (
-                    <text>{code}</text>
-                  )}
+        {expanded && (
+          <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.sm}>
+            {lines.map((l, i) => {
+              const isAdd = l.kind === 'add';
+              const isRm = l.kind === 'remove';
+              const op = isAdd ? '+' : isRm ? '-' : ' ';
+              const text = stripAnsiAndCr(l.text || ' ');
+              
+              return (
+                <box key={i} flexDirection="row" width="100%">
+                  <text fg={theme.dim}>
+                    {String(l.oldNo ?? '').padStart(padOld)} │ {String(l.newNo ?? '').padStart(padNew)} │{' '}
+                  </text>
+                  <text fg={isAdd ? theme.diffGreen : isRm ? theme.diffRed : theme.dim} attributes={TextAttributes.BOLD}>
+                    {op}{' '}
+                  </text>
+                  <box flexGrow={1} backgroundColor={isAdd ? theme.diffGreenBg : isRm ? theme.diffRedBg : undefined}>
+                    <text fg={isAdd ? theme.diffGreen : isRm ? theme.diffRed : theme.text}>
+                      {text}
+                    </text>
+                  </box>
                 </box>
-              </box>
-            );
-          })}
-          {truncated && (
-            <box flexDirection="row" marginTop={SPACING.sm}>
-              <text fg={theme.accentDim}>
-                {expanded
-                  ? '\u2026 press Esc to collapse'
-                  : `\u2026 ${lines.length - maxRows} more lines (Tab \u2192 Enter to expand)`}
-              </text>
-            </box>
-          )}
-        </box>
+              );
+            })}
+          </box>
+        )}
       </box>
     </box>
   );
@@ -332,7 +282,7 @@ export function DiffBlock({ path, lines, expanded = false, marginTop = 1 }) {
 
 // ── Command Block ────────────────────────────────────────────────
 export function CommandBlock({ title, relDir, command, output, expanded = false, marginTop = 1 }) {
-  const out = String(output || '').split('\n');
+  const out = stripAnsiAndCr(output || '').split('\n');
   const truncated = out.length > CMD_MAX;
   const display = expanded ? out : out.slice(0, CMD_MAX);
   
@@ -365,7 +315,7 @@ export function CommandBlock({ title, relDir, command, output, expanded = false,
         ) : null}
         {output && (
           <box flexDirection="column" marginTop={title || command ? 1 : 0}>
-            {revealed.map((line, i) => <text key={i} fg={theme.dim}>{line || ' '}</text>)}
+            {revealed.map((line, i) => <text key={i} fg={theme.dim}>{stripAnsiAndCr(line) || ' '}</text>)}
             {truncated && (
               <text fg={theme.accentDim}>
                 {expanded ? '\u2026 collapse' : `\u2026 ${out.length - CMD_MAX} more lines`}
@@ -603,27 +553,37 @@ export function ChangeSummaryBlock({ files, marginTop = 1 }) {
   const totalRemoved = list.reduce((s, f) => s + (f.removed || 0), 0);
   return (
     <box flexDirection="column" marginTop={marginTop} flexShrink={0} paddingLeft={SPACING.sm}>
-      <box flexDirection="column" backgroundColor={theme.surface} paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingTop={SPACING.sm} paddingBottom={SPACING.sm}>
+      <box flexDirection="column" backgroundColor={theme.surface} borderStyle="round" border borderColor={theme.divider} paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingTop={SPACING.sm} paddingBottom={SPACING.sm}>
         <box flexDirection="row">
           <text fg={theme.diffGreen}>{'\u2713'} </text>
-          <text fg={theme.text} attributes={TextAttributes.BOLD}>Changed {list.length} {list.length === 1 ? 'file' : 'files'}</text>
+          <text fg={theme.textBright} attributes={TextAttributes.BOLD}>Changed {list.length} {list.length === 1 ? 'file' : 'files'}</text>
         </box>
         <box flexDirection="column" marginTop={SPACING.sm} paddingLeft={SPACING.md}>
           {list.map((f, i) => (
             <text key={i}>
-              <span fg={theme.text}>{f.path}</span>
-              <span fg={theme.dim}>{' '.repeat(Math.max(1, 24 - f.path.length))}</span>
-              {f.created ? <span fg={theme.teal}>(new)</span>
-                : <><span fg={theme.diffGreen}>+{f.added}</span><span fg={theme.muted}>/</span><span fg={theme.diffRed}>-{f.removed}</span></>}
+              <span fg={theme.textBright}>{f.path}</span>
+              <span fg={theme.dim}>{' '.repeat(Math.max(1, 28 - f.path.length))}</span>
+              {f.created ? (
+                <>
+                  <span fg={theme.teal}>(new)</span>
+                  <span fg={theme.diffGreen}> +{f.added}</span>
+                </>
+              ) : (
+                <>
+                  <span fg={theme.diffGreen}>+{f.added}</span>
+                  <span fg={theme.muted}>/</span>
+                  <span fg={theme.diffRed}>-{f.removed}</span>
+                </>
+              )}
             </text>
           ))}
         </box>
         {list.length > 1 && (
           <box marginTop={SPACING.sm} paddingLeft={SPACING.md} flexDirection="row">
             <text fg={theme.dim}>Total: </text>
-            <text fg={theme.diffGreen}>+{totalAdded}</text>
+            <text fg={theme.diffGreen} attributes={TextAttributes.BOLD}>+{totalAdded}</text>
             <text fg={theme.muted}>/</text>
-            <text fg={theme.diffRed}>-{totalRemoved}</text>
+            <text fg={theme.diffRed} attributes={TextAttributes.BOLD}>-{totalRemoved}</text>
           </box>
         )}
       </box>

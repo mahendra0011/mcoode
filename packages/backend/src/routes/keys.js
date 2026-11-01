@@ -47,13 +47,14 @@ export function keyRoutes({ secret, encSecret, encKeyId, encPreviousSecret, encP
           // BSEC-001: make silent key loss visible (never logs key material).
           console.warn(`[keys] KEY_DECRYPT_FAILED id=${k._id} provider=${k.providerId}: ${err.message}`);
         }
+        const modelStr = typeof k.model === 'string' ? k.model : (k.get && typeof k.get('model') === 'string' ? k.get('model') : undefined);
         masked.push({
           id: k._id,
           providerId: k.providerId,
           envVar: k.envVar || k.providerId,
           displayName: k.displayName || k.providerId,
           masked: m,
-          model: k.model,
+          model: modelStr,
           baseUrl: k.baseUrl,
           apiFormat: k.apiFormat,
           createdAt: k.createdAt
@@ -200,6 +201,7 @@ export function keyRoutes({ secret, encSecret, encKeyId, encPreviousSecret, encP
       const { getAllAdapters } = await import('mcode-cli/providers');
       const adapters = getAllAdapters(secrets);
 
+      const userConfiguredProviders = new Set(keys.map((k) => k.providerId.toLowerCase()));
       const result = [];
       const providerList = [];
       for (const adapter of adapters) {
@@ -210,12 +212,57 @@ export function keyRoutes({ secret, encSecret, encKeyId, encPreviousSecret, encP
           /* Return static catalog immediately — no network calls */
           const models = adapter.models || [];
           if (models.length === 0) continue;
-          providerList.push({ id: adapter.id, displayName: adapter.displayName, kind: adapter.kind, keyConfigured: true, available: true });
+          const isUserKey = userConfiguredProviders.has(adapter.id.toLowerCase());
+          providerList.push({
+            id: adapter.id,
+            displayName: adapter.displayName,
+            kind: adapter.kind,
+            keyConfigured: true,
+            available: true,
+            isUserConfigured: isUserKey,
+            isSystemDefault: !isUserKey && adapter.id === 'openrouter'
+          });
           for (const m of models) {
-            result.push({ ref: `${adapter.id}:${m.id}`, provider: adapter.id, name: m.name, model: m.id, free: m.free, scores: m.scores });
+            const isDefault = Boolean(m.isDefault) && adapter.id === 'openrouter';
+            result.push({
+              ref: `${adapter.id}:${m.id}`,
+              provider: adapter.id,
+              name: m.name,
+              model: m.id,
+              free: m.free,
+              scores: m.scores,
+              latency: m.latency,
+              working: m.working,
+              isDefault,
+              isCustom: !isDefault
+            });
           }
         } catch { /* skip broken provider */ }
       }
+
+      // Also append any custom models explicitly configured by the user on their API key rows
+      for (const k of keys) {
+        const customModel = typeof k.model === 'string' ? k.model : (k.get && typeof k.get('model') === 'string' ? k.get('model') : null);
+        if (customModel) {
+          const modelRef = `${k.providerId}:${customModel}`;
+          const existing = result.find((r) => r.ref === modelRef || r.model === customModel);
+          if (!existing) {
+            result.push({
+              ref: modelRef,
+              provider: k.providerId,
+              name: k.displayName ? `${k.displayName} (${customModel})` : customModel,
+              model: customModel,
+              free: false,
+              scores: {},
+              latency: 'custom',
+              working: true,
+              isDefault: false,
+              isCustom: true
+            });
+          }
+        }
+      }
+
       const responseData = { models: result, providers: providerList, hasKeys: true };
       // Cache the result so subsequent calls are sub-millisecond (60s TTL)
       await cache().set(cacheKey, responseData, MODELS_CACHE_TTL);

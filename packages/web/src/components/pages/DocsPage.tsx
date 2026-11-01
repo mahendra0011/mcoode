@@ -21,19 +21,30 @@ const QUICKSTART = [
 
 export function DocsPage() {
   return (
-    <div className="min-h-screen bg-[#0c0c0c] text-white p-6 max-w-4xl mx-auto">
-      <h1 className="text-xl font-bold mb-1">Docs</h1>
-      <p className="text-xs text-white/40 mb-6">Start here — quickstart and every reference page.</p>
-      <h2 className="text-sm font-semibold text-white/60 mb-2">Quickstart</h2>
-      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 mb-8 font-mono text-sm space-y-1.5">
-        {QUICKSTART.map((c) => <p key={c} className="text-emerald-300">{c}</p>)}
+    <div className="min-h-screen bg-slate-50 text-neutral-900 py-10 px-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold text-neutral-900 tracking-tight mb-1">Documentation</h1>
+      <p className="text-sm text-neutral-500 mb-8">Start here — quickstart commands and comprehensive reference guides.</p>
+      
+      <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Quickstart</h2>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 mb-8 font-mono text-sm space-y-2 shadow-xs">
+        {QUICKSTART.map((c) => (
+          <div key={c} className="flex items-center gap-2 text-emerald-800 bg-emerald-50/70 border border-emerald-200/60 px-3 py-2 rounded-xl">
+            <span className="text-emerald-500 select-none">$</span>
+            <span className="font-semibold">{c}</span>
+          </div>
+        ))}
       </div>
-      <h2 className="text-sm font-semibold text-white/60 mb-3">Reference</h2>
-      <div className="grid gap-3 md:grid-cols-2">
+
+      <h2 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Reference</h2>
+      <div className="grid gap-3.5 md:grid-cols-2">
         {SECTIONS.map((s) => (
-          <Link key={s.href} href={s.href} className="rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] p-4 transition-colors">
-            <p className="font-medium text-sm">{s.title}</p>
-            <p className="mt-1 text-xs text-white/50">{s.desc}</p>
+          <Link
+            key={s.href}
+            href={s.href}
+            className="rounded-2xl border border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-xs p-5 transition-all group"
+          >
+            <p className="font-bold text-sm text-neutral-900 group-hover:text-emerald-700 transition">{s.title}</p>
+            <p className="mt-1.5 text-xs text-neutral-500 leading-relaxed">{s.desc}</p>
           </Link>
         ))}
       </div>

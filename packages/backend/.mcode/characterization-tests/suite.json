@@ -1,0 +1,18 @@
+[
+  {
+    "id": "char-f2",
+    "feature": "f2",
+    "name": "App root",
+    "code": "Mock response to: {\n  \"id\": \"f2\",\n  \"name\": \"App root\",\n  \"layer\": \"frontend\",\n  \"route\": \"/\",\n  \"successCriteria\": \"renders the landing page without console errors\",\n  \"requiresAuth\": false\n}",
+    "route": "/",
+    "layer": "frontend"
+  },
+  {
+    "id": "char-f3",
+    "feature": "f3",
+    "name": "Dashboard",
+    "code": "Mock response to: {\n  \"id\": \"f3\",\n  \"name\": \"Dashboard\",\n  \"layer\": \"both\",\n  \"route\": \"/dashboard\",\n  \"successCriteria\": \"dashboard loads and shows user data\",\n  \"requiresAuth\": true\n}",
+    "route": "/dashboard",
+    "layer": "both"
+  }
+]

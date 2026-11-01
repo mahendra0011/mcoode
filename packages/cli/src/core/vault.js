@@ -48,19 +48,21 @@ function warnNoPassphrase() {
  * Require a real passphrase — fail closed if none provided.
  * SEC-003: empty passphrase means the key is derivable from non-secret
  * hostname/username, so we refuse to operate without one.
+ * (Fix: this used to silently fall back to the machine-derived weak key it
+ * documents as rejected; only the explicit MCODE_VAULT_ALLOW_WEAK=1 escape
+ * hatch permits operating without a passphrase.)
  */
 function requirePassphrase(passphrase) {
+  if (passphrase) return passphrase;
+  if (process.env.MCODE_VAULT_PASSWORD) return process.env.MCODE_VAULT_PASSWORD;
   if (process.env.MCODE_VAULT_ALLOW_WEAK === '1') {
     warnNoPassphrase();
-    return passphrase || 'mcode-vault-weak';
+    return 'mcode-vault-weak';
   }
-  if (!passphrase) {
-    throw new Error(
-      'A vault passphrase is required. Set MCODE_VAULT_PASSWORD or use `mcode env add --prompt-passphrase`.\n' +
-      '  Or set MCODE_VAULT_ALLOW_WEAK=1 to allow weak encryption (not recommended).'
-    );
-  }
-  return passphrase;
+  throw new Error(
+    'vault requires a passphrase (SEC-003): set MCODE_VAULT_PASSWORD, pass one explicitly, ' +
+    'or set MCODE_VAULT_ALLOW_WEAK=1 to accept a weak machine-derived key'
+  );
 }
 
 function machinePassword(passphrase = '') {

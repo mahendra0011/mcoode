@@ -5,6 +5,7 @@ import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
 import { SLASH_COMMANDS } from './InputLine.jsx';
 import { useEntrance } from './useEntrance.js';
+import { getClipboardText, sanitizePasteText } from './clipboard.js';
 
 export function CommandPalette({ onRun, onClose }) {
   const { width: tw, height: th } = useTerminalDimensions();
@@ -38,7 +39,14 @@ export function CommandPalette({ onRun, onClose }) {
     : SLASH_COMMANDS;
 
   useKeyboard((key) => {
-    const input = key.sequence && key.sequence.length === 1 ? key.sequence : '';
+    if ((key.ctrl || key.meta) && (key.name === 'v' || key.sequence === '\x16')) {
+      const clip = sanitizePasteText(getClipboardText());
+      if (clip) {
+        setQuery((q) => q + clip);
+        setSel(0);
+        return;
+      }
+    }
     if (key.name === 'escape') {
       onClose();
       return;
@@ -60,9 +68,12 @@ export function CommandPalette({ onRun, onClose }) {
       setSel(0);
       return;
     }
-    if (input && input.length === 1 && !key.ctrl && !key.meta) {
-      setQuery((q) => q + input);
-      setSel(0);
+    if (key.sequence && !key.ctrl && !key.meta) {
+      const clean = sanitizePasteText(key.sequence);
+      if (clean) {
+        setQuery((q) => q + clean);
+        setSel(0);
+      }
     }
   });
 

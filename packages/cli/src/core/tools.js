@@ -105,6 +105,67 @@ export async function fetchWithTimeout(url, opts = {}, ms = 7000) {
  * Scoped toolset handed to subagents. Writes go through a snapshot +
  * diff-preview layer so `/undo` can revert any todo's changes.
  */
+
+export function formatHtml(html) {
+  if (html.includes('\n')) return html;
+  let formatted = '';
+  let indent = 0;
+  const tab = '  ';
+  const tokens = html.replace(/>\s*</g, '>\n<').split('\n');
+  for (let token of tokens) {
+    token = token.trim();
+    if (!token) continue;
+    if (token.startsWith('</')) {
+      indent = Math.max(0, indent - 1);
+    }
+    formatted += tab.repeat(indent) + token + '\n';
+    if (token.startsWith('<') && !token.startsWith('</') && !token.endsWith('/>') && !token.startsWith('<!') &&
+        !token.match(/<(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)/i)) {
+      const tagNameMatch = token.match(/<([a-zA-Z0-9_-]+)/);
+      if (tagNameMatch) {
+        const closeTag = `</${tagNameMatch[1]}>`;
+        if (!token.includes(closeTag)) {
+          indent++;
+        }
+      }
+    }
+  }
+  return formatted.trim();
+}
+
+export function formatCss(css) {
+  if (css.includes('\n')) return css;
+  // Don't re-flow when string literals are present: `content: "a;b"` would be
+  // split inside the string and turn valid CSS invalid.
+  if (css.includes('"')) return css;
+  return css
+    .replace(/\{/g, ' {\n  ')
+    .replace(/;/g, ';\n  ')
+    .replace(/\s*\n\s*\}/g, '\n}\n')
+    .replace(/\}\s*/g, '}\n\n')
+    .trim();
+}
+
+export function formatJs(js) {
+  // Regex reflowing is unsalvageable for JS: `const s = "a;b"` gets a newline
+  // inside the string literal. Removing it keeps user/model content verbatim.
+  if (js.includes('\n')) return js;
+  return js;
+}
+
+export function formatCodeIfSingleLine(path, content) {
+  const str = String(content || '');
+  if (!str || str.includes('\n')) return str;
+  const ext = String(path || '').split('.').pop()?.toLowerCase();
+  if (ext === 'html' || ext === 'htm') return formatHtml(str);
+  if (ext === 'css') return formatCss(str);
+  if (ext === 'js' || ext === 'ts' || ext === 'jsx' || ext === 'tsx') return formatJs(str);
+  if (ext === 'json') {
+    try { return JSON.stringify(JSON.parse(str), null, 2); } catch {}
+  }
+  return str;
+}
+
 export class ToolExecutor {
   constructor({ projectPath = process.cwd(), bus = null, undoStack = null, allowShellAll = false, requireEditApproval = false, domain = 'backend', todoId = null, cancelSignal = null, networkWhitelist = null, auditLog = null, memoryDir = null, mode = null, readOnly = false, onWrite = null } = {}) {
     this.projectPath = resolve(projectPath);
@@ -121,15 +182,19 @@ export class ToolExecutor {
     // containment must set networkWhitelist (see README security section).
     if ((networkWhitelist === null || networkWhitelist === undefined) && !ToolExecutor._egressWarned) {
       ToolExecutor._egressWarned = true;
-      try {
-        process.stderr?.write('[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.\n');
-      } catch { /* stderr may be closed in tests */ }
+      if (!process.env.MCCODE_TUI_ACTIVE && !process.env.MCODE_TUI_ACTIVE && !process.stdout?.isTTY) {
+        try {
+          process.stderr?.write('[mcode] security: network egress is unrestricted (networkWhitelist not set) — set networkWhitelist to contain agent web access.\n');
+        } catch { /* stderr may be closed in tests */ }
+      }
     }
     this.auditLog = auditLog;
     this.memoryDir = memoryDir;
     this.mode = mode;
     this.readOnly = Boolean(readOnly || mode === 'review' || mode === 'explain' || mode === 'plan');
     this.browserTool = null; // lazily created
+    /** Critical tools the user granted 'always' to — cache per executor. */
+    this._criticallyApproved = new Set();
     /** MF-004: writer-audit hook — called after every successful file write. */
     this.onWrite = onWrite;
   }
@@ -176,6 +241,9 @@ export class ToolExecutor {
 
   _abs(path) {
     let cleanPath = String(path || '').trim();
+    if (!cleanPath) {
+      throw new Error('path is required and cannot be empty');
+    }
     const normProj = resolve(this.projectPath);
     const full = resolve(normProj, cleanPath);
     const isWin = process.platform === 'win32';
@@ -194,11 +262,14 @@ export class ToolExecutor {
     }
 
     const start = Date.now();
-    const { score, level } = scoreRisk(name, args);
+    const { level } = scoreRisk(name, args);
     this.bus?.emit(EVENTS.SUBAGENT_TOOL_CALL, { tool: name, args: JSON.stringify(args).slice(0, 200), risk: level });
 
-    // High-risk operations always require permission, even in agent mode
-    if (level === RISK_LEVELS.CRITICAL && this.bus && this.bus.listenerCount) {
+    // High-risk operations always require permission, even in agent mode.
+    // SECURITY-FIX: the gate used to check `this.bus.listenerCount`, which is
+    // undefined on the plain {emit, on, off} bus Orchestrator passes — critical
+    // ops silently skipped approval. Gate on the ability to subscribe instead.
+    if (level === RISK_LEVELS.CRITICAL && typeof this.bus?.on === 'function') {
       const approved = await this._askPermissionIfNeeded(name, args);
       if (!approved) {
         this.auditLog?.logPermission(name, 'denied', { reason: 'high risk', args });
@@ -219,48 +290,50 @@ export class ToolExecutor {
     return result;
   }
 
-  /** Risk-based permission prompt for critical operations. */
+  /** Risk-based permission prompt for critical operations.
+   *  Emits a permission message and waits for PERMISSION_ANSWER (the CLI UI /
+   *  web dashboard answer via orchestrator.answerPermission). Resolves:
+   *  - true  — answered yes (or the tool was previously granted 'always')
+   *  - false — denied, timed out, or nobody can answer (no bus). */
   async _askPermissionIfNeeded(name, args) {
-    if (!this.bus) return true;
-    const requestId = `risk${Date.now().toString(36)}`;
-    let resolved = false;
-    let approved = false;
-    const onAnswer = (p) => {
-      if (p.requestId !== requestId) return;
-      if (p.answer === 'always' || p.answer === 'yes') approved = true;
-      resolved = true;
-      this.bus.off('PERMISSION_ANSWER', onAnswer);
-      clearTimeout(timer);
-    };
-    this.bus.on('PERMISSION_ANSWER', onAnswer);
-    const timer = setTimeout(() => {
-      if (!resolved) {
-        this.bus.off('PERMISSION_ANSWER', onAnswer);
-        resolved = true;
-        approved = false;
-      }
-    }, 60_000);
+    if (!this.bus || typeof this.bus.on !== 'function') return false;
+    if (this._criticallyApproved.has(name)) return true;
 
-    this.bus.emit(EVENTS.MESSAGE, {
-      kind: 'tool',
-      block: 'permission',
-      requestId,
-      status: 'running',
-      prompt: `High-risk action: ${name}`,
-      command: name,
-      detail: `risk level: ${scoreRisk(name, args).level} (score ${scoreRisk(name, args).score}/10)`,
+    const requestId = `risk${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    return new Promise((resolve) => {
+      const finish = (approved) => {
+        clearTimeout(timer);
+        this.bus.off(EVENTS.PERMISSION_ANSWER, onAnswer);
+        this.auditLog?.logPermission(name, approved ? 'approved' : 'denied', { args });
+        resolve(approved);
+      };
+      const onAnswer = (p) => {
+        if (!p || p.requestId !== requestId) return;
+        if (p.answer === 'always') this._criticallyApproved.add(name);
+        finish(p.answer === 'yes' || p.answer === 'always');
+      };
+      // Nobody answers within 60s → deny: an unattended terminal must never
+      // get auto-approved.
+      const timer = setTimeout(() => finish(false), 60_000);
+      this.bus.on(EVENTS.PERMISSION_ANSWER, onAnswer);
+
+      this.auditLog?.logPermission(name, 'pending', { args });
+      this.bus.emit(EVENTS.MESSAGE, {
+        kind: 'tool',
+        block: 'permission',
+        requestId,
+        status: 'running',
+        prompt: `High-risk action: ${name}`,
+        command: name,
+        detail: `risk level: ${scoreRisk(name, args).level} (score ${scoreRisk(name, args).score}/10)`,
+      });
     });
-
-    // Wait for answer
-    await new Promise(/** @type {(v?: any) => void} */ ((resolve) => {
-      const check = setInterval(() => {
-        if (resolved) { clearInterval(check); resolve(); }
-      }, 50);
-    }));
-    return approved;
   }
 
-  async read_file({ path, offset = 0, length = null }) {
+  async read_file(args = {}) {
+    const path = args.path || args.file || args.filePath || args.filename || args.target;
+    const offset = args.offset !== undefined ? args.offset : 0;
+    const length = args.length !== undefined ? args.length : null;
     const full = this._abs(path);
     let raw;
     try {
@@ -335,12 +408,17 @@ export class ToolExecutor {
 
   async search_code({ query }) {
     try {
-      const { stdout } = await execa('rg', ['-l', '--no-messages', query, this.projectPath]);
-      const files = stdout.split('\n').filter(Boolean).slice(0, 50);
-      return { ok: true, files };
-    } catch {
-      return { ok: true, files: await this._nativeSearch(query) };
-    }
+      // `reject: false` + exit-code handling: ripgrep exit 1 means "no
+      // matches" — that is success, not an error. Previously the throw sent
+      // every miss through the expensive native fallback. `--` stops the
+      // query being parsed as a flag when it starts with '-'.
+      const res = await execa('rg', ['-l', '--no-messages', '--', query, this.projectPath], { reject: false });
+      if (res.exitCode === 0) {
+        return { ok: true, files: res.stdout.split('\n').filter(Boolean).slice(0, 50) };
+      }
+      if (res.exitCode === 1) return { ok: true, files: [] };
+    } catch { /* rg unavailable — fall back below */ }
+    return { ok: true, files: await this._nativeSearch(query) };
   }
 
   /** ripgrep-less fallback: bounded recursive text scan over source-ish files. */
@@ -373,7 +451,10 @@ export class ToolExecutor {
     return matches;
   }
 
-  async write_file({ path, content }) {
+  async write_file(args = {}) {
+    const path = args.path || args.file || args.filePath || args.filename || args.target;
+    const rawContent = args.content !== undefined ? args.content : (args.code !== undefined ? args.code : (args.text !== undefined ? args.text : ''));
+    const content = formatCodeIfSingleLine(path, rawContent);
     if (isProtectedPath(path)) {
       if (!this.allowShellAll && !this.requireEditApproval) {
         return { ok: false, error: `Writing to protected file "${path}" is blocked. Explicit approval is required.` };
@@ -413,7 +494,11 @@ export class ToolExecutor {
     return { ok: true, file: rel, created, diff, diffLines: diff?.lines || [], content, undoId };
   }
 
-  async edit_file({ path, old: oldText, new: newText, replaceAll = false }) {
+  async edit_file(args = {}) {
+    const path = args.path || args.file || args.filePath || args.filename || args.target;
+    const oldText = args.old !== undefined ? args.old : (args.old_str !== undefined ? args.old_str : (args.oldText !== undefined ? args.oldText : (args.search !== undefined ? args.search : '')));
+    const newText = args.new !== undefined ? args.new : (args.new_str !== undefined ? args.new_str : (args.newText !== undefined ? args.newText : (args.replacement !== undefined ? args.replacement : '')));
+    const replaceAll = Boolean(args.replaceAll || args.replace_all);
     const full = this._abs(path);
     const prev = await readFile(full, 'utf8').catch(() => null);
     if (prev === null) {
@@ -476,6 +561,18 @@ export class ToolExecutor {
     if (!cleanQuery) return { ok: false, error: 'empty search query' };
     const limit = Math.min(20, Math.max(1, Number(count) || 5));
 
+    // SECURITY: containment parity with web_fetch — when a networkWhitelist
+    // is configured, search providers must honor it too or contained agents
+    // could exfiltrate arbitrary queries to the engines.
+    const tierAllowed = (host) => !this.networkWhitelist
+      || isNetworkAllowed(`https://${host}/`, this.networkWhitelist);
+    const tier1 = tierAllowed('lite.duckduckgo.com');
+    const tier2 = tierAllowed('www.bing.com');
+    const tier3 = tierAllowed('en.wikipedia.org');
+    if (!tier1 && !tier2 && !tier3) {
+      return { ok: false, error: 'web_search blocked: none of the search providers is allowed by networkWhitelist' };
+    }
+
     // Helper to decode Bing redirect URLs (u=a1base64url)
     const decodeBingUrl = (url) => {
       if (!url || typeof url !== 'string') return '';
@@ -498,7 +595,7 @@ export class ToolExecutor {
     const results = [];
 
     // Tier 1: DuckDuckGo Lite HTML (fast, direct URLs, no ads/redirects)
-    try {
+    if (tier1) try {
       const ddgRes = await fetchWithTimeout('https://lite.duckduckgo.com/lite/', {
         method: 'POST',
         body: 'q=' + encodeURIComponent(cleanQuery),
@@ -548,7 +645,7 @@ export class ToolExecutor {
     } catch { /* fallback to Bing */ }
 
     // Tier 2: Bing HTML with redirect decoding and strict domain exclusion
-    if (results.length === 0) {
+    if (tier2 && results.length === 0) {
       try {
         const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(cleanQuery)}&count=${Math.max(10, limit)}&setmkt=en-US&setlang=en-US`;
         const res = await fetchWithTimeout(searchUrl, {
@@ -589,7 +686,7 @@ export class ToolExecutor {
     }
 
     // Tier 3: Wikipedia OpenSearch API
-    if (results.length === 0) {
+    if (tier3 && results.length === 0) {
       try {
         const wikiUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(cleanQuery)}&limit=${limit}&namespace=0&format=json`;
         const wikiRes = await fetchWithTimeout(wikiUrl, { signal: this.cancelSignal || undefined }, 4000);
@@ -753,8 +850,8 @@ export class ToolExecutor {
     return { ok: true, files: status.files.map((f) => `${f.index} ${f.path}`), branch: status.current };
   }
 
-  async run_shell({ command }) {
-    const rawCmd = String(command || '');
+  async run_shell(args = {}) {
+    const rawCmd = String(args.command || args.cmd || '');
     this.auditLog?.logToolCall('run_shell', { command: rawCmd.slice(0, 500), todoId: this.todoId, domain: this.domain }).catch(() => {});
     if (!this.allowShellAll) {
       // SECURITY-2: allowlist-only — no denylist. The old keyword filter was
@@ -816,9 +913,11 @@ export class ToolExecutor {
       child.stdout?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
       child.stderr?.on('data', chunk => this.bus?.emit('SUBAGENT_SHELL_OUTPUT', { chunk: chunk.toString() }));
       
-      const { stdout, stderr } = await child;
-      const passed = !/FAIL|failed/i.test(stdout + stderr);
-      return { ok: true, passed, output: (stdout + stderr).slice(-1500) };
+      const { stdout, stderr, exitCode } = await child;
+      const output = (stdout + stderr).slice(-1500);
+      // The test runner's exit code is authoritative. (The old
+      // !/FAIL|failed/i regex false-positived on output like "0 failed".)
+      return { ok: true, passed: exitCode === 0, output };
     } catch (err) {
       return { ok: false, error: err.message };
     }

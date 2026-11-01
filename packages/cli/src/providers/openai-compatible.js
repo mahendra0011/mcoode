@@ -40,26 +40,27 @@ export class OpenAICompatible extends HttpProvider {
       const hardcoded = new Map(this.models.map(m => [m.id, m]));
       const fallbackScores = { planning: 70, frontend: 70, backend: 70, db: 70, devops: 70, test: 70, docs: 70, bugfix: 70 };
 
-      return (body.data || []).map((m) => {
-        if (hardcoded.has(m.id)) return hardcoded.get(m.id);
+      // Curated default models (like Web IDE models) always stay at the top
+      const curatedIds = new Set(this.models.map(m => m.id));
+      const otherModels = (body.data || [])
+        .filter(m => !curatedIds.has(m.id))
+        .map((m) => {
+          const scale = (v) => {
+            const n = Number(v);
+            if (!Number.isFinite(n)) return undefined;
+            return n > 0.1 ? n : n * 1000;
+          };
+          return {
+            id: m.id,
+            name: m.id,
+            free: false,
+            scores: fallbackScores,
+            costPer1kIn: scale(m.pricing?.prompt),
+            costPer1kOut: scale(m.pricing?.completion)
+          };
+        });
 
-        // OAI-002: OpenRouter-style pricing is per-token (tiny fractions),
-        // but some gateways quote per-1K already — only scale up sub-unit
-        // values to avoid 1000x cost inflation.
-        const scale = (v) => {
-          const n = Number(v);
-          if (!Number.isFinite(n)) return undefined;
-          return n > 0.1 ? n : n * 1000;
-        };
-        return {
-          id: m.id,
-          name: m.id,
-          free: false,
-          scores: fallbackScores,
-          costPer1kIn: scale(m.pricing?.prompt),
-          costPer1kOut: scale(m.pricing?.completion)
-        };
-      });
+      return [...this.models, ...otherModels];
     } catch {
       return this.models;
     }
@@ -139,11 +140,23 @@ export class OpenAICompatible extends HttpProvider {
         temperature,
         max_tokens: maxTokens,
         stream: true,
-        ...(reasoning?.effort ? { reasoning_effort: reasoning.effort } : {})
+        ...(reasoning?.effort ? { reasoning_effort: reasoning.effort } : { include_reasoning: false })
       })
     });
     if (!res.ok) {
-      throw new Error(`${this.id} stream error ${res.status}`);
+      let detail = '';
+      try {
+        const text = await res.text();
+        const json = JSON.parse(text);
+        detail = json?.error?.message || text;
+      } catch {}
+      if (res.status === 401) {
+        throw new Error(`${this.displayName || this.id} authentication failed (401 Unauthorized) — invalid API key. Update via /model or Settings.`);
+      }
+      if (res.status === 402) {
+        throw new Error(`${this.displayName || this.id} credits exhausted (402 Payment Required): ${detail || 'insufficient balance'}. Please add credits at openrouter.ai/credits or select a free model in Model Settings.`);
+      }
+      throw new Error(`${this.id} stream error ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`);
     }
     // OAI-003: track malformed chunks — an all-garbage stream throws
     // instead of completing silently with zero output.
@@ -152,7 +165,7 @@ export class OpenAICompatible extends HttpProvider {
     for await (const payload of streamSSE(res)) {
       try {
         const json = JSON.parse(payload);
-        const delta = json.choices?.[0]?.delta?.content;
+        const delta = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.delta?.reasoning;
         if (delta) {
           yielded++;
           yield delta;

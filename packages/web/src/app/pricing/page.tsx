@@ -1,4 +1,3 @@
-"use client";
 import { PricingPage } from "../../components/pages/PricingPage";
 
 export const dynamic = "force-dynamic";

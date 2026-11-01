@@ -40,6 +40,7 @@ import { getSocket } from '../../hooks/useChatSocket';
 import { useI18n } from '../../lib/i18n';
 
 import { ModelSelector } from '../ide/ModelSelector';
+import { OutputLengthSelector } from './OutputLengthSelector';
 import { SparkleButton } from '../ide/SparkleButton';
 import { WaveProgress } from '../ide/WaveProgress';
 import { ClarifyCard } from '../ide/ClarifyCard';
@@ -61,6 +62,7 @@ import { AgentActionSequence } from './AgentActionSequence';
 import { ReactionBurst } from './ReactionBurst';
 import { VirtualChatMessages } from './VirtualChatMessages';
 import { SlashCommandPicker } from './SlashCommandPicker';
+import { ModeSelector } from './ModeSelector';
 
 /**
  * Local copy of AIChatPage's `StreamInterruptedNotice` (kept private to the
@@ -183,48 +185,96 @@ export function ChatPanel(props: ChatPanelProps) {
   const { t } = useI18n();
 
   return (
-    <div className="h-full border-l border-white/5 bg-[#0e0e0e] flex flex-col relative z-20 w-full min-w-[280px] overflow-hidden">
-    <div className="p-3 px-4 flex items-center justify-between border-b border-white/5 bg-[#121212]/50">
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-emerald-400" />
-        <span className="text-sm font-semibold text-white">AI Assistance</span>
-      </div>
-      <div className="flex items-center gap-2">
-        {/* Mode toggle pill: Chat vs Agent */}
-        <div className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 text-[11px]">
+    <div className="dark h-full border-l border-white/[0.06] bg-[#0c0c0e] text-[#f4f4f5] flex flex-col relative z-20 w-full min-w-[280px] overflow-hidden">
+      {/* Header */}
+      <div className="p-2.5 px-3.5 flex items-center justify-between border-b border-white/[0.06] bg-[#121215]/90 backdrop-blur-md flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+            <Sparkles className="w-3 h-3 text-emerald-400" />
+          </div>
+          <span className="text-[12.5px] font-semibold text-white tracking-wide">AI Assistance</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Mode toggle pill: Chat vs Agent vs Explain */}
+          <div className="flex items-center bg-black/50 border border-white/10 rounded-lg p-0.5 text-[10.5px]">
+            <button
+              type="button"
+              onClick={() => dispatch(setMode('chat'))}
+              className={`px-2 py-0.5 rounded-md transition font-medium cursor-pointer ${mode === 'chat' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}
+            >
+              Chat
+            </button>
+            <button
+              type="button"
+              onClick={() => dispatch(setMode('agent'))}
+              className={`px-2 py-0.5 rounded-md transition font-semibold cursor-pointer ${mode === 'agent' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-white/40 hover:text-white'}`}
+            >
+              Agent
+            </button>
+            <button
+              type="button"
+              onClick={() => dispatch(setMode('explain'))}
+              className={`px-2 py-0.5 rounded-md transition font-semibold cursor-pointer ${mode === 'explain' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-white/40 hover:text-white'}`}
+            >
+              Explain
+            </button>
+          </div>
           <button
             type="button"
-            onClick={() => dispatch(setMode('chat'))}
-            className={`px-2 py-0.5 rounded-md transition font-medium ${mode === 'chat' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white'}`}
+            onClick={() => useIDEStore.getState().setSecondarySideBarVisible(false)}
+            className="p-1 rounded-md hover:bg-white/10 text-white/40 hover:text-white transition cursor-pointer"
+            title={t('ide.closePanel')}
           >
-            Chat
-          </button>
-          <button
-            type="button"
-            onClick={() => dispatch(setMode('agent'))}
-            className={`px-2 py-0.5 rounded-md transition font-medium ${mode === 'agent' ? 'bg-emerald-500/20 text-emerald-400 font-semibold' : 'text-white/40 hover:text-white'}`}
-          >
-            Agent
-          </button>
-          <button
-            type="button"
-            onClick={() => dispatch(setMode('explain'))}
-            className={`px-2 py-0.5 rounded-md transition font-medium ${mode === 'explain' ? 'bg-cyan-500/20 text-cyan-400 font-semibold' : 'text-white/40 hover:text-white'}`}
-          >
-            Explain
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
-        <button
-          type="button"
-          onClick={() => useIDEStore.getState().setSecondarySideBarVisible(false)}
-          className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-white transition cursor-pointer"
-          title={t('ide.closePanel')}
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
-    </div>
-<div className="flex-1 flex flex-col min-h-0 p-4">
+
+      <div className="flex-1 flex flex-col min-h-0 p-3 overflow-y-auto custom-scrollbar">
+        {/* Rich Empty State when there are no messages */}
+        {messages.length === 0 && !enhancedPrompt?.pending && !clarifyQuestions?.length && (
+          <div className="flex-1 flex flex-col items-center justify-center p-4 text-center select-none my-auto">
+            <div className="relative group mb-3">
+              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-emerald-500/20 via-blue-500/20 to-purple-500/20 blur-md opacity-60"></div>
+              <div className="relative w-11 h-11 rounded-2xl bg-[#141416] border border-white/10 flex items-center justify-center shadow-lg">
+                <Sparkles className="w-5 h-5 text-emerald-400" />
+              </div>
+            </div>
+            <h3 className="text-[13px] font-semibold text-white tracking-tight mb-1">
+              AI Code Assistant
+            </h3>
+            <p className="text-[11.5px] text-white/40 max-w-[240px] leading-relaxed mb-4">
+              Ask questions, generate components, or run agentic tasks on your workspace.
+            </p>
+            <div className="w-full max-w-[260px] flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPrompt('Explain the current file structure and code architecture')}
+                className="w-full text-left px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-white/15 text-[11px] text-white/70 hover:text-white transition flex items-center gap-2 group cursor-pointer"
+              >
+                <span className="text-emerald-400 font-mono text-[10px]">✦</span>
+                <span className="truncate">Explain file architecture</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrompt('Find potential bugs, edge cases, and performance bottlenecks in this workspace')}
+                className="w-full text-left px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-white/15 text-[11px] text-white/70 hover:text-white transition flex items-center gap-2 group cursor-pointer"
+              >
+                <span className="text-blue-400 font-mono text-[10px]">⚡</span>
+                <span className="truncate">Scan for bugs & issues</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrompt('Write comprehensive unit tests with edge case coverage')}
+                className="w-full text-left px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-white/15 text-[11px] text-white/70 hover:text-white transition flex items-center gap-2 group cursor-pointer"
+              >
+                <span className="text-purple-400 font-mono text-[10px]">🧪</span>
+                <span className="truncate">Write unit tests</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {enhancedPrompt?.pending && (
           <ThinkingIndicator label="expanding your prompt..." size="sm" />
         )}
@@ -258,8 +308,10 @@ export function ChatPanel(props: ChatPanelProps) {
         ))}
         <CodebaseReadingCard state={codebaseReading} />
         <RoleAssignmentTable assignments={roleAssignments} />
-        <TodoCard plan={plan as any} />
-{godMode && (
+        {Boolean(plan && (plan as any).todos && (plan as any).todos.length > 0) && (
+          <TodoCard plan={plan as any} defaultCollapsed={messages.length > 0} />
+        )}
+        {godMode && (
           <div className="mb-2">
             <WaveProgress
               waves={waves as any}
@@ -348,6 +400,7 @@ export function ChatPanel(props: ChatPanelProps) {
           size="sm"
           isNormalChat={mode === 'chat'}
           undo={undo as any}
+          onResubmitPrompt={send}
         />
         {streamInterrupted && (
           <StreamInterruptedNotice connectionState={connectionState} />
@@ -370,28 +423,49 @@ export function ChatPanel(props: ChatPanelProps) {
           </motion.div>
         )}
         <ReactionBurst key="ide-reaction-burst" emoji="✓" show={showReactionBurst} />
-</div>
+      </div>
 
       {/* Inline Chat Input */}
-      <div className="p-4 border-t border-white/5 bg-[#0c0c0c]">
-        <form onSubmit={handleSubmit} className="w-full relative rounded-[20px] group">
-          <div className="absolute -inset-[1.5px] rounded-[21px] overflow-hidden z-0">
-            <div className="absolute inset-[-150%] mcode-input-glow-reversed opacity-50 group-focus-within:opacity-100 transition-opacity duration-500"></div>
-          </div>
-          <div className="absolute inset-[0px] bg-[#121212] rounded-[20px] z-0"></div>
-          <div className="relative z-10 rounded-[20px] p-2 flex flex-col gap-2" ref={commandPickerRef}>
+      <div className="p-3 border-t border-white/[0.06] bg-[#0e0e11]/90 backdrop-blur-md">
+        <form onSubmit={handleSubmit} className="w-full">
+          <div className="relative rounded-xl bg-[#141416] border border-white/[0.08] focus-within:border-emerald-500/40 p-2 flex flex-col gap-1.5 transition-all shadow-xl" ref={commandPickerRef}>
             {/* Top Action Bar (Upload & Git Branch) */}
-            <div className="flex items-center gap-3 px-1 pb-1">
-              <motion.button type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} suppressHydrationWarning className="flex items-center gap-1.5 text-[13px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-2.5 py-1 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer" title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}>
-                {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" /> : <UploadCloud className="w-4 h-4 text-purple-400"/>}
-                <span suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find((w: any) => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload Folder'}</span>
-                <ChevronDown className="w-3 h-3 opacity-50"/>
-              </motion.button>
-              <motion.button type="button" onClick={() => setShowBranchDropdown(true)} className="branch-dropdown flex items-center gap-1.5 text-[13px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-md border border-blue-500/20 transition cursor-pointer" title={t('ide.gitBranch')}>
-                <GitBranch className="w-4 h-4 text-blue-400"/>
-                <span>{activeBranch}</span>
-                <ChevronDown className="w-3 h-3 opacity-50"/>
-              </motion.button>
+            {/* Top Toolbar: Workspace / Branch & Mode Selector */}
+            <div className="flex items-center justify-between gap-1 px-1 pb-1 flex-wrap min-w-0">
+              <div className="flex items-center gap-1 flex-shrink-0 min-w-0">
+                <motion.button 
+                  type="button" 
+                  onClick={() => setIsModalsOpen(true)} 
+                  disabled={isUploading} 
+                  suppressHydrationWarning 
+                  className="flex items-center gap-1 text-[10.5px] font-medium text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-500/20 px-1.5 py-0.5 rounded-md border border-purple-500/20 transition disabled:opacity-50 cursor-pointer flex-shrink-0" 
+                  title={activeWorkspaceId ? "Project Options" : "Upload Folder, File, or ZIP"}
+                >
+                  {isUploading ? <Loader2 className="w-2.5 h-2.5 animate-spin text-purple-400" /> : <UploadCloud className="w-2.5 h-2.5 text-purple-400"/>}
+                  <span className="truncate max-w-[55px] sm:max-w-[75px]" suppressHydrationWarning>{activeWorkspaceId ? (workspaces.find((w: any) => w._id === activeWorkspaceId)?.name || 'Project') : 'Upload'}</span>
+                  <ChevronDown className="w-2 h-2 opacity-50"/>
+                </motion.button>
+                <motion.button 
+                  type="button" 
+                  onClick={() => setShowBranchDropdown(true)} 
+                  className="branch-dropdown flex items-center gap-1 text-[10.5px] font-medium text-blue-300 hover:text-white bg-blue-500/10 hover:bg-blue-500/20 px-1.5 py-0.5 rounded-md border border-blue-500/20 transition cursor-pointer flex-shrink-0" 
+                  title={t('ide.gitBranch')}
+                >
+                  <GitBranch className="w-2.5 h-2.5 text-blue-400"/>
+                  <span className="truncate max-w-[35px] sm:max-w-[50px]">{activeBranch}</span>
+                  <ChevronDown className="w-2 h-2 opacity-50"/>
+                </motion.button>
+              </div>
+              <div className="flex-shrink-0 ml-auto">
+                <ModeSelector
+                  mode={mode}
+                  onModeChange={(m) => dispatch(setMode(m))}
+                  godMode={godMode}
+                  onGodModeChange={(g) => dispatch(setGodMode(g))}
+                  size="xs"
+                  compact
+                />
+              </div>
             </div>
 
             <textarea
@@ -403,10 +477,12 @@ export function ChatPanel(props: ChatPanelProps) {
                 else if (!val.includes('/')) setShowCommandPicker(false);
               }}
               placeholder={t('chat.askAgent')}
-              className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-2 py-1 min-h-[40px] text-sm"
+              rows={2}
+              className="w-full bg-transparent text-white placeholder-white/30 outline-none resize-none px-1.5 py-1 min-h-[38px] text-[12.5px] leading-relaxed custom-scrollbar"
               onKeyDown={(e) => handleChatKeyDown(e, handleSubmit)}
             />
-{/* Slash Command Picker */}
+
+            {/* Slash Command Picker */}
             <AnimatePresence>
               {showCommandPicker && prompt.startsWith('/') && (
                 <SlashCommandPicker
@@ -419,41 +495,59 @@ export function ChatPanel(props: ChatPanelProps) {
                 />
               )}
             </AnimatePresence>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => setIsModalsOpen(true)} disabled={isUploading} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/80 transition backdrop-blur-md border border-white/10 disabled:opacity-50" title={t('ide.uploadProject')}>
-                  {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" /> : <Paperclip className="w-3.5 h-3.5" />}
+
+            {/* Bottom Toolbar - Clean, Non-overflowing Layout */}
+            <div className="flex items-center justify-between pt-1.5 border-t border-white/[0.04] gap-1 w-full min-w-0">
+              {/* Left Action Buttons */}
+              <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink min-w-0 overflow-x-auto no-scrollbar">
+                <motion.button 
+                  whileHover={{ scale: 1.05 }} 
+                  whileTap={{ scale: 0.95 }} 
+                  type="button" 
+                  onClick={() => setIsModalsOpen(true)} 
+                  disabled={isUploading} 
+                  className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-md bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-white/50 hover:text-white transition border border-white/[0.06] disabled:opacity-50 flex-shrink-0" 
+                  title={t('ide.uploadProject')}
+                >
+                  {isUploading ? <Loader2 className="w-3 h-3 animate-spin text-emerald-400" /> : <Paperclip className="w-3 h-3" />}
+                </motion.button>
+                <motion.button 
+                  whileHover={{ scale: 1.05 }} 
+                  whileTap={{ scale: 0.95 }} 
+                  type="button" 
+                  onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} 
+                  className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-md bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-white/50 hover:text-white transition border border-white/[0.06] flex-shrink-0" 
+                  title={t('ide.cmdPalette')}
+                >
+                  <Slash className="w-3 h-3" />
                 </motion.button>
                 <SparkleButton prompt={prompt} setPrompt={setPrompt} />
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   type="button"
                   onClick={() => runReview('diff')}
-                  className="h-7 px-2 rounded-lg bg-white/5 hover:bg-white/10 flex items-center gap-1.5 text-[11px] text-white/60 hover:text-white transition backdrop-blur-md border border-white/10 cursor-pointer"
+                  className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-md bg-white/[0.04] hover:bg-blue-500/15 flex items-center justify-center text-white/50 hover:text-blue-300 transition border border-white/[0.06] cursor-pointer flex-shrink-0"
                   title={t('ide.reviewChanges')}
                 >
-                  <MessageSquare className="w-3 h-3 text-blue-400" /> Review Changes
+                  <MessageSquare className="w-3 h-3 text-blue-400" />
                 </motion.button>
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   type="button"
                   onClick={() => runCleanMode()}
-                  className="h-7 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 flex items-center gap-1.5 text-[11px] text-amber-300 transition backdrop-blur-md border border-amber-500/30 cursor-pointer"
+                  className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-md bg-white/[0.04] hover:bg-amber-500/15 flex items-center justify-center text-white/50 hover:text-amber-300 transition border border-white/[0.06] cursor-pointer flex-shrink-0"
                   title={t('ide.cleanMode')}
                 >
-                  {isCleanScanning ? <Loader2 className="w-3 h-3 animate-spin text-amber-400" /> : <Scissors className="w-3 h-3 text-amber-400" />} Clean
+                  {isCleanScanning ? <Loader2 className="w-3 h-3 animate-spin text-amber-400" /> : <Scissors className="w-3 h-3 text-amber-400" />}
                 </motion.button>
-                <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="button" onClick={() => { setPrompt('/'); setShowCommandPicker(true); setSelectedCmdIndex(0); }} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition backdrop-blur-md border border-white/10" title={t('ide.cmdPalette')}>
-                  <Slash className="w-4 h-4" />
-                </motion.button>
-                {mode === 'agent' && (
-                  <GodModeToggle value={godMode} onChange={(v: boolean) => dispatch(setGodMode(v))} size="xs" />
-                )}
               </div>
-<div className="flex items-center gap-2">
-                <ModelSelector />
+
+              {/* Right: Output Length, Model Selector & Send Button */}
+              <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 ml-auto">
+                <OutputLengthSelector compact />
+                <ModelSelector compact />
                 <AnimatePresence mode="wait">
                   {isStreaming ? (
                     <motion.button
@@ -463,24 +557,22 @@ export function ChatPanel(props: ChatPanelProps) {
                       initial={{ scale: 0.9, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.9, opacity: 0 }}
-                      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                      className="w-7 h-7 rounded-[8px] bg-[#303030] hover:bg-[#404040] flex items-center justify-center transition-all"
+                      className="w-7 h-7 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 flex items-center justify-center text-red-400 transition flex-shrink-0"
+                      title="Stop streaming"
                     >
-                      <Square className="w-3.5 h-3.5 text-[#d0d0d0] fill-current" />
+                      <Square className="w-3 h-3 fill-current" />
                     </motion.button>
                   ) : (
                     <motion.button
                       key="send-btn"
                       type="submit"
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.9, opacity: 0 }}
-                      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                      className="w-7 h-7 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 flex items-center justify-center text-emerald-400 transition disabled:opacity-50"
+                      whileHover={{ scale: 1.04 }}
+                      whileTap={{ scale: 0.96 }}
+                      className="w-7 h-7 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center transition disabled:opacity-30 disabled:pointer-events-none flex-shrink-0 shadow-sm"
                       disabled={!prompt.trim() || isStreaming}
                       title={t('ide.sendMessage')}
                     >
-                      <Send className="w-3.5 h-3.5 ml-0.5" />
+                      <Send className="w-3.5 h-3.5 fill-current" />
                     </motion.button>
                   )}
                 </AnimatePresence>

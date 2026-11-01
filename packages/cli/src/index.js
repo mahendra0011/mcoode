@@ -618,6 +618,32 @@ export async function run(argv) {
 }
 
 /** One-shot non-interactive God Mode run: plan, dispatch subagents, print summary. */
+
+/** `--confirm` asks for plan approval before dispatch (--confirm no skips it).
+ *  FIX: it used to map to `async () => true` — "ask" behaved as "auto-approve".
+ *  Rebuilt to prompt via readline when a TTY can actually answer; in JSON mode
+ *  or headless runs there is nobody to ask, so approval is skipped (warned). */
+async function buildPlanConfirmFn(confirm) {
+  if (confirm !== true) return null;
+  if (isJsonMode() || !process.stdin.isTTY) {
+    warn('--confirm requested approval but no interactive terminal is available — skipping plan approval');
+    return null;
+  }
+  return async (plan) => {
+    const { createInterface } = await import('node:readline');
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const q = plan?.summary
+        ? `${plan.summary}\napprove plan and dispatch subagents? [Y/n] `
+        : 'approve plan and dispatch subagents? [Y/n] ';
+      const answer = await new Promise((res) => rl.question(q, (a) => res(String(a || ''))));
+      return answer.trim().toLowerCase() !== 'n';
+    } finally {
+      rl.close();
+    }
+  };
+}
+
 async function runGodOnce(prompt, maxAgents, { watchAfter = false, noTests = false, confirm = null, model = null, mode = null, deployTarget = null, dryRun = false, executePlan = false, maxCost = null } = {}) {
   const { Orchestrator } = await import('./core/orchestrator.js');
   const { loadConfig } = await import('./core/store.js');
@@ -645,7 +671,7 @@ async function runGodOnce(prompt, maxAgents, { watchAfter = false, noTests = fal
       dryRun: Boolean(dryRun),
       executePlan: Boolean(executePlan),
       maxCost: maxCost ?? null,
-      confirmFn: confirm ? async () => true : null,
+      confirmFn: await buildPlanConfirmFn(confirm),
       addMessage: (m) => {
         const line = String(m.text || '');
         if (m.kind === 'ok') ok(line);

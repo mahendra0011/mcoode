@@ -4,6 +4,8 @@ import { useKeyboard } from '@opentui/react';
 import { TextAttributes } from '@opentui/core';
 import { theme, SPACING } from './theme.js';
 import { useTicker } from './useTicker.js';
+import { getClipboardText, sanitizePasteText } from './clipboard.js';
+import { usePaste } from './usePaste.js';
 
 const SLASH_COMMANDS = [
   { cmd: 'agent', desc: 'Toggle agent mode (read/edit/run in chat)' },
@@ -28,9 +30,10 @@ const SLASH_COMMANDS = [
   { cmd: 'hooks', desc: 'Show active workflow hooks' },
   { cmd: 'init', desc: 'guided AGENTS.md setup' },
   { cmd: 'migrate', desc: 'Structural refactor with behavioral equivalence' },
-  { cmd: 'mode', desc: 'Reasoning level (low/medium/high/extra/max/god)' },
+  { cmd: 'mode', desc: 'Operational mode: God, Watch, Build, Architect, Edit, Read' },
+  { cmd: 'output', desc: 'Output reasoning level (low, medium, high, extra, max, god)' },
+  { cmd: 'output-mode', desc: 'Output reasoning level (low, medium, high, extra, max, god)' },
   { cmd: 'model', desc: 'Switch AI model' },
-  { cmd: 'models', desc: 'Switch model' },
   { cmd: 'plan', desc: 'View plan' },
   { cmd: 'quota', desc: 'Check usage quotas' },
   { cmd: 'record', desc: 'Record macro commands' },
@@ -57,8 +60,23 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
   const [histIdx, setHistIdx] = useState(history.length);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuIdx, setMenuIdx] = useState(0);
+  const [inputScroll, setInputScroll] = useState(0);
   const lastKeyAt = useRef(0);
   const draftRef = useRef('');
+
+  const MAX_INPUT_LINES = 4;
+  const valueLines = value ? value.split('\n') : [];
+  const countEffectiveLines = (lines) => {
+    let count = 0;
+    const colWidth = 65;
+    for (const l of lines) {
+      count += Math.max(1, Math.ceil((l.length || 1) / colWidth));
+    }
+    return count;
+  };
+  const totalInputLines = valueLines.length;
+  const effectiveLines = countEffectiveLines(valueLines);
+  const isCapped = totalInputLines > MAX_INPUT_LINES || effectiveLines > MAX_INPUT_LINES;
 
   const exitHistoryPreview = () => {
     if (histIdx !== history.length) {
@@ -74,11 +92,56 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
   const typingActive = isActive && !isGenerating && Date.now() - lastKeyAt.current <= 250;
   const cursorOn = isActive && !isGenerating && (typingActive ? true : blink);
 
+  usePaste((clip) => {
+    if (!isActive || isGenerating) return;
+    exitHistoryPreview();
+    setValue((v) => {
+      const next = v + clip;
+      setInputScroll(Math.max(0, next.split('\n').length - MAX_INPUT_LINES));
+      return next;
+    });
+  }, isActive && !isGenerating);
+
   useKeyboard((key) => {
     if (!isActive) return;
     if (isGenerating) return;
     lastKeyAt.current = Date.now();
-    const input = key.sequence && !key.sequence.includes('\u001b') ? key.sequence : '';
+    if ((key.ctrl || key.meta) && (key.name === 'v' || key.sequence === '\x16')) {
+      const clip = sanitizePasteText(getClipboardText());
+      if (clip) {
+        exitHistoryPreview();
+        setValue((v) => {
+          const next = v + clip;
+          setInputScroll(Math.max(0, next.split('\n').length - MAX_INPUT_LINES));
+          return next;
+        });
+        return;
+      }
+    }
+    // Terminal-chunk pasted text (multi-character stream)
+    if (key.sequence && key.sequence.length > 1 && !key.ctrl && !key.meta) {
+      const clean = sanitizePasteText(key.sequence);
+      if (clean) {
+        exitHistoryPreview();
+        setValue((v) => {
+          const next = v + clean;
+          setInputScroll(Math.max(0, next.split('\n').length - MAX_INPUT_LINES));
+          return next;
+        });
+        return;
+      }
+    }
+    if (isCapped && !menuOpen) {
+      if (key.name === 'pageup') {
+        setInputScroll((s) => Math.max(0, s - MAX_INPUT_LINES));
+        return;
+      }
+      if (key.name === 'pagedown') {
+        setInputScroll((s) => Math.min(totalInputLines - MAX_INPUT_LINES, s + MAX_INPUT_LINES));
+        return;
+      }
+    }
+    const input = key.sequence ? sanitizePasteText(key.sequence) : '';
     const currentMatches = menuOpen 
       ? SLASH_COMMANDS.filter((c) => c.cmd.startsWith(value.slice(1).toLowerCase()))
       : [];
@@ -147,7 +210,11 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
     
     if (key.name === 'return') {
       if (key.shift) {
-        setValue((v) => v + '\n');
+        setValue((v) => {
+          const next = v + '\n';
+          setInputScroll(Math.max(0, next.split('\n').length - MAX_INPUT_LINES));
+          return next;
+        });
         return;
       }
       
@@ -158,6 +225,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       
       submitted = submitted.trim();
       setValue('');
+      setInputScroll(0);
       setMenuOpen(false);
       setMenuIdx(0);
       setHistIdx(history.length);
@@ -169,6 +237,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
       exitHistoryPreview();
       const next = value.slice(0, -1);
       setValue(next);
+      setInputScroll((s) => Math.max(0, Math.min(s, next.split('\n').length - MAX_INPUT_LINES)));
       setMenuOpen(next.startsWith('/') && next.length > 1);
       setMenuIdx(0);
       return;
@@ -265,25 +334,81 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
     );
   };
 
-  const placeholder = value.length === 0
-    ? (isGenerating ? 'Generating\u2026' : 'Ask anything\u2026  \u00b7  / for commands')
-    : value;
-  const placeholderColor = value.length === 0 ? theme.dim : theme.textBright;
+  const handleInputWheel = (e) => {
+    if (!isCapped) return;
+    const dir = e.deltaY > 0 ? 1 : -1;
+    setInputScroll((s) => Math.max(0, Math.min(totalInputLines - MAX_INPUT_LINES, s + dir)));
+  };
+
+  const renderInputContent = () => {
+    if (value.length === 0) {
+      return (
+        <text fg={theme.dim}>
+          {isGenerating ? 'Generating\u2026' : (variant === 'welcome' ? 'Ask anything\u2026 "build a rest api for orders"' : 'Ask anything\u2026  \u00b7  / for commands')}
+          {cursorOn && <span fg={theme.green}>{'\u258d'}</span>}
+        </text>
+      );
+    }
+
+    if (!isCapped) {
+      return (
+        <box flexDirection="column">
+          {valueLines.map((line, idx) => (
+            <text key={idx} fg={theme.textBright}>
+              {line || ' '}
+              {idx === valueLines.length - 1 && cursorOn && <span fg={theme.green}>{'\u258d'}</span>}
+            </text>
+          ))}
+        </box>
+      );
+    }
+
+    const visibleLines = valueLines.slice(inputScroll, inputScroll + MAX_INPUT_LINES);
+    const maxScroll = Math.max(1, totalInputLines - MAX_INPUT_LINES);
+    const thumbPos = Math.round((inputScroll / maxScroll) * (MAX_INPUT_LINES - 1));
+
+    return (
+      <box flexDirection="column" onWheel={handleInputWheel}>
+        <box flexDirection="row" marginBottom={SPACING.none}>
+          <text fg={theme.accent}>[Pasted {totalInputLines} lines · scroll/PgUp/PgDn to view · Enter to submit]</text>
+        </box>
+        <box flexDirection="row">
+          <box flexDirection="column" flexGrow={1}>
+            {visibleLines.map((line, idx) => {
+              const actualIdx = inputScroll + idx;
+              const isLast = actualIdx === totalInputLines - 1;
+              const displayLine = line.length > 100 ? line.slice(0, 97) + '…' : (line || ' ');
+              return (
+                <text key={actualIdx} fg={theme.textBright}>
+                  {displayLine}
+                  {isLast && cursorOn && <span fg={theme.green}>{'\u258d'}</span>}
+                </text>
+              );
+            })}
+          </box>
+          <box flexDirection="column" paddingLeft={1} paddingRight={0}>
+            {Array.from({ length: MAX_INPUT_LINES }).map((_, i) => (
+              <text key={i} fg={i === thumbPos ? theme.accent : theme.divider}>
+                {i === thumbPos ? '█' : '│'}
+              </text>
+            ))}
+          </box>
+        </box>
+      </box>
+    );
+  };
 
   if (variant === 'welcome') {
     return (
       <box flexDirection="column" width={64}>
         {renderMenu()}
         <box width={64} borderStyle="single" border={['left']} borderColor={theme.accent} backgroundColor={theme.userBg} paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingTop={SPACING.sm} paddingBottom={SPACING.sm} flexDirection="column">
-          <text fg={placeholderColor}>
-            {value.length === 0 ? 'Ask anything\u2026 "build a rest api for orders"' : value}
-            {cursorOn && <span fg={theme.green}>{'\u258d'}</span>}
-          </text>
+          {renderInputContent()}
           <text> </text>
           <box flexDirection="row">
-            <text fg={theme.amber}>{agentMode}{'  '}</text>
-            <text fg={theme.green}>{modelLabel}{'   '}</text>
-            <text fg={theme.red}>max</text>
+            <text fg={theme.amber}>Mode: {agentMode}{'  '}</text>
+            <text fg={theme.green}>Model: {modelLabel}{'   '}</text>
+            <text fg={theme.red}>Output: {mode}</text>
           </box>
         </box>
       </box>
@@ -294,7 +419,7 @@ export function InputLine({ onSubmit, history, variant = 'default', modelLabel =
     <box flexDirection="column" width="100%">
       {renderMenu()}
       <box width="100%" borderStyle="single" border={['left']} borderColor={theme.accent} backgroundColor={theme.userBg} paddingLeft={SPACING.md} paddingRight={SPACING.md} paddingTop={SPACING.sm} paddingBottom={SPACING.sm} flexDirection="column">
-        <text fg={placeholderColor}>{placeholder}{cursorOn && <span fg={theme.green}>{'\u258d'}</span>}</text>
+        {renderInputContent()}
         <text> </text>
         <box flexDirection="row">
           <text fg={theme.amber}>{agentMode} </text>

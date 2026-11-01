@@ -247,7 +247,8 @@ export function ExplorerPanel({ workspaceId, projectName = "cli" }: ExplorerPane
 
   const handleNewFile = () => {
     if (!workspaceId) {
-      toast.info("Create or select a workspace to add files");
+      toast.info("Please create or open a project folder first");
+      document.dispatchEvent(new CustomEvent("mcode:open-create-project"));
       return;
     }
     // Trigger VS Code style inline file creation in the FileTree
@@ -256,7 +257,8 @@ export function ExplorerPanel({ workspaceId, projectName = "cli" }: ExplorerPane
 
   const handleNewFolder = () => {
     if (!workspaceId) {
-      toast.info("Create or select a workspace to add folders");
+      toast.info("Please create or open a project folder first");
+      document.dispatchEvent(new CustomEvent("mcode:open-create-project"));
       return;
     }
     // Trigger VS Code style inline folder creation in the FileTree
@@ -492,12 +494,42 @@ export function ExplorerPanel({ workspaceId, projectName = "cli" }: ExplorerPane
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
                           <button
                             type="button"
-                            onClick={() => {
-                              createLanguageFile(langName);
-                              toast.success(`Created new ${langName} file`);
+                            onClick={async () => {
+                              const lang = ALL_LANGUAGES.find((l) => l.name === langName);
+                              if (!workspaceId) {
+                                document.dispatchEvent(new CustomEvent("mcode:open-create-project", { detail: { lang } }));
+                                return;
+                              }
+                              const ext = lang ? lang.extension : ".txt";
+                              const baseName = ext.startsWith(".") ? `main${ext}` : ext;
+                              let targetPath = baseName;
+                              let counter = 1;
+                              const currentOpen = useIDEStore.getState().openFiles;
+                              while (currentOpen.includes(targetPath)) {
+                                targetPath = ext.startsWith(".") ? `main_${counter}${ext}` : `${ext}_${counter}`;
+                                counter++;
+                              }
+                              const boilerplate = (lang?.defaultBoilerplate || "").replace(/\r\n/g, "\n");
+                              try {
+                                await api.post(`/api/v1/workspaces/${workspaceId}/file`, { path: targetPath, content: boilerplate });
+                                useIDEStore.getState().addOpenFile(targetPath);
+                                useIDEStore.getState().setActivePath(targetPath);
+                                useIDEStore.getState().setFileContent(targetPath, boilerplate);
+                                useIDEStore.getState().setSavedContent(targetPath, boilerplate);
+                                useIDEStore.getState().bumpRefresh();
+                                toast.success(`Created ${targetPath} in active project`);
+                              } catch (err: any) {
+                                if (err?.response?.status === 404) {
+                                  toast.info("Project workspace not found. Please create a new project folder.");
+                                  try { localStorage.removeItem("mcode_active_workspace_id"); } catch {}
+                                  document.dispatchEvent(new CustomEvent("mcode:open-create-project", { detail: { lang } }));
+                                } else {
+                                  toast.error(err?.response?.data?.error?.message || "Failed to create file");
+                                }
+                              }
                             }}
                             className="p-1 hover:bg-white/10 rounded text-blue-400 hover:text-blue-300"
-                            title={`New ${langName} file`}
+                            title={`Create ${langName} file or project`}
                           >
                             <Plus className="w-3 h-3" />
                           </button>

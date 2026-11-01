@@ -19,6 +19,8 @@
     "dev:cli": "node --watch packages/cli/bin/mcode.js",
     "dev:web": "npm --workspace=web run dev",
     "dev:dashboard": "npm --workspace=web run dev",
+    "dev:docker": "docker compose up -d",
+    "docker:down": "docker compose down",
     "dev:backend": "npm --workspace=@mcode/backend run dev",
     "serve": "node packages/cli/bin/mcode.js serve",
     "build:cli": "node packages/cli/scripts/build.js",
@@ -54,5 +56,8 @@
     "esbuild": true,
     "cpu-features@0.0.10": true,
     "protobufjs@7.6.6": true
+  },
+  "dependencies": {
+    "search-insights": "^2.17.3"
   }
 }

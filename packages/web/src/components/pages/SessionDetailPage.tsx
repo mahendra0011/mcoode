@@ -19,18 +19,29 @@ export function SessionDetailPage() {
   }, [id]);
 
   return (
-    <div className="min-h-screen bg-[#0c0c0c] text-white p-6 max-w-3xl mx-auto">
-      <Link href="/sessions" className="text-xs text-emerald-300 hover:underline">← All sessions</Link>
+    <div className="min-h-screen bg-slate-50 text-neutral-900 py-10 px-6 max-w-3xl mx-auto">
+      <Link
+        href="/sessions"
+        className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 mb-6 transition shadow-xs"
+      >
+        ← All sessions
+      </Link>
       {state === 'loading' ? (
         <div className="animate-pulse mt-4 space-y-3" aria-label="Loading transcript">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="h-12 rounded-xl bg-white/5" />)}
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-16 rounded-2xl bg-white border border-slate-200/80 shadow-xs" />
+          ))}
         </div>
       ) : state === 'error' || !data ? (
-        <p className="mt-4 text-sm text-red-300">Session not found or backend unreachable.</p>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800 shadow-xs">
+          Session not found or backend unreachable.
+        </div>
       ) : (
-        <div className="mt-3">
-          <h1 className="text-xl font-bold">{data.projectName || 'Untitled session'}</h1>
-          <p className="text-xs text-white/40 mb-4">{data.mode || ''} · {data.status || ''}</p>
+        <div className="mt-2">
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">{data.projectName || 'Untitled session'}</h1>
+          <p className="text-xs text-neutral-500 mb-5 mt-1">
+            <span className="font-semibold text-neutral-700">{data.mode || 'session'}</span> · {data.status || 'unknown'}
+          </p>
           <button
             type="button"
             onClick={async () => {
@@ -44,23 +55,25 @@ export function SessionDetailPage() {
                 window.location.href = '/ai/chat';
               } catch {}
             }}
-            className="mb-6 text-xs px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70"
+            className="mb-8 text-xs font-semibold px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-neutral-700 border border-slate-200 shadow-xs transition cursor-pointer"
           >
             Replay in chat (copies prompts)
           </button>
           {((data.transcripts && data.transcripts.length > 0) || (data.messages && data.messages.length > 0)) ? (
             <div className="space-y-4">
               {(data.transcripts || data.messages || []).map((t: any, i: number) => (
-                <div key={t._id || `msg-${i}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                  <p className="text-[11px] uppercase tracking-wide text-white/30 mb-2">{t.role || 'message'}</p>
-                  <div className="prose prose-invert prose-sm max-w-none">
+                <div key={t._id || `msg-${i}`} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 mb-2">{t.role || 'message'}</p>
+                  <div className="prose prose-slate prose-sm max-w-none text-neutral-800">
                     <ReactMarkdown>{String(t.content || '')}</ReactMarkdown>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-white/40">No transcript messages recorded for this session.</p>
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-neutral-500 shadow-xs">
+              No transcript messages recorded for this session.
+            </div>
           )}
         </div>
       )}

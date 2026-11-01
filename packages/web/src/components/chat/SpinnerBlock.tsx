@@ -37,7 +37,7 @@ export function SpinnerBlock({
     emerald: 'text-[var(--mcode-green,#3ecf8e)]',
     blue: 'text-blue-400',
     amber: 'text-amber-400',
-    white: 'text-white/50',
+    white: 'text-white/90',
   };
 
   const sizeClasses = {
