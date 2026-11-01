@@ -55,7 +55,9 @@ class FileLockManager {
         const entry = this.locks.get(filePath);
         const lockedBy = entry?.ownerId || null;
         if (entry) {
-          entry.waiters = entry.waiters.filter((w) => w.agentId !== agentId);
+          // Remove this exact waiter. A todo may request the same file more
+          // than once, so filtering by id could discard a live request.
+          entry.waiters = entry.waiters.filter((waiter) => waiter !== queuedWaiter);
           if (!entry.ownerId && entry.waiters.length === 0) {
             this.locks.delete(filePath);
           }
@@ -74,7 +76,7 @@ class FileLockManager {
         reject(err);
       }, timeout);
 
-      this.locks.get(filePath).waiters.push({
+      const queuedWaiter = {
         agentId,
         resolve: () => {
           clearTimeout(timer);
@@ -84,7 +86,8 @@ class FileLockManager {
           resolve(() => this.releaseLock(agentId, filePath));
         },
         reject
-      });
+      };
+      this.locks.get(filePath).waiters.push(queuedWaiter);
     });
   }
 
@@ -630,12 +633,12 @@ export class SubagentManager {
               at: new Date().toISOString()
             });
           }
-          this.emit(EVENTS.TOAST, {
-            kind: 'warn',
-            text: isConflict
-              ? `file conflict: ${filePath} held by ${lockErr.lockedBy || 'another todo'} while ${todo.id} waited ${lockErr.waitedMs || 30000}ms — continuing without the lock; verify both writes in the diff`
-              : `lock timeout for ${filePath} on ${todo.id}`
-          });
+          if (isConflict) {
+            // A shared-file lock is a correctness boundary. Continuing after
+            // timeout would let concurrent agents overwrite one another.
+            throw lockErr;
+          }
+          throw new Error(`could not acquire shared file lock for ${filePath}: ${lockErr.message}`);
         }
       }
 

@@ -142,9 +142,19 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
     let diskPath;
     let workspaceCommitted = false;
     try {
-      const { name, source, repoUrl, branch, branchName, zipFilename } = req.body;
+      const { source, repoUrl, branch, branchName, zipFilename } = req.body;
+      const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
       if (!name || !source) {
         return res.status(400).json({ error: { code: 'VALIDATION', message: 'name and source are required' } });
+      }
+      const invalidNameCharacter = [...name].some((character) =>
+        '<>:"/\\|?*'.includes(character) || character.charCodeAt(0) < 32
+      );
+      if (name.length > 80 || invalidNameCharacter || /[. ]$/.test(name) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(name)) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'name must be 1-80 characters and cannot contain reserved file-name characters' } });
+      }
+      if (!['blank', 'zip', 'git', 'duplicate'].includes(source)) {
+        return res.status(400).json({ error: { code: 'VALIDATION', message: 'source must be blank, zip, git, or duplicate' } });
       }
 
       const workspaceId = randomBytes(6).toString('hex');
@@ -213,6 +223,9 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
             }
           }
         }
+      } else if (source === 'blank') {
+        // An intentionally empty workspace; the Welcome view creates it with
+        // multipart FormData and adds files later through the editor.
       }
 
       // Never replace an existing workspace implicitly. The UI retries with a

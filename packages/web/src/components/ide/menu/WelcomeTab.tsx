@@ -92,12 +92,17 @@ export function WelcomeTab({
     try {
       toast.loading("Creating new workspace...", { id: "create-ws" });
       const formData = new FormData();
-      formData.append("name", `Project-${Date.now().toString().slice(-4)}`);
+      formData.append("name", `Project-${Date.now()}`);
       formData.append("source", "blank");
       const res = await api.post("/api/v1/workspaces", formData, { timeout: 15000 });
       if (res.data?.workspace) {
         toast.success(`Created workspace: ${res.data.workspace.name}`, { id: "create-ws" });
-        if (onSelectWorkspace) onSelectWorkspace(res.data.workspace._id);
+        if (onSelectWorkspace) {
+          onSelectWorkspace(res.data.workspace._id);
+          setWelcomeOpen(false);
+          setActiveActivityBar("explorer");
+          setSidebarOpen(true);
+        }
       } else {
         toast.error("Failed to create workspace", { id: "create-ws" });
       }

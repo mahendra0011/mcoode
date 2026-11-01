@@ -19,7 +19,7 @@ export function Header() {
         access = parsed.access;
         setIsLoggedIn(true);
       }
-    } catch {}
+    } catch { }
     // Provider badge: no stored keys → mock (free demo) mode.
     const headers: Record<string, string> = access ? { Authorization: `Bearer ${access}` } : {};
     fetch('/api/v1/keys', { headers })
@@ -27,7 +27,7 @@ export function Header() {
       .then((d) => {
         if (Array.isArray(d?.keys)) setKeyMode(d.keys.length > 0 ? 'live' : 'mock');
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   return (
@@ -38,7 +38,7 @@ export function Header() {
       className="fixed top-3.5 inset-x-0 mx-auto w-full max-w-5xl z-50 px-4 pointer-events-none"
     >
       <div className="pointer-events-auto h-16 rounded-full bg-white/80 backdrop-blur-2xl border border-neutral-200/90 shadow-[0_8px_30px_rgb(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)] grid grid-cols-[auto_1fr_auto] items-center px-4 w-full transition-all duration-300">
-        
+
         {/* Left Side: Brand Logo */}
         <div className="flex items-center pl-1">
           <Link href="/" className="flex items-center gap-2.5 group">
@@ -59,9 +59,8 @@ export function Header() {
               {keyMode && (
                 <span
                   title={keyMode === 'live' ? 'Real provider keys configured' : 'No keys — running on free demo mock'}
-                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                    keyMode === 'live' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                  }`}
+                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${keyMode === 'live' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}
                 >
                   {keyMode === 'live' ? 'LIVE' : 'MOCK'}
                 </span>
@@ -87,11 +86,10 @@ export function Header() {
                 key={item.id}
                 href={item.href}
                 onClick={() => setMenuOpen(false)}
-                className={`relative px-3 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 whitespace-nowrap ${
-                  item.highlight
+                className={`relative px-3 py-1.5 text-xs font-semibold rounded-full transition-all duration-200 whitespace-nowrap ${item.highlight
                     ? 'text-emerald-700 bg-emerald-500/10 hover:bg-emerald-500/20 font-bold'
                     : 'text-neutral-600 hover:text-neutral-950 hover:bg-white hover:shadow-sm'
-                }`}
+                  }`}
               >
                 {item.label}
               </Link>
@@ -171,11 +169,10 @@ export function Header() {
                 key={item.href + item.label}
                 href={item.href}
                 onClick={() => setMenuOpen(false)}
-                className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-colors ${
-                  item.highlight
+                className={`px-3.5 py-2 text-xs font-semibold rounded-xl transition-colors ${item.highlight
                     ? 'bg-emerald-50 text-emerald-800 font-bold'
                     : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
-                }`}
+                  }`}
               >
                 {item.label}
               </Link>

@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { FolderPlus, X, Loader2, Sparkles, Check, ChevronDown, FileCode2 } from "lucide-react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { FolderPlus, X, Loader2, ChevronDown, FileCode2 } from "lucide-react";
 import { ALL_LANGUAGES, LanguageItem } from "../../lib/languagesData";
 import { LanguageIcon } from "./LanguageIcon";
 import api from "../../lib/axios";
@@ -29,10 +29,18 @@ export function CreateProjectModal({
   const [showAllLanguages, setShowAllLanguages] = useState(false);
   const [langSearch, setLangSearch] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const wasOpenRef = useRef(false);
+  const prefersReducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   // Sync initial language when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       const defaultLang = initialLanguage || ALL_LANGUAGES.find((l) => l.name === "Python") || ALL_LANGUAGES[0];
       setSelectedLang(defaultLang);
       const cleanSlug = (defaultLang.name || "app")
@@ -43,24 +51,49 @@ export function CreateProjectModal({
       setShowAllLanguages(false);
       setLangSearch("");
 
+      triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.focus();
           inputRef.current.select();
         }
       }, 50);
+      wasOpenRef.current = true;
+      return;
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, initialLanguage]);
 
-  // When user picks a different language, suggest an updated folder name if untouched or standard
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSubmitting) {
+        event.preventDefault();
+        onCloseRef.current();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (triggerRef.current?.isConnected) triggerRef.current.focus();
+    };
+  }, [isOpen, isSubmitting]);
+
+  // Update the suggested name only while it is still the previous language's
+  // default. A custom name must survive quick language changes.
   const handleSelectLang = (lang: LanguageItem) => {
     setSelectedLang(lang);
     setShowAllLanguages(false);
-    const cleanSlug = (lang.name || "app")
+    const currentDefault = `${(selectedLang.name || "app")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")}-project`;
+    const nextSlug = (lang.name || "app")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
-    setProjectName(`${cleanSlug}-project`);
+    const nextDefault = `${nextSlug}-project`;
+    setProjectName((current) => !current || current === currentDefault ? nextDefault : current);
     if (inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
@@ -69,6 +102,7 @@ export function CreateProjectModal({
 
   const getStarterFileName = (lang: LanguageItem) => {
     const ext = lang.extension || ".txt";
+    if (lang.id === "makefile" || ext.toLowerCase() === "makefile") return "Makefile";
     if (ext === ".py") return "main.py";
     if (ext === ".js" || ext === ".jsx") return "index.js";
     if (ext === ".ts" || ext === ".tsx") return "index.ts";
@@ -89,6 +123,13 @@ export function CreateProjectModal({
     const trimmed = projectName.trim();
     if (!trimmed) {
       toast.error("Please enter a project folder name");
+      return;
+    }
+    const invalidNameCharacter = [...trimmed].some((character) =>
+      '<>:"/\\|?*'.includes(character) || character.charCodeAt(0) < 32
+    );
+    if (trimmed.length > 80 || invalidNameCharacter || /[. ]$/.test(trimmed) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(trimmed)) {
+      toast.error("Use a project name up to 80 characters without reserved file-name characters");
       return;
     }
 
@@ -139,19 +180,32 @@ export function CreateProjectModal({
     l.extension.toLowerCase().includes(langSearch.toLowerCase())
   );
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[300] bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
+      {isOpen && <motion.div
+        className="fixed inset-0 z-[300] bg-black/75 backdrop-blur-md flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !isSubmitting) onClose();
+        }}
+        role="presentation"
+      >
         {/* Backdrop click to dismiss */}
-        <div className="absolute inset-0" onClick={onClose} />
+        <div className="absolute inset-0" aria-hidden="true" />
 
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="create-project-title"
+          aria-describedby="create-project-description"
+          onMouseDown={(event) => event.stopPropagation()}
           className="relative bg-[#181820] border border-white/15 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden z-10"
         >
           {/* Header */}
@@ -169,21 +223,23 @@ export function CreateProjectModal({
                 />
               </div>
               <div>
-                <h2 className="text-base font-semibold text-white tracking-wide flex items-center gap-2">
+                <h2 id="create-project-title" className="text-base font-semibold text-white tracking-wide flex items-center gap-2">
                   <span>Create {selectedLang.name} Project</span>
                   <span className="text-[11px] font-mono font-normal px-2 py-0.5 rounded-full bg-white/10 text-white/70">
                     {selectedLang.extension}
                   </span>
                 </h2>
-                <p className="text-xs text-white/50">
+                <p id="create-project-description" className="text-xs text-white/50">
                   Set up a project workspace folder with starter template files
                 </p>
               </div>
             </div>
             <button
               type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white flex items-center justify-center transition"
+              onClick={() => { if (!isSubmitting) onClose(); }}
+              disabled={isSubmitting}
+              aria-label="Close create project dialog"
+              className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white flex items-center justify-center transition disabled:opacity-40"
             >
               <X className="w-4 h-4" />
             </button>
@@ -202,6 +258,7 @@ export function CreateProjectModal({
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
                   placeholder="e.g. my-python-app"
+                  maxLength={80}
                   required
                   className="w-full px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition font-mono"
                 />
@@ -314,7 +371,7 @@ export function CreateProjectModal({
             <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => { if (!isSubmitting) onClose(); }}
                 disabled={isSubmitting}
                 className="px-4 py-2 rounded-xl text-xs font-medium text-white/60 hover:text-white hover:bg-white/10 transition cursor-pointer"
               >
@@ -340,7 +397,7 @@ export function CreateProjectModal({
             </div>
           </form>
         </motion.div>
-      </div>
+      </motion.div>}
     </AnimatePresence>
   );
 }

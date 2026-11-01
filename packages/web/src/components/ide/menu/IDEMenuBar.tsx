@@ -396,8 +396,14 @@ export function IDEMenuBar({
               return;
             }
             try {
+              const safeSourceName = (workspaceName || "workspace")
+                .split("")
+                .filter((character) => character.charCodeAt(0) >= 32 && !'<>:"/\\|?*'.includes(character))
+                .join("")
+                .replace(/[. ]+$/g, "")
+                .slice(0, 40) || "workspace";
               const res = await api.post("/api/v1/workspaces", {
-                name: `Copy of ${workspaceName || "workspace"} ${new Date().toISOString().replace(/[:.]/g, "-")}`,
+                name: `Copy of ${safeSourceName} ${new Date().toISOString().replace(/[:.]/g, "-")}`,
                 source: "duplicate",
                 sourceWorkspaceId: workspaceId,
               });
