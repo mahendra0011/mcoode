@@ -1522,38 +1522,58 @@ export function AIChatPage() {
 
   const handleExport = async () => {
     const wsId = activeWorkspaceId || workspaces?.[0]?._id;
-    if (!wsId) return showToast('No active workspace', 'error');
-    const wsName = workspaces?.find(w => w._id === wsId)?.name || wsId;
-    try {
-      const res = await api.get(`/api/v1/workspaces/${wsId}/export`, {
-        timeout: 60000,
-        responseType: 'blob'
-      });
-      if (res.status >= 400) throw new Error('Export failed');
-      const blob = res.data;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${wsName}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('Workspace exported successfully!');
-    } catch (err: any) {
-      console.error('Export failed:', err);
-      let message = 'Failed to export workspace';
-      if (err?.response?.data instanceof Blob) {
-        try {
-          const text = await err.response.data.text();
-          const parsed = JSON.parse(text);
-          if (parsed?.error?.message) message = parsed.error.message;
-        } catch (e) {
-          console.debug('[AIChatPage] export error response was not JSON:', e);
+    const rawName = workspaces?.find(w => w._id === wsId)?.name || 'mcode-project';
+    const wsName = rawName.replace(/[^\w.-]/g, '_');
+
+    // 1. If backend workspace ID exists, try downloading from the backend API
+    if (wsId) {
+      try {
+        const res = await api.get(`/api/v1/workspaces/${wsId}/export`, {
+          timeout: 60000,
+          responseType: 'blob'
+        });
+        if (res.status === 200 && res.data && res.data.size > 0) {
+          const blob = res.data;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${wsName}.zip`;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast('Workspace exported successfully!');
+          return;
         }
-      } else if (err?.message) {
-        message = err.message;
+      } catch (backendErr: any) {
+        console.warn('[AIChatPage] Backend export failed, attempting client-side fallback:', backendErr?.message || backendErr);
       }
-      showToast(message, 'error');
     }
+
+    // 2. Client-side fallback: check in-memory files from IDE store
+    try {
+      const storeState = useIDEStore.getState();
+      const filesCache = storeState.fileContentsCache || {};
+      const fileEntries = Object.entries(filesCache).filter(([path, content]) => Boolean(path && typeof content === 'string'));
+
+      if (fileEntries.length > 0) {
+        const zipEntries: ZipEntry[] = fileEntries.map(([path, content]) => ({
+          path: path.replace(/^[\\/]+/, ''),
+          file: new File([content], path.split('/').pop() || 'file.txt', { type: 'text/plain' })
+        }));
+        const blob = await zipFilesOffMainThread(zipEntries);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${wsName}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Workspace exported successfully!');
+        return;
+      }
+    } catch (clientZipErr: any) {
+      console.error('[AIChatPage] Client-side zip export failed:', clientZipErr);
+    }
+
+    showToast('No files to export in current workspace', 'warning');
   };
 
   const handlePush = async () => {

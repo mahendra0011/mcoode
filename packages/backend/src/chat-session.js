@@ -572,11 +572,23 @@ export class ChatSession {
     // animated step cards as agent mode — but every write/edit/shell still
     // flows through the permission gate before it executes.
     const isExplain = mode === 'explain';
+    const isGreeting = SIMPLE_PROMPT_RE.test(String(prompt || '').trim());
+    const chatDomain = (isExplain || isGreeting || mode === 'chat') ? 'chat' : (this.config.domain || 'backend');
+
+    let extraRules = '';
+    if (isExplain) {
+      extraRules = `Explain code clearly to someone new to this codebase. Be concrete — reference actual function/file names, walk through the logic step by step where helpful, and explain WHY something is designed a certain way when it's not obvious, not just WHAT it does. No code changes, no opinions on quality — pure explanation.`;
+    } else if (isGreeting) {
+      extraRules = `The user sent a friendly greeting or casual inquiry. Greet them warmly and politely in text, introduce yourself as mcode, their AI coding assistant, and ask what project, feature, or bug they would like to work on today. DO NOT invoke any tools! DO NOT create or edit any files!`;
+    } else {
+      extraRules = `Respond directly and helpfully to the user's question or request. For technical questions, provide clear explanations or code snippets in markdown. Only use tools when needed to inspect existing code or search.`;
+    }
+
     const chatConfig = {
       ...this.config,
       allowShellAll: false,
       requireEditApproval: true,
-      domain: isExplain ? 'chat' : (this.config.domain || 'backend'),
+      domain: chatDomain,
       mode,
       maxTokens,
       outputLength,
@@ -584,10 +596,7 @@ export class ChatSession {
       // 046: bounded to the last 100 messages so marathon sessions can't
       // blow past model context limits (400s on overflow).
       historyLimit: 100,
-      // Chat-style behavior: no filler greetings, answer directly.
-      extraRules: isExplain
-        ? `Explain code clearly to someone new to this codebase. Be concrete — reference actual function/file names, walk through the logic step by step where helpful, and explain WHY something is designed a certain way when it's not obvious, not just WHAT it does. No code changes, no opinions on quality — pure explanation.`
-        : `Never open with filler greetings. Always respond directly — start with the answer, keep concise.`
+      extraRules
     };
 
     // Inject auto-searched web context into the environment so the model has

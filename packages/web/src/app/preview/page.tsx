@@ -69,7 +69,9 @@ function PreviewContent() {
       const target = new URL(url, window.location.origin);
       if (target.protocol !== 'http:' && target.protocol !== 'https:') return base;
       if (target.origin !== window.location.origin) return `${base} allow-same-origin`;
-    } catch { /* malformed URL — stay conservative (no same-origin) */ }
+    } catch (e) {
+      console.debug('[Preview] malformed URL:', e);
+    }
     return base;
   }, [url]);
 

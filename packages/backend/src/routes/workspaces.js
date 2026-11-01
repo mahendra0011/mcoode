@@ -275,7 +275,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       const q = typeof req.query.q === 'string' ? req.query.q : '';
       if (!q.trim()) return res.json({ results: [] });
 
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       const matchCase = req.query.matchCase === 'true';
@@ -348,7 +353,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
     try {
       const { path } = req.query;
       if (!path) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path query param required' } });
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const full = safeJoin(ws.diskPath, path);
       const content = await readFile(full, 'utf8');
@@ -373,7 +383,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       }
       if (!filePath) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path is required' } });
 
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       const full = safeJoin(ws.diskPath, filePath);
@@ -450,7 +465,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
     try {
       const { path } = req.query;
       if (!path) return res.status(400).json({ error: { code: 'VALIDATION', message: 'path query param required' } });
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const full = safeJoin(ws.diskPath, path);
       // WS-013: safeJoin already rejects `..`/absolute/empty, but refuse the
@@ -471,7 +491,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
     try {
       const { oldPath, newPath } = req.body;
       if (!oldPath || !newPath) return res.status(400).json({ error: { code: 'VALIDATION', message: 'oldPath and newPath required' } });
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const oldFull = safeJoin(ws.diskPath, oldPath);
       const newFull = safeJoin(ws.diskPath, newPath);
@@ -516,9 +541,14 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
   // gigabytes into a response and exhausting memory/bandwidth.
   router.get('/:id/export', async (req, res, next) => {
     try {
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       const diskPath = ws?.diskPath;
-      if (!diskPath) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
+      if (!diskPath || !existsSync(diskPath)) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       const tooBig = await workspaceExceedsBytes(diskPath, 1_000_000_000);
       if (tooBig) {
@@ -577,7 +607,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
   // so files modified externally/CLI never showed up).
   router.get('/:id/git-status', async (req, res, next) => {
     try {
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       try {
@@ -609,7 +644,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       const { branch, create } = req.body;
       if (!branch) return res.status(400).json({ error: { code: 'VALIDATION', message: 'branch required' }});
       
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       
       const git = await simpleGit();
@@ -636,7 +676,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
   // GET /workspaces/:id/diff?path=... — unified git diff for a file (or repo)
   router.get('/:id/diff', async (req, res, next) => {
     try {
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const git = await simpleGit(ws.diskPath);
       const isRepo = await git.checkIsRepo().catch(() => false);
@@ -655,7 +700,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
   // CLI/TUI reuse); unselected regions keep original content.
   router.post('/:id/hunks', async (req, res, next) => {
     try {
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       const relPath = req.body?.path;
       const hunks = req.body?.hunks;
@@ -716,7 +766,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       const { message, branch, githubRepo } = req.body;
       if (!message || !branch) return res.status(400).json({ error: { code: 'VALIDATION', message: 'message and branch required' }});
       
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       // Fetch the oauth token to construct authenticated url
@@ -776,7 +831,12 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
   // would still allow 100GB per request).
   router.post('/:id/upload', uploadFieldArray('files', 200), async (req, res, next) => {
     try {
-      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      let ws = null;
+      try {
+        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      } catch {
+        // ID not found or invalid
+      }
       if (!ws) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
       
       const { copyFile, mkdir: mkDir } = await import('node:fs/promises');

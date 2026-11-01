@@ -101,7 +101,18 @@ export class OpenAICompatible extends HttpProvider {
         })
       });
       if (!res.ok) {
-        const detail = await res.text().catch(() => '');
+        let detail = '';
+        try {
+          const text = await res.text();
+          const json = JSON.parse(text);
+          detail = json?.error?.message || text;
+        } catch {}
+        if (res.status === 401) {
+          throw new Error(`${this.displayName || this.id} authentication failed (401 Unauthorized) — invalid API key. Update via /model or Settings.`);
+        }
+        if (res.status === 402) {
+          throw new Error(`${this.displayName || this.id} credits exhausted (402 Payment Required): ${detail || 'insufficient balance'}. Please add credits at openrouter.ai/credits or select a free model in Model Settings.`);
+        }
         const err = new Error(`${this.id} error ${res.status}: ${detail.slice(0, 400)}`);
         /** @type {any} */ (err).status = res.status;
         throw err;

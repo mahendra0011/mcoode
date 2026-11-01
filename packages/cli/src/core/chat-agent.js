@@ -89,7 +89,7 @@ WHEN TO USE web_search / web_fetch (do this WITHOUT being asked):
 CRITICAL - NEVER OUTPUT CODE IN NARRATION:
 - NEVER write markdown code blocks (\`\`\`html, \`\`\`css, \`\`\`js, etc.) in your chat narration!
 - ALL code MUST be written directly to files using the write_file tool.
-- Your narration must be ONLY 1 short sentence (e.g. "Creating index.html...", "Adding style.css..."), followed immediately by the \`\`\`mcode-action fence.
+- When invoking a tool, your narration must be ONLY 1 short sentence describing the action (e.g. "Creating project files...", "Applying updates..."), followed immediately by the \`\`\`mcode-action fence. Do NOT use action fences for conversational replies.
 - Outputting raw code in text instead of using write_file is strictly forbidden.
 
 RULES:
@@ -883,18 +883,19 @@ export class ChatAgent {
         }
       } catch (err) {
         if (this.aborted) break;
+        const is402 = /402|credits exhausted|payment required/i.test(err.message);
         // Auto-fallback: If OpenRouter paid model failed with 402 (Credits Exhausted),
         // try fallback to openrouter/free so user's work isn't blocked!
         if (
-          this.assignment?.provider?.id === 'openrouter' &&
+          (this.assignment?.provider?.id === 'openrouter' || /openrouter/i.test(err.message)) &&
           this.assignment?.model?.id !== 'openrouter/free' &&
-          /402|credits exhausted/i.test(err.message) &&
+          is402 &&
           !this._fellBackToFree
         ) {
           this._fellBackToFree = true;
           this.bus?.emit(EVENTS.MESSAGE, {
             kind: 'system',
-            text: `⚠️ OpenRouter credits exhausted for ${this.assignment.model.id}. Auto-switching to OpenRouter Free...`
+            text: `⚠️ OpenRouter credits exhausted (402). Auto-switching to OpenRouter Free...`
           });
           this.assignment = {
             ...this.assignment,
@@ -904,7 +905,11 @@ export class ChatAgent {
           continue;
         }
 
-        this.bus?.emit(EVENTS.MESSAGE, { kind: 'system', text: `model error: ${err.message}` });
+        const friendlyMsg = is402
+          ? `⚠️ OpenRouter Credits Exhausted (Error 402): Your OpenRouter account has no remaining balance. Please top up your credits at https://openrouter.ai/credits or select a free / local Ollama model in Settings.`
+          : `model error: ${err.message}`;
+
+        this.bus?.emit(EVENTS.MESSAGE, { kind: 'system', text: friendlyMsg });
         break;
       }
       if (this.aborted) break;
@@ -915,6 +920,18 @@ export class ChatAgent {
       if (actions.length === 0) {
         this.narration.push(stripActions(text));
         break;
+      }
+
+      // Guardrail: if prompt is a greeting or casual chat, NEVER execute file-writing tools!
+      const SIMPLE_GREETING_RE = /^(hi\b|hello\b|hey\b|namaste\b|thanks?\b|ok(ay)?\b|yes\b|no\b|who are you\b|how are you\b)/i;
+      const isGreetingPrompt = typeof prompt === 'string' && SIMPLE_GREETING_RE.test(prompt.trim());
+      if (isGreetingPrompt) {
+        const fileActions = actions.filter((a) => a.tool === 'write_file' || a.tool === 'edit_file' || a.tool === 'run_shell');
+        if (fileActions.length > 0) {
+          const cleanText = stripActions(text).trim();
+          this.narration.push(cleanText || "Hello! I am mcode, your AI coding assistant. What would you like to build or work on today?");
+          break;
+        }
       }
 
       // CAG-003/004: when NOTHING in the batch is a real tool (hallucinated
