@@ -564,35 +564,6 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ─────────────────── MOTION GRAPHIC LIVE STATS BANNER ─────────────────── */}
-      <section className="py-12 border-y border-neutral-200/80 bg-white">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            {[
-              { stat: '12x', label: 'Faster Parallel Swarms', sub: 'vs Single Thread' },
-              { stat: '99.4%', label: 'Build Auto-Heal Rate', sub: 'Zero Broken Builds' },
-              { stat: '40+', label: 'Supported AI Models', sub: 'Cloud & Local Ollama' },
-              { stat: '< 80ms', label: 'Local P99 Latency', sub: 'Zero Lag Web IDE' },
-            ].map((s, i) => (
-              <motion.div
-                key={s.label}
-                initial={{ opacity: 0, y: 15 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4, delay: i * 0.1 }}
-                className="p-5 rounded-2xl bg-neutral-50/70 border border-neutral-200/70 hover:border-emerald-300 transition-colors"
-              >
-                <div className="text-3xl sm:text-4xl font-black text-neutral-950 font-sans tracking-tight mb-1 bg-gradient-to-r from-emerald-600 to-teal-700 bg-clip-text text-transparent">
-                  {s.stat}
-                </div>
-                <div className="text-xs font-bold text-neutral-900 mb-0.5">{s.label}</div>
-                <div className="text-[11px] text-neutral-500 font-medium">{s.sub}</div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ─────────────────── MCODE CLI TERMINAL SHOWCASE SECTION ─────────────────── */}
       <section className="relative py-28 bg-[#090d12] text-white overflow-hidden border-b border-neutral-800">
         {/* Ambient Dark-Cyber Matrix Glows */}
