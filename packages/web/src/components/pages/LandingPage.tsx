@@ -646,7 +646,7 @@ export function LandingPage() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="relative rounded-2xl sm:rounded-3xl border border-emerald-500/30 bg-[#0d1218]/90 shadow-[0_20px_70px_-15px_rgba(16,185,129,0.25)] p-2.5 sm:p-4 mb-16 overflow-hidden backdrop-blur-xl group"
+            className="relative rounded-2xl sm:rounded-3xl border border-emerald-500/30 bg-[#0d1218]/90 shadow-[0_20px_70px_-15px_rgba(16,185,129,0.25)] p-2.5 sm:p-4 mb-8 sm:mb-10 overflow-hidden backdrop-blur-xl group"
           >
             {/* Terminal Window Chrome Titlebar */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 mb-2">
@@ -693,109 +693,6 @@ export function LandingPage() {
               </div>
             </div>
           </motion.div>
-
-          {/* 4 Feature Columns Highlighting MCODE CLI Power */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-14">
-            {/* Card 1: God Mode */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-emerald-500/40 hover:bg-white/[0.05] transition-all flex flex-col justify-between group"
-            >
-              <div>
-                <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Flame className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-                  <span>God Mode</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">--god</span>
-                </h3>
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  Autonomous Plan-to-Build Engine. Formulates architectural task waves, dispatches parallel subagents, and generates full-stack code in one go.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-white/5 font-mono text-[11px] text-emerald-400">
-                mcode --god &quot;&lt;prompt&gt;&quot;
-              </div>
-            </motion.div>
-
-            {/* Card 2: 40+ LLMs & Local Models */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-teal-500/40 hover:bg-white/[0.05] transition-all flex flex-col justify-between group"
-            >
-              <div>
-                <div className="w-11 h-11 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Cpu className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-                  <span>Multi-Model Engine</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-mono">/model</span>
-                </h3>
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  Switch instantly between 40+ frontier models (Claude 3.7, GPT-4o, DeepSeek R1, Llama 3.3) or run 100% locally offline with Ollama &amp; LM Studio.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-white/5 font-mono text-[11px] text-teal-400">
-                mcode models / mcode switch
-              </div>
-            </motion.div>
-
-            {/* Card 3: Encrypted Secrets Vault */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-indigo-500/40 hover:bg-white/[0.05] transition-all flex flex-col justify-between group"
-            >
-              <div>
-                <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Shield className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-                  <span>Encrypted Vault</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono">AES-256</span>
-                </h3>
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  Zero plaintext credentials in repo files or git. All API keys and secrets are encrypted in an isolated PBKDF2/AES-GCM master vault.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-white/5 font-mono text-[11px] text-indigo-400">
-                mcode env add / mcode vault
-              </div>
-            </motion.div>
-
-            {/* Card 4: Background Watch Daemon */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-cyan-500/40 hover:bg-white/[0.05] transition-all flex flex-col justify-between group"
-            >
-              <div>
-                <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Activity className="w-5 h-5" />
-                </div>
-                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-                  <span>Watch &amp; Auto-Heal</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">watch</span>
-                </h3>
-                <p className="text-xs text-neutral-400 leading-relaxed">
-                  Continuous watch daemon that monitors file saves, runs background test suites, and automatically fixes breaking builds and syntax errors.
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-white/5 font-mono text-[11px] text-cyan-400">
-                mcode watch --auto-fix
-              </div>
-            </motion.div>
-          </div>
 
           {/* Quick Copy CLI Bar */}
           <div className="p-4 sm:p-5 rounded-2xl bg-[#0f151d] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
