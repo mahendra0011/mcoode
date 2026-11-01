@@ -2,6 +2,7 @@ import multer from 'multer';
 import { join, basename } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 
 // Single upload policy for every route (BUG-36): one size limit, zip-only
 // MIME gate, sanitized filenames, and relative file refs in responses
@@ -26,7 +27,9 @@ export function zipOnlyFilter(req, file, cb) {
 
 export function safeFilename(original) {
   const base = basename(String(original || 'upload.zip')).replace(/[^a-z0-9._-]/gi, '_');
-  return `${Date.now()}-${base}`;
+  // Folder uploads commonly contain repeated basenames (e.g. src/index.js and
+  // test/index.js). A timestamp alone can collide for concurrent Multer writes.
+  return `${Date.now()}-${randomUUID()}-${base}`;
 }
 
 /** Multer instance factory — disk storage, shared limits + filter. */

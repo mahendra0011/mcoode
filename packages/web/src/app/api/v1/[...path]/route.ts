@@ -6,13 +6,16 @@ async function handleProxy(req: NextRequest, { params }: { params: Promise<{ pat
   const resolvedParams = await params;
   const subPath = (resolvedParams?.path || []).join("/");
   const targetUrl = `${BACKEND_URL}/api/v1/${subPath}${req.nextUrl.search}`;
+  const controller = new AbortController();
+  // Uploads can contain a full project archive and are explicitly allowed
+  // more time by the backend. The old fixed 3s proxy deadline made those
+  // otherwise-valid requests fail before the backend's upload timeout.
+  const timeoutMs = subPath.split("/")[0] === "uploads" ? 10 * 60 * 1000 : 30_000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const headers = new Headers(req.headers);
     headers.delete("host");
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
 
     const backendRes = await fetch(targetUrl, {
       method: req.method,
@@ -20,8 +23,6 @@ async function handleProxy(req: NextRequest, { params }: { params: Promise<{ pat
       body: req.method !== "GET" && req.method !== "HEAD" ? await req.blob() : undefined,
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
-
     const data = await backendRes.blob();
     return new NextResponse(data, {
       status: backendRes.status,
@@ -42,6 +43,8 @@ async function handleProxy(req: NextRequest, { params }: { params: Promise<{ pat
       return NextResponse.json({ user: null }, { status: 401 });
     }
     return NextResponse.json({ ok: false, message: "Backend service offline" }, { status: 503 });
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

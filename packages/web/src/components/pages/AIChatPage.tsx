@@ -572,6 +572,23 @@ export function AIChatPage() {
 		bumpRefresh();
 	}, [bumpRefresh, leftPanelRef]);
 
+	const handleWorkspaceDuplicated = useCallback((workspace: { _id: string; name: string }) => {
+		setWorkspaces((current) => [workspace, ...current.filter((item) => item._id !== workspace._id)]);
+		setActiveWorkspaceId(workspace._id);
+		try {
+			localStorage.setItem('mcode_active_workspace_id', workspace._id);
+		} catch (err) {
+			reportError('Failed to save active workspace id', err);
+		}
+		useIDEStore.getState().setWelcomeOpen(false);
+		useIDEStore.getState().setOpenFiles([]);
+		useIDEStore.getState().setActivePath(null);
+		useIDEStore.getState().setActiveActivityBar('explorer');
+		useIDEStore.getState().setSidebarOpen(true);
+		leftPanelRef.current?.expand();
+		bumpRefresh();
+	}, [bumpRefresh, leftPanelRef]);
+
   // Branch selector state
   const [branches, setBranches] = useState<any[]>([]);
   const [activeBranch, setActiveBranch] = useState('main');
@@ -1876,6 +1893,9 @@ export function AIChatPage() {
             {activeTab === 'AI Code Editor' && (
               <IDEMenuBar
                 className="bg-transparent border-0 h-auto ml-1"
+                workspaceId={activeWorkspaceId}
+                workspaceName={workspaces.find((workspace) => workspace._id === activeWorkspaceId)?.name}
+                onWorkspaceDuplicated={handleWorkspaceDuplicated}
                 onOpenFile={() => fileInputRef.current?.click()}
                 onOpenFolder={() => {
                   if ("showDirectoryPicker" in window) {

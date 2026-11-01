@@ -24,7 +24,10 @@ export type AuthResult =
   | { ok: false; response: Response };
 
 /** Cookies the backend sets for the session (see packages/backend/src/auth.js). */
-const TOKEN_COOKIES = ["mcode_token", "access_token", "token"] as const;
+// Keep this list in sync with setAuthCookies() in packages/backend/src/auth.js.
+// The access cookie is the browser session credential; the refresh cookie must
+// never be accepted as an access token.
+const TOKEN_COOKIES = ["mcode_access", "mcode_token", "access_token", "token"] as const;
 
 /**
  * Explicit, opt-in escape hatch for local development only. Requires BOTH
@@ -43,7 +46,12 @@ function readCookie(req: Request, name: string): string | null {
     const idx = part.indexOf("=");
     if (idx === -1) continue;
     if (part.slice(0, idx).trim() === name) {
-      return decodeURIComponent(part.slice(idx + 1).trim());
+      try {
+        return decodeURIComponent(part.slice(idx + 1).trim());
+      } catch {
+        // Ignore malformed percent encoding and let normal auth rejection run.
+        return part.slice(idx + 1).trim();
+      }
     }
   }
   return null;
@@ -73,7 +81,7 @@ function b64urlDecode(segment: string): string {
   return Buffer.from(padded, "base64").toString("utf8");
 }
 
-type JwtPayload = { sub?: unknown; role?: unknown; exp?: unknown };
+type JwtPayload = { sub?: unknown; role?: unknown; type?: unknown; exp?: unknown };
 
 /**
  * Verify an HS256 JWT. Returns the payload, or null if the token is
@@ -114,7 +122,9 @@ function verifyHs256(token: string, secret: string): JwtPayload | null {
   if (actual.length !== expected.length) return null;
   if (!timingSafeEqual(actual, expected)) return null;
 
-  if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now()) {
+  // Backend access tokens always carry an expiry and `type: "access"`.
+  // Reject refresh tokens and non-expiring signed payloads at this boundary.
+  if (payload.type !== "access" || typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) {
     return null;
   }
   return payload;

@@ -30,6 +30,9 @@ interface MenuDef {
 
 export interface IDEMenuBarProps {
   className?: string;
+  workspaceId?: string | null;
+  workspaceName?: string;
+  onWorkspaceDuplicated?: (workspace: any) => void;
   onOpenFile?: () => void;
   onOpenFolder?: () => void;
   onSave?: () => void;
@@ -51,6 +54,9 @@ export interface IDEMenuBarProps {
 
 export function IDEMenuBar({
   className,
+  workspaceId,
+  workspaceName,
+  onWorkspaceDuplicated,
   onOpenFile,
   onOpenFolder,
   onSave,
@@ -383,18 +389,25 @@ export function IDEMenuBar({
         },
         {
           label: "Duplicate Workspace",
+          disabled: !workspaceId,
           action: async () => {
+            if (!workspaceId) {
+              toast.error("Open a workspace before duplicating it");
+              return;
+            }
             try {
-              const currentFiles = store.openFiles.map((p) => ({
-                path: p,
-                content: store.fileContentsCache[p] || "",
-              }));
               const res = await api.post("/api/v1/workspaces", {
-                name: `Copy of workspace ${new Date().toLocaleTimeString()}`,
+                name: `Copy of ${workspaceName || "workspace"} ${new Date().toISOString().replace(/[:.]/g, "-")}`,
                 source: "duplicate",
-                files: currentFiles,
+                sourceWorkspaceId: workspaceId,
               });
-              toast.success(`Workspace duplicated: ${res.data?.workspace?.name || "done"}`);
+              const copied = res.data?.workspace;
+              if (copied) {
+                onWorkspaceDuplicated?.(copied);
+                toast.success(`Workspace duplicated: ${copied.name}`);
+              } else {
+                toast.error("The server did not return the duplicated workspace");
+              }
             } catch (err: any) {
               toast.error(err?.response?.data?.error?.message || "Failed to duplicate workspace");
             }

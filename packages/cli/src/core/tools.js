@@ -1,4 +1,5 @@
 import { join, resolve, relative } from 'node:path';
+import { lstatSync } from 'node:fs';
 import { readFile, writeFile, readdir, mkdir, rm } from 'node:fs/promises';
 import { execa } from 'execa';
 import { EVENTS } from '@mcode/shared';
@@ -253,6 +254,21 @@ export class ToolExecutor {
     if (rel.startsWith('..') || (isWin ? /^[a-zA-Z]:/.test(rel) : rel.startsWith('/'))) {
       throw new Error(`path escapes project root: ${path}`);
     }
+    // Lexical containment does not stop a project symlink from pointing
+    // outside the root. Refuse existing symlink components for every file
+    // read/write tool; otherwise `safe.txt -> ~/.ssh/id_rsa` bypasses `_abs`.
+    let candidate = normProj;
+    for (const part of rel.split(/[\\/]/).filter(Boolean)) {
+      candidate = join(candidate, part);
+      try {
+        if (lstatSync(candidate).isSymbolicLink()) {
+          throw new Error(`path traverses a symlink outside the project: ${path}`);
+        }
+      } catch (err) {
+        if (err.code === 'ENOENT') break;
+        throw err;
+      }
+    }
     return full;
   }
 
@@ -378,6 +394,7 @@ export class ToolExecutor {
         return;
       }
       for (const entry of entries) {
+        if (entry.isSymbolicLink()) continue;
         if (entry.name === 'node_modules' || entry.name === '.git') continue;
         const full = join(dir, entry.name);
         if (entry.isDirectory()) await walk(full);
@@ -432,6 +449,7 @@ export class ToolExecutor {
         return;
       }
       for (const entry of entries) {
+        if (entry.isSymbolicLink()) continue;
         if (matches.length >= 50) return;
         if (['node_modules', '.git', 'dist', 'build', 'coverage'].includes(entry.name)) continue;
         const full = join(dir, entry.name);

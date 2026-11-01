@@ -32,12 +32,23 @@ const QUICK_PORTS = [
   { label: '8080 (Web)', url: 'http://localhost:8080' },
 ];
 
+function isHttpPreviewUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value, 'http://localhost');
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function PreviewContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const workspaceId = searchParams.get('workspaceId') || '';
-  const initialUrl = searchParams.get('url') || (workspaceId ? `/api/v1/workspaces/${workspaceId}/preview/index.html` : 'http://localhost:5500');
+  const defaultUrl = workspaceId ? `/api/v1/workspaces/${workspaceId}/preview/index.html` : 'http://localhost:5500';
+  const requestedUrl = searchParams.get('url') || defaultUrl;
+  const initialUrl = isHttpPreviewUrl(requestedUrl) ? requestedUrl : defaultUrl;
   const [url, setUrl] = useState(initialUrl);
   const [inputUrl, setInputUrl] = useState(initialUrl);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +67,7 @@ function PreviewContent() {
     if (typeof window === 'undefined') return base;
     try {
       const target = new URL(url, window.location.origin);
+      if (target.protocol !== 'http:' && target.protocol !== 'https:') return base;
       if (target.origin !== window.location.origin) return `${base} allow-same-origin`;
     } catch { /* malformed URL — stay conservative (no same-origin) */ }
     return base;
@@ -76,6 +88,10 @@ function PreviewContent() {
   useEffect(() => {
     const qUrl = searchParams.get('url');
     if (qUrl && qUrl !== url) {
+      if (!isHttpPreviewUrl(qUrl)) {
+        toast.error('Preview URLs must use HTTP or HTTPS');
+        return;
+      }
       setUrl(qUrl);
       setInputUrl(qUrl);
       setIsLoading(true);
@@ -128,6 +144,7 @@ function PreviewContent() {
   };
 
   const handleSelectPort = (newUrl: string) => {
+    if (!isHttpPreviewUrl(newUrl)) return;
     setUrl(newUrl);
     setInputUrl(newUrl);
     setIsLoading(true);
@@ -140,6 +157,10 @@ function PreviewContent() {
     if (!target) return;
     if (!/^https?:\/\//i.test(target)) {
       target = 'http://' + target;
+    }
+    if (!isHttpPreviewUrl(target)) {
+      toast.error('Preview URLs must use HTTP or HTTPS');
+      return;
     }
     setUrl(target);
     setInputUrl(target);

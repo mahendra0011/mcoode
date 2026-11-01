@@ -146,16 +146,23 @@ export async function startServer({ port = 3100, env = process.env } = {}) {
       return next();
     }
     const origin = req.headers.origin || req.headers.referer || '';
-    if (!origin) return next();
+    if (!origin) {
+      return res.status(403).json({ error: { code: 'CSRF_BLOCKED', message: 'origin or referer is required for cookie-authenticated writes' } });
+    }
     try {
       const host = req.headers.host || '';
       const fHost = req.headers['x-forwarded-host'];
-      const oHost = new URL(origin, `http://${host}`).host;
+      // Origin is either an absolute HTTP(S) origin or the literal `null`.
+      // Resolving it against our host would turn `null` into a same-host URL,
+      // allowing sandboxed/opaque-origin pages to bypass the CSRF check.
+      const parsedOrigin = new URL(origin);
+      if (!['http:', 'https:'].includes(parsedOrigin.protocol)) throw new Error('unsupported origin protocol');
+      const oHost = parsedOrigin.host;
       const isAllowed = oHost === host
         || (fHost && fHost === oHost)
         || allowedHosts.has(oHost)
         || allowedOrigins.includes(origin)
-        || (/^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin));
+        || (env.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin));
       if (!isAllowed) {
         return res.status(403).json({ error: { code: 'CSRF_BLOCKED', message: 'cross-origin request refused' } });
       }

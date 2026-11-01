@@ -5,8 +5,8 @@ import { uploadSingle, uploadFieldArray, UPLOADS_DIR } from '../upload-config.js
 import { db } from '../db.js';
 import { httpError } from '../http-error.js';
 import { join, resolve as resolvePath, sep as pathSep, extname } from 'node:path';
-import { readFile, readdir, mkdir, writeFile, stat } from 'node:fs/promises';
-import { createReadStream, existsSync, symlinkSync, rmSync, mkdirSync } from 'node:fs';
+import { readFile, readdir, mkdir, writeFile, stat, rm, copyFile } from 'node:fs/promises';
+import { createReadStream, existsSync, lstatSync, symlinkSync, rmSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 
@@ -50,25 +50,17 @@ const handleZipfileUpload = uploadSingle('zipfile');
 
 export function workspaceRoutes({ secret, env = process.env } = {}) {
   const router = Router();
+  const requireAuth = authMiddleware({ secret });
 
-  // GET /workspaces/:id/preview* — public static file preview for iframes
-  router.get('/:id/preview*', async (req, res, next) => {
+  // GET /workspaces/:id/preview* — authenticated static preview for iframes.
+  // Project IDs are not authorization tokens; always enforce workspace owner.
+  router.get('/:id/preview*', requireAuth, async (req, res, next) => {
     try {
       const wsId = req.params.id;
-      let ws = null;
-      try {
-        ws = await db().workspace.findOne({ _id: wsId });
-      } catch {}
-      let diskPath = ws?.diskPath;
+      const ws = await db().workspace.findOne({ _id: wsId, userId: req.userId });
+      const diskPath = ws?.diskPath;
       if (!diskPath) {
-        const candidate = join(WORKSPACE_ROOT, wsId);
-        try {
-          const s = await stat(candidate);
-          if (s.isDirectory()) diskPath = candidate;
-        } catch {}
-      }
-      if (!diskPath) {
-        return res.status(404).send('Workspace not found: ' + wsId);
+        return res.status(404).send('Workspace not found');
       }
 
       let subPath = req.params[0] || '';
@@ -109,7 +101,11 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       const ext = extname(targetFile).toLowerCase();
       const content = await readFile(targetFile);
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('X-Frame-Options', 'ALLOWALL');
+      // Workspace HTML is user-controlled. The iframe sandbox does not apply
+      // when someone opens this endpoint directly, so enforce an opaque origin
+      // at the response level as well. Scripts still run for live previews but
+      // cannot inherit the dashboard's origin, cookies, or storage.
+      res.setHeader('Content-Security-Policy', 'sandbox allow-scripts allow-forms allow-popups allow-presentation');
       res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
       res.send(content);
     } catch (err) {
@@ -117,7 +113,7 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
     }
   });
 
-  router.use(authMiddleware({ secret }));
+  router.use(requireAuth);
 
   // GET /workspaces — list user's workspaces (sorted newest first)
   router.get('/', async (req, res, next) => {
@@ -143,6 +139,8 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
 
   // POST /workspaces — create from ZIP (multipart) or Git (JSON)
   router.post('/', handleZipfileUpload, async (req, res, next) => {
+    let diskPath;
+    let workspaceCommitted = false;
     try {
       const { name, source, repoUrl, branch, branchName, zipFilename } = req.body;
       if (!name || !source) {
@@ -150,7 +148,7 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       }
 
       const workspaceId = randomBytes(6).toString('hex');
-      const diskPath = join(WORKSPACE_ROOT, workspaceId);
+      diskPath = join(WORKSPACE_ROOT, workspaceId);
       await mkdir(diskPath, { recursive: true });
 
       let gitUrl = null;
@@ -170,56 +168,74 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
         branchResult = branch;
         await cloneRepo(repoUrl, diskPath, { branch: branchResult, branchName });
       } else if (source === 'duplicate') {
-        // WS-012: bound the inline-file body (count + per-file + total).
-        const files = Array.isArray(req.body.files) ? req.body.files.slice(0, 1000) : [];
-        const { writeFile } = await import('node:fs/promises');
-        const { dirname } = await import('node:path');
-        let writtenBytes = 0;
-        for (const f of files) {
-          if (f && f.path) {
-            const text = String(f.content || '');
-            if (text.length > 5_000_000) {
-              throw httpError(413, 'duplicate file exceeds 5MB inline limit');
+        if (req.body.sourceWorkspaceId) {
+          // Duplicate the complete workspace server-side. The old menu sent
+          // only open editor tabs, silently omitting every other project file.
+          const sourceWorkspace = await db().workspace.findOne({
+            _id: String(req.body.sourceWorkspaceId),
+            userId: req.userId
+          });
+          if (!sourceWorkspace) throw httpError(404, 'source workspace not found');
+          if (await workspaceExceedsBytes(sourceWorkspace.diskPath, 1_000_000_000)) {
+            throw httpError(413, 'source workspace exceeds the 1GB duplicate limit');
+          }
+          const entries = await walkDir(sourceWorkspace.diskPath);
+          const CONCURRENCY = 32;
+          for (let i = 0; i < entries.length; i += CONCURRENCY) {
+            await Promise.all(entries.slice(i, i + CONCURRENCY).map(async (entry) => {
+              const target = safeJoin(diskPath, entry.path);
+              if (entry.isDir) {
+                await mkdir(target, { recursive: true });
+                return;
+              }
+              await mkdir(join(target, '..'), { recursive: true });
+              await copyFile(safeJoin(sourceWorkspace.diskPath, entry.path), target);
+            }));
+          }
+        } else {
+          // WS-012: bound the legacy inline-file body (count + per-file + total).
+          const files = Array.isArray(req.body.files) ? req.body.files.slice(0, 1000) : [];
+          let writtenBytes = 0;
+          for (const f of files) {
+            if (f && f.path) {
+              const text = String(f.content || '');
+              const fileBytes = Buffer.byteLength(text, 'utf8');
+              if (fileBytes > 5_000_000) {
+                throw httpError(413, 'duplicate file exceeds 5MB inline limit');
+              }
+              writtenBytes += fileBytes;
+              if (writtenBytes > 40_000_000) {
+                throw httpError(413, 'duplicate body exceeds 40MB inline limit');
+              }
+              const target = safeJoin(diskPath, f.path);
+              await mkdir(join(target, '..'), { recursive: true });
+              await writeFile(target, text, 'utf8');
             }
-            writtenBytes += text.length;
-            if (writtenBytes > 100_000_000) {
-              throw httpError(413, 'duplicate body exceeds 100MB total');
-            }
-            const target = safeJoin(diskPath, f.path);
-            await mkdir(dirname(target), { recursive: true });
-            await writeFile(target, text, 'utf8');
           }
         }
       }
 
-      // If a workspace with the same name already exists for this user,
-      // update its files/diskPath and metadata seamlessly instead of failing with a duplicate key error.
+      // Never replace an existing workspace implicitly. The UI retries with a
+      // new name on 409; the old upsert path could delete a user's existing
+      // project when they uploaded another folder with the same name.
       const existing = await db().workspace.findOne({ userId: req.userId, name });
-      let ws;
       if (existing) {
-        if (existing.diskPath && existing.diskPath !== diskPath) {
-          try {
-            const { rm } = await import('node:fs/promises');
-            await rm(existing.diskPath, { recursive: true, force: true });
-          } catch {}
-        }
-        await db().workspace.findByIdAndUpdate(existing._id, {
-          diskPath,
-          gitUrl,
-          branch: branchResult,
-          status: 'active'
-        });
-        ws = await db().workspace.findById(existing._id) || { ...existing, diskPath, gitUrl, branch: branchResult, status: 'active' };
-      } else {
-        ws = await db().workspace.create({
-          userId: req.userId,
-          name,
-          diskPath,
-          gitUrl,
-          branch: branchResult,
-          status: 'active'
+        return res.status(409).json({
+          error: {
+            code: 'DUPLICATE',
+            message: `A workspace named "${name}" already exists. Please choose a different name.`
+          }
         });
       }
+      const ws = await db().workspace.create({
+        userId: req.userId,
+        name,
+        diskPath,
+        gitUrl,
+        branch: branchResult,
+        status: 'active'
+      });
+      workspaceCommitted = true;
       ensureNamedJunction(ws?.name, ws?.diskPath);
       res.status(201).json({ workspace: ws });
     } catch (err) {
@@ -233,6 +249,11 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       }
       console.error('[workspaces] POST / failed:', err);
       next(err);
+    } finally {
+      if (req.file?.path) await rm(req.file.path, { force: true }).catch(() => {});
+      if (!workspaceCommitted && diskPath) {
+        await rm(diskPath, { recursive: true, force: true }).catch(() => {});
+      }
     }
   });
 
@@ -495,23 +516,8 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
   // gigabytes into a response and exhausting memory/bandwidth.
   router.get('/:id/export', async (req, res, next) => {
     try {
-      let ws = null;
-      try {
-        ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
-      } catch {}
-      if (!ws) {
-        try {
-          ws = await db().workspace.findOne({ _id: req.params.id }) || await db().workspace.findOne({ name: req.params.id }) || await db().workspace.findOne({ diskPath: { $regex: req.params.id } });
-        } catch {}
-      }
-      let diskPath = ws?.diskPath;
-      if (!diskPath) {
-        const candidate = join(WORKSPACE_ROOT, req.params.id);
-        try {
-          const s = await stat(candidate);
-          if (s.isDirectory()) diskPath = candidate;
-        } catch {}
-      }
+      const ws = await db().workspace.findOne({ _id: req.params.id, userId: req.userId });
+      const diskPath = ws?.diskPath;
       if (!diskPath) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'workspace not found' } });
 
       const tooBig = await workspaceExceedsBytes(diskPath, 1_000_000_000);
@@ -809,6 +815,8 @@ export function workspaceRoutes({ secret, env = process.env } = {}) {
       res.json({ ok: true, uploadedFiles });
     } catch (err) {
       next(err);
+    } finally {
+      await Promise.allSettled((req.files || []).map((file) => rm(file.path, { force: true })));
     }
   });
 
@@ -950,7 +958,21 @@ function safeJoin(root, p) {
   if (!stack.length) {
     throw httpError(400, 'invalid path');
   }
-  return join(rootResolved, ...stack);
+  let candidate = rootResolved;
+  for (const part of stack) {
+    candidate = join(candidate, part);
+    try {
+      // A lexically safe path can still escape through a symlink committed to
+      // a Git project. Refuse symlink components before reads or mutations.
+      if (lstatSync(candidate).isSymbolicLink()) {
+        throw httpError(400, 'invalid path: workspace symlinks are not followed');
+      }
+    } catch (err) {
+      if (err.code === 'ENOENT') continue;
+      throw err;
+    }
+  }
+  return candidate;
 }
 
 /** WS-010 helper: true when a tree exceeds `maxBytes` (early-abort walk). */

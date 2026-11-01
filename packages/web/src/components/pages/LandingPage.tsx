@@ -593,6 +593,242 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* ─────────────────── MCODE CLI TERMINAL SHOWCASE SECTION ─────────────────── */}
+      <section className="relative py-28 bg-[#090d12] text-white overflow-hidden border-b border-neutral-800">
+        {/* Ambient Dark-Cyber Matrix Glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[400px] bg-gradient-to-b from-emerald-500/15 via-teal-500/5 to-transparent blur-[120px] pointer-events-none -z-10" />
+        <div className="absolute -bottom-24 right-1/4 w-96 h-96 bg-cyan-500/10 blur-[130px] pointer-events-none -z-10" />
+        {/* Terminal Matrix Grid Overlay */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none -z-10 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000_70%,transparent_100%)]" />
+
+        <div className="max-w-6xl mx-auto px-6">
+          {/* Header Row */}
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-semibold mb-5 shadow-[0_0_20px_rgba(16,185,129,0.2)]"
+            >
+              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+              <span>TERMINAL-FIRST AUTONOMOUS CODING</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            </motion.div>
+
+            <motion.h2
+              initial={{ opacity: 0, y: 15 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight mb-5"
+            >
+              Control Autonomous AI Swarms from Your{' '}
+              <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
+                Command Line
+              </span>
+            </motion.h2>
+
+            <motion.p
+              initial={{ opacity: 0, y: 15 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="text-neutral-400 text-sm sm:text-base leading-relaxed"
+            >
+              MCODE CLI is an ultra-fast, multi-model AI coding engine built right inside your shell. Plan system architectures, dispatch parallel subagents with God Mode, and auto-heal breaking builds with real-time watch daemons.
+            </motion.p>
+          </div>
+
+          {/* Featured Terminal Screenshot Showcase with Glow and Mac Titlebar */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="relative rounded-2xl sm:rounded-3xl border border-emerald-500/30 bg-[#0d1218]/90 shadow-[0_20px_70px_-15px_rgba(16,185,129,0.25)] p-2.5 sm:p-4 mb-16 overflow-hidden backdrop-blur-xl group"
+          >
+            {/* Terminal Window Chrome Titlebar */}
+            <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 mb-2">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-[#ff5f56] inline-block shadow-sm" />
+                <span className="w-3 h-3 rounded-full bg-[#ffbd2e] inline-block shadow-sm" />
+                <span className="w-3 h-3 rounded-full bg-[#27c93f] inline-block shadow-sm" />
+                <span className="text-[12px] font-mono text-neutral-400 ml-2 hidden sm:inline">
+                  ~/mcode-workspaces — mcode (OpenTUI v2.4)
+                </span>
+                <span className="text-[12px] font-mono text-neutral-400 ml-2 sm:hidden">
+                  mcode cli
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  meta-llama/llama-3.3-70b-instruct
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white/5 text-neutral-300 border border-white/10 hidden md:inline">
+                  God Mode
+                </span>
+              </div>
+            </div>
+
+            {/* The Actual Terminal Screenshot */}
+            <div className="relative rounded-xl overflow-hidden bg-black/90 border border-white/5">
+              <img
+                src="/mcode-cli-terminal.png"
+                alt="MCODE CLI Terminal Interface Preview"
+                className="w-full h-auto object-cover rounded-xl transition duration-500 group-hover:scale-[1.01]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-4 sm:p-6 pointer-events-none">
+                <span className="text-xs font-mono text-emerald-300 font-semibold bg-black/70 px-3 py-1.5 rounded-lg border border-emerald-500/30 backdrop-blur-md">
+                  mcode --god &quot;build a rest api for orders&quot;
+                </span>
+                <Link
+                  href="/cli"
+                  className="pointer-events-auto px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold font-sans flex items-center gap-1.5 shadow-lg shadow-emerald-500/30 transition-transform active:scale-95"
+                >
+                  <span>Explore CLI Commands</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 4 Feature Columns Highlighting MCODE CLI Power */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-14">
+            {/* Card 1: God Mode */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-emerald-500/40 hover:bg-white/[0.05] transition-all flex flex-col justify-between group"
+            >
+              <div>
+                <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                  <span>God Mode</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">--god</span>
+                </h3>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Autonomous Plan-to-Build Engine. Formulates architectural task waves, dispatches parallel subagents, and generates full-stack code in one go.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 font-mono text-[11px] text-emerald-400">
+                mcode --god &quot;&lt;prompt&gt;&quot;
+              </div>
+            </motion.div>
+
+            {/* Card 2: 40+ LLMs & Local Models */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-teal-500/40 hover:bg-white/[0.05] transition-all flex flex-col justify-between group"
+            >
+              <div>
+                <div className="w-11 h-11 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Cpu className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                  <span>Multi-Model Engine</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-mono">/model</span>
+                </h3>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Switch instantly between 40+ frontier models (Claude 3.7, GPT-4o, DeepSeek R1, Llama 3.3) or run 100% locally offline with Ollama &amp; LM Studio.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 font-mono text-[11px] text-teal-400">
+                mcode models / mcode switch
+              </div>
+            </motion.div>
+
+            {/* Card 3: Encrypted Secrets Vault */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-indigo-500/40 hover:bg-white/[0.05] transition-all flex flex-col justify-between group"
+            >
+              <div>
+                <div className="w-11 h-11 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                  <span>Encrypted Vault</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono">AES-256</span>
+                </h3>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Zero plaintext credentials in repo files or git. All API keys and secrets are encrypted in an isolated PBKDF2/AES-GCM master vault.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 font-mono text-[11px] text-indigo-400">
+                mcode env add / mcode vault
+              </div>
+            </motion.div>
+
+            {/* Card 4: Background Watch Daemon */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-cyan-500/40 hover:bg-white/[0.05] transition-all flex flex-col justify-between group"
+            >
+              <div>
+                <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                  <span>Watch &amp; Auto-Heal</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">watch</span>
+                </h3>
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Continuous watch daemon that monitors file saves, runs background test suites, and automatically fixes breaking builds and syntax errors.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 font-mono text-[11px] text-cyan-400">
+                mcode watch --auto-fix
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Quick Copy CLI Bar */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-[#0f151d] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <span className="text-emerald-400 font-mono text-sm font-bold pl-2 select-none">$</span>
+              <span className="font-mono text-xs sm:text-sm text-neutral-200">
+                npm install -g mcode &amp;&amp; mcode
+              </span>
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText('npm install -g mcode && mcode');
+                  toast.success('Copied: npm install -g mcode && mcode');
+                }}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold font-mono flex items-center gap-2 transition cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Copy Command</span>
+              </button>
+              <Link
+                href="/cli"
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold font-sans flex items-center gap-1.5 transition shadow-md shadow-emerald-500/20"
+              >
+                <span>Read CLI Docs</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─────────────────── THE 4 UNIFIED WAYS TO BUILD ─────────────────── */}
       <section className="py-24 bg-[#f8fafc]">
         <div className="max-w-6xl mx-auto px-6">
