@@ -7,7 +7,7 @@ import {
   Check, Copy, Play, GitBranch, RefreshCw, Lock, Globe,
   Monitor, Puzzle, ChevronRight, CheckCircle2, MessageSquare,
   Activity, Star, Download, Code2, Database, ExternalLink,
-  Laptop, CheckCircle, Flame, Rocket, ChevronDown, Smartphone
+  Laptop, CheckCircle, Flame, Rocket, ChevronDown, Smartphone, Lightbulb, ShieldAlert
 } from 'lucide-react';
 import { Layout } from '../layout/Layout';
 import { toast } from 'sonner';
@@ -868,81 +868,173 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ─────────────────── 3 WORKING MODES SHOWCASE ─────────────────── */}
+      {/* ─────────────────── 6 WORKING MODES SHOWCASE ─────────────────── */}
       <section className="py-24 bg-white border-t border-neutral-200/80">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-950 mb-4 tracking-tight">
-              Three Distinct Working Modes
+              Six Distinct Working Modes
             </h2>
             <p className="text-neutral-600 text-sm sm:text-base">
-              Shift between interactive chat pairing, fully autonomous multi-agent execution, and automatic background healing.
+              Shift seamlessly between interactive chat pairing, fully autonomous multi-agent execution, background healing, deep architectural explanations, security audits, and automated migrations.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Mode 1: Chat Mode */}
-            <div className="p-7 rounded-3xl bg-neutral-50/70 border border-neutral-200/90 hover:border-blue-300 transition-colors">
-              <div className="w-11 h-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center mb-5 shadow-sm">
-                <MessageSquare className="w-5 h-5" />
+            <div className="p-7 rounded-3xl bg-neutral-50/70 border border-neutral-200/90 hover:border-blue-300 transition-all hover:shadow-lg flex flex-col justify-between group">
+              <div>
+                <div className="w-11 h-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center mb-5 shadow-sm group-hover:scale-110 transition-transform">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-bold text-neutral-950">1. Chat Pairing Mode</h3>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Interactive</span>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed mb-5">
+                  Interactive pairing for exploratory architecture questions, code reviews, debugging stack traces, and rubber-ducking.
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-neutral-950 mb-2">1. Chat Pairing Mode</h3>
-              <p className="text-xs text-neutral-600 leading-relaxed mb-5">
-                Interactive pairing for exploratory architecture questions, code reviews, debugging stack traces, and rubber-ducking.
-              </p>
-              <ul className="text-xs text-neutral-700 space-y-2.5 font-mono">
+              <ul className="text-xs text-neutral-700 space-y-2.5 font-mono pt-4 border-t border-neutral-200/70">
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-blue-600" />
+                  <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
                   <span>Stream responses in real-time</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-blue-600" />
+                  <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />
                   <span>Context tags: @file, @git, @docs</span>
                 </li>
               </ul>
             </div>
 
             {/* Mode 2: God Mode */}
-            <div className="p-7 rounded-3xl bg-emerald-50/60 border border-emerald-300/80 relative shadow-sm hover:shadow-md transition-shadow">
+            <div className="p-7 rounded-3xl bg-emerald-50/60 border border-emerald-300/90 relative shadow-sm hover:shadow-xl transition-all flex flex-col justify-between group">
               <div className="absolute top-5 right-5 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-mono font-bold shadow-sm">
                 FLAGSHIP
               </div>
-              <div className="w-11 h-11 rounded-2xl bg-emerald-200 text-emerald-800 flex items-center justify-center mb-5 shadow-sm">
-                <Zap className="w-5 h-5" />
+              <div>
+                <div className="w-11 h-11 rounded-2xl bg-emerald-200 text-emerald-800 flex items-center justify-center mb-5 shadow-sm group-hover:scale-110 transition-transform">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-bold text-neutral-950">2. God Mode (Autonomous)</h3>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed mb-5">
+                  Full-stack agent mode. Deconstructs your prompt into a DAG dependency graph and launches subagents in parallel waves.
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-neutral-950 mb-2">2. God Mode (Autonomous)</h3>
-              <p className="text-xs text-neutral-600 leading-relaxed mb-5">
-                Full-stack agent mode. Deconstructs your prompt into a DAG dependency graph and launches subagents in parallel waves.
-              </p>
-              <ul className="text-xs text-neutral-800 space-y-2.5 font-mono font-medium">
+              <ul className="text-xs text-neutral-800 space-y-2.5 font-mono font-medium pt-4 border-t border-emerald-200/80">
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600" />
+                  <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                   <span>Parallel multi-agent waves</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600" />
+                  <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                   <span>Atomic rollback checkpoints</span>
                 </li>
               </ul>
             </div>
 
             {/* Mode 3: Watch & Auto-Heal */}
-            <div className="p-7 rounded-3xl bg-neutral-50/70 border border-neutral-200/90 hover:border-amber-300 transition-colors">
-              <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mb-5 shadow-sm">
-                <Activity className="w-5 h-5" />
+            <div className="p-7 rounded-3xl bg-neutral-50/70 border border-neutral-200/90 hover:border-amber-300 transition-all hover:shadow-lg flex flex-col justify-between group">
+              <div>
+                <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mb-5 shadow-sm group-hover:scale-110 transition-transform">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-bold text-neutral-950">3. Watch & Auto-Heal</h3>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Daemon</span>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed mb-5">
+                  Background daemon watches your Git repo. When you save a broken import or a test fails, mcode auto-fixes it.
+                </p>
               </div>
-              <h3 className="text-lg font-bold text-neutral-950 mb-2">3. Watch & Auto-Heal</h3>
-              <p className="text-xs text-neutral-600 leading-relaxed mb-5">
-                Background daemon watches your Git repo. When you save a broken import or a test fails, mcode auto-fixes it.
-              </p>
-              <ul className="text-xs text-neutral-700 space-y-2.5 font-mono">
+              <ul className="text-xs text-neutral-700 space-y-2.5 font-mono pt-4 border-t border-neutral-200/70">
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-600" />
+                  <Check className="w-4 h-4 text-amber-600 flex-shrink-0" />
                   <span>Runs vitest/jest automatically</span>
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-amber-600" />
+                  <Check className="w-4 h-4 text-amber-600 flex-shrink-0" />
                   <span>Self-healing patch suggestions</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Mode 4: Explain & Architecture */}
+            <div className="p-7 rounded-3xl bg-neutral-50/70 border border-neutral-200/90 hover:border-cyan-300 transition-all hover:shadow-lg flex flex-col justify-between group">
+              <div>
+                <div className="w-11 h-11 rounded-2xl bg-cyan-100 text-cyan-700 flex items-center justify-center mb-5 shadow-sm group-hover:scale-110 transition-transform">
+                  <Lightbulb className="w-5 h-5" />
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-bold text-neutral-950">4. Explain & Architecture</h3>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800">Read-Only</span>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed mb-5">
+                  Deep structural codebase walkthroughs, AST inspections, dependency maps, and architectural pattern breakdowns with zero risk.
+                </p>
+              </div>
+              <ul className="text-xs text-neutral-700 space-y-2.5 font-mono pt-4 border-t border-neutral-200/70">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-cyan-600 flex-shrink-0" />
+                  <span>Step-by-step logic unraveling</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-cyan-600 flex-shrink-0" />
+                  <span>Zero unsolicited file mutations</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Mode 5: Security & Audit */}
+            <div className="p-7 rounded-3xl bg-neutral-50/70 border border-neutral-200/90 hover:border-rose-300 transition-all hover:shadow-lg flex flex-col justify-between group">
+              <div>
+                <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mb-5 shadow-sm group-hover:scale-110 transition-transform">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-bold text-neutral-950">5. Security & Audit Mode</h3>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">Scanner</span>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed mb-5">
+                  Static analysis & LLM audit for OWASP vulnerabilities, secret leaks, dead code, and bloated dependencies in seconds.
+                </p>
+              </div>
+              <ul className="text-xs text-neutral-700 space-y-2.5 font-mono pt-4 border-t border-neutral-200/70">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  <span>Hardcoded API secrets detection</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  <span>PDF & Markdown audit export</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Mode 6: Migrate & Refactor */}
+            <div className="p-7 rounded-3xl bg-neutral-50/70 border border-neutral-200/90 hover:border-purple-300 transition-all hover:shadow-lg flex flex-col justify-between group">
+              <div>
+                <div className="w-11 h-11 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mb-5 shadow-sm group-hover:scale-110 transition-transform">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-bold text-neutral-950">6. Migrate & Refactor Mode</h3>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">Transform</span>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed mb-5">
+                  Large-scale automated code migrations (JS to TS, CommonJS to ESM, React conversions) with strict equivalence test checks.
+                </p>
+              </div>
+              <ul className="text-xs text-neutral-700 space-y-2.5 font-mono pt-4 border-t border-neutral-200/70">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                  <span>AST-guided multi-file rewrite</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                  <span>Automated test equivalence gate</span>
                 </li>
               </ul>
             </div>
