@@ -1,7 +1,7 @@
-import { DesktopAppPage } from "../../components/pages/DesktopAppPage";
+import { MobileAppPage } from "../../components/pages/MobileAppPage";
 
 export const dynamic = "force-dynamic";
 
 export default function Page() {
-  return <DesktopAppPage />;
+  return <MobileAppPage />;
 }

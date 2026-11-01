@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {
   Terminal, Globe, Puzzle, Monitor, Sparkles, Shield, Zap,
   Cpu, Github, ExternalLink, Heart, CheckCircle2, ChevronRight,
-  Laptop, ArrowUpRight, Copy, CheckCheck, Code2
+  Laptop, ArrowUpRight, Copy, CheckCheck, Code2, Smartphone
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -112,9 +112,9 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/mcode" className="hover:text-purple-400 transition-colors flex items-center gap-1.5">
-                  <Monitor className="w-3.5 h-3.5 text-neutral-500" />
-                  <span>Native Desktop App (Client)</span>
+                <Link href="/mcode" className="hover:text-emerald-400 transition-colors flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-neutral-500" />
+                  <span>Mobile App (Android &amp; iOS)</span>
                 </Link>
               </li>
             </ul>
@@ -276,3 +276,4 @@ export function Footer() {
     </footer>
   );
 }
+
