@@ -146,7 +146,6 @@ const COMMAND_WORKFLOWS: Record<string, { label: string; icon: any; commands: CL
 export function CLIPage() {
   const [activeInstallTab, setActiveInstallTab] = useState<'npm' | 'curl' | 'brew'>('npm');
   const [copiedText, setCopiedText] = useState<string | null>(null);
-  const [activeSim, setActiveSim] = useState<'god' | 'watch' | 'audit' | 'review'>('god');
   const [activeWorkflow, setActiveWorkflow] = useState<string>('build');
 
   const copy = (text: string) => {
@@ -224,103 +223,78 @@ export function CLIPage() {
             </div>
           </div>
 
-          {/* ─────────────────── INTERACTIVE TERMINAL SIMULATOR ─────────────────── */}
-          <div className="max-w-4xl mx-auto rounded-3xl overflow-hidden border border-neutral-800 bg-[#090d12] shadow-2xl text-left mb-24 relative">
-            {/* Header / Traffic Lights */}
-            <div className="flex items-center justify-between px-4 py-3 bg-[#111620] border-b border-neutral-800 text-xs font-mono">
+          {/* ─────────────────── ACTUAL MCODE CLI TERMINAL SHOWCASE ─────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 25 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="max-w-5xl mx-auto rounded-3xl overflow-hidden border border-neutral-800 bg-[#090d12] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] text-left mb-24 relative p-3 sm:p-5 group"
+          >
+            {/* Terminal Window Top Bar */}
+            <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl bg-[#111620] border border-white/5 mb-3 sm:mb-4">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-rose-500/80 inline-block" />
                 <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block" />
                 <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block" />
-                <span className="text-neutral-400 ml-2">mcode-cli — zsh</span>
+                <span className="text-[12px] font-mono text-neutral-400 ml-2 hidden sm:inline">
+                  mcode-cli — zsh (tmux session: swarm-01)
+                </span>
+                <span className="text-[12px] font-mono text-neutral-400 ml-2 sm:hidden">
+                  mcode cli
+                </span>
               </div>
-
-              {/* Simulation Selectors */}
-              <div className="flex items-center gap-1.5">
-                {[
-                  { id: 'god', label: 'mcode god' },
-                  { id: 'watch', label: 'mcode watch' },
-                  { id: 'audit', label: 'mcode audit' },
-                  { id: 'review', label: 'mcode review' }
-                ].map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setActiveSim(s.id as any)}
-                    className={`px-3 py-1 rounded-lg text-xs font-mono cursor-pointer transition-colors ${
-                      activeSim === s.id
-                        ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/35'
-                        : 'text-neutral-400 hover:text-white'
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
+              <div className="flex items-center gap-3">
+                <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  meta-llama/llama-3.3-70b-instruct
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white/5 text-neutral-300 border border-white/10 hidden md:inline">
+                  God Mode
+                </span>
               </div>
             </div>
 
-            {/* Terminal Window Content */}
-            <div className="p-6 font-mono text-[12px] leading-relaxed text-neutral-300 space-y-2 min-h-[250px]">
-              {activeSim === 'god' && (
-                <>
-                  <p className="text-neutral-400">
-                    <span className="text-emerald-400 font-bold">$</span> mcode god "refactor auth to use jwt tokens and prisma"
-                  </p>
-                  <p className="text-indigo-400 font-semibold">✦ mcode autonomous swarm initialized (planner: claude-3-7-sonnet)</p>
-                  <p className="text-neutral-400">
-                    ├── Wave 1: Schema migration [claude-3-7-sonnet] → <span className="text-emerald-400 font-bold">DONE (+42 lines)</span>
-                  </p>
-                  <p className="text-neutral-400">
-                    ├── Wave 2: Auth middleware & guards [gpt-4o] → <span className="text-emerald-400 font-bold">DONE (+88 lines)</span>
-                  </p>
-                  <p className="text-neutral-400">
-                    └── Wave 3: Integration test verification (12/12) → <span className="text-emerald-400 font-bold">VERIFIED</span>
-                  </p>
-                  <p className="text-emerald-300 pt-1">
-                    ✓ All 3 subagent tasks succeeded. Checkpoint #18 created in 4.2s.
-                  </p>
-                </>
-              )}
-
-              {activeSim === 'watch' && (
-                <>
-                  <p className="text-neutral-400">
-                    <span className="text-emerald-400 font-bold">$</span> mcode watch --auto-fix
-                  </p>
-                  <p className="text-cyan-400 font-semibold">✦ Watch daemon active across 1,420 repository files</p>
-                  <p className="text-neutral-400">[16:04:12] File saved: packages/web/src/lib/axios.js</p>
-                  <p className="text-amber-400">[16:04:13] Warning: detected broken import './config'</p>
-                  <p className="text-emerald-400">[16:04:14] Auto-healing: replaced with 'import &#123; config &#125; from "./settings"'</p>
-                  <p className="text-emerald-300 pt-1">✓ Background vitest rerun: 452/452 tests passing (0ms manual delay)</p>
-                </>
-              )}
-
-              {activeSim === 'audit' && (
-                <>
-                  <p className="text-neutral-400">
-                    <span className="text-emerald-400 font-bold">$</span> mcode audit --scope all --pdf
-                  </p>
-                  <p className="text-rose-400 font-semibold">✦ Running zero-AI static scan + LLM deep vulnerability inspection</p>
-                  <p className="text-neutral-400">├── Tier 1: Static AST & Secret scanner → 0 plaintext credentials found</p>
-                  <p className="text-neutral-400">├── Tier 2: Performance analysis → 0 unindexed queries, bundle budget OK</p>
-                  <p className="text-neutral-400">└── Tier 3: Quality review → 98.6% clean code rating</p>
-                  <p className="text-emerald-300 pt-1">✓ Audit passed. Report exported to ./mcode-audit-report.pdf</p>
-                </>
-              )}
-
-              {activeSim === 'review' && (
-                <>
-                  <p className="text-neutral-400">
-                    <span className="text-emerald-400 font-bold">$</span> mcode review origin/main
-                  </p>
-                  <p className="text-blue-400 font-semibold">✦ Reviewing git diff against origin/main (6 files changed, +148/-32)</p>
-                  <p className="text-neutral-300">  • packages/web/src/components/pages/AIChatPage.tsx: Clean fallback added</p>
-                  <p className="text-neutral-300">  • packages/backend/src/routes/workspaces.js: Safe directory check verified</p>
-                  <p className="text-emerald-400">  • Security & Logic check: 0 regressions, all test cases covered</p>
-                  <p className="text-emerald-300 pt-1">✓ Ready to merge. Run `mcode ship` to commit and push.</p>
-                </>
-              )}
+            {/* The Actual Terminal Screenshot Image */}
+            <div className="relative rounded-2xl overflow-hidden bg-black/90 border border-white/10 shadow-2xl">
+              <img
+                src="/mcode-cli-terminal.png"
+                alt="MCODE CLI Terminal Interface"
+                className="w-full h-auto object-cover rounded-2xl transition duration-500 group-hover:scale-[1.008]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-4 sm:p-6 pointer-events-none">
+                <span className="text-xs font-mono text-emerald-300 font-semibold bg-black/80 px-3 py-1.5 rounded-lg border border-emerald-500/30 backdrop-blur-md">
+                  mcode --god &quot;build a rest api for orders&quot;
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copy('mcode --god "build a rest api for orders"')}
+                  className="pointer-events-auto px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold font-sans flex items-center gap-1.5 shadow-lg shadow-emerald-500/30 transition-transform active:scale-95 cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy Run Command</span>
+                </button>
+              </div>
             </div>
-          </div>
+
+            {/* Quick Copy Bottom Bar */}
+            <div className="mt-4 p-3.5 sm:p-4 rounded-2xl bg-[#0f151d] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <span className="text-emerald-400 font-bold select-none">$</span>
+                <span className="text-neutral-200">
+                  npm install -g mcode &amp;&amp; mcode
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => copy('npm install -g mcode && mcode')}
+                className="w-full sm:w-auto px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-sans text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Copy className="w-3 h-3 text-emerald-400" />
+                <span>Copy</span>
+              </button>
+            </div>
+          </motion.div>
         </div>
       </section>
 
