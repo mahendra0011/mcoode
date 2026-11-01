@@ -726,27 +726,27 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ─────────────────── THE 4 UNIFIED WAYS TO BUILD ─────────────────── */}
+      {/* ─────────────────── THE 5 UNIFIED WAYS TO BUILD ─────────────────── */}
       <section className="py-24 bg-[#f8fafc]">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-950 mb-4 tracking-tight">
-              One Unified AI Engine. Four Ways to Build.
+              One Unified AI Engine. Five Ways to Build.
             </h2>
             <p className="text-neutral-600 text-sm sm:text-base">
               Work wherever you are most productive. Your encrypted vault, MCP tools, and subagents stay synchronized everywhere.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 mb-10">
             {/* 1: Terminal CLI */}
-            <div className="p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-emerald-300 transition-all flex flex-col justify-between group">
+            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-emerald-300 transition-all flex flex-col justify-between group">
               <div>
                 <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <Terminal className="w-6 h-6" />
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-lg font-bold text-neutral-950">Terminal CLI</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-neutral-950">Terminal CLI</h3>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-mono font-bold">v2.4</span>
                 </div>
                 <p className="text-xs text-neutral-600 leading-relaxed mb-6">
@@ -763,13 +763,13 @@ export function LandingPage() {
             </div>
 
             {/* 2: Web IDE */}
-            <div className="p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-cyan-300 transition-all flex flex-col justify-between group">
+            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-cyan-300 transition-all flex flex-col justify-between group">
               <div>
                 <div className="w-12 h-12 rounded-2xl bg-cyan-50 border border-cyan-200 text-cyan-700 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <Globe className="w-6 h-6" />
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-lg font-bold text-neutral-950">Web IDE</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-neutral-950">Web IDE</h3>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 font-mono font-bold">Cloud</span>
                 </div>
                 <p className="text-xs text-neutral-600 leading-relaxed mb-6">
@@ -785,14 +785,14 @@ export function LandingPage() {
               </Link>
             </div>
 
-            {/* 3: VS Code Extension */}
-            <div className="p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-indigo-300 transition-all flex flex-col justify-between group">
+            {/* 3: VS Code Plugin */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-indigo-300 transition-all flex flex-col justify-between group">
               <div>
                 <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <Puzzle className="w-6 h-6" />
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-lg font-bold text-neutral-950">VS Code Plugin</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-neutral-950">VS Code Plugin</h3>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-mono font-bold">VSIX</span>
                 </div>
                 <p className="text-xs text-neutral-600 leading-relaxed mb-6">
@@ -808,14 +808,37 @@ export function LandingPage() {
               </Link>
             </div>
 
-            {/* 4: Desktop App */}
-            <div className="p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-purple-300 transition-all flex flex-col justify-between group">
+            {/* 4: Desktop Software */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-rose-300 transition-all flex flex-col justify-between group">
+              <div>
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                  <Code2 className="w-6 h-6" />
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-base sm:text-lg font-bold text-neutral-950">Desktop Software</h3>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-mono font-bold">Native IDE</span>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed mb-6">
+                  Standalone desktop IDE powerhouse. Low-latency native filesystem watchers, multi-root tabs, and full local docker sandbox.
+                </p>
+              </div>
+              <Link
+                href="/ide"
+                className="inline-flex items-center justify-between w-full py-2.5 px-4 rounded-xl bg-neutral-100 hover:bg-rose-600 text-xs font-bold text-neutral-800 hover:text-white transition-all group-hover:shadow-md"
+              >
+                <span>Download Software</span>
+                <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+            {/* 5: Desktop App */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)] hover:shadow-xl hover:border-purple-300 transition-all flex flex-col justify-between group">
               <div>
                 <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-200 text-purple-700 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <Monitor className="w-6 h-6" />
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-lg font-bold text-neutral-950">Desktop App</h3>
+                  <h3 className="text-base sm:text-lg font-bold text-neutral-950">Desktop App</h3>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-mono font-bold">Win/Mac</span>
                 </div>
                 <p className="text-xs text-neutral-600 leading-relaxed mb-6">
@@ -830,6 +853,46 @@ export function LandingPage() {
                 <ChevronRight className="w-4 h-4" />
               </Link>
             </div>
+          </div>
+
+          {/* Quick Access Action Bar for All 5 Ways */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-white border border-neutral-200/90 shadow-sm flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
+            <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider mr-2 hidden md:inline">Quick Links:</span>
+            <Link
+              href="/web-ide"
+              className="px-3.5 py-2 rounded-xl bg-cyan-50 hover:bg-cyan-100 text-cyan-800 text-xs font-bold transition flex items-center gap-1.5 border border-cyan-200/80"
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-600" />
+              <span>Start Web IDE</span>
+            </Link>
+            <Link
+              href="/cli"
+              className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold font-mono transition flex items-center gap-1.5 border border-emerald-200/80"
+            >
+              <Terminal className="w-3.5 h-3.5 text-emerald-600" />
+              <span>$ npm install -g mcode</span>
+            </Link>
+            <Link
+              href="/ide"
+              className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold transition flex items-center gap-1.5 border border-rose-200/80"
+            >
+              <Code2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>Download Software</span>
+            </Link>
+            <Link
+              href="/mcode"
+              className="px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-bold transition flex items-center gap-1.5 border border-purple-200/80"
+            >
+              <Monitor className="w-3.5 h-3.5 text-purple-600" />
+              <span>Download App</span>
+            </Link>
+            <Link
+              href="/vscode"
+              className="px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold transition flex items-center gap-1.5 border border-indigo-200/80"
+            >
+              <Puzzle className="w-3.5 h-3.5 text-indigo-600" />
+              <span>VS Code Extension</span>
+            </Link>
           </div>
         </div>
       </section>
